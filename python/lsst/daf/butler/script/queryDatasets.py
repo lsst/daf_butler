@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import EllipsisType
 from typing import TYPE_CHECKING
 
@@ -177,29 +177,11 @@ class QueryDatasets:
         # show_uri requires a datastore.
         without_datastore = not show_uri
         self.butler = butler or Butler.from_config(repo, without_datastore=without_datastore)
-        self._getDatasets(glob, collections, where, find_first)
         self.showUri = show_uri
-
-    def _getDatasets(
-        self, glob: Iterable[str], collections: Iterable[str], where: str, find_first: bool
-    ) -> None:
-        datasetTypes = glob or ...
-        query_collections: Iterable[str] | EllipsisType = collections or ...
-
-        # Currently need to use old interface to get all the matching
-        # dataset types and loop over the dataset types executing a new
-        # query each time.
-        dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
-        query_collections = self.butler.registry.queryCollections(query_collections)
-        datasets = []
-        with self.butler._query() as query:
-            # Accumulate into a list
-            for dt in dataset_types:
-                results = query.datasets(dt, collections=query_collections, find_first=find_first)
-                if where:
-                    results = results.where(where)
-                datasets.extend([ref for ref in results.with_dimension_records()])
-        self.datasets = datasets
+        self._dataset_type_glob = glob
+        self._collections_wildcard = collections
+        self._where = where
+        self._find_first = find_first
 
     def getTables(self) -> list[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -211,11 +193,10 @@ class QueryDatasets:
         """
         tables: dict[str, _Table] = defaultdict(_Table)
         if not self.showUri:
-            for dataset_ref in self.datasets:
+            for dataset_ref in self.getDatasets():
                 tables[dataset_ref.datasetType.name].add(dataset_ref)
         else:
-            d = self.datasets
-            ref_uris = self.butler.get_many_uris(d, predict=True)
+            ref_uris = self.butler.get_many_uris(list(self.getDatasets()), predict=True)
             for ref, uris in ref_uris.items():
                 if uris.primaryURI:
                     tables[ref.datasetType.name].add(ref, uris.primaryURI)
@@ -224,12 +205,26 @@ class QueryDatasets:
 
         return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
 
-    def getDatasets(self) -> list:
+    def getDatasets(self) -> Iterator[DatasetRef]:
         """Get the datasets as a list.
 
         Returns
         -------
-        refs : `list`
+        refs : `collections.abc.Iterator` [ `DatasetRef` ]
             Dataset references matching the given query criteria.
         """
-        return self.datasets
+        datasetTypes = self._dataset_type_glob or ...
+        query_collections: Iterable[str] | EllipsisType = self._collections_wildcard or ...
+
+        # Currently need to use old interface to get all the matching
+        # dataset types and loop over the dataset types executing a new
+        # query each time.
+        dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
+        with self.butler._query() as query:
+            query_collections = self.butler.registry.queryCollections(query_collections)
+            # Accumulate over dataset types.
+            for dt in dataset_types:
+                results = query.datasets(dt, collections=query_collections, find_first=self._find_first)
+                if self._where:
+                    results = results.where(self._where)
+                yield from results.with_dimension_records()
