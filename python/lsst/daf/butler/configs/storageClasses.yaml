@@ -422,5 +422,5 @@ storageClasses:
   QPEnsemble:
     pytype: qp.Ensemble
   PZModel:
-    pytype: dict
+    pytype: rail.core.model.Model
 
