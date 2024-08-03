@@ -92,4 +92,4 @@ MultipleCellCoadd: lsst.cell_coadds.CellCoaddFitsFormatter
 NNModelPackagePayload: lsst.meas.transiNet.modelPackages.NNModelPackageFormatter
 Timespan: lsst.daf.butler.formatters.json.JsonFormatter
 RegionTimeInfo: lsst.daf.butler.formatters.json.JsonFormatter
-PZModel: lsst.daf.butler.formatters.pickle.PickleFormatter
+PZModel: lsst.meas.pz.model_formatter.ModelFormatter

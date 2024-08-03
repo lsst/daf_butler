@@ -420,4 +420,4 @@ storageClasses:
   RegionTimeInfo:
     pytype: lsst.pipe.base.utils.RegionTimeInfo
   PZModel:
-    pytype: dict
+    pytype: rail.core.model.Model
