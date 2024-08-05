@@ -78,8 +78,13 @@ def certifyCalibrations(
     if not search_all_inputs and registry.getCollectionType(input_collection) is CollectionType.CHAINED:
         input_collection = next(iter(registry.getCollectionChain(input_collection)))
 
-    refs = set(registry.queryDatasets(dataset_type_name, collections=[input_collection]))
-    if not refs:
-        raise RuntimeError(f"No inputs found for dataset {dataset_type_name} in {input_collection}.")
+    with butler._query() as query:
+        results = query.datasets(dataset_type_name, collections=input_collection)
+        refs = set(results)
+        if not refs:
+            explanation = "\n".join(results.explain_no_results())
+            raise RuntimeError(
+                f"No inputs found for dataset {dataset_type_name} in {input_collection}. {explanation}"
+            )
     registry.registerCollection(output_collection, type=CollectionType.CALIBRATION)
     registry.certify(output_collection, refs, timespan)
