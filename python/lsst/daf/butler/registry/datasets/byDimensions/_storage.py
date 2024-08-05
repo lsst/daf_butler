@@ -612,7 +612,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
             if "timespan" in fields:
                 tags_builder.joiner.timespans[self.datasetType.name] = (
-                    self._db.getTimespanRepresentation().fromLiteral(Timespan(None, None))
+                    self._db.getTimespanRepresentation().fromLiteral(None)
                 )
         calibs_builder: QueryBuilder | None = None
         if CollectionType.CALIBRATION in collection_types:

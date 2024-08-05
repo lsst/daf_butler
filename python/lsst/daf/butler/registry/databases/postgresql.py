@@ -504,7 +504,11 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     def fromLiteral(cls, timespan: Timespan | None) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if timespan is None:
-            return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
+            # Cast NULL to an expected type, helps Postgres to figure out
+            # column type when doing UNION.
+            return cls(
+                column=sqlalchemy.func.cast(sqlalchemy.sql.null(), type_=_RangeTimespanType), name=cls.NAME
+            )
         return cls(
             column=sqlalchemy.sql.cast(
                 sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType), type_=_RangeTimespanType
