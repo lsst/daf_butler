@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os.path
+import tempfile
 import unittest
 import uuid
 
@@ -105,6 +106,17 @@ class ButlerClientServerTestCase(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["name"], "butler")
+
+    def test_static_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "temp.txt"), "w") as fh:
+                fh.write("test data 123")
+
+            with mock_env({"DAF_BUTLER_SERVER_STATIC_FILES_PATH": tmpdir}):
+                with create_test_server(TESTDIR) as server:
+                    response = server.client.get("/api/butler/configs/temp.txt")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.text, "test data 123")
 
     def test_dimension_universe(self):
         universe = self.butler.dimensions

@@ -70,5 +70,7 @@ def _is_authenticated_endpoint(path: str) -> bool:
         return False
     if path.endswith("/butler.json"):
         return False
+    if path.startswith("/api/butler/configs"):
+        return False
 
     return True
