@@ -77,6 +77,35 @@ class ParquetFormatter(FormatterV2):
     default_extension = ".parq"
     can_read_from_local_file = True
 
+    def can_accept(self, in_memory_dataset: Any) -> bool:
+        # Docstring inherited.
+        import numpy as np
+        from astropy.table import Table as astropyTable
+
+        # Note: we do not check for a dict of numpy arrays as that
+        # is (a) heavy because it requires a full conversion, and
+        # (b) the storage class conversion will work fine and will
+        # be lossless in any case because of the simplicity of the
+        # format.
+
+        if isinstance(in_memory_dataset, pa.Table):
+            return True
+        elif isinstance(in_memory_dataset, astropyTable):
+            return True
+        elif isinstance(in_memory_dataset, np.ndarray):
+            return True
+        elif hasattr(in_memory_dataset, "to_parquet"):
+            # This may be a pandas DataFrame
+            try:
+                import pandas as pd
+            except ImportError:
+                pd = None
+
+            if pd is not None and isinstance(in_memory_dataset, pd.DataFrame):
+                return True
+
+        return False
+
     def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
         # Docstring inherited from Formatter.read.
         schema = pq.read_schema(path)
