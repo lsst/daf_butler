@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 from .._butler import Butler
 
 if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetRef
     from lsst.resources import ResourcePath
 
 log = logging.getLogger(__name__)
@@ -90,11 +91,15 @@ def retrieveArtifacts(
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.
-    refs = list(
-        butler.registry.queryDatasets(
-            datasetType=query_types, collections=query_collections, where=where, findFirst=find_first
-        )
-    )
+    dataset_types = butler.registry.queryDatasetTypes(query_types)
+    refs: list[DatasetRef] = []
+    with butler._query() as query:
+        expanded_collections = butler.registry.queryCollections(query_collections)
+        for dt in dataset_types:
+            results = query.datasets(dt, collections=expanded_collections, find_first=find_first)
+            if where:
+                results = results.where(where)
+            refs.extend(results)
 
     log.info("Number of datasets matching query: %d", len(refs))
 
