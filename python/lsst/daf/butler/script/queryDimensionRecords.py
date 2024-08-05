@@ -27,8 +27,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from types import EllipsisType
 from typing import Any
 
 from astropy.table import Table
@@ -44,7 +42,6 @@ def queryDimensionRecords(
     datasets: tuple[str, ...],
     collections: tuple[str, ...],
     where: str,
-    no_check: bool,
     order_by: tuple[str, ...],
     limit: int,
     offset: int,
@@ -63,8 +60,6 @@ def queryDimensionRecords(
         Collections to search.
     where : `str`
         Query string.
-    no_check : `bool`
-        If `True` do not check the query for consistency.
     order_by : `tuple` of `str`
         Columns to order results by.
     limit : `int`
@@ -80,23 +75,32 @@ def queryDimensionRecords(
     """
     butler = Butler.from_config(repo, without_datastore=True)
 
-    query_collections: Iterable[str] | EllipsisType | None = None
-    if datasets:
-        query_collections = collections or ...
-    query_results = butler.registry.queryDimensionRecords(
-        element, datasets=datasets, collections=query_collections, where=where, check=not no_check
-    )
+    with butler._query() as query:
 
-    if order_by:
-        query_results = query_results.order_by(*order_by)
-    if limit > 0:
-        new_offset = offset if offset > 0 else None
-        query_results = query_results.limit(limit, new_offset)
+        if datasets:
+            query_collections = collections or ...
+            expanded_collections = butler.registry.queryCollections(query_collections)
+            dataset_types = list(butler.registry.queryDatasetTypes(datasets))
 
-    records = list(query_results)
+            sub_query = query.join_dataset_search(dataset_types.pop(0), collections=expanded_collections)
+            for dt in dataset_types:
+                sub_query = sub_query.join_dataset_search(dt, collections=expanded_collections)
 
-    if not records:
-        return None
+            query_results = sub_query.dimension_records(element)
+        else:
+            query_results = query.dimension_records(element)
+
+        if where:
+            query_results = query_results.where(where)
+        if order_by:
+            query_results = query_results.order_by(*order_by)
+        if limit > 0:
+            query_results = query_results.limit(limit)
+
+        records = list(query_results)
+
+        if not records:
+            return None
 
     if not order_by:
         # use the dataId to sort the rows if not ordered already

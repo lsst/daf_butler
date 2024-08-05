@@ -568,6 +568,7 @@ def query_data_ids(**kwargs: Any) -> None:
 @click.option(
     "--no-check",
     is_flag=True,
+    default=None,
     help=unwrap(
         """Don't check the query before execution. By default the query is checked before it
                           executed, this may reject some valid queries that resemble common mistakes."""
@@ -576,6 +577,8 @@ def query_data_ids(**kwargs: Any) -> None:
 @options_file_option()
 def query_dimension_records(**kwargs: Any) -> None:
     """Query for dimension information."""
+    if kwargs.pop("no_check") is not None:
+        click.echo("WARNING: --no-check option now has no effect and is ignored.")
     table = script.queryDimensionRecords(**kwargs)
     if table:
         table.pprint_all()
