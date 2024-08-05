@@ -622,16 +622,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             assert (
                 self._calibs is not None
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
+            calibs_table = self._calibs.alias(f"{self.datasetType.name}_calibs")
             calibs_builder = self._finish_query_builder(
-                QueryJoiner(self._db, self._calibs.alias(f"{self.datasetType.name}_calibs")).to_builder(
-                    columns
-                ),
+                QueryJoiner(self._db, calibs_table).to_builder(columns),
                 [record for record in collections if record.type is CollectionType.CALIBRATION],
                 fields,
             )
             if "timespan" in fields:
                 calibs_builder.joiner.timespans[self.datasetType.name] = (
-                    self._db.getTimespanRepresentation().from_columns(self._calibs.columns)
+                    self._db.getTimespanRepresentation().from_columns(calibs_table.columns)
                 )
 
             # In calibration collections, we need timespan as well as data ID
