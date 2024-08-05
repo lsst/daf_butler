@@ -136,9 +136,7 @@ def removeRuns(
         with butler.transaction():
             for run in runs:
                 for parent in run.parents:
-                    children = list(butler.registry.getCollectionChain(parent))
-                    children.remove(run.name)
-                    butler.registry.setCollectionChain(parent, children, flatten=False)
+                    butler.collection_chains.remove_from_chain(parent, run.name)
             butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(
