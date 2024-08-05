@@ -46,6 +46,7 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
+from ..queries.tree import ResultColumn
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -65,12 +66,12 @@ from ..registry.queries import (
     DimensionRecordQueryResults,
 )
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
-from ..remote_butler import RemoteButler
 from ._collection_args import (
     convert_collection_arg_to_glob_string_list,
     convert_dataset_type_arg_to_glob_string_list,
 )
 from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._remote_butler import RemoteButler
 from .registry._query_common import CommonQueryArguments
 from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
 from .registry._query_datasets import QueryDriverDatasetRefQueryResults
@@ -513,7 +514,18 @@ class RemoteButlerRegistry(Registry):
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
     ) -> Iterator[DatasetAssociation]:
-        raise NotImplementedError()
+        # queryCollections only accepts DatasetType.
+        if isinstance(datasetType, str):
+            datasetType = self.getDatasetType(datasetType)
+        resolved_collections = self.queryCollections(
+            collections, datasetType=datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
+        )
+        with self._butler._query() as query:
+            result = query.dataset_associations(datasetType, resolved_collections)
+            timespan_key = ResultColumn(logical_table=datasetType.name, field="timespan")
+            collection_key = ResultColumn(logical_table=datasetType.name, field="collection")
+            for ref, row_dict in result.iter_refs(datasetType):
+                yield DatasetAssociation(ref, row_dict[collection_key], row_dict[timespan_key])
 
     @property
     def storageClasses(self) -> StorageClassFactory:

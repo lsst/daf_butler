@@ -29,4 +29,5 @@ from ._base import *
 from ._data_coordinate_query_results import *
 from ._dataset_query_results import *
 from ._dimension_record_query_results import *
+from ._general_query_results import *
 from ._query import *

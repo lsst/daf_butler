@@ -30,7 +30,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -50,9 +50,16 @@ from ..queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
     DimensionRecordResultPage,
+    GeneralResultPage,
     ResultPage,
 )
-from ..queries.result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
+from ..queries.result_specs import (
+    DataCoordinateResultSpec,
+    DatasetRefResultSpec,
+    DimensionRecordResultSpec,
+    GeneralResultSpec,
+)
+from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
@@ -310,3 +317,81 @@ class _DimensionGroupRecordRowConverter:  # numpydoc ignore=PR01
         the dimensions in the database row.
         """
         return {name: converter.convert(row) for name, converter in self._record_converters.items()}
+
+
+class GeneralResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
+    """Converts raw SQL rows into pages of `GeneralResult` query results."""
+
+    def __init__(self, spec: GeneralResultSpec, ctx: ResultPageConverterContext) -> None:
+        self.spec = spec
+
+        result_columns = spec.get_result_columns()
+        self.converters: list[_GeneralColumnConverter] = []
+        for column in result_columns:
+            column_name = qt.ColumnSet.get_qualified_name(column.logical_table, column.field)
+            if column.field == TimespanDatabaseRepresentation.NAME:
+                self.converters.append(_TimespanGeneralColumnConverter(column_name, ctx.db))
+            else:
+                self.converters.append(_DefaultGeneralColumnConverter(column_name))
+
+    def convert(self, raw_rows: Iterable[sqlalchemy.Row]) -> GeneralResultPage:
+        rows = [tuple(cvt.convert(row) for cvt in self.converters) for row in raw_rows]
+        return GeneralResultPage(spec=self.spec, rows=rows)
+
+
+class _GeneralColumnConverter:
+    """Interface for converting one or more columns in a result row to a single
+    column value in output row.
+    """
+
+    @abstractmethod
+    def convert(self, row: sqlalchemy.Row) -> Any:
+        """Convert one or more columns in the row into single value.
+
+        Parameters
+        ----------
+        row : `sqlalchemy.Row`
+            Row of values.
+
+        Returns
+        -------
+        value : `Any`
+            Result of the conversion.
+        """
+        raise NotImplementedError()
+
+
+class _DefaultGeneralColumnConverter(_GeneralColumnConverter):
+    """Converter that returns column value without conversion.
+
+    Parameters
+    ----------
+    name : `str`
+        Column name
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def convert(self, row: sqlalchemy.Row) -> Any:
+        return row._mapping[self.name]
+
+
+class _TimespanGeneralColumnConverter(_GeneralColumnConverter):
+    """Converter that extracts timespan from the row.
+
+    Parameters
+    ----------
+    name : `str`
+        Column name or prefix.
+    db : `Database`
+        Database instance.
+    """
+
+    def __init__(self, name: str, db: Database):
+        self.timespan_class = db.getTimespanRepresentation()
+        self.name = name
+
+    def convert(self, row: sqlalchemy.Row) -> Any:
+        timespan = self.timespan_class.extract(row._mapping, self.name)
+        return timespan

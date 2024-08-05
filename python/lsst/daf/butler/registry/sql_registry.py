@@ -65,7 +65,10 @@ from ..dimensions import (
     DimensionUniverse,
 )
 from ..dimensions.record_cache import DimensionRecordCache
+from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
+from ..queries import Query
+from ..queries.tree import ResultColumn
 from ..registry import (
     ArgumentError,
     CollectionExpressionError,
@@ -2342,6 +2345,33 @@ class SqlRegistry:
         query = builder.finish().with_record_columns(element.name)
         return queries.DatabaseDimensionRecordQueryResults(query, element)
 
+    @contextlib.contextmanager
+    def _query(self) -> Iterator[Query]:
+        """Context manager returning a `Query` object used for construction
+        and execution of complex queries.
+        """
+        with self._query_driver(self.defaults.collections, self.defaults.dataId) as driver:
+            yield Query(driver)
+
+    @contextlib.contextmanager
+    def _query_driver(
+        self,
+        default_collections: Iterable[str],
+        default_data_id: DataCoordinate,
+    ) -> Iterator[DirectQueryDriver]:
+        """Set up a `QueryDriver` instance for query execution."""
+        with self.caching_context():
+            driver = DirectQueryDriver(
+                self._db,
+                self.dimensions,
+                self._managers,
+                self.dimension_record_cache,
+                default_collections=default_collections,
+                default_data_id=default_data_id,
+            )
+            with driver:
+                yield driver
+
     def queryDatasetAssociations(
         self,
         datasetType: str | DatasetType,
@@ -2392,59 +2422,18 @@ class SqlRegistry:
         lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``collections`` expression is invalid.
         """
-        if collections is None:
-            if not self.defaults.collections:
-                raise NoDefaultCollectionError(
-                    "No collections provided to queryDatasetAssociations, "
-                    "and no defaults from registry construction."
-                )
-            collections = self.defaults.collections
-        collection_wildcard = CollectionWildcard.from_expression(collections)
-        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
-        parent_dataset_type = backend.resolve_single_dataset_type_wildcard(datasetType)
-        timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
-        collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
-        for parent_collection_record in backend.resolve_collection_wildcard(
-            collection_wildcard,
-            collection_types=frozenset(collectionTypes),
-            flatten_chains=flattenChains,
-        ):
-            # Resolve this possibly-chained collection into a list of
-            # non-CHAINED collections that actually hold datasets of this
-            # type.
-            candidate_collection_records = backend.resolve_dataset_collections(
-                parent_dataset_type,
-                CollectionWildcard.from_names([parent_collection_record.name]),
-                allow_calibration_collections=True,
-                governor_constraints={},
-            )
-            if not candidate_collection_records:
-                continue
-            with backend.context() as context:
-                relation = backend.make_dataset_query_relation(
-                    parent_dataset_type,
-                    candidate_collection_records,
-                    columns={"dataset_id", "run", "timespan", "collection"},
-                    context=context,
-                )
-                reader = queries.DatasetRefReader(
-                    parent_dataset_type,
-                    translate_collection=lambda k: self._managers.collections[k].name,
-                    full=False,
-                )
-                for row in context.fetch_iterable(relation):
-                    ref = reader.read(row)
-                    collection_record = self._managers.collections[row[collection_tag]]
-                    if collection_record.type is CollectionType.CALIBRATION:
-                        timespan = row[timespan_tag]
-                    else:
-                        # For backwards compatibility and (possibly?) user
-                        # convenience we continue to define the timespan of a
-                        # DatasetAssociation row for a non-CALIBRATION
-                        # collection to be None rather than a fully unbounded
-                        # timespan.
-                        timespan = None
-                    yield DatasetAssociation(ref=ref, collection=collection_record.name, timespan=timespan)
+        if isinstance(datasetType, str):
+            datasetType = self.getDatasetType(datasetType)
+        resolved_collections = self.queryCollections(
+            collections, datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
+        )
+        with self._query() as query:
+            result = query.dataset_associations(datasetType, resolved_collections)
+            timespan_key = ResultColumn(logical_table=datasetType.name, field="timespan")
+            collection_key = ResultColumn(logical_table=datasetType.name, field="collection")
+            for ref, row_dict in result.iter_refs(datasetType):
+                _LOG.debug("row_dict: %s", row_dict)
+                yield DatasetAssociation(ref, row_dict[collection_key], row_dict[timespan_key])
 
     def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
         """Retrieve datastore records for given ref.

@@ -43,10 +43,16 @@ from ._base import QueryBase
 from ._data_coordinate_query_results import DataCoordinateQueryResults
 from ._dataset_query_results import DatasetRefQueryResults
 from ._dimension_record_query_results import DimensionRecordQueryResults
+from ._general_query_results import GeneralQueryResults
 from .convert_args import convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
-from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
+from .result_specs import (
+    DataCoordinateResultSpec,
+    DatasetRefResultSpec,
+    DimensionRecordResultSpec,
+    GeneralResultSpec,
+)
 from .tree import DatasetSearch, Predicate, QueryTree, make_identity_query_tree
 
 
@@ -291,6 +297,38 @@ class Query(QueryBase):
             tree = tree.join_dimensions(self._driver.universe[element].minimal_group)
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
         return DimensionRecordQueryResults(self._driver, tree, result_spec)
+
+    def dataset_associations(
+        self,
+        dataset_type: DatasetType,
+        collections: Iterable[str],
+    ) -> GeneralQueryResults:
+        """Iterate over dataset-collection combinations where the dataset is in
+        the collection.
+
+        Parameters
+        ----------
+        dataset_type : `DatasetType`
+            A dataset type object.
+        collections : `~collections.abc.Iterable` [`str`]
+            Names of the collections to search. Chained collections are
+            ignored.
+
+        Returns
+        -------
+        result : `GeneralQueryResults`
+            Query result that can be iterated over. The result includes all
+            columns needed to construct `DatasetRef`, plus ``collection`` and
+            ``timespan`` columns.
+        """
+        _, _, query = self._join_dataset_search_impl(dataset_type, collections)
+        result_spec = GeneralResultSpec(
+            dimensions=dataset_type.dimensions,
+            dimension_fields={},
+            dataset_fields={dataset_type.name: {"dataset_id", "run", "collection", "timespan"}},
+            find_first=False,
+        )
+        return GeneralQueryResults(self._driver, tree=query._tree, spec=result_spec)
 
     def materialize(
         self,

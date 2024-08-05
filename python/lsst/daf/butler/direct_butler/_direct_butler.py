@@ -2193,32 +2193,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         return self._registry.dimensions
 
-    @contextlib.contextmanager
-    def _query(self) -> Iterator[Query]:
+    def _query(self) -> contextlib.AbstractContextManager[Query]:
         # Docstring inherited.
-        with self._query_driver(self._registry.defaults.collections, self.registry.defaults.dataId) as driver:
-            yield Query(driver)
+        return self._registry._query()
 
-    @contextlib.contextmanager
     def _query_driver(
         self,
         default_collections: Iterable[str],
         default_data_id: DataCoordinate,
-    ) -> Iterator[DirectQueryDriver]:
+    ) -> contextlib.AbstractContextManager[DirectQueryDriver]:
         """Set up a QueryDriver instance for use with this Butler.  Although
         this is marked as a private method, it is also used by Butler server.
         """
-        with self._caching_context():
-            driver = DirectQueryDriver(
-                self._registry._db,
-                self.dimensions,
-                self._registry._managers,
-                self._registry.dimension_record_cache,
-                default_collections=default_collections,
-                default_data_id=default_data_id,
-            )
-            with driver:
-                yield driver
+        return self._registry._query_driver(default_collections, default_data_id)
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""
