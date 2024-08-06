@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+from operator import attrgetter
 from typing import Any
 
 from astropy.table import Table
@@ -104,7 +105,7 @@ def queryDimensionRecords(
 
     if not order_by:
         # use the dataId to sort the rows if not ordered already
-        records.sort(key=lambda r: r.dataId)
+        records.sort(key=attrgetter("dataId"))
 
     # order the columns the same as the record's `field.names`, and add units
     # to timespans

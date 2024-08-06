@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Iterable
+from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from astropy.table import Table
@@ -170,7 +171,7 @@ def exportCalibs(
         log.info("Saving %d dataset(s)", len(datasetsToExport))
         export.saveDatasets(datasetsToExport)
 
-    sortedDatasets = sorted(datasetsToExport, key=lambda x: x.datasetType.name)
+    sortedDatasets = sorted(datasetsToExport, key=attrgetter("datasetType.name", "dataId"))
 
     requiredDimensions: set[str] = set()
     for ref in sortedDatasets:
