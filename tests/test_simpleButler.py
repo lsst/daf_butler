@@ -32,6 +32,7 @@ import os
 import re
 import tempfile
 import unittest
+from operator import attrgetter
 from typing import Any
 
 try:
@@ -55,6 +56,7 @@ from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
+from lsst.sphgeom import Region
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
@@ -795,6 +797,78 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         butler = Butler.from_config(config, writeable=writeable)
         DatastoreMock.apply(butler)
         return butler
+
+    def test_region_queries(self):
+        """Test region queries for datasets."""
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "ci_hsc-subset.yaml"))
+
+        run = "HSC/runs/ci_hsc/20240806T180642Z"
+        with butler._query() as query:
+            # Return everything.
+            results = query.datasets("calexp", collections=run)
+            # Sort by data coordinate.
+            refs = sorted(results.with_dimension_records(), key=attrgetter("dataId"))
+            self.assertEqual(len(refs), 33)
+
+        # Use a region from the first visit.
+        first_visit_region = refs[0].dataId.visit.region
+
+        # Debug code to plot some visit detector regions.
+        # Will be removed.
+        polygons = []
+        with butler._query() as query:
+            results = query.dimension_records("visit_detector_region")
+            for rec in results:
+                region = rec.region.to_ivoa_pos()
+                coords = region.split()
+                coords.pop(0)
+                pairs = list(zip(coords[0::2], coords[1::2]))
+                polygons.append(pairs)
+                print(pairs)
+        # plot_poly(polygons)
+
+        # Get a visit detector region from the first ref.
+        with butler._query() as query:
+            results = query.dimension_records("visit_detector_region").where(**refs[0].dataId.mapping)
+            records = list(results)
+            self.assertEqual(len(records), 1)
+
+        for pos, count in (
+            ("CIRCLE 320. -0.25 10.", 33),  # Match everything.
+            ("CIRCLE 321.0 -0.4 0.01", 1),  # Should be small region on 1 detector.
+            ("CIRCLE 321.1 -0.35 0.02", 2),
+            ("CIRCLE 321.1 -0.48 0.05", 1),  # Center off the region.
+            ("CIRCLE 321.0 -0.5 0.01", 0),  # No overlap.
+            (first_visit_region.to_ivoa_pos(), 33),  # Visit region overlaps everything.
+            (records[0].region.to_ivoa_pos(), 17),  # Some overlap.
+        ):
+            with butler._query() as query:
+                results = query.datasets("calexp", collections=run)
+                results = results.where(
+                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(POS)",
+                    bind={"POS": Region.from_ivoa_pos(pos)},
+                )
+                refs = list(results)
+                self.assertEqual(len(refs), count, f"POS={pos} REFS={refs}")
+
+
+def plot_poly(polygons: list[list[tuple[float, float], ...]]):
+    """Plot polygons."""
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon
+
+    fig, ax = plt.subplots(1, 1)
+
+    for poly in polygons:
+        polygon1 = Polygon(poly, fc=(1, 0, 0, 0.1), ec=(0, 0, 0, 0.25), lw=1)
+        ax.add_patch(polygon1)
+
+    plt.ylim(-0.6, 0)
+    plt.xlim(320.6, 321.12)
+    plt.show()
 
 
 class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):
