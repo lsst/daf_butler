@@ -34,11 +34,13 @@ from collections.abc import Awaitable, Callable
 import safir.dependencies.logger
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 from safir.logging import configure_logging, configure_uvicorn_logging
 
 from ..._exceptions import ButlerUserError
 from .._errors import serialize_butler_user_error
 from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
+from ._config import load_config
 from .handlers._external import external_router
 from .handlers._external_query import query_router
 from .handlers._internal import internal_router
@@ -49,6 +51,8 @@ configure_uvicorn_logging()
 
 def create_app() -> FastAPI:
     """Create a Butler server FastAPI application."""
+    config = load_config()
+
     app = FastAPI()
     app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -66,6 +70,17 @@ def create_app() -> FastAPI:
             responses={422: {"model": ErrorResponseModel}},
         )
     app.include_router(internal_router)
+
+    # If configured to do so, serve a directory of static files via HTTP.
+    #
+    # Until we are able to fully transition away from DirectButler for the RSP,
+    # we need a place to host DirectButler configuration files. Since this
+    # same configuration is needed for Butler server, it's easier to configure
+    # in Phalanx if we just host them from Butler server itself.
+    # This will also host the end-user repository index file for the RSP, for
+    # lack of a better place to put it.
+    if config.static_files_path:
+        app.mount(f"{default_api_path}/configs", StaticFiles(directory=config.static_files_path))
 
     # Any time an exception is returned by a handler, add a log message that
     # includes the username and request ID from the client.  This will make it
