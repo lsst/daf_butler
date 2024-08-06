@@ -171,7 +171,7 @@ def exportCalibs(
         requiredDimensions.update(ref.dimensions.names)
     dimensionColumns = {
         dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
-        for dimensionName in requiredDimensions
+        for dimensionName in sorted(requiredDimensions)
     }
 
     return Table(
