@@ -1,0 +1,732 @@
+description: Butler Data Repository Export
+version: 1.0.2
+universe_version: 7
+universe_namespace: daf_butler
+data:
+- type: dimension
+  element: instrument
+  records:
+  - name: HSC
+    visit_max: 21474800
+    visit_system: 0
+    exposure_max: 21474800
+    detector_max: 200
+    class_name: lsst.obs.subaru.HyperSuprimeCam
+- type: dimension
+  element: day_obs
+  records:
+  - instrument: HSC
+    id: 20130617
+    datetime_begin: !butler_time/tai/iso '2013-06-17 00:00:00.000000000'
+    datetime_end: !butler_time/tai/iso '2013-06-18 00:00:00.000000000'
+  - instrument: HSC
+    id: 20131102
+    datetime_begin: !butler_time/tai/iso '2013-11-02 00:00:00.000000000'
+    datetime_end: !butler_time/tai/iso '2013-11-03 00:00:00.000000000'
+- type: dimension
+  element: detector
+  records:
+  - instrument: HSC
+    id: 0
+    full_name: '1_53'
+    name_in_raft: '53'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 1
+    full_name: '1_54'
+    name_in_raft: '54'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 4
+    full_name: '1_42'
+    name_in_raft: '42'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 5
+    full_name: '1_43'
+    name_in_raft: '43'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 6
+    full_name: '1_44'
+    name_in_raft: '44'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 10
+    full_name: '1_36'
+    name_in_raft: '36'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 11
+    full_name: '1_37'
+    name_in_raft: '37'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 12
+    full_name: '1_38'
+    name_in_raft: '38'
+    raft: '1'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 16
+    full_name: '0_30'
+    name_in_raft: '30'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 17
+    full_name: 0_29
+    name_in_raft: '29'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 18
+    full_name: 0_28
+    name_in_raft: '28'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 22
+    full_name: '0_27'
+    name_in_raft: '27'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 23
+    full_name: '0_26'
+    name_in_raft: '26'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 24
+    full_name: '0_25'
+    name_in_raft: '25'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 25
+    full_name: '0_24'
+    name_in_raft: '24'
+    raft: '0'
+    purpose: SCIENCE
+  - instrument: HSC
+    id: 100
+    full_name: '0_31'
+    name_in_raft: '31'
+    raft: '0'
+    purpose: SCIENCE
+- type: dimension
+  element: physical_filter
+  records:
+  - instrument: HSC
+    name: HSC-I
+    band: i
+  - instrument: HSC
+    name: HSC-R
+    band: r
+- type: dimension
+  element: visit
+  records:
+  - instrument: HSC
+    id: 903334
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90333400
+    seq_num: 903334
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 157.95888945
+    zenith_angle: 21.192894420000002
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70997e4cfb8374e83fd4c3fe822ea2e4bfea6325f607e78cbf21a21f096887e83f56e798bdaf8be4bf8cf61669682c8dbffdaba729a6aae83f70d16a2d5261e4bf5bba12978f308dbf0da2cec457bde83fee12ca86a24ae4bf75adbb16cdf08cbf8e3c819133cfe83f12b710621335e4bf3f46521d367c89bf55b756f3f6d8e83fba054ca18329e4bf561dbbfbfafa82bfa6ec981fc8e1e83f37f1404df51ee4bf193e97e8e65c78bf14723db21de2e83fb336476da71ee4bf42007f7d61ac71bf9b9c6d922be2e83fba9e72df9a1ee4bf00461acc3e4f70bfc81f63b357e2e83fc1fd4fed721ee4bffdc8829377cc65bfbab8c62d60e2e83fe445db316b1ee4bf7d1d0f0ca81663bf9c4ff62576e2e83fe0304a6a571ee4bf6bd980963e5a50bfa0ae7b3278e2e83f5269c5cd551ee4bf0bc695f91bce45bff68d33c679e2e83faf692ad9531ee4bf2636e33e72e0453fbdc0d4f475e2e83f583c90a4571ee4bf77ee0a598366503f12888aab60e2e83f4ff5fd996a1ee4bf75457a13c412633f60f81c0d59e2e83f195ef23c711ee4bf361c753fdad0653f52ce551d2ee2e83fbff71ca0971ee4bf95c283775957703f8012df7121e2e83f8d496ed1a21ee4bf10d9dc3464aa713f925f14c3cae1e83f38f7cee0f11ee4bf958116526365783fd37da5befcd8e83fc431fc587c29e4bf0531fec863fd823f3666b3883bcfe83f1e0ebf7b0935e4bfed352a82bb7d893f4854d36160bde83fe4495e0a984ae4bfb2ab7b82a0f08c3f6fbaf7fba6aae83f53df16005161e4bf59f0551e9a328d3ff2fec7246587e83fcca982d5b28be4bff5fb0f5c74308d3f1b5eb2ed8074e83ff152968f31a2e4bfd5a6a44c88ed8c3f92accf919a62e83f29ef56c39eb7e4bfe4d4528cea76893f6da677dcbd58e83f28fc8850a4c3e4bf29b979b7e2f3823f3c8fd521fe4fe83f18a0555033cee4bf5626f81f4954783ff9b3d191be4fe83f8986239798cee4bf9f7841df80a2713f75421fafb44fe83fbb4ea385a8cee4bf862bab43904a703f483fb7b4954fe83f74b907d6dacee4bf02b6c83b9ac5653f2584f8ed8f4fe83f2bd3ea42e4cee4bf54767654ed0a633f623abc89814fe83f13b0342efccee4bf92ea797f985c503f07100e0d7e4fe83fca88cb2501cfe4bf75e28fe85fd1453f2d81d61d7f4fe83fb6f23ee8ffcee4bf83c1a176efbf45bf15ae774b814fe83f17f85978fccee4bf8887d1e2795550bf0819abbf8f4fe83f5c1af279e4cee4bf5f398998e80963bf96834f21964fe83f053fb85bdacee4bfa8bdc0cd3cc165bfda2d3c19b54fe83f75af4510a8cee4bf94ee3935734870bf9797360cbf4fe83ff733a90a98cee4bf5ebe38bdc1a171bf98aff1ccfc4fe83f2725b4ec34cee4bfd36de2b2495178bfe13f0bdcbc58e83f4b4c4d8ca5c3e4bfd03822f0d9f282bf97013c379d62e83f25312f079cb7e4bf2bef39bef87189bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:29:11.039000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:29:43.495000000'
+  - instrument: HSC
+    id: 903336
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90333600
+    seq_num: 903336
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 158.22591802
+    zenith_angle: 21.156526690000007
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70de7c0591808be83f96ee8c10d186e4bfa75e58f914e78cbff0c2e5724b9ee83f7c1aa23f3d70e4bf4e7d586c752c8dbfdc4dae2b5ac1e83f7a3fc56cb845e4bfe3dc549a9c308dbf250b6c64f2d3e83fcdff18f3f32ee4bfb7dfef19daf08cbf26338911b6e5e83f89257ce95019e4bfebb48020437c89bf5dfd8f836cefe83fcb506448b60de4bfd95bf5fe07fb82bf78be22e031f8e83fa3cbee211e03e4bf77c611ef005d78bfc389a71b87f8e83fce3d9fe2cf02e4bf5b8b06847bac71bf2cd7cced94f8e83ff0be5545c302e4bff7f6a3d2584f70bf048116e2c0f8e83f9b490d229b02e4bff1cea3a0abcc65bfc34bd553c9f8e83fae04285d9302e4bff3b23219dc1663bf3437ed35dff8e83f7bba247d7f02e4bfa0d2d5b0a65a50bf43f9a740e1f8e83f4beb59de7d02e4bf3044432eecce45bf7b6d3dd2e2f8e83fa18308e87b02e4bff8f6350aa2df453fe96b2105dff8e83ff573b2b77f02e4bfc2f6b53e1b66503f5f141fd1c9f8e83f3317e6c49202e4bf79b056069012633fd254233ac2f8e83feab15b709902e4bf62275432a6d0653fa8df647597f8e83fb7ab6e03c002e4bfc62afa703f57703f26bc79d68af8e83ff07ae242cb02e4bf4f5b552e4aaa713fa706448034f8e83fa464f1b21a03e4bf621a9c4b4965783f057d774772efe83f256f3dfaae0de4bf5407c4c556fd823fadaea7febde5e83f2c021efb4619e4bf6edcfb7eae7d893ff2aad7f6fad3e83f3877046ee92ee4bfc281477f93f08c3fb572d2fd5ac1e83ffccb783fb745e4bf1cda131b8d328d3f277b2993489ee83fe568b65b4070e4bf6f8ece5867308d3f0e80f7877d8be83f2af27a21d486e4bf2ed571497bed8c3fdfcdc725af79e83fc077ff45559ce4bf7c602689dd76893fa8eee0e3df6fe83feaca84cf65a8e4bf8d5d42b4d5f3823f344fa3f92b67e83f40b23f8efeb2e4bf843884192f54783f74cad4daec66e83f8a50bf1b64b3e4bff69dc0d866a2713fc78cf009e366e83f31ff3c1574b3e4bf3536283d764a703f7bd2c047c466e83fb6921088a6b3e4bfc133b52e66c5653f114d898bbe66e83f01a15efbafb3e4bfab5f6047b90a633f2ba8ff41b066e83f2660a1f6c7b3e4bf2afa3f65305c503f1b86dccaac66e83fd55d17f2ccb3e4bfc2c818b48fd0453fb6f233daad66e83f759a4fb3cbb3e4bf670619abbfc045bf3d8ef903b066e83ffb1bfb40c8b3e4bf42760bfde15550bf24a8495dbe66e83fba157232b0b3e4bf2b4f9fa51c0a63bf319399b3c466e83f770f1b0da6b3e4bf4548d4da70c165bff0573873e366e83f24ba259f73b3e4bf0ce9bc3b8d4870bfc0f04354ed66e83fe3a4738e63b3e4bf519cb9c3dba171bf31ba12a62a67e83fbb49b52b00b3e4bfae5c56b9635178bf5a8b17e4de6fe83fc3dec90b67a8e4bf279659f3e6f282bf79d724c7b179e83f6b141286529ce4bf088166c1057289bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:30:35.544000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:31:08.316000000'
+  - instrument: HSC
+    id: 903338
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90333800
+    seq_num: 903338
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 158.4959259
+    zenith_angle: 21.12029828
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7092bb8d1d5fa2e83feb2d644e596be4bf2adcf17a1be78cbf162664bb10b5e83f4baf968db054e4bfd340f9ed7b2c8dbf1a7f78dfefd7e83fe01e17ac042ae4bf4aeef51ba3308dbfe18bf29d6eeae83ffebb3e7b2b13e4bffcf8899be0f08cbfb449a9141afce83f2af833a774fde3bf68ec17a2497c89bfca065e8ac305e93f6c96ee33cff1e3bf487b92800efb82bf446bf10b7d0ee93f76fef7472de7e3bf0f0b4ff20d5d78bfaf99e1efd10ee93fa2c5aaa9dee6e3bf56514a8788ac71bfa7bde8b3df0ee93fcf48fafcd1e6e3bfe2cfe8d5654f70bf70d9477b0b0fe93fa221b7a8a9e6e3bfd45234a7c5cc65bf396555e4130fe93fa75669daa1e6e3bf9a7ec41ff61663bfd1ff32b0290fe93ffe4606e28de6e3bf295100beda5a50bfc2db1eb92b0fe93f18f8f5408ce6e3bf2c079a4854cf45bfce1989482d0fe93f49d2ea488ae6e3bf4b53dfef39df453fd50bb37f290fe93f5bcbd21c8ee6e3bfd7788b31e765503f1ed50c61140fe93fff77af41a1e6e3bfeae4c4ff7512633fdfda8ad10c0fe93fccb89cf5a7e6e3bfe1abc32b8cd0653f43d20438e20ee93fef7463b8cee6e3bf4f5eb56d3257703f89b3b3a5d50ee93ff9b0ea05dae6e3bfdd9b112b3daa713fd79d78a87f0ee93fda1e40d629e7e3bf30e65e483c65783f3e8d7846c905e93fa6c6a9dfc7f1e3bf29f2264450fd823fa4522bf721fce83ff0586ab06afde3bf57af64fda77d893fea5c2a2577eae83fdda514ed2013e4bf6e6cadfd8cf08c3ff0abdeb0f0d7e83fdbdb587e032ae4bfa0ce729986328d3f72f6b5df0db5e83f9e0a57adb354e4bf51d72dd760308d3fec2480185ca2e83f8e542b635c6be4bffe6bd8c774ed8c3f9fd2e0c6a590e83f76cb285ef180e4bff1259007d776893f91cf1005e486e83f976b49d50c8de4bf6dafa632cff3823f28c971f63b7ee83ffcf40746af97e4bf01414a162254783f27933249fd7de83f636ec3191598e4bf103080d559a2713f9be82a8af37de83f88c62c1e2598e4bffabae639694a703f14ff6100d57de83f272137b35798e4bf8b712b284cc5653f29ceba4ecf7de83fc3f2e52c6198e4bf4153d5409f0a633f6c0ffd1fc17de83f6dc609387998e4bfe5ff2258fc5b503f531e6baebd7de83fe8395a377e98e4bfd437dd9927d0453fd3ed56bcbe7de83fbe885ef77c98e4bfc4ac54c527c145bfaadd3fe2c07de83fa832a0827998e4bf8f6f280a165650bf3ecfa020cf7de83f765519646198e4bffe5a2aac360a63bf17b8956bd57de83ff80bb3375798e4bf7f0e5ee18ac165bf4d7fc5f2f37de83fc6a97ea72498e4bfb666fe3e9a4870bff52ad7c1fd7de83fac28cc8b1498e4bfb80bfac6e8a171bfcc9972a43a7ee83f93c7c5e4b097e4bf855490bc705178bf4cd74906e386e83f676e5d120e8de4bfff44f574edf282bf41a2a964a890e83f7325e49aee80e4bf1fcafc420c7289bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:32:00.170000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:32:32.142000000'
+  - instrument: HSC
+    id: 903342
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90334200
+    seq_num: 903342
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 161.44628715
+    zenith_angle: 20.499787830000002
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 708e5589d2d774e83f93d1997074a2e4bf845da3709df783bf6986b9cebc87e83fdffa7271f68be4bf2d423abbf33c84bf10c6b8fdfaaae83fb8d64ced9861e4bfa502a97b1a4184bfb1bb04beabbde83f8099a690e84ae4bf20a03ab5610184bfae7019ac7bcfe83fb3a7ba8c4f35e4bf25aee3d8d08c80bf29ae86b528d9e83fc84b5636ad29e4bf6782c453231774bfd36ebf86e2e1e83f34a791750b1fe4bfb0a69a6862f859bfdea9ee9b2ce2e83ff1e73307b41ee4bf08d4d7c9c938093faf9b702438e2e83f1d409f86a51ee4bf6e2f7d4b4ef9383fc92e7cfa5ae2e83fc0d5f5d9751ee4bfbddf88d764e25b3fceac062161e2e83f3f09f12e6c1ee4bf4643780402a7603f6a521dba6de2e83f3fc70f9c501ee4bfe0cbdfb388906b3f1b128a6f6de2e83f3858470d4d1ee4bf865d58e91f4a6e3fde3e5ca265e2e83fc9efdc4b431ee4bf252b454ede9a743fb48490785fe2e83f3912e423451ee4bf3394d1b96ff8753f9539cdd840e2e83f19d62d55501ee4bfa2e56a2a2b687b3fd2866cdf36e2e83fb919aa02551ee4bfa9a5a37e34c77c3f13d49b9a02e2e83f7065e2a2731ee4bfc464315c0c1b813f1e78cfa8f3e1e83fe0d5e0ef7c1ee4bfcbee619890c4813f4109a06a91e1e83f9b9ff261c21ee4bfd01d378f0922853f2e9b6111acd8e83fe4d693723929e4bf81ca4c5cb5ec8b3f7c211486d4cee83f4a1b4002b434e4bff4fe4b758036913fa7b02686edbce83f17b34db6384ae4bf917010e1f3ef923f3fb27b3d33aae83f578f63eff060e4bf40051d62f510933fce90796df186e83f73a9c7ca528be4bfd688b847e20f933f27d73d1c0e74e83f67840544d2a1e4bfcbd3e85067ee923f1f9dfda53362e83f56b9ce5c49b7e4bf7d53f5551733913fc513214f6d58e83fca46ae8461c3e4bfcbb1a36332e38b3f7f36efe5c44fe83f6ae738e903cee4bf5c577a427a19853f06be7bd5904fe83fe6612bc072cee4bf8660b4a89cc0813fa9708841894fe83ff71bfd9984cee4bf2759217fa514813f38e4dc8f734fe83ffbc418a3becee4bfd71c66e28fc17c3f5a452321704fe83f07390403cacee4bf75e9692b3b647b3ffca4e6106b4fe83f613d63b0e9cee4bf6d773361f0f5753f65929feb694fe83fa3027f9af0cee4bf570aeb5ef798743fdf4d0657744fe83f9ff68824f7cee4bfb35101b9a14d6e3fe4fcbedc784fe83f2aa0bba7f5cee4bfa38c98c3e1926b3faf1025a7904fe83f491a3d6de5cee4bf47b63b2bb8b3603fe776f05d994fe83fa902a93fddcee4bf50865dd1c7f85b3f876ac09ec14fe83fc9e00dadb2cee4bfd5c5aeb5bd65393f48a3d5e2cd4fe83fda5fb994a4cee4bfb4bc0ad35b860e3fae7a531f1750e83fe2edbe034bcee4bf04b51bcfffc959bff6bd9581ee58e83f19548409cfc3e4bf241c113be50674bf4e330a2ee562e83f151f1514d8b7e4bfcc2493c7948280bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:34:45.775000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:35:17.947000000'
+  - instrument: HSC
+    id: 903344
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90334400
+    seq_num: 903344
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 161.69996154
+    zenith_angle: 20.471941549999997
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70685372e7d48be83fb044c8631687e4bf6b3171fccaf783bfb50352b8a09ee83f7713e1578370e4bf3cb93c47213d84bfe936377fafc1e83fbd43a690fe45e4bf4fb5ad07484184bfa5bd1adc46d4e83fef9ebe61392fe4bf76f40c418f0184bf3e2d919ffee5e83f59ca2f868c19e4bf3ddc8b64fe8c80bf89e1b0a49eefe83fb604a568df0de4bf8ad0146b7e1774bf3bdbd1904cf8e83f2268c9ef3303e4bfd593d6c4cef959bf0b39654496f8e83f261d132fdc02e4bfd406db403e0b093f851db9bca1f8e83f7585afa1cd02e4bfe61370da9cf3383fb4419e5dc4f8e83f4cd861ce9d02e4bf06be6f7bf8e05b3f234c6479caf8e83f772d8e1c9402e4bf98f873d64ba6603f6578d6f3d6f8e83f5450d37b7802e4bf4dbe0886d28f6b3f320e56a5d6f8e83f38446aed7402e4bf2d8a8fbb69496e3f308977cdcef8e83f5d48e4346b02e4bfbc968337839a743f8ae4caa5c8f8e83f1282d6136d02e4bfdc211aa314f8753f9ce9ca12aaf8e83fc27275677802e4bf701ae213d0677b3f480ab61ea0f8e83fdbc51c207d02e4bf412b2868d9c67c3f58fa6afc6bf8e83f3849cbfa9b02e4bf06fb10d1de1a813f971317155df8e83f54d17e58a502e4bfbe68490d63c4813f99a2f124fbf7e83fd6085238eb02e4bf0ce64a04dc21853ff291268221efe83f4e4489326c0de4bffa6696d187ec8b3fdceab7cf56e5e83f7ee6abb9f118e4bfd8251ab06936913f645f40e487d3e83f74b8915f8a2ee4bf3262df1bddef923fb47ed407e7c0e83f8f3e91755745e4bf306bd49cde10933fd577c7a4d49de83f40a11498e06fe4bf350f7182cb0f933fd32978800a8be83f0b4f2d1c7586e4bf1116ba8b50ee923fbad5f90e4879e83f09fc7118009ce4bfa0b5c6900033913f82f713408f6fe83f7874712323a8e4bf20e3f6d804e38b3fc224a6bcf266e83f0090a12ccfb2e4bf973d99b74c19853f314be627bf66e83f7be3453d3eb3e4bfc65ea71d6fc0813fc543dca7b766e83f699d791f50b3e4bf14630cf47714813fb9b2e136a266e83ffa3385408ab3e4bf1c0702cc34c17c3f66c1d2d49e66e83fab2f35a495b3e4bf55a2f814e0637b3ffd7dcbe79966e83f93f60057b5b3e4bfa59b934a95f5753f755032ca9866e83ffc205642bcb3e4bf4b1a41489c98743fcf8bb03ca366e83f422691c0c2b3e4bfe006688beb4c6e3f9312b1c0a766e83fe3b6ad3ec1b3e4bf6ee0f0952b926b3f9f19b878bf66e83f3f267fe9b0b3e4bf60fb66fd01b3603f91aa4f26c866e83f65972ab2a8b3e4bf8f52a3755bf75b3f27984937f066e83f54b28cf27db3e4bf1a491c460c60393f7dea8c6bfc66e83f56d683cc6fb3e4bf1ab3de55d0580e3f925897434567e83f3556c3e915b3e4bfe115fa2a6ccb59bf9349f2e91070e83f2ff68e1590a8e4bfb9da4c52400774bf4ad38132fa79e83f58c031068e9ce4bffc8c3453c28280bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:36:07.837000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:36:40.375000000'
+  - instrument: HSC
+    id: 903346
+    day_obs: 20130617
+    physical_filter: HSC-R
+    name: HSCA90334600
+    seq_num: 903346
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 161.9828211499999
+    zenith_angle: 20.441397859999995
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7080d764dbb3a2e83f332d39269e6be4bff8be0274aaf783bfd39dfe6866b5e83f7b665029f654e4bfacada8be003d84bfcbc3089b45d8e83f0fbe38534a2ae4bf7611187f274184bfca0cbf7cc3eae83f0a5a016e7013e4bfd84a9bb86e0184bf718a8ffe62fce83f0a2719d5affde3bfe44d38dcdd8c80bfb73254f2f505e93fc02e1dfef7f1e3bfb5bd6d5a3d1774bfa23e7bed970ee93fe7ce9cd942e7e3bf58ebf482caf859bfeefdaf3ee10ee93f5991a6c6eae6e3bf68d0217ec62b093faca4b2a6ec0ee93f11f9742cdce6e3bfe3b70be2adf7383f568ff3110f0fe93f7da57a32ace6e3bfc38c38bdfce15b3fa9e5d822150fe93f6338d379a2e6e3bf057752f7cda6603f903b447e210fe93f191e1dcb86e6e3bfa5ecc6a654906b3f0571c22b210fe93ff4f7063d83e6e3bff78e43dceb496e3fed95ea48190fe93fc6dd2d8d79e6e3bfbab7c447c49a743fdc315023130fe93f5b06f8727be6e3bff80554b355f8753f521be89cf40ee93f2b2c9be886e6e3bfcdabfa2311687b3f19f316aeea0ee93fbfdc56ac8be6e3bfc83937781ac77c3f838441aeb60ee93f98d012c1aae6e3bfda8f0359ff1a813fe5f464d1a70ee93f1da65f2fb4e6e3bff05a369583c4813f660e602f460ee93f2ccd4b7cfae6e3bfa832188cfc21853f58db864d7805e93fa51a8b5285f1e3bfa6403d59a8ec8b3f5843b17fbafbe83fcc065ec215fde3bf410ad0f37936913fb2d403bf03eae83f91b7403fc212e4bfd2b5945fedef923fb9a898667cd7e83f2e042216a429e4bf4e909ae0ee10933f9b16479d99b4e83f9e1f884b5454e4bf4d6636c6db0f933f7a97e7bde8a1e83f6e37c8befd6ae4bf60c26dcf60ee923f8a983f683e90e83fe68f69849c80e4bf264b7ad41033913fdfd97f2e9386e83f4f5a4164ca8ce4bfc2e4966025e38b3fcf2ea29c027ee83f1558a3058097e4bf59995e3f6d19853fe3bb3d84cf7de83fe85cc34fef97e4bf0b178ca58fc0813fa6fc3a18c87de83f6aa6533a0198e4bfdbc9f67b9814813fd7e85ee8b27de83f93524a733b98e4bf026000dc75c17c3feaad1393af7de83ffba9c1da4698e4bfa367002521647b3f7f6f9ac9aa7de83fbd4216936698e4bf7da6bc5ad6f5753fef3ac5b3a97de83ff327ad7f6d98e4bf2c587158dd98743f0710a02db47de83f129354f27398e4bfdd17faab6d4d6e3f614ef7afb87de83fb4c66d6b7298e4bff1368db6ad926b3f7221d355d07de83fec89e6fb6198e4bfd080231e84b3603fb64840fad87de83f0b70ecba5998e4bfc25228b75ff85b3f958d82db007ee83f2d58c3ce2e98e4bfb77ba94c1d64393f25b7f8ff0c7ee83f7c41289b2098e4bf2cf1b48a58790e3f3b599773557ee83fe9346367c697e4bf533f5be967ca59bf5ebf9d531587e83f0c58c9c6368de4bf9477b441ff0674bf63dc642cf190e83fbebfdeac2981e4bf24d5e5caa18280bf
+    datetime_begin: !butler_time/tai/iso '2013-06-17 13:37:32.518000000'
+    datetime_end: !butler_time/tai/iso '2013-06-17 13:38:04.986000000'
+  - instrument: HSC
+    id: 903986
+    day_obs: 20131102
+    physical_filter: HSC-I
+    name: HSCA90398600
+    seq_num: 903986
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 195.48948491
+    zenith_angle: 20.449417370000006
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70c4a60f138474e83fe8d2fb632ea2e4bff5d5247e28e78cbf7af4c3206887e83f64187c9eaf8be4bfa4c63af1882c8dbf031a1841a6aae83fa2d7220e5261e4bfe20f381fb0308dbfc27f26dc57bde83f96e16d67a24ae4bf4d2abe9eedf08cbf4604eaa833cfe83f74adc2421335e4bf305a46a5567c89bf5ebf020bf7d8e83fb9bc35828329e4bf02b9cc831bfb82bfe01c8d37c8e1e83f959f662ef51ee4bf0c92c9f8275d78bfbf185bca1de2e83fa4478f4ea71ee4bf2bdbd18da2ac71bf50bb93aa2be2e83fa0b6c1c09a1ee4bf9a7f72dc7f4f70bf15e3aacb57e2e83f6503bbce721ee4bf735655b4f9cc65bf04ec164660e2e83f764d4d136b1ee4bfc411e82c2a1763bf9c89683e76e2e83f5e7ed84b571ee4bf1d4655d8425b50bfe86bf64a78e2e83f6fca5aaf551ee4bffd7c477d24d045bf4d6ed0de79e2e83f0a2fdcba531ee4bfc71b32bb69de453fc62f7a0d76e2e83f8c204986571ee4bfe08436177f65503fc00d52c460e2e83f1a3ad37b6a1ee4bfa351a1f24112633f7219ed2559e2e83f01cece1e711ee4bfb7b8a21e58d0653f881848362ee2e83f59de1582971ee4bf41c72b671857703f9ab2d98a21e2e83f01236eb3a21ee4bfd71e8a2423aa713f167739dccae1e83fe73bf2c2f11ee4bf9d7fe4412265783ff6632cd8fcd8e83fbcda703b7c29e4bfadc8ec4043fd823f9ab499a23bcfe83fa93e835e0935e4bff45536fa9a7d893f4a12ff7b60bde83f9a235ced974ae4bf8d4279fa7ff08c3fbc6a4216a7aae83f9c3f2ee35061e4bf72b8309679328d3ff949463f6587e83ff3f7c4b8b28be4bfdb69ecd353308d3f33d648088174e83f7cf5ec7231a2e4bf669aa5c467ed8c3fe3f754ac9a62e83fca619fa69eb7e4bfa9b16304ca76893fa42abaf6bd58e83f59ba9933a4c3e4bf09546f2fc2f3823ff20ed03bfe4fe83f9c6e2a3333cee4bfcf53d60f0854783fe9d1a2abbe4fe83f0fd1d57998cee4bf2156ffce3fa2713ff60ce8c8b44fe83f76a84e68a8cee4bf6bc663334f4a703fa8795ece954fe83fe51b97b8dacee4bff5f0171b18c5653f66419707904fe83fb8237325e4cee4bf4d3ebf336b0a633f511e39a3814fe83f09d3a010fccee4bf3e13e93d945b503fa47382267e4fe83ff598300801cfe4bfcd25666557cf453fbbd428377f4fe83f60ae87caffcee4bf53e9cbf9f7c145bf8e74c164814fe83ffb979b5afccee4bf0c5a62247e5650bfc7c3d2d88f4fe83fdc62175ce4cee4bf7e6e40b96a0a63bfd7a36e3a964fe83f7c6fd63ddacee4bfc79671eebec165bfc8423932b54fe83fb99c47f2a7cee4bfec5f8145b44870bf8b292b25bf4fe83f2011a4ec97cee4bf69e87acd02a271bf60f9bbe5fc4fe83f1df18bce34cee4bf044204c38a5178bf29bb73f4bc58e83f17cad36da5c3e4bf8da12c78faf282bf2b8c444f9d62e83f0f0e66e89bb7e4bf1a5b2946197289bf
+    datetime_begin: !butler_time/tai/iso '2013-11-02 05:19:02.876000000'
+    datetime_end: !butler_time/tai/iso '2013-11-02 05:19:35.683000000'
+  - instrument: HSC
+    id: 903988
+    day_obs: 20131102
+    physical_filter: HSC-I
+    name: HSCA90398800
+    seq_num: 903988
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 195.76668946
+    zenith_angle: 20.474563720000006
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 704e8c7bab808be83f39aac5f3d086e4bf7aeb5871f4e68cbf71ad438d4b9ee83f58b6c6223d70e4bf16ac34e4542c8dbf338cd8455ac1e83f7f40bf4fb845e4bf3d862f127c308dbffb61777ef2d3e83f3dbdf9d5f32ee4bfc061ed91b9f08cbf20c44e2bb6e5e83f2d7523cc5019e4bfff9f8c98227c89bf20bff59c6cefe83fcd77bc2ab60de4bf72bfe376e7fa82bf363b26f931f8e83ffbe4f5031e03e4bf9171dfdebf5c78bfd8aa803487f8e83ff95283c4cf02e4bfc3afb3733aac71bf9a599d0695f8e83fe6b43227c302e4bfbabc4bc2174f70bfc7ddc4fac0f8e83f3c0cce039b02e4bfa340d17f29cc65bfc71d7b6cc9f8e83f37bae13e9302e4bfefbd59f8591663bf83b2704edff8e83fc61ac25e7f02e4bf4d65016fa25950bf73e52259e1f8e83f813cf0bf7d02e4bf668c91aae3cc45bf3a1296eae2f8e83feb9282c97b02e4bf7e10e78daae1453f4a83711ddff8e83f4e7725997f02e4bfb55f8a801f67503f00244de9c9f8e83fcf133da69202e4bf8ea32f271213633f5bd14852c2f8e83f8f9fab519902e4bf0a8a265328d1653f7771688d97f8e83f40b1a2e4bf02e4bf782552818057703fc10b75ee8af8e83fc5b50f24cb02e4bfd814a83e8baa713f3a79159834f8e83f7036fc931a03e4bf691bce5b8a65783feb96005f72efe83f6da90cdbae0de4bff06ed54d77fd823f1752ed15bee5e83fa7cdb5db4619e4bf6cbbef06cf7d893f25690c0efbd3e83fa63e8e4ee92ee4bfc9e94907b4f08c3f4dc71f155bc1e83f0aa21620b745e4bfe31039a3ad328d3f36d0aaaa489ee83f811f7f3c4070e4bf691ff2e087308d3feba8979f7d8be83f104b5d02d486e4bf7fe070d19bed8c3fa9acad3daf79e83f7d601b27559ce4bfbd821511fe76893f1c4327fcdf6fe83f2e0df0b065a8e4bff1c14c3cf6f3823f6ec64b122c67e83f0dd0fb6ffeb2e4bf190aa6297054783fb4c1a7f3ec66e83f0b5e9efd63b3e4bfc5bf02e9a7a2713f2e06cc22e366e83f210c23f773b3e4bfae9a6f4db74a703f4476be60c466e83f6fbc126aa6b3e4bff6f7654fe8c5653fea8c8fa4be66e83f1ee167ddafb3e4bff49617683b0b633f3b1b285bb066e83fd7cac6d8c7b3e4bfded0d0a6345d503f858d0de4ac66e83f49da43d4ccb3e4bf9384423798d2453fb82687f3ad66e83fb0429895cbb3e4bfc2ddee27b7be45bfd74e551db066e83f22d14a23c8b3e4bf1ca37abbdd5450bf5069c776be66e83f1dd9dd14b0b3e4bf4f19e8849a0963bf01ce1fcdc466e83fddd18defa5b3e4bf506e23baeec065bf8242e08ce366e83f9e4eb48173b3e4bf1177752b4c4870bff43ef46ded66e83fd627097163b3e4bf977177b39aa171bf2485ecbf2a67e83fea186d0e00b3e4bf8a8734a9225178bfeea239fede6fe83f7651bdee66a8e4bfae2c4f6bc6f282bf46be89e1b179e83fefc33c69529ce4bf1d147739e57189bf
+    datetime_begin: !butler_time/tai/iso '2013-11-02 05:20:26.658000000'
+    datetime_end: !butler_time/tai/iso '2013-11-02 05:20:58.886000000'
+  - instrument: HSC
+    id: 903990
+    day_obs: 20131102
+    physical_filter: HSC-I
+    name: HSCA90399000
+    seq_num: 903990
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 195.99364613
+    zenith_angle: 20.495525720000003
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7024e89db95ea2e83f92a061c6596be4bf1b598bfc21e78cbf3e39e25710b5e83f58ceee05b154e4bfc6039a6f822c8dbf85c7c67cefd7e83f7d641925052ae4bf21ff969da9308dbfb7f6b03b6eeae83fcec79bf42b13e4bfaf11241de7f08cbffe61dab219fce83fc05cee2075fde3bf5523af23507c89bffb58d828c305e93f2986e5adcff1e3bf2d9a2f0215fb82bf86c2b0aa7c0ee93f488127c22de7e3bf984e8cf51a5d78bffbddaa8ed10ee93f62c9e223dfe6e3bf48168e8a95ac71bfa2f7b352df0ee93f15f73377d2e6e3bfc5a72dd9724f70bf00a91a1a0b0fe93f1f37f722aae6e3bfabd4c4addfcc65bfe40f2a83130fe93f3ffaaa54a2e6e3bf35485626101763bf83eb0e4f290fe93f9bf24d5c8ee6e3bfa8cb2acb0e5b50bfd086fc572b0fe93fa6143fbb8ce6e3bf1dc2f062bccf45bf61af6de72c0fe93f2c9539c38ae6e3bf92b788d5d1de453f1d47991e290fe93f90e322978ee6e3bfe1fe6024b365503f3d8cf9ff130fe93f9bc104bca1e6e3bf4d1b33f95b12633f812b79700c0fe93fd646f36fa8e6e3bf5432332572d0653ff33df9d6e10ee93fb3cabe32cfe6e3bfcd92706a2557703f2993a944d50ee93f5d264780dae6e3bf60ddcd2730aa713f7e7275477f0ee93f05dea1502ae7e3bff1b221452f65783fbdad52e5c805e93f0bfcee59c8f1e3bf72dd89c249fd823ff70add9521fce83fb5d38d2a6bfde3bfac82cd7ba17d893fddcf7ac376eae83f6801e9662113e4bf8957137c86f08c3f9315c04ef0d7e83fa556d3f7032ae4bf94c3d11780328d3ff005c77c0db5e83ff13f2726b454e4bfa0208d555a308d3fa2f621b55ba2e83f1bc49fdb5c6be4bf3d033f466eed8c3ff8961063a590e83f13a93fd6f180e4bfd6ebf985d076893f8515f5a0e386e83fc843234d0d8de4bfc3010bb1c8f3823f8b0e11923b7ee83ffa94a9bdaf97e4bf714a10131554783fa878c7e4fc7de83f8cf85c911598e4bf20c33fd24ca2713fa8cebd25f37de83f22bfc4952598e4bfb840a5365c4a703f151fed9bd47de83f75f4c82a5898e4bf47b1a12132c5653fda0744eace7de83fb44276a46198e4bfce484a3a850a633f51fc7ebbc07de83f293a94af7998e4bf9609064bc85b503f303beb49bd7de83faa35e3ae7e98e4bfd7aea17fbfcf453f8434d057be7de83fa7eee16e7d98e4bf134b90df8fc145bf157db77dc07de83f753b22fa7998e4bfd36445174a5650bf530b12bcce7de83f740b96db6198e4bfc564b5b2500a63bfd76f0507d57de83fd97a2eaf5798e4bfaad2e7e7a4c165bf875e2f8ef37de83f4d1df51e2598e4bf57e33f42a74870bfcba53f5dfd7de83fac6841031598e4bf187a3acaf5a171bfde8ed43f3a7ee83f154f355cb197e4bf4e4bcabf7d5178bf1a99cea1e286e83f5f3ce9890e8de4bf4ef390f6f3f282bfa62f5900a890e83f3d439212ef80e4bfa51293c4127289bf
+    datetime_begin: !butler_time/tai/iso '2013-11-02 05:21:46.155000000'
+    datetime_end: !butler_time/tai/iso '2013-11-02 05:22:19.378000000'
+  - instrument: HSC
+    id: 904010
+    day_obs: 20131102
+    physical_filter: HSC-I
+    name: HSCA90401000
+    seq_num: 904010
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 220.54040256
+    zenith_angle: 24.98797295
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 708c4d0c55d774e83fe7561e0675a2e4bf5efc436d90f783bf2c0fc751bc87e83f1ae46b07f78be4bffcd6cbb7e63c84bf3cd5c881faaae83fdbcf1c849961e4bf21f439780d4184bf35f59d42abbde83f408ee727e94ae4bfb7f5d9b1540184bfd52125317bcfe83f25e559245035e4bfbd0e8fd5c38c80bf36cdb83a28d9e83f2f7f15cead29e4bfe6471b4d091774bfe965100ce2e1e83fa4cb690d0c1fe4bfc165404efaf759bf84fa30212ce2e83f74e5ff9eb41ee4bfaf568d15cd45093f6edbafa937e2e83fa5ad681ea61ee4bfbb96eeb4eefa383fd508af7f5ae2e83f56d6b471761ee4bf712ed9f1cce25b3f115e36a660e2e83fa45dadc66c1ee4bf5e0d9e1136a7603ff505403f6de2e83f9d0ec133511ee4bfd5a8f8c0bc906b3fdd72a9f46ce2e83f28c8f5a44d1ee4bfc8296df6534a6e3f96326e2765e2e83f16d47fe3431ee4bf5b9dc554f89a743fc2029ffd5ee2e83facf983bb451ee4bf37214fc089f8753f03dacd5d40e2e83f52b3c1ec501ee4bf331edb3045687b3fa19c696436e2e83fc6df3a9a551ee4bf441010854ec77c3fce978a1f02e2e83ffa9e663a741ee4bf04395f5f191b813f04b3ba2df3e1e83ff0f261877d1ee4bff8818d9b9dc4813fadc678ef90e1e83fd76463f9c21ee4bf430856921622853fef86d895abd8e83f1115b2093a29e4bf94535c5fc2ec8b3fa380240ad4cee83f69420799b434e4bf3af3c7f68636913fa389a209edbce83f914a994c394ae4bfe22a8c62faef923fe4a76bc032aae83f3ed53b85f160e4bfc1799fe3fb10933f160567eff086e83f83e3c85f538be4bfeeaa3ac9e80f933f875ba39d0d74e83fdc9b94d8d2a1e4bfc7e463d26dee923f1983f1263362e83f6750fff049b7e4bf6a5b70d71d33913fccc5ebcf6c58e83fcd54be1862c3e4bf117eb0663fe38b3f8dfe9a66c44fe83fed62307d04cee4bfab1496458719853fbaa03556904fe83f1b8d2f5473cee4bf55a9dcaba9c0813fca4245c2884fe83f7be4032e85cee4bfc6e74b82b214813fa7d9a510734fe83fe7472a37bfcee4bf61d8cbe8a9c17c3f365fefa16f4fe83fc97d1897cacee4bf026ad33155647b3f5893bf916a4fe83facaf8244eacee4bf2347aa670af6753f82bf7b6c694fe83ff443a12ef1cee4bf4ebb64651199743f7ff2efd7734fe83feccbb6b8f7cee4bf3c8908c6d54d6e3f8914ac5d784fe83fe867ec3bf6cee4bf0ee0a3d015936b3f4a242028904fe83f45c27901e6cee4bf94e95338ecb3603f0e22efde984fe83f1cb3e8d3ddcee4bf9bb592eb2ff95b3ffe9ecd1fc14fe83fc3c55941b3cee4bfc4ffb31e5e67393f7b8de663cd4fe83f115e0829a5cee4bfbd07601b5f930e3f9f4077a01650e83fa4931d984bcee4bf782edcb497c959bf2d711b03ee58e83fbe29359ecfc3e4bf86c16d34cb0674bf2964f9afe462e83fe0c41da9d8b7e4bfcb7440c4878280bf
+    datetime_begin: !butler_time/tai/iso '2013-11-02 06:01:15.668000000'
+    datetime_end: !butler_time/tai/iso '2013-11-02 06:01:47.909000000'
+  - instrument: HSC
+    id: 904014
+    day_obs: 20131102
+    physical_filter: HSC-I
+    name: HSCA90401400
+    seq_num: 904014
+    exposure_time: 30.0
+    target_name: STRIPE82L
+    observation_reason: science
+    science_program: o13015
+    azimuth: 220.88709214
+    zenith_angle: 25.1015017
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ff60dfc2b3a2e83f34069a449e6be4bf845da3709df783bf2429965066b5e83fe12cc947f654e4bf2d423abbf33c84bfe873d48245d8e83f6421dc714a2ae4bfa602a97b1a4184bf1b5da564c3eae83fb646ba8c7013e4bf22a03ab5610184bf85fb7ee662fce83f455ad9f3affde3bf27aee3d8d08c80bf9c2831daf505e93f6b48ce1cf8f1e3bf6682c453231774bf6c0243d5970ee93f12733cf842e7e3bfaca69a6862f859bf67526726e10ee93faec938e5eae6e3bf09d4d7c9c938093f549b668eec0ee93f9470044bdce6e3bf6e2f7d4b4ef9383ff61e9af90e0fe93fe923ff50ace6e3bfc2df88d764e25b3f1c177c0a150fe93f16f45498a2e6e3bf4843780402a7603fa2cfd965210fe93f9aad93e986e6e3bfe1cbdfb388906b3fa09a5413210fe93f14b97a5b83e6e3bf875d58e91f4a6e3f94096f30190fe93fd85796ab79e6e3bf262b454ede9a743f7432d10a130fe93f53a95d917be6e3bf3494d1b96ff8753f705b5b84f40ee93fff78f50687e6e3bfa3e56a2a2b687b3ffbb88695ea0ee93fd34aaeca8be6e3bfaca5a37e34c77c3f1b74a395b60ee93f0dd05edfaae6e3bfc664315c0c1b813fce82c3b8a70ee93f7fd9a84db4e6e3bfcbee619890c4813f9051ad16460ee93fb6ae869afae6e3bfd11d378f0922853f8508a5347805e93f18489f7085f1e3bf81ca4c5cb5ec8b3f3092a066bafbe83f988d4be015fde3bff4fe4b758036913f0451c7a503eae83fb16e0a5dc212e4bf927010e1f3ef923f6aed3e4d7cd7e83f4c10d433a429e4bf41051d62f510933feb50b98399b4e83f59a40f695454e4bfd688b847e20f933f037d3fa4e8a1e83ff3013adcfd6ae4bfccd3e85067ee923fef908e4e3e90e83f240fd4a19c80e4bf7e53f5551733913f38c6e0149386e83fa5dcba81ca8ce4bfccb1a36332e38b3f8a3e1883027ee83fa2592e238097e4bf5d577a427a19853f9921c46acf7de83fdfe75b6def97e4bf8760b4a89cc0813f08afc4fec77de83f54ecee570198e4bf2759217fa514813f80f2f5ceb27de83f179ff0903b98e4bfd81c66e28fc17c3fce19ae79af7de83f89c16af84698e4bf76e9692b3b647b3f8a6342b0aa7de83f6982cab06698e4bf6e773361f0f5753fc895709aa97de83fa634649d6d98e4bf580aeb5ef798743f901b5914b47de83f78e216107498e4bfb65101b9a14d6e3f06ccb396b87de83fcfea32897298e4bfa58c98c3e1926b3f42659d3cd07de83f79fbb6196298e4bf49b63b2bb8b3603f86020ee1d87de83fd2b7bfd85998e4bf54865dd1c7f85b3f5d1a5ec2007ee83f44f1a1ec2e98e4bfe5c5aeb5bd65393f47bbd7e60c7ee83f35b009b92098e4bf33bd0ad35b860e3faba3875a557ee83f4dbf5285c697e4bf04b51bcfffc959bf3323bd3a1587e83f8e83dfe4368de4bf251c113be50674bfdcb0b313f190e83fb5b11bcb2981e4bfcd2493c7948280bf
+    datetime_begin: !butler_time/tai/iso '2013-11-02 06:03:59.784000000'
+    datetime_end: !butler_time/tai/iso '2013-11-02 06:04:31.705000000'
+- type: dimension
+  element: visit_detector_region
+  records:
+  - instrument: HSC
+    detector: 0
+    visit: 903344
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70eded6a01c6c2e83f5da07b6e0745e4bf836a0aa25d6c7abf8eb8f97884c2e83f850185c32845e4bf3dd0ff986a1d81bf9844881a4ed5e83f604f69f1222ee4bfb15243015be680bfbff1875ec3d5e83f8b88006ec02de4bf2359d6371d157abf
+  - instrument: HSC
+    detector: 1
+    visit: 903346
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ad0428e7e9c6e83f4275621ef73fe4bf400f3343ab857abfdddcf382d5c6e83fc92a77fae03fe4bf16546d72552d81bf871aba5de6d9e83f77fdd5537728e4bfaa37962fe51b81bf1f6f778c29dae83ff9369f725328e4bfa0ffb283f6697abf
+  - instrument: HSC
+    detector: 1
+    visit: 904014
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 706505b6cee9c6e83f1ce0d33cf73fe4bf7d571c3c91857abf37b4956ad5c6e83f159cf818e13fe4bfac16ee6e482d81bfb52a7845e6d9e83ff8696e727728e4bf5d121c2cd81b81bf8601227429dae83fdfe427915328e4bffddaa67cdc697abf
+  - instrument: HSC
+    detector: 4
+    visit: 903342
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f703b56aa6bee83f99fedb4f2f4ae4bf7348550fe87873bf95a93f7949bee83f8aaca2047c4ae4bfd7853234e5667bbf2e9c9463a4d0e83ff422a0af0834e4bf6f0a80c974c57abfe697534e33d1e83fbfb7196a7c33e4bff31bdf6823fb72bf
+  - instrument: HSC
+    detector: 4
+    visit: 904010
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7055471fefa5bee83ff031f8e62f4ae4bfa78a5708ce7873bfeeeebbfd48bee83f2328cd9b7c4ae4bf4102472dcb667bbf864298e8a3d0e83fd14739470934e4bfba3ec7c25ac57abf491947d332d1e83f630fa6017d33e4bf34e5156209fb72bf
+  - instrument: HSC
+    detector: 5
+    visit: 903344
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70e016730fefc2e83fdc7ffeb9f344e4bfa1c8085418bd73bfad1d4811bbc2e83f31c9c5bc0d45e4bfcd60753153be7bbfeb6871d8b0d5e83fc6e9a456d02de4bfbad61cf3ed617bbf51d3af2f0ed6e83f39693c3f822de4bfa72b09e62b7573bf
+  - instrument: HSC
+    detector: 6
+    visit: 903346
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f47f7583f7c6e83f8bc9de230540e4bf0ff1bfccfbd173bf3374416ce8c6e83f6e81aecff13fe4bfb843436d06d97bbf706e011221dae83f809149d75628e4bfdc2f9e8f65ba7bbf6a59cd3256dae83fd41e70043b28e4bf6fad278eb3b973bf
+  - instrument: HSC
+    detector: 6
+    visit: 904014
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70e28cf26af7c6e83f377942420540e4bf646f99c5e1d173bf6bd2d253e8c6e83f07a522eef13fe4bfd8353066ecd87bbf5b4caff920dae83f9be9d4f55628e4bf4da395884bba7bbf912f671a56dae83f783eeb223b28e4bfbcfb0b8799b973bf
+  - instrument: HSC
+    detector: 10
+    visit: 903342
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7018674d79e0bee83ff13a7ceefd49e4bf325e1db2c07069bfbc75adcd97bee83fbbf0e2ce3b4ae4bfbb2314253cd074bfda83a6571dd1e83f2c4006479233e4bfbe49a168214c74bfcb1cf5708dd1e83f3bc1a9492233e4bfc7c8c88b53aa68bf
+  - instrument: HSC
+    detector: 10
+    visit: 904010
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70e0f3a7fddfbee83f58c48b85fe49e4bf77a30ca48c7069bfb5c71a5297bee83f299501663c4ae4bf9409191e22d074bfd3ca9cdc1cd1e83ff0ce94de9233e4bf3070da61074c74bf9722daf58cd1e83fe0692ae12233e4bfbd5f237e1faa68bf
+  - instrument: HSC
+    detector: 11
+    visit: 903344
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7037b2665313c3e83fe48d5161dd44e4bf7cba61e53eda69bfd9f1980fe8c2e83f9b4428d9f644e4bf0147f96f1b1675bf762e5fe000d6e83fc9ed3e3d8d2de4bff4e9f2d0eace74bf40c427d54cd6e83fb5e238a04a2de4bf3ae8b944567069bf
+  - instrument: HSC
+    detector: 12
+    visit: 903346
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 705b050bbafcc6e83f76cf70e31440e4bfee51262325fc69bfa6f3d963f2c6e83f383b47ef0540e4bf7e499846212c75bf0865606d4bdae83f410259d84228e4bfdef088bf871275bf09db096074dae83f1b265ade2b28e4bf9e71aa070fd469bf
+  - instrument: HSC
+    detector: 12
+    visit: 904014
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7031cb76a1fcc6e83f5f77c6011540e4bfdc87c214f1fb69bfb8675a4bf2c6e83f33adad0d0640e4bf4999743f072c75bf7296fd544bdae83f94dad6f64228e4bfb80070b86d1275bf779a924774dae83f2d65c7fc2b28e4bffda15cf9dad369bf
+  - instrument: HSC
+    detector: 16
+    visit: 903334
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70475bf1ba79d0e83fbae4796c2134e4bf6d0aff2d988f7fbfca028ffbd9d0e83fb219bf5bd733e4bfa42d1700c87377bf0d46e4dc09bee83f039c610adc4ae4bffe57a72b77bd77bf8af0a44bc7bde83f07cc910e004be4bffa50a8899ff67fbf
+  - instrument: HSC
+    detector: 16
+    visit: 903986
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f25cd2d279d0e83f7e408f4d2134e4bf3b82aa3ed98f7fbf715fa213dad0e83f852cfe3cd733e4bfd7d2f810097477bf6ceb11f509bee83f9c23b6ebdb4ae4bf578a0d3db8bd77bf03559f63c7bde83fb3dfbbefff4ae4bf7545d59ae0f67fbf
+  - instrument: HSC
+    detector: 16
+    visit: 903988
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70df986845fbe6e83f15be986a5d18e4bf918efe23718f7fbf6d76f1325be7e83f6e9c70ee1218e4bf6730f6f5a07377bfe1e5dad5a4d4e83f914617922c2fe4bfd9d2362150bd77bf778e1e6d62d4e83f75c4a4e0502fe4bfe6235a7f78f67fbf
+  - instrument: HSC
+    detector: 17
+    visit: 903336
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70a78caf622ed5e83fbe24e308562ee4bf3c174328d8f27fbfcdce7dc171d5e83fb7fae37c302ee4bf03e643f19bba77bf8666c3381dc2e83f93402125e245e4bf59fd09d1b1e477bfd95fa9e3f2c1e83f4597d908e845e4bfa68ed30e631680bf
+  - instrument: HSC
+    detector: 17
+    visit: 903988
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ac5f177c2ed5e83fcd343ceb552ee4bfd38c1a1797f27fbf4cddb1da71d5e83fc531125f302ee4bf1437e2df5aba77bfb66515521dc2e83ff2e66707e245e4bf9f4e57bf70e477bf5b602ffdf2c1e83f134a4bebe745e4bf219e1786421680bf
+  - instrument: HSC
+    detector: 18
+    visit: 903338
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ae65a1165ed9e83f739d10d02c29e4bf92fd58568d1580bf97f5e3e389d9e83ffbe960de2429e4bfeb71adf572e377bfd3d1402bfcc5e83fb4d98ed12641e4bf016a05f66df077bfe8c72155e8c5e83f810a8f0d1141e4bf4df8dcfc501e80bf
+  - instrument: HSC
+    detector: 18
+    visit: 903990
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70bbd014b45dd9e83fd2d834492d29e4bfaff317d8931580bfa4f5618189d9e83fd2808e572529e4bf5a1e37f97fe377bf7a9749c8fbc5e83fcbf55c4a2741e4bfc60b94f97af077bfd48320f2e7c5e83f653b54861141e4bfa75c9e7e571e80bf
+  - instrument: HSC
+    detector: 22
+    visit: 903334
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70a6ec981fc8e1e83f37f1404df51ee4bf193e97e8e65c78bf9b9c6d922be2e83fba9e72df9a1ee4bf00461acc3e4f70bf699c99c045d0e83f2040f287a834e4bf4f6156079e9d70bfe50f6120ffcfe83fd84fba8ddd34e4bf96aee39fe8d478bf
+  - instrument: HSC
+    detector: 22
+    visit: 903986
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70e01c8d37c8e1e83f959f662ef51ee4bf0c92c9f8275d78bf50bb93aa2be2e83fa0b6c1c09a1ee4bf9a7f72dc7f4f70bf23b9d8d845d0e83f8d965569a834e4bf8c436018df9d70bf1f0c6d38ffcfe83f0a41f36edd34e4bf7b17c4b029d578bf
+  - instrument: HSC
+    detector: 23
+    visit: 903334
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70424ca5cdc8d0e83f403274dfe533e4bfbb2784fa99d478bf1a4231b611d1e83fde1e2101ae33e4bf0eff3023d09e70bf413cd84b30bee83f84ea11e0c84ae4bf23f2b11d58cf70bff78d7cecfcbde83f42472b24e54ae4bf5499cd6f4d2079bf
+  - instrument: HSC
+    detector: 23
+    visit: 903986
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70381cb0e5c8d0e83ffc2eacc0e533e4bf99d05d0bdbd478bfb0256fce11d1e83f3a7683e2ad33e4bf80ff3334119f70bfec20316430bee83f964e8ac1c84ae4bf6f4f3b2f99cf70bf6f93a104fdbde83f19a97805e54ae4bf5e662b818e2079bf
+  - instrument: HSC
+    detector: 23
+    visit: 903988
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7098eb4d154ae7e83f942f51852118e4bf0bf567f072d478bfb87b26bf92e7e83f80159855e917e4bf7afefb18a99e70bf53ad342fcbd4e83f9564d03c192fe4bf72532c1331cf70bfb8baaaef97d4e83f9f5d53ba352fe4bfbc1d6265262079bf
+  - instrument: HSC
+    detector: 24
+    visit: 903336
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7088d116be67d5e83ff0364f0d362ee4bf8624fe2bef1f79bf7e7f803a9cd5e83f445d0703182ee4bffd889e1ddfcf70bf8800f01339c2e83f8ade8e38dc45e4bf6132a28122ea70bff89fadea16c2e83f1e584a17e345e4bf6bd773c3124979bf
+  - instrument: HSC
+    detector: 24
+    visit: 903988
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7076a953d767d5e83ff2b284ef352ee4bf48f9a41aae1f79bf830689539cd5e83f289711e5172ee4bf5ade190c9ecf70bf9b2b162d39c2e83fae47b11adc45e4bf3578cb6fe1e970bf025d080417c2e83f053a98f9e245e4bf07d4c9b1d14879bf
+  - instrument: HSC
+    detector: 25
+    visit: 903338
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f731d1fe7fd9e83f470a99412a29e4bf25d39fc5c24879bfd3c72152a2d9e83f7295abfb2229e4bfdb25920b3cea70bfb023234b06c6e83f77db0fad3641e4bfee0770ff86f170bf7923f8bef5c5e83f3597d7e82741e4bfb5db3e30695479bf
+  - instrument: HSC
+    detector: 25
+    visit: 903990
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7098554d9c7fd9e83f1201c5ba2a29e4bfb5c427c9cf4879bf059aa8efa1d9e83ff4d0e0742329e4bfcb07230f49ea70bf0d6c34e805c6e83f435ce5253741e4bf92ee050394f170bf5f23ff5bf5c5e83f8825a4612841e4bf7ebfcb33765479bf
+  - instrument: HSC
+    detector: 100
+    visit: 903334
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 705bf0f99de8d9e83fa93c6991b228e4bfb3d453c1be5c77bf21b929fe0ad0e83f9ba644f7d434e4bf89796a64409577bf0cbdd27043cfe83f908164806f35e4bfd5da7425222c83bf55b756f3f6d8e83fba054ca18329e4bf561dbbfbfafa82bf
+  - instrument: HSC
+    detector: 100
+    visit: 903342
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f866054d01dae83f0cccb14bc728e4bf58f6507460f755bf13381f0e24d0e83f3cd32702ea34e4bf3fc896ec02d956bf3db6b9db75cfe83fbfb6c0a19935e4bfa544b6eb597974bf29ae86b528d9e83fc84b5636ad29e4bf6782c453231774bf
+  - instrument: HSC
+    detector: 100
+    visit: 903986
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70744400b6e8d9e83f63ba9d72b228e4bfa208e1d1ff5c77bfe4793d160bd0e83fe50784d8d434e4bf2a455275819577bfd9e98a8843cfe83f4b0f58616f35e4bf023bb1ad422c83bf5ebf020bf7d8e83fb9bc35828329e4bf02b9cc831bfb82bf
+  - instrument: HSC
+    detector: 100
+    visit: 904010
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f57b18d200dae83f88c957e3c728e4bf57956c59f8f655bf10d2e89223d0e83f27199299ea34e4bf2eda1fd19ad856bf130ea46075cfe83f2c8c45399a35e4bfcb20eae43f7974bf36cdb83a28d9e83f2f7f15cead29e4bfe6471b4d091774bf
+- type: collection
+  collection_type: RUN
+  name: HSC/runs/ci_hsc/20240806T180642Z
+  host: null
+  timespan_begin: null
+  timespan_end: null
+- type: dataset_type
+  name: calexp
+  dimensions:
+  - band
+  - instrument
+  - day_obs
+  - detector
+  - physical_filter
+  - visit
+  storage_class: ExposureF
+  is_calibration: false
+- type: dataset
+  dataset_type: calexp
+  run: HSC/runs/ci_hsc/20240806T180642Z
+  records:
+  - dataset_id:
+    - !uuid '1b3a4c19-dffa-4942-af1d-b123a1497a00'
+    data_id:
+    - instrument: HSC
+      detector: 23
+      visit: 903334
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903334/calexp_HSC_r_HSC-R_903334_0_26_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'ae4cae3d-780e-422c-bf12-b21627f38f47'
+    data_id:
+    - instrument: HSC
+      detector: 22
+      visit: 903334
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903334/calexp_HSC_r_HSC-R_903334_0_27_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'd7f22645-9384-4e3b-aed9-66a29188fee2'
+    data_id:
+    - instrument: HSC
+      detector: 16
+      visit: 903334
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903334/calexp_HSC_r_HSC-R_903334_0_30_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '7f7b8ea0-c5fa-465d-8332-de2051f08d95'
+    data_id:
+    - instrument: HSC
+      detector: 100
+      visit: 903334
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903334/calexp_HSC_r_HSC-R_903334_0_31_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'cbe79ea0-a3ce-459a-a13c-136bd0df1f75'
+    data_id:
+    - instrument: HSC
+      detector: 24
+      visit: 903336
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903336/calexp_HSC_r_HSC-R_903336_0_25_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'cf2a1298-ea80-4780-b020-5ef039d6b4f0'
+    data_id:
+    - instrument: HSC
+      detector: 17
+      visit: 903336
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903336/calexp_HSC_r_HSC-R_903336_0_29_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'a51ca628-27a0-4254-bf36-6d71e2d50a09'
+    data_id:
+    - instrument: HSC
+      detector: 25
+      visit: 903338
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903338/calexp_HSC_r_HSC-R_903338_0_24_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '4ea0922a-ace6-4913-bc18-e504f4e2e117'
+    data_id:
+    - instrument: HSC
+      detector: 18
+      visit: 903338
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903338/calexp_HSC_r_HSC-R_903338_0_28_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'c83db1a8-a8f9-43e0-8ffa-500b448aff18'
+    data_id:
+    - instrument: HSC
+      detector: 100
+      visit: 903342
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903342/calexp_HSC_r_HSC-R_903342_0_31_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '49bc81a8-533b-4b7f-bc5b-35a1a6fd8078'
+    data_id:
+    - instrument: HSC
+      detector: 10
+      visit: 903342
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903342/calexp_HSC_r_HSC-R_903342_1_36_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '1e2d557f-b9e1-4afc-9269-a9edc8cba1ce'
+    data_id:
+    - instrument: HSC
+      detector: 4
+      visit: 903342
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903342/calexp_HSC_r_HSC-R_903342_1_42_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '3a342284-0124-4391-a4e6-6deea6883e6b'
+    data_id:
+    - instrument: HSC
+      detector: 11
+      visit: 903344
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903344/calexp_HSC_r_HSC-R_903344_1_37_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '57f827c1-9ce4-4b57-8b5e-fc53e5492f26'
+    data_id:
+    - instrument: HSC
+      detector: 5
+      visit: 903344
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903344/calexp_HSC_r_HSC-R_903344_1_43_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'e2d8ba12-2f94-4a14-a6fe-30acceb342ae'
+    data_id:
+    - instrument: HSC
+      detector: 0
+      visit: 903344
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903344/calexp_HSC_r_HSC-R_903344_1_53_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '52d9ed1d-39cd-4777-ba29-6406d80d5ec9'
+    data_id:
+    - instrument: HSC
+      detector: 12
+      visit: 903346
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903346/calexp_HSC_r_HSC-R_903346_1_38_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'e0fdfd5f-b7f3-4a8a-b453-18c4b85ec040'
+    data_id:
+    - instrument: HSC
+      detector: 6
+      visit: 903346
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903346/calexp_HSC_r_HSC-R_903346_1_44_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'e7da31a8-ab47-434b-ae3e-09d91ac040ff'
+    data_id:
+    - instrument: HSC
+      detector: 1
+      visit: 903346
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20130617/r/HSC-R/903346/calexp_HSC_r_HSC-R_903346_1_54_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '014deddc-583a-4ba5-925f-b25fefa04b36'
+    data_id:
+    - instrument: HSC
+      detector: 23
+      visit: 903986
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903986/calexp_HSC_i_HSC-I_903986_0_26_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '7b3fda4c-8003-41f1-bb9f-aa96422ae13a'
+    data_id:
+    - instrument: HSC
+      detector: 22
+      visit: 903986
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903986/calexp_HSC_i_HSC-I_903986_0_27_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '82477e74-4db4-4796-b6fe-0b40819e0f7c'
+    data_id:
+    - instrument: HSC
+      detector: 16
+      visit: 903986
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903986/calexp_HSC_i_HSC-I_903986_0_30_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '39a751a5-3054-411c-8954-91e6b89ed754'
+    data_id:
+    - instrument: HSC
+      detector: 100
+      visit: 903986
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903986/calexp_HSC_i_HSC-I_903986_0_31_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'c94ac8a4-9f57-40e3-981e-402ebb7bc17a'
+    data_id:
+    - instrument: HSC
+      detector: 24
+      visit: 903988
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_25_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '9e769254-56d0-4eb3-84e0-369602caa7bf'
+    data_id:
+    - instrument: HSC
+      detector: 23
+      visit: 903988
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_26_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '400b7bb1-f519-4600-8929-64d1969501bc'
+    data_id:
+    - instrument: HSC
+      detector: 17
+      visit: 903988
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_29_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'c985a6c5-790e-4720-a788-1ec1f914e2f1'
+    data_id:
+    - instrument: HSC
+      detector: 16
+      visit: 903988
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_30_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'bfd52094-b5d9-45fb-b667-a43b8d38402c'
+    data_id:
+    - instrument: HSC
+      detector: 25
+      visit: 903990
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903990/calexp_HSC_i_HSC-I_903990_0_24_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '4c531046-a44e-4618-88ff-f8311a2ecc26'
+    data_id:
+    - instrument: HSC
+      detector: 18
+      visit: 903990
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/903990/calexp_HSC_i_HSC-I_903990_0_28_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '020e7c89-07bf-40f8-8c32-5723bfb30063'
+    data_id:
+    - instrument: HSC
+      detector: 100
+      visit: 904010
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904010/calexp_HSC_i_HSC-I_904010_0_31_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid 'cff97abc-7ad2-4ca9-8f6d-1b8370c33bd5'
+    data_id:
+    - instrument: HSC
+      detector: 10
+      visit: 904010
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904010/calexp_HSC_i_HSC-I_904010_1_36_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '2dd8e902-3a7c-4f26-a4ce-6a384038bfe1'
+    data_id:
+    - instrument: HSC
+      detector: 4
+      visit: 904010
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904010/calexp_HSC_i_HSC-I_904010_1_42_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '5633a452-5bd6-4feb-8672-399afe8d2d8a'
+    data_id:
+    - instrument: HSC
+      detector: 12
+      visit: 904014
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904014/calexp_HSC_i_HSC-I_904014_1_38_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '585fe50e-14f4-4df0-b75c-ab5c7c8fbd9c'
+    data_id:
+    - instrument: HSC
+      detector: 6
+      visit: 904014
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904014/calexp_HSC_i_HSC-I_904014_1_44_HSC_runs_ci_hsc_20240806T180642Z.fits
+  - dataset_id:
+    - !uuid '240c31ea-001b-497d-8673-1166b149981f'
+    data_id:
+    - instrument: HSC
+      detector: 1
+      visit: 904014
+    path: HSC/runs/ci_hsc/20240806T180642Z/calexp/20131102/i/HSC-I/904014/calexp_HSC_i_HSC-I_904014_1_54_HSC_runs_ci_hsc_20240806T180642Z.fits
