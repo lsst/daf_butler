@@ -854,6 +854,43 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 refs = list(results)
                 self.assertEqual(len(refs), count, f"POS={pos} REFS={refs}")
 
+    def test_time_queries(self):
+        """Test region queries for datasets."""
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "ci_hsc-subset.yaml"))
+
+        # Some times from the test data.
+        v_903334_pre = astropy.time.Time("2013-01-01T12:00:00", scale="tai", format="isot")
+        v_903334_mid = astropy.time.Time("2013-06-17T13:29:20", scale="tai", format="isot")
+        v_904014_pre = astropy.time.Time("2013-11-01T12:00:00", scale="tai", format="isot")
+        v_904014_post = astropy.time.Time("2013-12-21T12:00:00", scale="tai", format="isot")
+
+        with butler._query() as query:
+            run = "HSC/runs/ci_hsc/20240806T180642Z"
+            results = query.datasets("calexp", collections=run)
+
+            # Use a time during the middle of a visit.
+            v_903334 = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)", bind={"ts": v_903334_mid}
+            )
+            self.assertEqual(len(list(v_903334)), 4)
+
+            # Timespan covering first half of the data.
+            first_half = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(t1, t2)",
+                bind={"t1": v_903334_pre, "t2": v_904014_pre},
+            )
+            self.assertEqual(len(list(first_half)), 17)
+
+            # Query using a timespan object.
+            with_ts = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)",
+                bind={"ts": Timespan(v_904014_pre, v_904014_post)},
+            )
+            self.assertEqual(len(list(with_ts)), 16)
+
 
 def plot_poly(polygons: list[list[tuple[float, float], ...]]):
     """Plot polygons."""
