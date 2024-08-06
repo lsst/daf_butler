@@ -66,6 +66,7 @@ from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import (
     AdditionalQueryInput,
     DataCoordinateUpload,
+    GeneralResultModel,
     MaterializedQuery,
     QueryAnyRequestModel,
     QueryAnyResponseModel,
@@ -260,5 +261,24 @@ def _convert_query_result_page(
             spec=result_spec,
             rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
         )
+    elif result_spec.result_type == "general":
+        assert result.type == "general"
+        return _convert_general_result(result_spec, result)
     else:
         raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")
+
+
+def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) -> GeneralResultPage:
+    """Convert GeneralResultModel to a general result page."""
+    columns = spec.get_result_columns()
+    type_adapters = [
+        columns.get_column_spec(column.logical_table, column.field).type_adapter() for column in columns
+    ]
+    rows = [
+        tuple(
+            value if value is None else type_adapter.validate_python(value)
+            for value, type_adapter in zip(row, type_adapters)
+        )
+        for row in model.rows
+    ]
+    return GeneralResultPage(spec=spec, rows=rows)

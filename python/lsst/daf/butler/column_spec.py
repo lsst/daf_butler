@@ -53,6 +53,7 @@ from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
+from .pydantic_utils import SerializableRegion, SerializableTime
 
 if TYPE_CHECKING:
     from .name_shrinker import NameShrinker
@@ -134,6 +135,18 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        """Return pydantic type adapter that converts values of this column to
+        or from serializable format.
+
+        Returns
+        -------
+        type_adapter : `pydantic.TypeAdapter`
+            A converter instance.
+        """
+        raise NotImplementedError()
+
     def display(self, level: int = 0, tab: str = "  ") -> list[str]:
         """Return a human-reader-focused string description of this column as
         a list of lines.
@@ -178,6 +191,10 @@ class IntColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
+
 
 @final
 class StringColumnSpec(_BaseColumnSpec):
@@ -197,6 +214,10 @@ class StringColumnSpec(_BaseColumnSpec):
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
+
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
 
 
 @final
@@ -224,6 +245,10 @@ class HashColumnSpec(_BaseColumnSpec):
             nullable=self.nullable,
         )
 
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
+
 
 @final
 class FloatColumnSpec(_BaseColumnSpec):
@@ -238,6 +263,10 @@ class FloatColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
+
 
 @final
 class BoolColumnSpec(_BaseColumnSpec):
@@ -250,6 +279,10 @@ class BoolColumnSpec(_BaseColumnSpec):
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
+
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
 
 
 @final
@@ -264,6 +297,10 @@ class UUIDColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
+
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
 
 
 @final
@@ -284,6 +321,10 @@ class RegionColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(SerializableRegion)
+
 
 @final
 class TimespanColumnSpec(_BaseColumnSpec):
@@ -298,6 +339,10 @@ class TimespanColumnSpec(_BaseColumnSpec):
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
+
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(self.pytype)
 
 
 @final
@@ -314,6 +359,10 @@ class DateTimeColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
+
+    def type_adapter(self) -> pydantic.TypeAdapter:
+        # Docstring inherited.
+        return pydantic.TypeAdapter(SerializableTime)
 
 
 ColumnSpec = Annotated[

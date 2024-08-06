@@ -372,7 +372,7 @@ class HybridButlerRegistry(Registry):
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
     ) -> Iterator[DatasetAssociation]:
-        return self._direct.queryDatasetAssociations(
+        return self._remote.queryDatasetAssociations(
             datasetType, collections, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
 

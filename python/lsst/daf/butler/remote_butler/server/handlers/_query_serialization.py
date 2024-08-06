@@ -34,6 +34,7 @@ from ....queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
     DimensionRecordResultPage,
+    GeneralResultPage,
     ResultPage,
     ResultSpec,
 )
@@ -42,6 +43,7 @@ from ...server_models import (
     DataCoordinateResultModel,
     DatasetRefResultModel,
     DimensionRecordsResultModel,
+    GeneralResultModel,
     QueryErrorResultModel,
     QueryExecuteResultData,
 )
@@ -86,5 +88,24 @@ def _convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResul
         case "dataset_ref":
             assert isinstance(page, DatasetRefResultPage)
             return DatasetRefResultModel(rows=[ref.to_simple() for ref in page.rows])
+        case "general":
+            assert isinstance(page, GeneralResultPage)
+            return _convert_general_result(page)
         case _:
             raise NotImplementedError(f"Unhandled query result type {spec.result_type}")
+
+
+def _convert_general_result(page: GeneralResultPage) -> GeneralResultModel:
+    """Convert GeneralResultPage to a serializable model."""
+    columns = page.spec.get_result_columns()
+    type_adapters = [
+        columns.get_column_spec(column.logical_table, column.field).type_adapter() for column in columns
+    ]
+    rows = [
+        tuple(
+            value if value is None else type_adapter.dump_python(value)
+            for value, type_adapter in zip(row, type_adapters)
+        )
+        for row in page.rows
+    ]
+    return GeneralResultModel(rows=rows)
