@@ -35,7 +35,7 @@ from typing import Any, final
 from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
-from .._exceptions import InvalidQueryError
+from .._exceptions import DimensionNameError, InvalidQueryError
 from .._storage_class import StorageClassFactory
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError
@@ -281,6 +281,11 @@ class Query(QueryBase):
         records : `.queries.DimensionRecordQueryResults`
             Data IDs matching the given query parameters.
         """
+        if element not in self._driver.universe:
+            # Prefer an explicit exception over a KeyError below.
+            raise DimensionNameError(
+                f"No such dimension '{element}', available dimensions: " + str(self._driver.universe.elements)
+            )
         tree = self._tree
         if element not in tree.dimensions.elements:
             tree = tree.join_dimensions(self._driver.universe[element].minimal_group)
