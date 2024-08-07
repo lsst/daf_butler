@@ -1,0 +1,2 @@
+The command-line tools have been modified to use the new query system and interface.
+The only user visible changes are that the ``--no-check`` and ``--offset`` options are no longer used since they are not supported by the new system.
