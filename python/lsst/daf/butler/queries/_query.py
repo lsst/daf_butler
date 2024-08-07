@@ -53,7 +53,7 @@ from .result_specs import (
     DimensionRecordResultSpec,
     GeneralResultSpec,
 )
-from .tree import DatasetSearch, Predicate, QueryTree, make_identity_query_tree
+from .tree import DatasetFieldName, DatasetSearch, Predicate, QueryTree, make_identity_query_tree
 
 
 @final
@@ -298,37 +298,44 @@ class Query(QueryBase):
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
         return DimensionRecordQueryResults(self._driver, tree, result_spec)
 
-    def dataset_associations(
+    def general(
         self,
-        dataset_type: DatasetType,
-        collections: Iterable[str],
+        dimensions: DimensionGroup,
+        dimension_fields: Mapping[str, set[str]] = {},
+        dataset_fields: Mapping[str, set[DatasetFieldName]] = {},
+        find_first: bool = False,
     ) -> GeneralQueryResults:
-        """Iterate over dataset-collection combinations where the dataset is in
-        the collection.
+        """Execute query returning general result.
 
         Parameters
         ----------
-        dataset_type : `DatasetType`
-            A dataset type object.
-        collections : `~collections.abc.Iterable` [`str`]
-            Names of the collections to search. Chained collections are
-            ignored.
+        dimensions : `DimensionGroup`
+            The dimensions that span all fields returned by this query.
+        dimension_fields : `~collections.abc.Mapping` [`str`, `set`[`str`]], \
+                optional
+            Dimension record fields included in this query, the key in the
+            mapping is dimension name.
+        dataset_fields : `~collections.abc.Mapping` \
+                [`str`, `set`[`DatasetFieldName`]], optional
+            Dataset fields included in this query, the key in the mapping is
+            dataset type name.
+        find_first : bool, optional
+            Whether this query requires find-first resolution for a dataset.
+            This can only be `True` if exactly one dataset type's fields are
+            included in the results.
 
         Returns
         -------
         result : `GeneralQueryResults`
-            Query result that can be iterated over. The result includes all
-            columns needed to construct `DatasetRef`, plus ``collection`` and
-            ``timespan`` columns.
+            Query result that can be iterated over.
         """
-        _, _, query = self._join_dataset_search_impl(dataset_type, collections)
         result_spec = GeneralResultSpec(
-            dimensions=dataset_type.dimensions,
-            dimension_fields={},
-            dataset_fields={dataset_type.name: {"dataset_id", "run", "collection", "timespan"}},
-            find_first=False,
+            dimensions=dimensions,
+            dimension_fields=dimension_fields,
+            dataset_fields=dataset_fields,
+            find_first=find_first,
         )
-        return GeneralQueryResults(self._driver, tree=query._tree, spec=result_spec)
+        return GeneralQueryResults(self._driver, tree=self._tree, spec=result_spec)
 
     def materialize(
         self,

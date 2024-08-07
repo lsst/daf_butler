@@ -68,7 +68,6 @@ from ..dimensions.record_cache import DimensionRecordCache
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
 from ..queries import Query
-from ..queries.tree import ResultColumn
 from ..registry import (
     ArgumentError,
     CollectionExpressionError,
@@ -2428,9 +2427,13 @@ class SqlRegistry:
             collections, datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
         with self._query() as query:
-            result = query.dataset_associations(datasetType, resolved_collections)
-            timespan_key = ResultColumn(logical_table=datasetType.name, field="timespan")
-            collection_key = ResultColumn(logical_table=datasetType.name, field="collection")
+            query = query.join_dataset_search(datasetType, resolved_collections)
+            result = query.general(
+                datasetType.dimensions,
+                dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
+            )
+            timespan_key = f"{datasetType.name}.timespan"
+            collection_key = f"{datasetType.name}.collection"
             for ref, row_dict in result.iter_refs(datasetType):
                 _LOG.debug("row_dict: %s", row_dict)
                 yield DatasetAssociation(ref, row_dict[collection_key], row_dict[timespan_key])

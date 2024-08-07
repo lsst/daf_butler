@@ -46,7 +46,6 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from ..queries.tree import ResultColumn
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -521,9 +520,13 @@ class RemoteButlerRegistry(Registry):
             collections, datasetType=datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
         with self._butler._query() as query:
-            result = query.dataset_associations(datasetType, resolved_collections)
-            timespan_key = ResultColumn(logical_table=datasetType.name, field="timespan")
-            collection_key = ResultColumn(logical_table=datasetType.name, field="collection")
+            query = query.join_dataset_search(datasetType, resolved_collections)
+            result = query.general(
+                datasetType.dimensions,
+                dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
+            )
+            timespan_key = f"{datasetType.name}.timespan"
+            collection_key = f"{datasetType.name}.collection"
             for ref, row_dict in result.iter_refs(datasetType):
                 yield DatasetAssociation(ref, row_dict[collection_key], row_dict[timespan_key])
 

@@ -38,7 +38,7 @@ from ..dimensions import DataCoordinate, DimensionGroup
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import GeneralResultSpec
-from .tree import QueryTree, ResultColumn
+from .tree import QueryTree
 
 
 @final
@@ -68,20 +68,22 @@ class GeneralQueryResults(QueryResultsBase):
         super().__init__(driver, tree)
         self._spec = spec
 
-    def __iter__(self) -> Iterator[dict[ResultColumn, Any]]:
+    def __iter__(self) -> Iterator[dict[str, Any]]:
         """Iterate over result rows.
 
         Yields
         ------
-        row_dict : `dict` [`ResultColumn`, `Any`]
-            Result row as dictionary, the keys are `ResultColumn` instances.
+        row_dict : `dict` [`str`, `Any`]
+            Result row as dictionary, the keys the names of the dimensions,
+            dimension fields (separated from dimension by dot) or dataset type
+            fields (separated from dataset type name by dot).
         """
         for page in self._driver.execute(self._spec, self._tree):
-            columns = tuple(page.spec.get_result_columns())
+            columns = tuple(str(column) for column in page.spec.get_result_columns())
             for row in page.rows:
                 yield dict(zip(columns, row))
 
-    def iter_refs(self, dataset_type: DatasetType) -> Iterator[tuple[DatasetRef, dict[ResultColumn, Any]]]:
+    def iter_refs(self, dataset_type: DatasetType) -> Iterator[tuple[DatasetRef, dict[str, Any]]]:
         """Iterate over result rows and return DatasetRef constructed from each
         row and an original row.
 
@@ -94,13 +96,15 @@ class GeneralQueryResults(QueryResultsBase):
         ------
         dataset_ref : `DatasetRef`
             Dataset reference.
-        row_dict : `dict` [`ResultColumn`, `Any`]
-            Result row as dictionary, the keys are `ResultColumn` instances.
+        row_dict : `dict` [`str`, `Any`]
+            Result row as dictionary, the keys the names of the dimensions,
+            dimension fields (separated from dimension by dot) or dataset type
+            fields (separated from dataset type name by dot).
         """
         dimensions = dataset_type.dimensions
-        id_key = ResultColumn(logical_table=dataset_type.name, field="dataset_id")
-        run_key = ResultColumn(logical_table=dataset_type.name, field="run")
-        data_id_keys = [ResultColumn(logical_table=element, field=None) for element in dimensions.required]
+        id_key = f"{dataset_type.name}.dataset_id"
+        run_key = f"{dataset_type.name}.run"
+        data_id_keys = dimensions.required
         for row in self:
             values = tuple(row[key] for key in data_id_keys)
             data_id = DataCoordinate.from_required_values(dimensions, values)
