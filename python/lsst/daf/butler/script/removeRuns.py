@@ -33,7 +33,6 @@ from functools import partial
 
 from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
-from ..registry.queries import DatasetQueryResults
 
 
 @dataclass
@@ -96,17 +95,21 @@ def _getCollectionInfo(
         )
     except MissingCollectionError:
         collectionNames = []
+
+    dataset_types = butler.registry.queryDatasetTypes(...)
     runs = []
     datasets: dict[str, int] = defaultdict(int)
     for collectionName in collectionNames:
         assert butler.registry.getCollectionType(collectionName).name == "RUN"
         parents = butler.registry.getCollectionParentChains(collectionName)
         runs.append(RemoveRun(collectionName, list(parents)))
-        all_results = butler.registry.queryDatasets(..., collections=collectionName)
-        assert isinstance(all_results, DatasetQueryResults)
-        for r in all_results.byParentDatasetType():
-            if r.any(exact=False, execute=False):
-                datasets[r.parentDatasetType.name] += r.count(exact=False)
+        with butler._query() as query:
+            for dt in dataset_types:
+                results = query.datasets(dt, collections=collectionName)
+                count = results.count(exact=False)
+                if count:
+                    datasets[dt.name] += count
+
     return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 
 
@@ -136,9 +139,7 @@ def removeRuns(
         with butler.transaction():
             for run in runs:
                 for parent in run.parents:
-                    children = list(butler.registry.getCollectionChain(parent))
-                    children.remove(run.name)
-                    butler.registry.setCollectionChain(parent, children, flatten=False)
+                    butler.collection_chains.remove_from_chain(parent, run.name)
             butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(

@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Iterable
+from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from astropy.table import Table
@@ -37,20 +38,20 @@ from .._butler import Butler
 from ..registry import CollectionType
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DatasetRef, DatasetType, Registry
+    from lsst.daf.butler import DatasetRef, DatasetType
 
 log = logging.getLogger(__name__)
 
 
-def parseCalibrationCollection(
-    registry: Registry, collection: str, datasetTypes: Iterable[DatasetType]
-) -> tuple[list[str], list[DatasetRef]]:
+def find_calibration_datasets(
+    butler: Butler, collection: str, datasetTypes: Iterable[DatasetType]
+) -> list[DatasetRef]:
     """Search a calibration collection for calibration datasets.
 
     Parameters
     ----------
-    registry : `lsst.daf.butler.Registry`
-        Butler registry to use.
+    butler : `lsst.daf.butler.Butler`
+        Butler to use.
     collection : `str`
         Collection to search.  This should be a CALIBRATION
         collection.
@@ -59,8 +60,6 @@ def parseCalibrationCollection(
 
     Returns
     -------
-    exportCollections : `list` [`str`]
-        List of collections to save on export.
     exportDatasets : `list` [`lsst.daf.butler.DatasetRef`]
         Datasets to save on export.
 
@@ -69,24 +68,22 @@ def parseCalibrationCollection(
     RuntimeError
         Raised if the collection to search is not a CALIBRATION collection.
     """
-    if registry.getCollectionType(collection) != CollectionType.CALIBRATION:
+    if butler.registry.getCollectionType(collection) != CollectionType.CALIBRATION:
         raise RuntimeError(f"Collection {collection} is not a CALIBRATION collection.")
 
-    exportCollections = []
     exportDatasets = []
     for calibType in datasetTypes:
-        associations = registry.queryDatasetAssociations(
-            calibType, collections=collection, collectionTypes=[CollectionType.CALIBRATION]
-        )
-        for result in associations:
-            # Need an expanded dataId in case file templates will be used
-            # in the transfer.
-            dataId = registry.expandDataId(result.ref.dataId)
-            ref = result.ref.expanded(dataId)
-            exportDatasets.append(ref)
-            assert ref.run is not None, "These refs must all be resolved."
-            exportCollections.append(ref.run)
-    return exportCollections, exportDatasets
+        with butler._query() as query:
+            results = query.datasets(calibType, collections=collection, find_first=False)
+
+            try:
+                refs = list(results.with_dimension_records())
+            except Exception as e:
+                e.add_note(f"Error from querying dataset type {calibType} and collection {collection}")
+                raise
+            exportDatasets.extend(refs)
+
+    return exportDatasets
 
 
 def exportCalibs(
@@ -148,10 +145,7 @@ def exportCalibs(
         collectionsToExport.append(collection)
         collectionType = butler.registry.getCollectionType(collection)
         if collectionType == CollectionType.CALIBRATION:
-            exportCollections, exportDatasets = parseCalibrationCollection(
-                butler.registry, collection, calibTypes
-            )
-            collectionsToExport.extend(exportCollections)
+            exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
             datasetsToExport.extend(exportDatasets)
 
     if os.path.exists(directory):
@@ -170,14 +164,14 @@ def exportCalibs(
         log.info("Saving %d dataset(s)", len(datasetsToExport))
         export.saveDatasets(datasetsToExport)
 
-    sortedDatasets = sorted(datasetsToExport, key=lambda x: x.datasetType.name)
+    sortedDatasets = sorted(datasetsToExport, key=attrgetter("datasetType.name", "dataId"))
 
     requiredDimensions: set[str] = set()
     for ref in sortedDatasets:
         requiredDimensions.update(ref.dimensions.names)
     dimensionColumns = {
         dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
-        for dimensionName in requiredDimensions
+        for dimensionName in sorted(requiredDimensions)
     }
 
     return Table(

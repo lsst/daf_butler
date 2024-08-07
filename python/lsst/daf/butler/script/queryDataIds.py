@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -131,14 +130,20 @@ def queryDataIds(
     Docstring for supported parameters is the same as
     `~lsst.daf.butler.Registry.queryDataIds`.
     """
+    if offset:
+        raise RuntimeError("Offset is no longer supported by the query system.")
+
     butler = Butler.from_config(repo, without_datastore=True)
+
+    dataset_types = []
+    if datasets:
+        dataset_types = list(butler.registry.queryDatasetTypes(datasets))
 
     if datasets and collections and not dimensions:
         # Determine the dimensions relevant to all given dataset types.
         # Since we are going to AND together all dimensions, we can not
         # seed the result with an empty set.
         dataset_type_dimensions: DimensionGroup | None = None
-        dataset_types = list(butler.registry.queryDatasetTypes(datasets))
         for dataset_type in dataset_types:
             if dataset_type_dimensions is None:
                 # Seed with dimensions of first dataset type.
@@ -160,26 +165,35 @@ def queryDataIds(
         dimensions = set(dataset_type_dimensions.names)
         _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
 
-    query_collections: Iterable[str] | EllipsisType | None = None
-    if datasets:
-        query_collections = collections or ...
-    results = butler.registry.queryDataIds(
-        dimensions, datasets=datasets, where=where, collections=query_collections
-    )
+    with butler._query() as query:
+        if datasets:
+            # Need to constrain results based on dataset type and collection.
+            query_collections = collections or ...
 
-    if order_by:
-        results = results.order_by(*order_by)
-    if limit > 0:
-        new_offset = offset if offset > 0 else None
-        results = results.limit(limit, new_offset)
+            expanded_collections = butler.registry.queryCollections(query_collections)
 
-    if results.any(exact=False):
-        if results.dimensions:
-            table = _Table(results)
-            if not table.dataIds:
-                return None, "Post-query region filtering removed all rows, since nothing overlapped."
-            return table.getAstropyTable(not order_by), None
+            sub_query = query.join_dataset_search(dataset_types.pop(0), collections=expanded_collections)
+            for dt in dataset_types:
+                sub_query = sub_query.join_dataset_search(dt, collections=expanded_collections)
+
+            results = sub_query.data_ids(dimensions)
         else:
-            return None, "Result has one logical row but no columns because no dimensions were requested."
-    else:
-        return None, "\n".join(results.explain_no_results())
+            results = query.data_ids(dimensions)
+
+        if where:
+            results = results.where(where)
+        if order_by:
+            results = results.order_by(*order_by)
+        if limit > 0:
+            results = results.limit(limit)
+
+        if results.any(exact=False):
+            if results.dimensions:
+                table = _Table(results)
+                if not table.dataIds:
+                    return None, "Post-query region filtering removed all rows, since nothing overlapped."
+                return table.getAstropyTable(not order_by), None
+            else:
+                return None, "Result has one logical row but no columns because no dimensions were requested."
+        else:
+            return None, "\n".join(results.explain_no_results())

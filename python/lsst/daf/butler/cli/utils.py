@@ -62,6 +62,7 @@ import re
 import sys
 import textwrap
 import traceback
+import types
 import uuid
 import warnings
 from collections import Counter
@@ -158,6 +159,60 @@ def textTypeStr(multiple: bool) -> str:
     return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
 
 
+class ClickExitFailedNicely:
+    """Exit a Click command that failed.
+
+    This class is used to control the behavior when a click command has failed.
+    By default the exception will be logged and a non-zero exit status will
+    be used.
+
+    Parameters
+    ----------
+    exc_type : `type`
+        The type of the exception.
+    exc_value : `Exception`
+        The `Exception` object.
+    exc_tb : `types.TracebackType`
+        The traceback for this exception.
+    """
+
+    use_bad_status: bool = True
+    """Control how a bad command is exited. `True` indicates bad status and
+    `False` indicates a `click.ClickException`."""
+
+    def __init__(self, exc_type: type[BaseException], exc_value: BaseException, exc_tb: types.TracebackType):
+        self.exc_type = exc_type
+        self.exc_value = exc_value
+        self.exc_tb = self._clean_tb(exc_tb)
+
+    def _clean_tb(self, exc_tb: types.TracebackType) -> types.TracebackType:
+        if exc_tb.tb_next:
+            # Do not show the decorator in traceback.
+            exc_tb = exc_tb.tb_next
+        return exc_tb
+
+    def exit_click(self) -> None:
+        if self.use_bad_status:
+            self.exit_click_command_bad_status()
+        else:
+            self.exit_click_command_click_exception()
+
+    def exit_click_command_bad_status(self) -> None:
+        """Exit a click command with bad exit status and report log message."""
+        log.exception(
+            "Caught an exception, details are in traceback:",
+            exc_info=(self.exc_type, self.exc_value, self.exc_tb),
+        )
+        # Tell click to stop, this never returns.
+        click.get_current_context().exit(1)
+
+    def exit_click_command_click_exception(self) -> None:
+        """Exit a click command raising ClickException."""
+        tb = traceback.format_tb(self.exc_tb)
+        errmsg = "".join(tb) + str(self.exc_value)
+        raise click.ClickException(errmsg)
+
+
 class LogCliRunner(click.testing.CliRunner):
     """A test runner to use when the logging system will be initialized by code
     under test, calls CliLog.resetLog(), which undoes any logging setup that
@@ -169,8 +224,15 @@ class LogCliRunner(click.testing.CliRunner):
     """
 
     def invoke(self, *args: Any, **kwargs: Any) -> click.testing.Result:
-        result = super().invoke(*args, **kwargs)
+        # We want exceptions to be reported to the test runner rather than
+        # being converted to a simple exit status. The default is to
+        # use a logger but the click test infrastructure doesn't capture that
+        # in result.
+        with patch.object(ClickExitFailedNicely, "use_bad_status", False):
+            result = super().invoke(*args, **kwargs)
         CliLog.resetLog()
+        if result.exception:
+            print("Failing command was: ", args)
         return result
 
 
@@ -857,6 +919,7 @@ class MWCommand(click.Command):
         Keyword arguments for `click.Command`.
     """
 
+    name = "butler"
     extra_epilog: str | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -1218,13 +1281,7 @@ def catch_and_exit(func: Callable) -> Callable:
             assert exc_type is not None
             assert exc_value is not None
             assert exc_tb is not None
-            if exc_tb.tb_next:
-                # do not show this decorator in traceback
-                exc_tb = exc_tb.tb_next
-            log.exception(
-                "Caught an exception, details are in traceback:", exc_info=(exc_type, exc_value, exc_tb)
-            )
-            # tell click to stop, this never returns.
-            click.get_current_context().exit(1)
+            exit_hdl = ClickExitFailedNicely(exc_type, exc_value, exc_tb)
+            exit_hdl.exit_click()
 
     return inner

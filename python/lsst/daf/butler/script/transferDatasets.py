@@ -31,8 +31,9 @@ __all__ = ("transferDatasets",)
 import logging
 from types import EllipsisType
 
+from lsst.daf.butler import DatasetRef
+
 from .._butler import Butler
-from ..registry.queries import DatasetQueryResults
 
 log = logging.getLogger(__name__)
 
@@ -80,14 +81,18 @@ def transferDatasets(
     dataset_type_expr = dataset_type or ...
     collections_expr: tuple[str, ...] | EllipsisType = collections or ...
 
-    source_refs = source_butler.registry.queryDatasets(
-        datasetType=dataset_type_expr, collections=collections_expr, where=where, findFirst=find_first
-    )
-
-    # Might need expanded results if datastore records have to be derived.
-    # Not all registries return the same form for results.
-    if isinstance(source_refs, DatasetQueryResults):
-        source_refs = source_refs.expanded()
+    dataset_types = source_butler.registry.queryDatasetTypes(dataset_type_expr)
+    source_refs: list[DatasetRef] = []
+    with source_butler._query() as query:
+        query_collections = source_butler.registry.queryCollections(collections_expr)
+        # Loop over dataset types and accumulate.
+        for dt in dataset_types:
+            results = query.datasets(dt, collections=query_collections, find_first=find_first)
+            if where:
+                results = results.where(where)
+            # Need dimension records in case new datastore records have to
+            # be derived.
+            source_refs.extend(results.with_dimension_records())
 
     # Place results in a set to remove duplicates
     source_refs_set = set(source_refs)

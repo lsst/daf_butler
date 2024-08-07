@@ -112,7 +112,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             where="instrument='Cam1' AND skymap='SkyMap1' AND visit=1 AND tract=1",
         )
         self.assertIsNone(res, msg)
-        self.assertIn("yields no results when applied to", msg)
+        self.assertEqual(msg, "")
 
     def testNoResultsHard(self):
         """Test getting no results in a way that can't be detected unless we
@@ -189,7 +189,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             datasets="test_metric_dimensionless",
         )
         self.assertIsNone(res)
-        self.assertIn("No datasets of type test_metric_dimensionless", msg)
+        self.assertIn("No datasets of type 'test_metric_dimensionless'", msg)
 
 
 if __name__ == "__main__":
