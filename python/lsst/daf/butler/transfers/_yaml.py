@@ -597,7 +597,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                 warnings.warn(
                     "Constructing day_obs records with no timespans for "
                     "visit/exposure records that were exported before day_obs was a dimension. "
-                    f"(instrument{plural}: {missing_offsets})"
+                    f"(instrument{plural}: {missing_offsets})",
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
 
         # key is (dataset type name, run)
