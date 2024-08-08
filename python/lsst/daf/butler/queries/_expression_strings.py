@@ -198,7 +198,14 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         if categorizeConstant(name) == ExpressionConstant.NULL:
             return _Null()
 
-        return _ColExpr(interpret_identifier(self.context, name))
+        column_expression = interpret_identifier(self.context, name)
+        if column_expression.column_type == "bool":
+            # Expression-handling code (in this file and elsewhere) expects
+            # boolean-valued expressions to be represented as Predicate, not a
+            # column expression.
+            return Predicate.from_bool_expression(column_expression)
+        else:
+            return _ColExpr(column_expression)
 
     def visitNumericLiteral(self, value: str, node: Node) -> _VisitorResult:
         numeric: int | float
