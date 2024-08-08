@@ -40,7 +40,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import sqlalchemy
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
-from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from .._column_tags import DatasetColumnTag
@@ -86,7 +85,7 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, ReadOnlyDatabaseError, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
-from ..utils import _DefaultMarker, _Marker, transactional
+from ..utils import transactional
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
@@ -1705,7 +1704,6 @@ class SqlRegistry:
         self,
         expression: Any = ...,
         *,
-        components: bool | _Marker = _DefaultMarker,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1718,9 +1716,6 @@ class SqlRegistry:
             ``...`` can be used to return all dataset types, and is the
             default. See :ref:`daf_butler_dataset_type_expressions` for more
             information.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1737,18 +1732,6 @@ class SqlRegistry:
         lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
-        if components is not _DefaultMarker:
-            if components is not False:
-                raise DatasetTypeError(
-                    "Dataset component queries are no longer supported by Registry.  Use "
-                    "DatasetType methods to obtain components from parent dataset types instead."
-                )
-            else:
-                warnings.warn(
-                    "The components parameter is ignored. It will be removed after v27.",
-                    category=FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                )
         wildcard = DatasetTypeWildcard.from_expression(expression)
         return self._managers.datasets.resolve_wildcard(wildcard, missing=missing)
 
@@ -1975,7 +1958,6 @@ class SqlRegistry:
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2020,9 +2002,6 @@ class SqlRegistry:
             (according to the order of ``collections`` passed in).  If `True`,
             ``collections`` must not contain regular expressions and may not
             be ``...``.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2077,18 +2056,6 @@ class SqlRegistry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
-        if components is not _DefaultMarker:
-            if components is not False:
-                raise DatasetTypeError(
-                    "Dataset component queries are no longer supported by Registry.  Use "
-                    "DatasetType methods to obtain components from parent dataset types instead."
-                )
-            else:
-                warnings.warn(
-                    "The components parameter is ignored. It will be removed after v27.",
-                    category=FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                )
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         resolved_dataset_types, collection_wildcard = self._standardize_query_dataset_args(
@@ -2158,7 +2125,6 @@ class SqlRegistry:
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2201,9 +2167,6 @@ class SqlRegistry:
             any column of a dimension table or (as a shortcut for the primary
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2250,18 +2213,6 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
-        if components is not _DefaultMarker:
-            if components is not False:
-                raise DatasetTypeError(
-                    "Dataset component queries are no longer supported by Registry.  Use "
-                    "DatasetType methods to obtain components from parent dataset types instead."
-                )
-            else:
-                warnings.warn(
-                    "The components parameter is ignored. It will be removed after v27.",
-                    category=FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                )
         requested_dimensions = self.dimensions.conform(dimensions)
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
@@ -2295,7 +2246,6 @@ class SqlRegistry:
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2327,12 +2277,6 @@ class SqlRegistry:
             A string expression similar to a SQL WHERE clause.  See
             `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
             information.
-        components : `bool`, optional
-            Whether to apply dataset expressions to components as well.
-            See `queryDataIds` for more information.
-
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2370,18 +2314,6 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
-        if components is not _DefaultMarker:
-            if components is not False:
-                raise DatasetTypeError(
-                    "Dataset component queries are no longer supported by Registry.  Use "
-                    "DatasetType methods to obtain components from parent dataset types instead."
-                )
-            else:
-                warnings.warn(
-                    "The components parameter is ignored. It will be removed after v27.",
-                    category=FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                )
         if not isinstance(element, DimensionElement):
             try:
                 element = self.dimensions[element]

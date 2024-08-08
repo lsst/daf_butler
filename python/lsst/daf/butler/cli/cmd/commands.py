@@ -38,7 +38,6 @@ from ..opt import (
     collection_type_option,
     collections_argument,
     collections_option,
-    components_option,
     confirm_option,
     dataset_type_option,
     datasets_option,
@@ -440,15 +439,9 @@ def query_collections(*args: Any, **kwargs: Any) -> None:
     "dataset types to return."
 )
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
-@components_option()
 @options_file_option()
 def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
-    # Drop the components option.
-    components = kwargs.pop("components")
-    if components is not None:
-        comp_opt_str = "" if components else "no-"
-        click.echo(f"WARNING: --{comp_opt_str}components option is deprecated and will be removed after v27.")
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
         table.pprint_all()

@@ -171,8 +171,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def testAddDatasetType(self):
         # 1 for StructuredDataNoComponents, 1 for StructuredData (components
         # not included).
-        with self.assertWarns(FutureWarning):
-            self.assertEqual(len(list(self.butler.registry.queryDatasetTypes(components=False))), 2)
+        self.assertEqual(len(list(self.butler.registry.queryDatasetTypes())), 2)
 
         # Testing the DatasetType objects is not practical, because all tests
         # need a DimensionUniverse. So just check that we have the dataset

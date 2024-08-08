@@ -1015,7 +1015,6 @@ class Registry(ABC):
         self,
         expression: Any = ...,
         *,
-        components: bool = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1028,9 +1027,6 @@ class Registry(ABC):
             ``...`` can be used to return all dataset types, and is the
             default. See :ref:`daf_butler_dataset_type_expressions` for more
             information.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1114,7 +1110,6 @@ class Registry(ABC):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1159,9 +1154,6 @@ class Registry(ABC):
             (according to the order of ``collections`` passed in).  If `True`,
             ``collections`` must not contain regular expressions and may not
             be ``...``.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1227,7 +1219,6 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1269,9 +1260,6 @@ class Registry(ABC):
             any column of a dimension table or (as a shortcut for the primary
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1329,7 +1317,6 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1361,9 +1348,6 @@ class Registry(ABC):
             A string expression similar to a SQL WHERE clause.  See
             `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
             information.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
