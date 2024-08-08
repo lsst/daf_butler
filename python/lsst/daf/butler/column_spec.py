@@ -41,6 +41,7 @@ __all__ = (
     "COLLECTION_NAME_MAX_LENGTH",
 )
 
+import datetime
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
@@ -86,6 +87,102 @@ COLLECTION_NAME_MAX_LENGTH = 64
 # TODO: DM-42541 would bee a good opportunity to move this constant to a
 # better home; this file is the least-bad home I can think of for now.  Note
 # that actually changing the value is a (minor) schema change.
+
+
+class ColumnValueSerializer(ABC):
+    """Class that knows how to serialize and deserialize column values."""
+
+    @abstractmethod
+    def serialize(self, value: Any) -> Any:
+        """Convert column value to something that can be serialized.
+
+        Parameters
+        ----------
+        value : `Any`
+            Column value to be serialized.
+
+        Returns
+        -------
+        value : `Any`
+            Column value in serializable format.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def deserialize(self, value: Any) -> Any:
+        """Convert serialized value to column value.
+
+        Parameters
+        ----------
+        value : `Any`
+            Serialized column value.
+
+        Returns
+        -------
+        value : `Any`
+            Deserialized column value.
+        """
+        raise NotImplementedError
+
+
+class _DefaultColumnValueSerializer(ColumnValueSerializer):
+    """Default implementation of serializer for basic types."""
+
+    def serialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        return value
+
+    def deserialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        return value
+
+
+class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
+    """Implementation of serializer that uses pydantic type adapter."""
+
+    def __init__(self, type_adapter: pydantic.TypeAdapter):
+        # Docstring inherited.
+        self._type_adapter = type_adapter
+
+    def serialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        return value if value is None else self._type_adapter.dump_python(value)
+
+    def deserialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        return value if value is None else self._type_adapter.validate_python(value)
+
+
+class _DateTimeColumnValueSerializer(ColumnValueSerializer):
+    """Implementation of serializer for ingest_time column. That column can be
+    either in native database time appearing as `datetime.datetime` on Python
+    side or integer nanoseconds appearing as astropy.time.Time. We use pydantic
+    type adapter for astropy time, which serializes it into integer
+    nanoseconds. datetime is converted to string representation to distinguish
+    it from integer nanoseconds (timezone handling depends entirely on what
+    database returns).
+    """
+
+    def __init__(self) -> None:
+        self._astropy_adapter = pydantic.TypeAdapter(SerializableTime)
+
+    def serialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        if value is None:
+            return None
+        elif isinstance(value, datetime.datetime):
+            return value.isoformat()
+        else:
+            return self._astropy_adapter.dump_python(value)
+
+    def deserialize(self, value: Any) -> Any:
+        # Docstring inherited.
+        if value is None:
+            return None
+        elif isinstance(value, str):
+            return datetime.datetime.fromisoformat(value)
+        else:
+            return self._astropy_adapter.validate_python(value)
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
@@ -136,13 +233,13 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def type_adapter(self) -> pydantic.TypeAdapter:
-        """Return pydantic type adapter that converts values of this column to
-        or from serializable format.
+    def serializer(self) -> ColumnValueSerializer:
+        """Return object that converts values of this column to or from
+        serializable format.
 
         Returns
         -------
-        type_adapter : `pydantic.TypeAdapter`
+        serializer : `ColumnValueSerializer`
             A converter instance.
         """
         raise NotImplementedError()
@@ -191,9 +288,9 @@ class IntColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _DefaultColumnValueSerializer()
 
 
 @final
@@ -215,9 +312,9 @@ class StringColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _DefaultColumnValueSerializer()
 
 
 @final
@@ -245,9 +342,9 @@ class HashColumnSpec(_BaseColumnSpec):
             nullable=self.nullable,
         )
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _DefaultColumnValueSerializer()
 
 
 @final
@@ -263,9 +360,9 @@ class FloatColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _DefaultColumnValueSerializer()
 
 
 @final
@@ -280,9 +377,9 @@ class BoolColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _DefaultColumnValueSerializer()
 
 
 @final
@@ -298,9 +395,9 @@ class UUIDColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
 
 
 @final
@@ -321,9 +418,9 @@ class RegionColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(SerializableRegion)
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableRegion))
 
 
 @final
@@ -340,9 +437,9 @@ class TimespanColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(self.pytype)
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
 
 
 @final
@@ -360,9 +457,9 @@ class DateTimeColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
 
-    def type_adapter(self) -> pydantic.TypeAdapter:
+    def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return pydantic.TypeAdapter(SerializableTime)
+        return _DateTimeColumnValueSerializer()
 
 
 ColumnSpec = Annotated[

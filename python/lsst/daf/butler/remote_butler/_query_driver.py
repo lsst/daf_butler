@@ -271,14 +271,11 @@ def _convert_query_result_page(
 def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) -> GeneralResultPage:
     """Convert GeneralResultModel to a general result page."""
     columns = spec.get_result_columns()
-    type_adapters = [
-        columns.get_column_spec(column.logical_table, column.field).type_adapter() for column in columns
+    serializers = [
+        columns.get_column_spec(column.logical_table, column.field).serializer() for column in columns
     ]
     rows = [
-        tuple(
-            value if value is None else type_adapter.validate_python(value)
-            for value, type_adapter in zip(row, type_adapters)
-        )
+        tuple(serializer.deserialize(value) for value, serializer in zip(row, serializers))
         for row in model.rows
     ]
     return GeneralResultPage(spec=spec, rows=rows)

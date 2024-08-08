@@ -98,14 +98,10 @@ def _convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResul
 def _convert_general_result(page: GeneralResultPage) -> GeneralResultModel:
     """Convert GeneralResultPage to a serializable model."""
     columns = page.spec.get_result_columns()
-    type_adapters = [
-        columns.get_column_spec(column.logical_table, column.field).type_adapter() for column in columns
+    serializers = [
+        columns.get_column_spec(column.logical_table, column.field).serializer() for column in columns
     ]
     rows = [
-        tuple(
-            value if value is None else type_adapter.dump_python(value)
-            for value, type_adapter in zip(row, type_adapters)
-        )
-        for row in page.rows
+        tuple(serializer.serialize(value) for value, serializer in zip(row, serializers)) for row in page.rows
     ]
     return GeneralResultModel(rows=rows)

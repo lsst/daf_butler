@@ -44,7 +44,7 @@ from .._butler import Butler
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
-from ..dimensions import DataCoordinate, DimensionRecord
+from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults
 from ..queries.tree import Predicate
@@ -208,6 +208,176 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 self.assertEqual(ref.dataId["instrument"], "Cam1")
                 self.assertEqual(ref.dataId["detector"], detector)
                 self.assertEqual(ref.run, "imported_g")
+
+    def test_general_query(self) -> None:
+        """Test Query.general and its result."""
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        dimensions = butler.dimensions["detector"].minimal_group
+
+        # Do simple dimension queries.
+        with butler._query() as query:
+            query = query.join_dimensions(dimensions)
+            rows = list(query.general(dimensions).order_by("detector"))
+            self.assertEqual(
+                rows,
+                [
+                    {"instrument": "Cam1", "detector": 1},
+                    {"instrument": "Cam1", "detector": 2},
+                    {"instrument": "Cam1", "detector": 3},
+                    {"instrument": "Cam1", "detector": 4},
+                ],
+            )
+            rows = list(
+                query.general(dimensions, "detector.full_name", "purpose").order_by(
+                    "-detector.purpose", "full_name"
+                )
+            )
+            self.assertEqual(
+                rows,
+                [
+                    {
+                        "instrument": "Cam1",
+                        "detector": 4,
+                        "detector.full_name": "Bb",
+                        "detector.purpose": "WAVEFRONT",
+                    },
+                    {
+                        "instrument": "Cam1",
+                        "detector": 1,
+                        "detector.full_name": "Aa",
+                        "detector.purpose": "SCIENCE",
+                    },
+                    {
+                        "instrument": "Cam1",
+                        "detector": 2,
+                        "detector.full_name": "Ab",
+                        "detector.purpose": "SCIENCE",
+                    },
+                    {
+                        "instrument": "Cam1",
+                        "detector": 3,
+                        "detector.full_name": "Ba",
+                        "detector.purpose": "SCIENCE",
+                    },
+                ],
+            )
+            rows = list(
+                query.general(dimensions, "detector.full_name", "purpose").where(
+                    "instrument = 'Cam1' AND purpose = 'WAVEFRONT'"
+                )
+            )
+            self.assertEqual(
+                rows,
+                [
+                    {
+                        "instrument": "Cam1",
+                        "detector": 4,
+                        "detector.full_name": "Bb",
+                        "detector.purpose": "WAVEFRONT",
+                    },
+                ],
+            )
+            result = query.general(dimensions, dimension_fields={"detector": {"full_name"}})
+            self.assertEqual(set(row["detector.full_name"] for row in result), {"Aa", "Ab", "Ba", "Bb"})
+
+        # Use "flat" whose dimension group includes implied dimension.
+        flat = butler.get_dataset_type("flat")
+        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+
+        # Do simple dataset queries in RUN collection.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", "imported_g")
+            # This just returns data IDs.
+            rows = list(query.general(dimensions).order_by("detector"))
+            self.assertEqual(
+                rows,
+                [
+                    {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G", "band": "g"},
+                    {"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-G", "band": "g"},
+                    {"instrument": "Cam1", "detector": 4, "physical_filter": "Cam1-G", "band": "g"},
+                ],
+            )
+
+            result = query.general(dimensions, dataset_fields={"flat": ...}).order_by("detector")
+            ids = {row["flat.dataset_id"] for row in result}
+            self.assertEqual(
+                ids,
+                {
+                    UUID("60c8a65c-7290-4c38-b1de-e3b1cdcf872d"),
+                    UUID("84239e7f-c41f-46d5-97b9-a27976b98ceb"),
+                    UUID("fd51bce1-2848-49d6-a378-f8a122f5139a"),
+                },
+            )
+
+            # Check what iter_tuples() returns
+            row_tuples = list(result.iter_tuples(flat))
+            self.assertEqual(len(row_tuples), 3)
+            for row_tuple in row_tuples:
+                self.assertEqual(len(row_tuple.refs), 1)
+                self.assertEqual(row_tuple.refs[0].datasetType, flat)
+                self.assertTrue(row_tuple.refs[0].dataId.hasFull())
+                self.assertTrue(row_tuple.data_id.hasFull())
+                self.assertEqual(row_tuple.data_id.dimensions, dimensions)
+                self.assertEqual(row_tuple.raw_row["flat.run"], "imported_g")
+
+            flat1, flat2, flat3 = (row_tuple.refs[0] for row_tuple in row_tuples)
+
+        # Query datasets CALIBRATION/TAGGED collections.
+        butler.registry.registerCollection("tagged", CollectionType.TAGGED)
+        butler.registry.registerCollection("calib", CollectionType.CALIBRATION)
+
+        # Add two refs to tagged collection.
+        butler.registry.associate("tagged", [flat1, flat2])
+
+        # Certify some calibs.
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
+        butler.registry.certify("calib", [flat1], Timespan(t1, t2))
+        butler.registry.certify("calib", [flat3], Timespan(t2, t3))
+        butler.registry.certify("calib", [flat1], Timespan(t3, None))
+        butler.registry.certify("calib", [flat2], Timespan.makeEmpty())
+
+        # Query tagged collection.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", ["tagged"])
+
+            result = query.general(dimensions, "flat.dataset_id", "flat.run", "flat.collection")
+            row_tuples = list(result.iter_tuples(flat))
+            self.assertEqual(len(row_tuples), 2)
+            self.assertEqual({row_tuple.refs[0] for row_tuple in row_tuples}, {flat1, flat2})
+            self.assertEqual({row_tuple.raw_row["flat.collection"] for row_tuple in row_tuples}, {"tagged"})
+
+        # Query calib collection.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", ["calib"])
+            result = query.general(
+                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+            )
+            row_tuples = list(result.iter_tuples(flat))
+            self.assertEqual(len(row_tuples), 4)
+            self.assertEqual({row_tuple.refs[0] for row_tuple in row_tuples}, {flat1, flat2, flat3})
+            self.assertEqual({row_tuple.raw_row["flat.collection"] for row_tuple in row_tuples}, {"calib"})
+            self.assertEqual(
+                {row_tuple.raw_row["flat.timespan"] for row_tuple in row_tuples},
+                {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty()},
+            )
+
+        # Query both tagged and calib collection.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", ["tagged", "calib"])
+            result = query.general(
+                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+            )
+            row_tuples = list(result.iter_tuples(flat))
+            self.assertEqual(len(row_tuples), 6)
+            self.assertEqual(
+                {row_tuple.raw_row["flat.collection"] for row_tuple in row_tuples}, {"calib", "tagged"}
+            )
+            self.assertEqual(
+                {row_tuple.raw_row["flat.timespan"] for row_tuple in row_tuples},
+                {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty(), None},
+            )
 
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"
