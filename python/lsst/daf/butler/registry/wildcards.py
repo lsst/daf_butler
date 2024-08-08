@@ -434,7 +434,6 @@ class DatasetTypeWildcard:
 
             - a `str` dataset type name;
             - a `DatasetType` instance;
-            - a `re.Pattern` to match against dataset type names;
             - an iterable whose elements may be any of the above (any dataset
               type matching any element in the list is an overall match);
             - an existing `DatasetTypeWildcard` instance;
@@ -455,9 +454,16 @@ class DatasetTypeWildcard:
         """
         if isinstance(expression, cls):
             return expression
+        # CategorizedWildcard currently allows globs and regex as patterns
+        # but RFC-879 drops support for regex in dataset type specifications.
+        # Therefore check for their presence.
+        for exp in ensure_iterable(expression):
+            if isinstance(exp, re.Pattern):
+                raise DatasetTypeExpressionError("Regular expressions are not supported.")
         try:
             wildcard = CategorizedWildcard.fromExpression(
-                expression, coerceUnrecognized=lambda d: (d.name, d)
+                expression,
+                coerceUnrecognized=lambda d: (d.name, d),
             )
         except TypeError as err:
             raise DatasetTypeExpressionError(f"Invalid dataset type expression: {expression!r}.") from err

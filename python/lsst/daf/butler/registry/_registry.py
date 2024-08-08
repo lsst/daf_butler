@@ -1241,10 +1241,8 @@ class Registry(ABC):
             ``exposure``, ``detector``, and ``physical_filter`` values to only
             those for which at least one "raw" dataset exists in
             ``collections``.  Allowed types include `DatasetType`, `str`,
-            and iterables thereof.  Regular expression objects (i.e.
-            `re.Pattern`) are deprecated and will be removed after the v26
-            release.  See :ref:`daf_butler_dataset_type_expressions` for more
-            information.
+            and iterables thereof. See
+            :ref:`daf_butler_dataset_type_expressions` for more information.
         collections : collection expression, optional
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches or partial matches
