@@ -27,10 +27,11 @@
 
 from __future__ import annotations
 
-__all__ = ("GeneralQueryResults",)
+__all__ = ("GeneralQueryResults", "GeneralResultTuple")
 
+import itertools
 from collections.abc import Iterator
-from typing import Any, final
+from typing import Any, NamedTuple, final
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
@@ -39,6 +40,25 @@ from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import GeneralResultSpec
 from .tree import QueryTree
+
+
+class GeneralResultTuple(NamedTuple):
+    """Helper class for general result that represents the result row as a
+    data coordinate and optionally a set of dataset refs extracted from a row.
+    """
+
+    data_id: DataCoordinate
+    """Data coordinate for current row."""
+
+    refs: list[DatasetRef]
+    """Dataset refs extracted from the current row, the order matches the order
+    of arguments in ``iter_tuples`` call."""
+
+    raw_row: dict[str, Any]
+    """Original result row, the keys are the names of the dimensions,
+    dimension fields (separated from dimension by dot) or dataset type fields
+    (separated from dataset type name by dot).
+    """
 
 
 @final
@@ -74,7 +94,7 @@ class GeneralQueryResults(QueryResultsBase):
         Yields
         ------
         row_dict : `dict` [`str`, `Any`]
-            Result row as dictionary, the keys the names of the dimensions,
+            Result row as dictionary, the keys are the names of the dimensions,
             dimension fields (separated from dimension by dot) or dataset type
             fields (separated from dataset type name by dot).
         """
@@ -83,33 +103,38 @@ class GeneralQueryResults(QueryResultsBase):
             for row in page.rows:
                 yield dict(zip(columns, row))
 
-    def iter_refs(self, dataset_type: DatasetType) -> Iterator[tuple[DatasetRef, dict[str, Any]]]:
-        """Iterate over result rows and return DatasetRef constructed from each
-        row and an original row.
+    def iter_tuples(self, *dataset_types: DatasetType) -> Iterator[GeneralResultTuple]:
+        """Iterate over result rows and return data coordinate, and dataset
+        refs constructed from each row, and an original row.
 
         Parameters
         ----------
-        dataset_type : `DatasetType`
-            Type of the dataset to return.
+        *dataset_types : `DatasetType`
+            Zero or more types of the datasets to return.
 
         Yields
         ------
-        dataset_ref : `DatasetRef`
-            Dataset reference.
-        row_dict : `dict` [`str`, `Any`]
-            Result row as dictionary, the keys the names of the dimensions,
-            dimension fields (separated from dimension by dot) or dataset type
-            fields (separated from dataset type name by dot).
+        row_tuple : `GeneralResultTuple`
+            Structure containing data coordinate, refs, and a copy of the row.
         """
-        dimensions = dataset_type.dimensions
-        id_key = f"{dataset_type.name}.dataset_id"
-        run_key = f"{dataset_type.name}.run"
-        data_id_keys = dimensions.required
+        all_dimensions = self._spec.dimensions
+        dataset_keys: list[tuple[DimensionGroup, str, str]] = []
+        for dataset_type in dataset_types:
+            dimensions = dataset_type.dimensions
+            id_key = f"{dataset_type.name}.dataset_id"
+            run_key = f"{dataset_type.name}.run"
+            dataset_keys.append((dimensions, id_key, run_key))
         for row in self:
-            values = tuple(row[key] for key in data_id_keys)
-            data_id = DataCoordinate.from_required_values(dimensions, values)
-            ref = DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key])
-            yield ref, row
+            values = tuple(
+                row[key] for key in itertools.chain(all_dimensions.required, all_dimensions.implied)
+            )
+            data_coordinate = DataCoordinate.from_full_values(all_dimensions, values)
+            refs = []
+            for dimensions, id_key, run_key in dataset_keys:
+                values = tuple(row[key] for key in itertools.chain(dimensions.required, dimensions.implied))
+                data_id = DataCoordinate.from_full_values(dimensions, values)
+                refs.append(DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key]))
+            yield GeneralResultTuple(data_id=data_coordinate, refs=refs, raw_row=row)
 
     @property
     def dimensions(self) -> DimensionGroup:
