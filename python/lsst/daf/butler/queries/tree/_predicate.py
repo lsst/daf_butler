@@ -46,6 +46,7 @@ from ..._exceptions import InvalidQueryError
 from ._base import QueryTreeBase
 from ._column_expression import (
     ColumnExpression,
+    ColumnReference,
     is_one_datetime_and_one_ingest_date,
     is_one_timespan_and_one_datetime,
 )
@@ -156,9 +157,9 @@ class Predicate(QueryTreeBase):
         return cls.model_construct(operands=() if value else ((),))
 
     @classmethod
-    def from_bool_expression(cls, value: ColumnExpression) -> Predicate:
-        """Construct a predicate that wraps a boolean ColumnExpression, taking
-        on the value of the underlying ColumnExpression.
+    def from_bool_expression(cls, value: ColumnReference) -> Predicate:
+        """Construct a predicate that wraps a boolean ColumnReference, taking
+        on the value of the underlying ColumnReference.
 
         Parameters
         ----------
@@ -437,7 +438,7 @@ class BooleanWrapper(PredicateLeafBase):
 
     predicate_type: Literal["boolean_wrapper"] = "boolean_wrapper"
 
-    operand: ColumnExpression
+    operand: ColumnReference
     """Wrapped expression that will be used as the value for this predicate."""
 
     def gather_required_columns(self, columns: ColumnSet) -> None:

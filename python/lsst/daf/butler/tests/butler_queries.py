@@ -988,6 +988,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     query_func("exposure.can_see_sky OR exposure = 2001"), [TRUE_ID, FALSE_ID_1]
                 )
 
+        # Find nulls and non-nulls.  This is run only against the new query
+        # system.  It appears that the `= NULL` syntax never had test coverage
+        # in the old query system and doesn't appear to work for any column
+        # types, not just bool.  Not worth fixing since we are dropping that
+        # code soon.
+        nulls = [NULL_ID_1, NULL_ID_2]
+        non_nulls = [TRUE_ID, FALSE_ID_1, FALSE_ID_2]
+        self.assertCountEqual(_run_query("exposure.can_see_sky = NULL"), nulls)
+        self.assertCountEqual(_run_query("exposure.can_see_sky != NULL"), non_nulls)
+        self.assertCountEqual(_run_query("NULL = exposure.can_see_sky"), nulls)
+        self.assertCountEqual(_run_query("NULL != exposure.can_see_sky"), non_nulls)
+
         # Test boolean columns in ExpressionFactory.
         with butler._query() as query:
             x = query.expression_factory
