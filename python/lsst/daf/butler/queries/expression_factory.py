@@ -88,6 +88,27 @@ class ScalarExpressionProxy(ExpressionProxy):
         """
         return tree.Reversed(operand=self._expression)
 
+    def as_boolean(self) -> tree.Predicate:
+        """If this scalar expression is a boolean, convert it to a `Predicate`
+        so it can be used as a boolean expression.
+
+        Raises
+        ------
+        InvalidQueryError
+            If this expression is not a boolean.
+
+        Returns
+        -------
+        predicate : `Predicate`
+            This expression converted to a `Predicate`.
+        """
+        expr = self._expression
+        raise InvalidQueryError(
+            f"Expression '{expr}' with type"
+            f" '{expr.column_type}' can't be used directly as a boolean value."
+            " Use a comparison operator like '>' or '==' instead."
+        )
+
     def __eq__(self, other: object) -> tree.Predicate:  # type: ignore[override]
         return self._make_comparison(other, "==")
 
@@ -233,6 +254,38 @@ class ResolvedScalarExpressionProxy(ScalarExpressionProxy):
         return self._expr
 
 
+class BooleanScalarExpressionProxy(ScalarExpressionProxy):
+    """A `ScalarExpressionProxy` representing a boolean column.  You should
+    call `as_boolean()` on this object to convert it to an instance of
+    `Predicate` before attempting to use it.
+
+    Parameters
+    ----------
+    expression : `.tree.ColumnReference`
+        Boolean column reference that backs this proxy.
+    """
+
+    # This is a hack/work-around to make static typing work when referencing
+    # dimension record metadata boolean columns.  From the perspective of
+    # typing, anything boolean should be a `Predicate`, but the type system has
+    # no way of knowing whether a given column is a bool or some other type.
+
+    def __init__(self, expression: tree.ColumnReference) -> None:
+        if expression.column_type != "bool":
+            raise ValueError(f"Expression is a {expression.column_type}, not a 'bool': {expression}")
+        self._boolean_expression = expression
+
+    def as_boolean(self) -> tree.Predicate:
+        return tree.Predicate.from_bool_expression(self._boolean_expression)
+
+    @property
+    def _expression(self) -> tree.ColumnExpression:
+        raise InvalidQueryError(
+            f"Boolean expression '{self._boolean_expression}' can't be used directly in other expressions."
+            " Call the 'as_boolean()' method to convert it to a Predicate instead."
+        )
+
+
 class TimespanProxy(ExpressionProxy):
     """An `ExpressionProxy` specialized for timespan columns and literals.
 
@@ -350,7 +403,10 @@ class DimensionElementProxy(ScalarExpressionProxy):
             expression = tree.DimensionFieldReference(element=self._element, field=field)
         except InvalidQueryError:
             raise AttributeError(field)
-        return ResolvedScalarExpressionProxy(expression)
+        if expression.column_type == "bool":
+            return BooleanScalarExpressionProxy(expression)
+        else:
+            return ResolvedScalarExpressionProxy(expression)
 
     @property
     def region(self) -> RegionProxy:
