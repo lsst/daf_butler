@@ -275,6 +275,10 @@ class BooleanScalarExpressionProxy(ScalarExpressionProxy):
             raise ValueError(f"Expression is a {expression.column_type}, not a 'bool': {expression}")
         self._boolean_expression = expression
 
+    @property
+    def is_null(self) -> tree.Predicate:
+        return ResolvedScalarExpressionProxy(self._boolean_expression).is_null
+
     def as_boolean(self) -> tree.Predicate:
         return tree.Predicate.from_bool_expression(self._boolean_expression)
 

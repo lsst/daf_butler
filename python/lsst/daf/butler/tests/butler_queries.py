@@ -947,14 +947,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         TRUE_ID = 1000
         FALSE_ID_1 = 2001
         FALSE_ID_2 = 2002
-        NULL_ID = 3000
+        NULL_ID_1 = 3000
+        NULL_ID_2 = 903342  # already exists in the YAML file
         records = [
             {"id": TRUE_ID, "obs_id": "true-1", "can_see_sky": True},
             {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False},
             {"id": FALSE_ID_2, "obs_id": "false-2", "can_see_sky": False},
-            {"id": NULL_ID, "obs_id": "null-1", "can_see_sky": None},
-            # There is also a record ID 903342 from the YAML file with a NULL
-            # value for can_see_sky.
+            {"id": NULL_ID_1, "obs_id": "null-1", "can_see_sky": None},
         ]
         for record in records:
             butler.registry.insertDimensionData("exposure", base_data | record)
@@ -1007,6 +1006,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.assertCountEqual(
                 do_query(x.exposure.can_see_sky.as_boolean().logical_not()), [FALSE_ID_1, FALSE_ID_2]
             )
+
+            # Searching for nulls works.
+            self.assertCountEqual(do_query(x.exposure.can_see_sky.is_null), [NULL_ID_1, NULL_ID_2])
 
             # Attempting to use operators that only apply to non-boolean types
             # is an error.
