@@ -1,0 +1,2 @@
+* Removed the ``components`` parameter from registry APIs.
+* Dropped supported for regular expressions (`re.Pattern`) in dataset type expressions. Wildcard globs are still supported.
