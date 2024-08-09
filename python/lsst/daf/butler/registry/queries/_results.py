@@ -321,7 +321,6 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
         collections: Any,
         *,
         findFirst: bool = True,
-        components: bool = False,
     ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
@@ -341,9 +340,6 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
             dataset type appears (according to the order of ``collections``
             passed in).  If `True`, ``collections`` must not contain regular
             expressions and may not be ``...``.
-        components : `bool`, optional
-            Must be `False`.  Provided only for backwards compatibility. After
-            v27 this argument will be removed entirely.
 
         Returns
         -------

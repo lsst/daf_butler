@@ -256,7 +256,6 @@ class HybridButlerRegistry(Registry):
         self,
         expression: Any = ...,
         *,
-        components: bool = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         return self._remote.queryDatasetTypes(expression, missing=missing)
@@ -282,7 +281,6 @@ class HybridButlerRegistry(Registry):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -307,7 +305,6 @@ class HybridButlerRegistry(Registry):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -352,7 +349,6 @@ class HybridButlerRegistry(Registry):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -442,11 +438,8 @@ class _HybridDataCoordinateQueryResults:
         collections: Any,
         *,
         findFirst: bool = True,
-        components: bool = False,
     ) -> ParentDatasetQueryResults:
-        return self._direct().findDatasets(
-            datasetType, collections, findFirst=findFirst, components=components
-        )
+        return self._direct().findDatasets(datasetType, collections, findFirst=findFirst)
 
     def findRelatedDatasets(
         self,

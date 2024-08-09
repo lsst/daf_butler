@@ -30,7 +30,6 @@ __all__ = (
     "CollectionTypeCallback",
     "collection_type_option",
     "collections_option",
-    "components_option",
     "config_option",
     "config_file_option",
     "confirm_option",
@@ -107,18 +106,6 @@ collections_option = MWOptionDecorator(
     ),
     multiple=True,
     callback=split_commas,
-)
-
-
-components_option = MWOptionDecorator(
-    "--components/--no-components",
-    default=None,
-    help=unwrap(
-        """For --components, apply all expression patterns to
-        component dataset type names as well. For --no-components,
-        never apply patterns to components. Only --no-components
-        is now supported. Option will be removed after v27."""
-    ),
 )
 
 

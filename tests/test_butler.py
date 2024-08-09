@@ -36,6 +36,7 @@ import pathlib
 import pickle
 import posixpath
 import random
+import re
 import shutil
 import string
 import tempfile
@@ -94,6 +95,7 @@ from lsst.daf.butler.registry import (
     CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
+    DatasetTypeExpressionError,
     MissingCollectionError,
     OrphanedRecordError,
 )
@@ -1141,6 +1143,13 @@ class ButlerTests(ButlerPutGetTests):
             fromRegistry.add(parent_dataset_type)
             fromRegistry.update(parent_dataset_type.makeAllComponentDatasetTypes())
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
+
+        # Query with wildcard.
+        dataset_types = butler.registry.queryDatasetTypes("metric*")
+        self.assertEqual(len(dataset_types), 4, f"Got: {dataset_types}")
+        # but not regex.
+        with self.assertRaises(DatasetTypeExpressionError):
+            butler.registry.queryDatasetTypes(["pvi", re.compile("metric.*")])
 
         # Now that we have some dataset types registered, validate them
         butler.validateConfiguration(

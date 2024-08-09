@@ -26,11 +26,10 @@ Arguments that specify one or more dataset types can generally take any of the f
  - `DatasetType` instances;
  - `str` values (corresponding to `DatasetType.name`);
  - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
- - `re.Pattern` values (matched to `DatasetType.name` strings, via `~re.Pattern.fullmatch`);
  - iterables of any of the above;
  - the special value "``...``", which matches all dataset types.
 
-Wildcards (`re.Pattern` and ``...``) are not allowed in certain contexts, such as `Registry.queryDataIds` and `Registry.queryDimensionRecords`, particularly when datasets are used only as a constraint on what is returned.
+Wildcards (globs and ``...``) are not allowed in certain contexts, such as `Registry.queryDataIds` and `Registry.queryDimensionRecords`, particularly when datasets are used only as a constraint on what is returned.
 `Registry.queryDatasetTypes` can be used to resolve patterns before calling these methods when desired.
 In these contexts, passing a dataset type or name that is not registered with the repository will result in `MissingDatasetTypeError` being raised, while contexts that do accept wildcards will typically ignore unregistered dataset types (for example, `Registry.queryDatasets` will return no datasets for these).
 
