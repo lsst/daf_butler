@@ -525,10 +525,7 @@ class RemoteButlerRegistry(Registry):
                 datasetType.dimensions,
                 dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
             )
-            timespan_key = f"{datasetType.name}.timespan"
-            collection_key = f"{datasetType.name}.collection"
-            for _, refs, row_dict in result.iter_tuples(datasetType):
-                yield DatasetAssociation(refs[0], row_dict[collection_key], row_dict[timespan_key])
+            yield from DatasetAssociation.from_query_result(result, datasetType)
 
     @property
     def storageClasses(self) -> StorageClassFactory:
