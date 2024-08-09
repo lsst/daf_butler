@@ -932,3 +932,67 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # Error to reference tract without skymap in a WHERE clause.
             with self.assertRaises(InvalidQueryError):
                 list(query.where(_x.tract == 4).dimension_records("patch"))
+
+    def test_boolean_columns(self) -> None:
+        """Test that boolean columns work as expected when specifying
+        expressions.
+        """
+        # Exposure is the only dimension that has boolean columns, and this set
+        # of data has all the pre-requisites for exposure set up.
+        butler = self.make_butler("hsc-rc2-subset.yaml")
+
+        base_data = {"instrument": "HSC", "physical_filter": "HSC-R", "group": "903342", "day_obs": 20130617}
+
+        TRUE_ID_1 = 1001
+        TRUE_ID_2 = 2001
+        FALSE_ID_1 = 1002
+        FALSE_ID_2 = 2002
+        records = [
+            {"id": TRUE_ID_1, "obs_id": "true-1", "can_see_sky": True},
+            {"id": TRUE_ID_2, "obs_id": "true-2", "can_see_sky": True},
+            {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False},
+            {"id": FALSE_ID_2, "obs_id": "false-2", "can_see_sky": False},
+            # There is also a record ID 903342 from the YAML file with a NULL
+            # value for can_see_sky.
+        ]
+        for record in records:
+            butler.registry.insertDimensionData("exposure", base_data | record)
+
+        # Go through the registry interface to cover the old query system, too.
+        # This can be removed once the old query system is removed.
+        def _run_registry_query(where: str) -> list[int]:
+            return _get_exposure_ids_from_dimension_records(
+                butler.registry.queryDimensionRecords("exposure", where=where, instrument="HSC")
+            )
+
+        def _run_query(where: str) -> list[int]:
+            with butler._query() as query:
+                return _get_exposure_ids_from_dimension_records(
+                    query.dimension_records("exposure").where(where, instrument="HSC")
+                )
+
+        for test, query_func in [("registry", _run_registry_query), ("new-query", _run_query)]:
+            with self.subTest(test):
+                # Boolean columns should be usable standalone as an expression.
+                self.assertCountEqual(query_func("exposure.can_see_sky"), [TRUE_ID_1, TRUE_ID_2])
+
+                # You can find false values in the column with NOT.  The NOT of
+                # NULL is NULL, consistent with SQL semantics -- so records
+                # with NULL can_see_sky are not included here.
+                self.assertCountEqual(query_func("NOT exposure.can_see_sky"), [FALSE_ID_1, FALSE_ID_2])
+
+                # Make sure the bare column composes with other expressions
+                # correctly.
+                self.assertCountEqual(
+                    query_func("exposure.can_see_sky OR exposure = 1002"), [TRUE_ID_1, TRUE_ID_2, FALSE_ID_1]
+                )
+
+
+def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
+    output = []
+    for rec in dimension_records:
+        id = rec.dataId["exposure"]
+        assert isinstance(id, int)
+        output.append(id)
+
+    return output
