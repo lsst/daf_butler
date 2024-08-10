@@ -951,8 +951,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         NULL_ID_2 = 903342  # already exists in the YAML file
         records = [
             {"id": TRUE_ID, "obs_id": "true-1", "can_see_sky": True},
-            {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False},
-            {"id": FALSE_ID_2, "obs_id": "false-2", "can_see_sky": False},
+            {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False, "observation_type": "science"},
+            {"id": FALSE_ID_2, "obs_id": "false-2", "can_see_sky": False, "observation_type": None},
             {"id": NULL_ID_1, "obs_id": "null-1", "can_see_sky": None},
         ]
         for record in records:
@@ -988,17 +988,36 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     query_func("exposure.can_see_sky OR exposure = 2001"), [TRUE_ID, FALSE_ID_1]
                 )
 
-        # Find nulls and non-nulls.  This is run only against the new query
-        # system.  It appears that the `= NULL` syntax never had test coverage
-        # in the old query system and doesn't appear to work for any column
-        # types, not just bool.  Not worth fixing since we are dropping that
-        # code soon.
+        # Find nulls and non-nulls.
+        #
+        # This is run only against the new query system.  It appears that the
+        # `= NULL` syntax never had test coverage in the old query system and
+        # doesn't work for any column types.  Not worth fixing since we are
+        # dropping that code soon.
         nulls = [NULL_ID_1, NULL_ID_2]
         non_nulls = [TRUE_ID, FALSE_ID_1, FALSE_ID_2]
         self.assertCountEqual(_run_query("exposure.can_see_sky = NULL"), nulls)
         self.assertCountEqual(_run_query("exposure.can_see_sky != NULL"), non_nulls)
         self.assertCountEqual(_run_query("NULL = exposure.can_see_sky"), nulls)
         self.assertCountEqual(_run_query("NULL != exposure.can_see_sky"), non_nulls)
+
+        # You can't do a NULL check on an arbitrary boolean predicate.
+        with self.assertRaises(InvalidQueryError):
+            _run_query("NULL = (exposure.can_see_sky AND exposure = 2001)")
+
+        # Check null finding for non-boolean columns, too.
+        self.assertEqual(
+            _run_query("exposure.observation_type = NULL AND NOT exposure.can_see_sky"), [FALSE_ID_2]
+        )
+        self.assertEqual(
+            _run_query("exposure.observation_type != NULL AND NOT exposure.can_see_sky"), [FALSE_ID_1]
+        )
+        self.assertEqual(
+            _run_query("NULL = exposure.observation_type AND NOT exposure.can_see_sky"), [FALSE_ID_2]
+        )
+        self.assertEqual(
+            _run_query("NULL != exposure.observation_type AND NOT exposure.can_see_sky"), [FALSE_ID_1]
+        )
 
         # Test boolean columns in ExpressionFactory.
         with butler._query() as query:
