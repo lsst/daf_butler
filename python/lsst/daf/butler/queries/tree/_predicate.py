@@ -46,6 +46,7 @@ from ..._exceptions import InvalidQueryError
 from ._base import QueryTreeBase
 from ._column_expression import (
     ColumnExpression,
+    ColumnReference,
     is_one_datetime_and_one_ingest_date,
     is_one_timespan_and_one_datetime,
 )
@@ -154,6 +155,26 @@ class Predicate(QueryTreeBase):
         #    value = all(any(or_group) for or_group in self.operands)
         #
         return cls.model_construct(operands=() if value else ((),))
+
+    @classmethod
+    def from_bool_expression(cls, value: ColumnReference) -> Predicate:
+        """Construct a predicate that wraps a boolean ColumnReference, taking
+        on the value of the underlying ColumnReference.
+
+        Parameters
+        ----------
+        value : `ColumnExpression`
+            Boolean-valued expression to convert to Predicate.
+
+        Returns
+        -------
+        predicate : `Predicate`
+            Predicate representing the expression.
+        """
+        if value.column_type != "bool":
+            raise ValueError(f"ColumnExpression must have column type 'bool', not '{value.column_type}'")
+
+        return cls._from_leaf(BooleanWrapper(operand=value))
 
     @classmethod
     def compare(cls, a: ColumnExpression, operator: ComparisonOperator, b: ColumnExpression) -> Predicate:
@@ -412,6 +433,26 @@ class LogicalNot(PredicateLeafBase):
         return visitor._visit_logical_not(self.operand, flags)
 
 
+class BooleanWrapper(PredicateLeafBase):
+    """Pass-through to a pre-existing boolean column expression."""
+
+    predicate_type: Literal["boolean_wrapper"] = "boolean_wrapper"
+
+    operand: ColumnReference
+    """Wrapped expression that will be used as the value for this predicate."""
+
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        # Docstring inherited.
+        self.operand.gather_required_columns(columns)
+
+    def __str__(self) -> str:
+        return f"{self.operand}"
+
+    def visit(self, visitor: PredicateVisitor[_A, _O, _L], flags: PredicateVisitFlags) -> _L:
+        # Docstring inherited.
+        return visitor.visit_boolean_wrapper(self.operand, flags)
+
+
 @final
 class IsNull(PredicateLeafBase):
     """A boolean column expression that tests whether its operand is NULL."""
@@ -639,7 +680,7 @@ class InQuery(PredicateLeafBase):
         return self
 
 
-LogicalNotOperand: TypeAlias = IsNull | Comparison | InContainer | InRange | InQuery
+LogicalNotOperand: TypeAlias = IsNull | Comparison | InContainer | InRange | InQuery | BooleanWrapper
 PredicateLeaf: TypeAlias = Annotated[
     LogicalNotOperand | LogicalNot, pydantic.Field(discriminator="predicate_type")
 ]

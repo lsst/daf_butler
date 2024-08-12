@@ -42,6 +42,7 @@ from ._identifiers import IdentifierContext, interpret_identifier
 from .tree import (
     BinaryExpression,
     ColumnExpression,
+    ColumnReference,
     ComparisonOperator,
     LiteralValue,
     Predicate,
@@ -158,6 +159,16 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
                 return Predicate.is_null(rhs.value)
             case ["!=", _Null(), _ColExpr() as rhs]:
                 return Predicate.is_null(rhs.value).logical_not()
+            # Boolean columns can be null, but will have been converted to
+            # Predicate, so we need additional cases.
+            case ["=" | "!=", Predicate() as pred, _Null()] | ["=" | "!=", _Null(), Predicate() as pred]:
+                column_ref = _get_boolean_column_reference(pred)
+                if column_ref is not None:
+                    match operator:
+                        case "=":
+                            return Predicate.is_null(column_ref)
+                        case "!=":
+                            return Predicate.is_null(column_ref).logical_not()
 
             # Handle arithmetic operations
             case [("+" | "-" | "*" | "/" | "%") as op, _ColExpr() as lhs, _ColExpr() as rhs]:
@@ -198,7 +209,23 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         if categorizeConstant(name) == ExpressionConstant.NULL:
             return _Null()
 
-        return _ColExpr(interpret_identifier(self.context, name))
+        column_expression = interpret_identifier(self.context, name)
+        if column_expression.column_type == "bool":
+            # Expression-handling code (in this file and elsewhere) expects
+            # boolean-valued expressions to be represented as Predicate, not a
+            # ColumnExpression.
+
+            # We should only be getting direct references to a column, not a
+            # more complicated expression.
+            # (Anything more complicated should be a Predicate already.)
+            assert (
+                column_expression.expression_type == "dataset_field"
+                or column_expression.expression_type == "dimension_field"
+                or column_expression.expression_type == "dimension_key"
+            )
+            return Predicate.from_bool_expression(column_expression)
+        else:
+            return _ColExpr(column_expression)
 
     def visitNumericLiteral(self, value: str, node: Node) -> _VisitorResult:
         numeric: int | float
@@ -303,3 +330,19 @@ def _convert_in_clause_to_predicate(lhs: ColumnExpression, rhs: _VisitorResult, 
             return Predicate.is_null(lhs)
         case _:
             raise InvalidQueryError(f"Invalid IN expression: '{node!s}")
+
+
+def _get_boolean_column_reference(predicate: Predicate) -> ColumnReference | None:
+    """Unwrap a predicate to recover the boolean ColumnReference it contains.
+    Returns `None` if this Predicate contains anything other than a single
+    boolean ColumnReference operand.
+
+    This undoes the ColumnReference to Predicate conversion that occurs in
+    visitIdentifier for boolean columns.
+    """
+    if len(predicate.operands) == 1 and len(predicate.operands[0]) == 1:
+        predicate_leaf = predicate.operands[0][0]
+        if predicate_leaf.predicate_type == "boolean_wrapper":
+            return predicate_leaf.operand
+
+    return None

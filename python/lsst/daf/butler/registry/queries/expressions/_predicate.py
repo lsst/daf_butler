@@ -390,7 +390,12 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 if column == timespan_database_representation.TimespanDatabaseRepresentation.NAME
                 else element.RecordClass.fields.standard[column].getPythonType()
             )
-            return ColumnExpression.reference(tag, dtype)
+            if dtype is bool:
+                # ColumnExpression is for non-boolean columns only.  Booleans
+                # are represented as Predicate.
+                return Predicate.reference(tag)
+            else:
+                return ColumnExpression.reference(tag, dtype)
         else:
             tag = DimensionKeyColumnTag(element.name)
             assert isinstance(element, Dimension)

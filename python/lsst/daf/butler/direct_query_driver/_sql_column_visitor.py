@@ -132,6 +132,11 @@ class SqlColumnVisitor(
         # Docstring inherited.
         return self.expect_scalar(expression.operand).desc()
 
+    def visit_boolean_wrapper(
+        self, value: qt.ColumnExpression, flags: PredicateVisitFlags
+    ) -> sqlalchemy.ColumnElement[bool]:
+        return self.expect_scalar(value)
+
     def visit_comparison(
         self,
         a: qt.ColumnExpression,

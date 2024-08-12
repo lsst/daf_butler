@@ -198,6 +198,25 @@ class PredicateVisitor(Generic[_A, _O, _L]):
     """
 
     @abstractmethod
+    def visit_boolean_wrapper(self, value: tree.ColumnExpression, flags: PredicateVisitFlags) -> _L:
+        """Visit a boolean-valued column expression.
+
+        Parameters
+        ----------
+        value : `tree.ColumnExpression`
+            Column expression, guaranteed to have `column_type == "bool"`.
+        flags : `PredicateVisitFlags`
+            Information about where this leaf appears in the larger predicate
+            tree.
+
+        Returns
+        -------
+        result : `object`
+            Implementation-defined.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_comparison(
         self,
         a: tree.ColumnExpression,
@@ -447,6 +466,11 @@ class SimplePredicateVisitor(
     visitation methods and either return `None` if there is no result, or
     return a replacement `Predicate` to construct a new tree.
     """
+
+    def visit_boolean_wrapper(
+        self, value: tree.ColumnExpression, flags: PredicateVisitFlags
+    ) -> tree.Predicate | None:
+        return None
 
     def visit_comparison(
         self,

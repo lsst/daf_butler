@@ -45,6 +45,7 @@ from .._timespan import Timespan
 from ..dimensions import DataCoordinate, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults
+from ..queries.tree import Predicate
 from ..registry import CollectionType, NoDefaultCollectionError, RegistryDefaults
 from ..registry.sql_registry import SqlRegistry
 from ..transfers import YamlRepoImportBackend
@@ -932,3 +933,137 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # Error to reference tract without skymap in a WHERE clause.
             with self.assertRaises(InvalidQueryError):
                 list(query.where(_x.tract == 4).dimension_records("patch"))
+
+    def test_boolean_columns(self) -> None:
+        """Test that boolean columns work as expected when specifying
+        expressions.
+        """
+        # Exposure is the only dimension that has boolean columns, and this set
+        # of data has all the pre-requisites for exposure set up.
+        butler = self.make_butler("hsc-rc2-subset.yaml")
+
+        base_data = {"instrument": "HSC", "physical_filter": "HSC-R", "group": "903342", "day_obs": 20130617}
+
+        TRUE_ID = 1000
+        FALSE_ID_1 = 2001
+        FALSE_ID_2 = 2002
+        NULL_ID_1 = 3000
+        NULL_ID_2 = 903342  # already exists in the YAML file
+        records = [
+            {"id": TRUE_ID, "obs_id": "true-1", "can_see_sky": True},
+            {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False, "observation_type": "science"},
+            {"id": FALSE_ID_2, "obs_id": "false-2", "can_see_sky": False, "observation_type": None},
+            {"id": NULL_ID_1, "obs_id": "null-1", "can_see_sky": None},
+        ]
+        for record in records:
+            butler.registry.insertDimensionData("exposure", base_data | record)
+
+        # Go through the registry interface to cover the old query system, too.
+        # This can be removed once the old query system is removed.
+        def _run_registry_query(where: str) -> list[int]:
+            return _get_exposure_ids_from_dimension_records(
+                butler.registry.queryDimensionRecords("exposure", where=where, instrument="HSC")
+            )
+
+        def _run_query(where: str) -> list[int]:
+            with butler._query() as query:
+                return _get_exposure_ids_from_dimension_records(
+                    query.dimension_records("exposure").where(where, instrument="HSC")
+                )
+
+        # Test boolean columns in the `where` string syntax.
+        for test, query_func in [("registry", _run_registry_query), ("new-query", _run_query)]:
+            with self.subTest(test):
+                # Boolean columns should be usable standalone as an expression.
+                self.assertCountEqual(query_func("exposure.can_see_sky"), [TRUE_ID])
+
+                # You can find false values in the column with NOT.  The NOT of
+                # NULL is NULL, consistent with SQL semantics -- so records
+                # with NULL can_see_sky are not included here.
+                self.assertCountEqual(query_func("NOT exposure.can_see_sky"), [FALSE_ID_1, FALSE_ID_2])
+
+                # Make sure the bare column composes with other expressions
+                # correctly.
+                self.assertCountEqual(
+                    query_func("exposure.can_see_sky OR exposure = 2001"), [TRUE_ID, FALSE_ID_1]
+                )
+
+        # Find nulls and non-nulls.
+        #
+        # This is run only against the new query system.  It appears that the
+        # `= NULL` syntax never had test coverage in the old query system and
+        # doesn't work for any column types.  Not worth fixing since we are
+        # dropping that code soon.
+        nulls = [NULL_ID_1, NULL_ID_2]
+        non_nulls = [TRUE_ID, FALSE_ID_1, FALSE_ID_2]
+        self.assertCountEqual(_run_query("exposure.can_see_sky = NULL"), nulls)
+        self.assertCountEqual(_run_query("exposure.can_see_sky != NULL"), non_nulls)
+        self.assertCountEqual(_run_query("NULL = exposure.can_see_sky"), nulls)
+        self.assertCountEqual(_run_query("NULL != exposure.can_see_sky"), non_nulls)
+
+        # You can't do a NULL check on an arbitrary boolean predicate.
+        with self.assertRaises(InvalidQueryError):
+            _run_query("NULL = (exposure.can_see_sky AND exposure = 2001)")
+
+        # Check null finding for non-boolean columns, too.
+        self.assertEqual(
+            _run_query("exposure.observation_type = NULL AND NOT exposure.can_see_sky"), [FALSE_ID_2]
+        )
+        self.assertEqual(
+            _run_query("exposure.observation_type != NULL AND NOT exposure.can_see_sky"), [FALSE_ID_1]
+        )
+        self.assertEqual(
+            _run_query("NULL = exposure.observation_type AND NOT exposure.can_see_sky"), [FALSE_ID_2]
+        )
+        self.assertEqual(
+            _run_query("NULL != exposure.observation_type AND NOT exposure.can_see_sky"), [FALSE_ID_1]
+        )
+
+        # Test boolean columns in ExpressionFactory.
+        with butler._query() as query:
+            x = query.expression_factory
+
+            def do_query(constraint: Predicate) -> list[int]:
+                return _get_exposure_ids_from_dimension_records(
+                    query.dimension_records("exposure").where(constraint, instrument="HSC")
+                )
+
+            # Boolean columns should be usable standalone as a Predicate.
+            self.assertCountEqual(do_query(x.exposure.can_see_sky.as_boolean()), [TRUE_ID])
+
+            # You can find false values in the column with NOT.  The NOT of
+            # NULL is NULL, consistent with SQL semantics -- so records
+            # with NULL can_see_sky are not included here.
+            self.assertCountEqual(
+                do_query(x.exposure.can_see_sky.as_boolean().logical_not()), [FALSE_ID_1, FALSE_ID_2]
+            )
+
+            # Searching for nulls works.
+            self.assertCountEqual(do_query(x.exposure.can_see_sky.is_null), [NULL_ID_1, NULL_ID_2])
+
+            # Attempting to use operators that only apply to non-boolean types
+            # is an error.
+            with self.assertRaisesRegex(
+                InvalidQueryError,
+                r"Boolean expression 'exposure.can_see_sky' can't be used directly in other expressions."
+                r" Call the 'as_boolean\(\)' method to convert it to a Predicate instead.",
+            ):
+                x.exposure.can_see_sky == 1
+
+            # Non-boolean types can't be converted directly to Predicate.
+            with self.assertRaisesRegex(
+                InvalidQueryError,
+                r"Expression 'exposure.observation_type' with type 'string' can't be used directly"
+                r" as a boolean value.",
+            ):
+                x.exposure.observation_type.as_boolean()
+
+
+def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
+    output = []
+    for rec in dimension_records:
+        id = rec.dataId["exposure"]
+        assert isinstance(id, int)
+        output.append(id)
+
+    return output
