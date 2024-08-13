@@ -27,20 +27,20 @@
 
 from __future__ import annotations
 
-__all__ = ("DirectButlerCollections",)
+__all__ = ("RemoteButlerCollections",)
 
 from collections.abc import Iterable, Sequence, Set
-
-from lsst.utils.iteration import ensure_iterable
+from typing import TYPE_CHECKING
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
-from ..registry.interfaces import ChainedCollectionRecord
-from ..registry.sql_registry import SqlRegistry
+
+if TYPE_CHECKING:
+    from ._registry import RemoteButlerRegistry
 
 
-class DirectButlerCollections(ButlerCollections):
-    """Implementation of ButlerCollections for DirectButler.
+class RemoteButlerCollections(ButlerCollections):
+    """Implementation of ButlerCollections for RemoteButler.
 
     Parameters
     ----------
@@ -48,7 +48,7 @@ class DirectButlerCollections(ButlerCollections):
         Registry object used to work with the collections database.
     """
 
-    def __init__(self, registry: SqlRegistry):
+    def __init__(self, registry: RemoteButlerRegistry):
         self._registry = registry
 
     @property
@@ -56,28 +56,20 @@ class DirectButlerCollections(ButlerCollections):
         return self._registry.defaults.collections
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
-        return self._registry._managers.collections.extend_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def prepend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
-        return self._registry._managers.collections.prepend_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def redefine_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
-        self._registry._managers.collections.update_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def remove_from_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
-        return self._registry._managers.collections.remove_from_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def query(
         self,
@@ -96,15 +88,10 @@ class DirectButlerCollections(ButlerCollections):
         )
 
     def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
-        record = self._registry.get_collection_record(name)
-        doc = ""
-        if include_doc:
-            doc = self._registry.getCollectionDocumentation(name) or ""
-        children: tuple[str, ...] = tuple()
-        if record.type == CollectionType.CHAINED:
-            assert isinstance(record, ChainedCollectionRecord)
-            children = tuple(record.children)
-        parents: set[str] = set()
-        if include_parents:
-            parents = self._registry.getCollectionParentChains(name)
-        return CollectionInfo(name=name, type=record.type, doc=doc, parents=parents, children=children)
+        info = self._registry._get_collection_info(
+            name, include_doc=include_doc, include_parents=include_parents
+        )
+        doc = info.doc or ""
+        children = info.children or ()
+        parents = info.parents or set()
+        return CollectionInfo(name=name, type=info.type, doc=doc, parents=parents, children=children)

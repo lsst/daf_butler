@@ -222,7 +222,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
                     )
                     self.assertIsInstance(butler, RemoteButler)
                     self.assertEqual(butler._connection.server_url, server_url)
-                    self.assertEqual(butler.collections, ("collection1", "collection2"))
+                    self.assertEqual(butler.collections.defaults, ("collection1", "collection2"))
                     self.assertEqual(butler.run, "collection2")
 
                 butler_factory = LabeledButlerFactory({"server": server_url})

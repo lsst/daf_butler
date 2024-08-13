@@ -146,12 +146,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     @property
     def collection_chains(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
-        return RemoteButlerCollections(self._registry)
+        from ._registry import RemoteButlerRegistry
+
+        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
 
     @property
     def collections(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
-        return RemoteButlerCollections(self._registry)
+        from ._registry import RemoteButlerRegistry
+
+        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
 
     @property
     def dimensions(self) -> DimensionUniverse:

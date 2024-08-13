@@ -27,11 +27,30 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerCollections",)
+__all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Set
 from typing import Any, overload
+
+from pydantic import BaseModel
+
+from ._collection_type import CollectionType
+
+
+class CollectionInfo(BaseModel):
+    """Information about a single Butler collection."""
+
+    name: str
+    """Name of the collection."""
+    type: CollectionType
+    """Type of the collection."""
+    doc: str = ""
+    """Documentation string associated with this collection."""
+    children: tuple[str, ...] = tuple()
+    """Children of this collection (only if CHAINED)."""
+    parents: frozenset[str] = frozenset()
+    """Any parents of this collection."""
 
 
 class ButlerCollections(ABC, Sequence):
@@ -188,5 +207,66 @@ class ButlerCollections(ABC, Sequence):
         will hold a lock that prevents other processes from modifying the
         parent collection until the end of the transaction.  Keep these
         transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def query(
+        self,
+        expression: str | Iterable[str],
+        collection_types: Set[CollectionType] | CollectionType | None = None,
+        flatten_chains: bool = False,
+        include_chains: bool | None = None,
+    ) -> Sequence[str]:
+        """Query the butler for collections matching an expression.
+
+        Parameters
+        ----------
+        expression : `str` or `~collections.abc.Iterable` [ `str` ]
+            One or more collection names or globs to include in the search.
+        collection_types : `set` [`CollectionType`], `CollectionType` or `None`
+            Restrict the types of collections to be searched. If `None` all
+            collection types are searched.
+        flatten_chains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        include_chains : `bool` or `None`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections. Default is the opposite of ``flatten_chains``:
+            include either CHAINED collections or their children, but not both.
+
+        Returns
+        -------
+        collections : `~collections.abc.Sequence` [ `str` ]
+            The names of collections that match ``expression``.
+
+        Notes
+        -----
+        The order in which collections are returned is unspecified, except that
+        the children of a `~CollectionType.CHAINED` collection are guaranteed
+        to be in the order in which they are searched.  When multiple parent
+        `~CollectionType.CHAINED` collections match the same criteria, the
+        order in which the two lists appear is unspecified, and the lists of
+        children may be incomplete if a child has multiple parents.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
+        """Obtain information for a specific collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection of interest.
+        include_doc : `bool`, optional
+            If `True` any documentation about this collection will be included.
+        include_parents : `bool`, optional
+           If `True` any parents of this collection will be included.
+
+        Returns
+        -------
+        info : `CollectionInfo`
+            Information on the requested collection.
         """
         raise NotImplementedError()
