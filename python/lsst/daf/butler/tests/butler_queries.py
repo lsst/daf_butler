@@ -33,10 +33,12 @@ import os
 import unittest
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
+from operator import attrgetter
 from typing import ClassVar
 from uuid import UUID
 
 import astropy.time
+from lsst.sphgeom import Region
 
 from .._butler import Butler
 from .._dataset_type import DatasetType
@@ -1057,6 +1059,81 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 r" as a boolean value.",
             ):
                 x.exposure.observation_type.as_boolean()
+
+    def test_dataset_region_queries(self) -> None:
+        """Test region queries for datasets."""
+        # Import data to play with.
+        butler = self.make_butler("base.yaml", "ci_hsc-subset.yaml")
+
+        run = "HSC/runs/ci_hsc/20240806T180642Z"
+        with butler._query() as query:
+            # Return everything.
+            results = query.datasets("calexp", collections=run)
+            # Sort by data coordinate.
+            refs = sorted(results.with_dimension_records(), key=attrgetter("dataId"))
+            self.assertEqual(len(refs), 33)
+
+        # Use a region from the first visit.
+        first_visit_region = refs[0].dataId.visit.region  # type: ignore
+
+        # Get a visit detector region from the first ref.
+        with butler._query() as query:
+            data_id = refs[0].dataId.mapping
+            records = list(query.dimension_records("visit_detector_region").where(**data_id))  # type: ignore
+            self.assertEqual(len(records), 1)
+
+        for pos, count in (
+            ("CIRCLE 320. -0.25 10.", 33),  # Match everything.
+            ("CIRCLE 321.0 -0.4 0.01", 1),  # Should be small region on 1 detector.
+            ("CIRCLE 321.1 -0.35 0.02", 2),
+            ("CIRCLE 321.1 -0.48 0.05", 1),  # Center off the region.
+            ("CIRCLE 321.0 -0.5 0.01", 0),  # No overlap.
+            (first_visit_region.to_ivoa_pos(), 33),  # Visit region overlaps everything.
+            (records[0].region.to_ivoa_pos(), 17),  # Some overlap.
+        ):
+            with butler._query() as query:
+                results = query.datasets("calexp", collections=run)
+                results = results.where(
+                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(POS)",
+                    bind={"POS": Region.from_ivoa_pos(pos)},
+                )
+                refs = list(results)
+                self.assertEqual(len(refs), count, f"POS={pos} REFS={refs}")
+
+    def test_dataset_time_queries(self) -> None:
+        """Test region queries for datasets."""
+        # Import data to play with.
+        butler = self.make_butler("base.yaml", "ci_hsc-subset.yaml")
+
+        # Some times from the test data.
+        v_903334_pre = astropy.time.Time("2013-01-01T12:00:00", scale="tai", format="isot")
+        v_903334_mid = astropy.time.Time("2013-06-17T13:29:20", scale="tai", format="isot")
+        v_904014_pre = astropy.time.Time("2013-11-01T12:00:00", scale="tai", format="isot")
+        v_904014_post = astropy.time.Time("2013-12-21T12:00:00", scale="tai", format="isot")
+
+        with butler._query() as query:
+            run = "HSC/runs/ci_hsc/20240806T180642Z"
+            results = query.datasets("calexp", collections=run)
+
+            # Use a time during the middle of a visit.
+            v_903334 = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)", bind={"ts": v_903334_mid}
+            )
+            self.assertEqual(len(list(v_903334)), 4)
+
+            # Timespan covering first half of the data.
+            first_half = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(t1, t2)",
+                bind={"t1": v_903334_pre, "t2": v_904014_pre},
+            )
+            self.assertEqual(len(list(first_half)), 17)
+
+            # Query using a timespan object.
+            with_ts = results.where(
+                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)",
+                bind={"ts": Timespan(v_904014_pre, v_904014_post)},
+            )
+            self.assertEqual(len(list(with_ts)), 16)
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:

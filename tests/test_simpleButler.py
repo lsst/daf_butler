@@ -32,7 +32,6 @@ import os
 import re
 import tempfile
 import unittest
-from operator import attrgetter
 from typing import Any
 
 try:
@@ -56,7 +55,6 @@ from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
-from lsst.sphgeom import Region
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
@@ -797,85 +795,6 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         butler = Butler.from_config(config, writeable=writeable)
         DatastoreMock.apply(butler)
         return butler
-
-    def test_region_queries(self):
-        """Test region queries for datasets."""
-        # Import data to play with.
-        butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "ci_hsc-subset.yaml"))
-
-        run = "HSC/runs/ci_hsc/20240806T180642Z"
-        with butler._query() as query:
-            # Return everything.
-            results = query.datasets("calexp", collections=run)
-            # Sort by data coordinate.
-            refs = sorted(results.with_dimension_records(), key=attrgetter("dataId"))
-            self.assertEqual(len(refs), 33)
-
-        # Use a region from the first visit.
-        first_visit_region = refs[0].dataId.visit.region
-
-        # Get a visit detector region from the first ref.
-        with butler._query() as query:
-            results = query.dimension_records("visit_detector_region").where(**refs[0].dataId.mapping)
-            records = list(results)
-            self.assertEqual(len(records), 1)
-
-        for pos, count in (
-            ("CIRCLE 320. -0.25 10.", 33),  # Match everything.
-            ("CIRCLE 321.0 -0.4 0.01", 1),  # Should be small region on 1 detector.
-            ("CIRCLE 321.1 -0.35 0.02", 2),
-            ("CIRCLE 321.1 -0.48 0.05", 1),  # Center off the region.
-            ("CIRCLE 321.0 -0.5 0.01", 0),  # No overlap.
-            (first_visit_region.to_ivoa_pos(), 33),  # Visit region overlaps everything.
-            (records[0].region.to_ivoa_pos(), 17),  # Some overlap.
-        ):
-            with butler._query() as query:
-                results = query.datasets("calexp", collections=run)
-                results = results.where(
-                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(POS)",
-                    bind={"POS": Region.from_ivoa_pos(pos)},
-                )
-                refs = list(results)
-                self.assertEqual(len(refs), count, f"POS={pos} REFS={refs}")
-
-    def test_time_queries(self):
-        """Test region queries for datasets."""
-        # Import data to play with.
-        butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "ci_hsc-subset.yaml"))
-
-        # Some times from the test data.
-        v_903334_pre = astropy.time.Time("2013-01-01T12:00:00", scale="tai", format="isot")
-        v_903334_mid = astropy.time.Time("2013-06-17T13:29:20", scale="tai", format="isot")
-        v_904014_pre = astropy.time.Time("2013-11-01T12:00:00", scale="tai", format="isot")
-        v_904014_post = astropy.time.Time("2013-12-21T12:00:00", scale="tai", format="isot")
-
-        with butler._query() as query:
-            run = "HSC/runs/ci_hsc/20240806T180642Z"
-            results = query.datasets("calexp", collections=run)
-
-            # Use a time during the middle of a visit.
-            v_903334 = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)", bind={"ts": v_903334_mid}
-            )
-            self.assertEqual(len(list(v_903334)), 4)
-
-            # Timespan covering first half of the data.
-            first_half = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(t1, t2)",
-                bind={"t1": v_903334_pre, "t2": v_904014_pre},
-            )
-            self.assertEqual(len(list(first_half)), 17)
-
-            # Query using a timespan object.
-            with_ts = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)",
-                bind={"ts": Timespan(v_904014_pre, v_904014_post)},
-            )
-            self.assertEqual(len(list(with_ts)), 16)
 
 
 class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):
