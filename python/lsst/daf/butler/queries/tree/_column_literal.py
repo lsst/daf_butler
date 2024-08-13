@@ -40,6 +40,7 @@ from base64 import b64decode, b64encode
 from functools import cached_property
 from typing import Literal, TypeAlias, Union, final
 
+import astropy.coordinates
 import astropy.time
 import erfa
 import lsst.sphgeom
@@ -386,9 +387,20 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
         case lsst.sphgeom.Region():
             return RegionColumnLiteral.from_value(value)
         case lsst.sphgeom.LonLat():
-            vec = lsst.sphgeom.UnitVector3d(value)
-            # Convert the point to a Region by representing it as a zero-radius
-            # Circle.
-            region = lsst.sphgeom.Circle(vec)
-            return RegionColumnLiteral.from_value(region)
+            return _make_region_literal_from_lonlat(value)
+        case astropy.coordinates.SkyCoord():
+            icrs = value.transform_to("icrs")
+            ra = icrs.ra.degree
+            dec = icrs.dec.degree
+            lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra, dec)
+            return _make_region_literal_from_lonlat(lon_lat)
+
     raise TypeError(f"Invalid type {type(value).__name__!r} of value {value!r} for column literal.")
+
+
+def _make_region_literal_from_lonlat(point: lsst.sphgeom.LonLat) -> RegionColumnLiteral:
+    vec = lsst.sphgeom.UnitVector3d(point)
+    # Convert the point to a Region by representing it as a zero-radius
+    # Circle.
+    region = lsst.sphgeom.Circle(vec)
+    return RegionColumnLiteral.from_value(region)

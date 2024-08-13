@@ -37,8 +37,9 @@ from operator import attrgetter
 from typing import ClassVar
 from uuid import UUID
 
+import astropy.coordinates
 import astropy.time
-from lsst.sphgeom import Region
+from lsst.sphgeom import LonLat, Region
 
 from .._butler import Butler
 from .._collection_type import CollectionType
@@ -624,6 +625,44 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             _check_visit_id(
                 query.where(
                     "visit_detector_region.region OVERLAPS POINT(ra, dec)", bind={"ra": ra, "dec": dec}
+                )
+            )
+
+            # Bind in a point object instead of specifying ra/dec separately.
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": LonLat.fromDegrees(ra, dec)},
+                )
+            )
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": astropy.coordinates.SkyCoord(ra, dec, frame="icrs", unit="deg")},
+                )
+            )
+            # Make sure alternative coordinate frames in astropy SkyCoord are
+            # handled.
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={
+                        "my_point": astropy.coordinates.SkyCoord(
+                            ra, dec, frame="icrs", unit="deg"
+                        ).transform_to("galactic")
+                    },
+                )
+            )
+
+            # Compare against literal values using ExpressionFactory.
+            _check_visit_id(
+                query.where(_x.visit_detector_region.region.overlaps(LonLat.fromDegrees(ra, dec)))
+            )
+            _check_visit_id(
+                query.where(
+                    _x.visit_detector_region.region.overlaps(
+                        astropy.coordinates.SkyCoord(ra, dec, frame="icrs", unit="deg")
+                    )
                 )
             )
 
