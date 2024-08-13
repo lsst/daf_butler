@@ -33,6 +33,7 @@ import contextlib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from ._collection_type import CollectionType
 from ._dataset_association import DatasetAssociation
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
@@ -47,7 +48,6 @@ from .dimensions import (
 )
 from .registry import Registry
 from .registry._collection_summary import CollectionSummary
-from .registry._collection_type import CollectionType
 from .registry._defaults import RegistryDefaults
 from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 

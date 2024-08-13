@@ -41,8 +41,8 @@ from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 import sqlalchemy
 
+from ..._collection_type import CollectionType
 from ..._timespan import Timespan
-from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._versioning import VersionedExtension, VersionTuple
 

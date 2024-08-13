@@ -31,6 +31,7 @@ import contextlib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, cast
 
+from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
@@ -44,7 +45,7 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from ..registry import CollectionArgType, CollectionSummary, CollectionType, Registry, RegistryDefaults
+from ..registry import CollectionArgType, CollectionSummary, Registry, RegistryDefaults
 from ..registry.queries import (
     DataCoordinateQueryResults,
     DatasetQueryResults,

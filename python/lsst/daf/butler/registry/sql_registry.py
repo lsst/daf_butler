@@ -42,6 +42,7 @@ from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
 from lsst.utils.iteration import ensure_iterable
 
+from .._collection_type import CollectionType
 from .._column_tags import DatasetColumnTag
 from .._config import Config
 from .._dataset_association import DatasetAssociation
@@ -72,7 +73,6 @@ from ..registry import (
     ArgumentError,
     CollectionExpressionError,
     CollectionSummary,
-    CollectionType,
     CollectionTypeError,
     ConflictingDefinitionError,
     DatasetTypeError,

@@ -38,12 +38,12 @@ from typing import Any, Generic, TypeVar
 import sqlalchemy
 from lsst.utils.iteration import chunk_iterable
 
+from ...._collection_type import CollectionType
 from ...._dataset_type import DatasetType
 from ...._named import NamedKeyDict, NamedKeyMapping
 from ....dimensions import GovernorDimension, addDimensionForeignKey
 from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
-from ..._collection_type import CollectionType
 from ...interfaces import (
     CollectionManager,
     CollectionRecord,

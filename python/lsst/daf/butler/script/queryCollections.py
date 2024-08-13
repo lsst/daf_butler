@@ -32,7 +32,7 @@ from collections.abc import Iterable
 from astropy.table import Table
 
 from .._butler import Butler
-from ..registry import CollectionType
+from .._collection_type import CollectionType
 
 
 def _getTable(

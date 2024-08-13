@@ -39,6 +39,7 @@ from ._butler import *
 from ._butler_collections import *
 from ._butler_config import *
 from ._butler_repo_index import *
+from ._collection_type import CollectionType
 from ._column_categorization import *
 from ._column_tags import *
 from ._column_type_info import *
@@ -81,13 +82,7 @@ from .progress import Progress
 
 # Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.
-from .registry import (
-    CollectionType,
-    MissingCollectionError,
-    NoDefaultCollectionError,
-    Registry,
-    RegistryConfig,
-)
+from .registry import MissingCollectionError, NoDefaultCollectionError, Registry, RegistryConfig
 from .transfers import RepoExportContext, YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *
 

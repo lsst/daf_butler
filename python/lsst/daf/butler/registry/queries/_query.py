@@ -35,6 +35,7 @@ from typing import Any, cast, final
 
 from lsst.daf.relation import ColumnError, ColumnTag, Diagnostics, Relation, Sort, SortTerm
 
+from ..._collection_type import CollectionType
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
@@ -45,7 +46,6 @@ from ...dimensions import (
     DimensionRecord,
     DimensionRecordSet,
 )
-from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
 from ._query_context import QueryContext

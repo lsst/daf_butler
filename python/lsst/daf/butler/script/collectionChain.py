@@ -30,7 +30,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .._butler import Butler
-from ..registry import CollectionType, MissingCollectionError
+from .._collection_type import CollectionType
+from ..registry import MissingCollectionError
 from ..registry.wildcards import CollectionWildcard
 
 

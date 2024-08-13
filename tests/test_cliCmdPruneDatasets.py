@@ -35,6 +35,7 @@ from unittest.mock import patch
 import lsst.daf.butler.registry.sql_registry
 import lsst.daf.butler.script
 from astropy.table import Table
+from lsst.daf.butler import CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_askContinueMsg,
@@ -54,7 +55,6 @@ from lsst.daf.butler.cli.cmd.commands import (
 )
 from lsst.daf.butler.cli.utils import LogCliRunner, astropyTablesToStr, clickResultMsg
 from lsst.daf.butler.direct_butler import DirectButler
-from lsst.daf.butler.registry import CollectionType
 from lsst.daf.butler.script import QueryDatasets
 
 doFindTables = True

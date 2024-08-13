@@ -46,12 +46,12 @@ from lsst.daf.relation import (
     UnaryOperationRelation,
 )
 
+from ..._collection_type import CollectionType
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ..._dataset_type import DatasetType
 from ..._exceptions import MissingDatasetTypeError
 from ..._exceptions_legacy import DatasetTypeError
 from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
-from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_context import QueryContext
 from .find_first_dataset import FindFirstDataset

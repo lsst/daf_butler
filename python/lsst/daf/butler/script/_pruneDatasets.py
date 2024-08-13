@@ -31,7 +31,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from .._butler import Butler
-from ..registry import CollectionType
+from .._collection_type import CollectionType
 from .queryDatasets import QueryDatasets
 
 if TYPE_CHECKING:
