@@ -30,11 +30,36 @@ from __future__ import annotations
 __all__ = ("ButlerCollections",)
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from typing import Any, overload
 
 
-class ButlerCollections(ABC):
+class ButlerCollections(ABC, Sequence):
     """Methods for working with collections stored in the Butler."""
+
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[str]: ...
+
+    def __getitem__(self, index: int | slice) -> str | Sequence[str]:
+        return self.defaults[index]
+
+    def __len__(self) -> int:
+        return len(self.defaults)
+
+    def __eq__(self, other: Any) -> bool:
+        # Do not try to compare registry instances.
+        if not isinstance(other, type(self)):
+            return False
+        return self.defaults == other.defaults
+
+    @property
+    @abstractmethod
+    def defaults(self) -> Sequence[str]:
+        """Collection defaults associated with this butler."""
+        raise NotImplementedError("Defaults must be implemented by a subclass")
 
     @abstractmethod
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:

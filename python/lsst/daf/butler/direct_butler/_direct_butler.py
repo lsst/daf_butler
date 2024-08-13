@@ -296,7 +296,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             DirectButler._unpickle,
             (
                 self._config,
-                self.collections,
+                self.collections.defaults,
                 self.run,
                 dict(self._registry.defaults.dataId.required),
                 self._registry.isWriteable(),
@@ -2154,16 +2154,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         return DirectButlerCollections(self._registry)
 
     @property
-    def collections(self) -> Sequence[str]:
-        """The collections to search by default, in order
-        (`~collections.abc.Sequence` [ `str` ]).
-
-        This is an alias for ``self.registry.defaults.collections``.  It cannot
-        be set directly in isolation, but all defaults may be changed together
-        by assigning a new `RegistryDefaults` instance to
-        ``self.registry.defaults``.
-        """
-        return self._registry.defaults.collections
+    def collections(self) -> DirectButlerCollections:
+        """Object with methods for modifying and inspecting collections."""
+        return DirectButlerCollections(self._registry)
 
     @property
     def run(self) -> str | None:

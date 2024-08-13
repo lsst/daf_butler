@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("DirectButlerCollections",)
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from lsst.utils.iteration import ensure_iterable
 
@@ -48,6 +48,10 @@ class DirectButlerCollections(ButlerCollections):
 
     def __init__(self, registry: SqlRegistry):
         self._registry = registry
+
+    @property
+    def defaults(self) -> Sequence[str]:
+        return self._registry.defaults.collections
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         return self._registry._managers.collections.extend_collection_chain(

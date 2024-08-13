@@ -322,10 +322,6 @@ class HybridButler(Butler):
         return self._direct_butler.validateConfiguration(logFailures, datasetTypeNames, ignore)
 
     @property
-    def collections(self) -> Sequence[str]:
-        return self._remote_butler.collections
-
-    @property
     def run(self) -> str | None:
         return self._remote_butler.run
 
@@ -459,3 +455,7 @@ class HybridButler(Butler):
     @property
     def collection_chains(self) -> ButlerCollections:
         return self._direct_butler.collection_chains
+
+    @property
+    def collections(self) -> ButlerCollections:
+        return self._remote_butler.collection_chains

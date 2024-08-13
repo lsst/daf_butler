@@ -61,6 +61,7 @@ from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, Re
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
+from ._remote_butler_collections import RemoteButlerCollections
 from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
@@ -145,7 +146,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     @property
     def collection_chains(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
-        raise NotImplementedError()
+        return RemoteButlerCollections(self._registry)
+
+    @property
+    def collections(self) -> ButlerCollections:
+        """Object with methods for modifying collection chains."""
+        return RemoteButlerCollections(self._registry)
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -509,11 +515,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
-
-    @property
-    def collections(self) -> Sequence[str]:
-        # Docstring inherited.
-        return self._registry_defaults.collections
 
     @property
     def run(self) -> str | None:
