@@ -37,7 +37,6 @@ from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
 from .._file_dataset import FileDataset
-from ..datastore import Datastore
 from ..dimensions import DataCoordinate, DimensionElement, DimensionRecord
 from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
@@ -45,7 +44,7 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
 
-    from ..registry.sql_registry import SqlRegistry
+    from ..direct_butler import DirectButler
     from ._interfaces import RepoExportBackend
 
 
@@ -61,10 +60,8 @@ class RepoExportContext:
 
     Parameters
     ----------
-    registry : `SqlRegistry`
-        Registry to export from.
-    datastore : `Datastore`
-        Datastore to export from.
+    butler : `lsst.daf.butler.direct_butler.DirectButler`
+        Butler to export from.
     backend : `RepoExportBackend`
         Implementation class for a particular export file format.
     directory : `~lsst.resources.ResourcePathExpression`, optional
@@ -76,15 +73,13 @@ class RepoExportContext:
 
     def __init__(
         self,
-        registry: SqlRegistry,
-        datastore: Datastore,
+        butler: DirectButler,  # Requires butler._registry to work for now.
         backend: RepoExportBackend,
         *,
         directory: ResourcePathExpression | None = None,
         transfer: str | None = None,
     ):
-        self._registry = registry
-        self._datastore = datastore
+        self._butler = butler
         self._backend = backend
         self._directory = directory
         self._transfer = transfer
@@ -118,7 +113,7 @@ class RepoExportContext:
         export its child collections; these must be explicitly exported or
         already be present in the repository they are being imported into.
         """
-        self._collections[name] = self._registry.get_collection_record(name)
+        self._collections[name] = self._butler._registry.get_collection_record(name)
 
     def saveDimensionData(
         self, element: str | DimensionElement, records: Iterable[dict | DimensionRecord]
@@ -136,7 +131,7 @@ class RepoExportContext:
             `dict` instances.
         """
         if not isinstance(element, DimensionElement):
-            element = self._registry.dimensions[element]
+            element = self._butler.dimensions[element]
         for record in records:
             if not isinstance(record, DimensionRecord):
                 record = element.RecordClass(**record)
@@ -170,13 +165,13 @@ class RepoExportContext:
         standardized_elements: Set[DimensionElement]
         if elements is None:
             standardized_elements = frozenset(
-                element for element in self._registry.dimensions.elements if element.has_own_table
+                element for element in self._butler.dimensions.elements if element.has_own_table
             )
         else:
             standardized_elements = set()
             for element in elements:
                 if not isinstance(element, DimensionElement):
-                    element = self._registry.dimensions[element]
+                    element = self._butler.dimensions[element]
                 if element.has_own_table:
                     standardized_elements.add(element)
         for dataId in dataIds:
@@ -185,7 +180,7 @@ class RepoExportContext:
             # if the data ID is already expanded, and DM-26692 will add (or at
             # least start to add / unblock) query functionality that should
             # let us speed this up internally as well.
-            dataId = self._registry.expandDataId(dataId)
+            dataId = self._butler.registry.expandDataId(dataId)
             for element_name in dataId.dimensions.elements:
                 record = dataId.records[element_name]
                 if record is not None and record.definition in standardized_elements:
@@ -243,7 +238,7 @@ class RepoExportContext:
             refs_to_export[dataset_id] = ref
         # Do a vectorized datastore export, which might be a lot faster than
         # one-by-one.
-        exports = self._datastore.export(
+        exports = self._butler._datastore.export(
             refs_to_export.values(),
             directory=self._directory,
             transfer=self._transfer,
@@ -267,15 +262,15 @@ class RepoExportContext:
 
         For use by `Butler.export` only.
         """
-        for element in self._registry.dimensions.sorted(self._records.keys()):
+        for element in self._butler.dimensions.sorted(self._records.keys()):
             # To make export deterministic sort the DataCoordinate instances.
             r = self._records[element]
             self._backend.saveDimensionData(element, *[r[dataId] for dataId in sorted(r.keys())])
         for datasetsByRun in self._datasets.values():
             for run in datasetsByRun:
-                self._collections[run] = self._registry.get_collection_record(run)
+                self._collections[run] = self._butler._registry.get_collection_record(run)
         for collectionName in self._computeSortedCollections():
-            doc = self._registry.getCollectionDocumentation(collectionName)
+            doc = self._butler.registry.getCollectionDocumentation(collectionName)
             self._backend.saveCollection(self._collections[collectionName], doc)
         # Sort the dataset types and runs before exporting to ensure
         # reproducible order in export file.
@@ -363,7 +358,7 @@ class RepoExportContext:
             collectionTypes = {CollectionType.TAGGED}
             if datasetType.isCalibration():
                 collectionTypes.add(CollectionType.CALIBRATION)
-            associationIter = self._registry.queryDatasetAssociations(
+            associationIter = self._butler.registry.queryDatasetAssociations(
                 datasetType,
                 collections=self._collections.keys(),
                 collectionTypes=collectionTypes,

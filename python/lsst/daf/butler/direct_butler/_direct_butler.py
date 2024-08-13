@@ -1607,9 +1607,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         with open(filename, "w") as stream:
             backend = BackendClass(stream, universe=self.dimensions)
             try:
-                helper = RepoExportContext(
-                    self._registry, self._datastore, backend=backend, directory=directory, transfer=transfer
-                )
+                helper = RepoExportContext(self, backend=backend, directory=directory, transfer=transfer)
                 with self._caching_context():
                     yield helper
             except BaseException:
