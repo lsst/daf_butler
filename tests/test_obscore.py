@@ -28,7 +28,6 @@
 import os
 import tempfile
 import unittest
-import warnings
 from abc import abstractmethod
 from typing import cast
 
@@ -48,6 +47,7 @@ from lsst.daf.butler.registry.obscore import (
     ObsCoreConfig,
     ObsCoreLiveTableManager,
     ObsCoreSchema,
+    RegionTypeWarning,
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
@@ -442,20 +442,17 @@ class ObsCoreTests(TestCaseMixin):
             rows = list(result)
             self.assertEqual(len(rows), 0)
 
-    @unittest.skip("Temporary, while deprecation warnings are present.")
     def test_region_type_warning(self) -> None:
         """Test that non-polygon region generates one or more warnings."""
         collections = None
         registry = self.make_registry(collections)
 
-        with warnings.catch_warnings(record=True) as warning_records:
+        with self.assertWarns(RegionTypeWarning) as cm:
             self._insert_dataset(registry, "run2", "calexp", detector=2, visit=9)
-            self.assertEqual(len(warning_records), 1)
-            for record in warning_records:
-                self.assertRegex(
-                    str(record.message),
-                    "Unexpected region type: .*lsst.sphgeom._sphgeom.Box.*",
-                )
+        self.assertRegex(
+            str(cm.warning),
+            "Unexpected region type: .*lsst.sphgeom._sphgeom.Box.*",
+        )
 
     def test_update_exposure_region(self) -> None:
         """Test for update_exposure_regions method."""

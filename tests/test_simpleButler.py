@@ -685,7 +685,9 @@ class SimpleButlerTests(TestCaseMixin):
     def test_dimension_records_import(self):
         # Dimension Records
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset-v0.yaml"))
+        with self.assertWarns(UserWarning) as cm:
+            butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset-v0.yaml"))
+        self.assertIn("Constructing day_obs records with no timespans", str(cm.warning))
 
         # Count records and assume this means it worked.
         dimensions = (
