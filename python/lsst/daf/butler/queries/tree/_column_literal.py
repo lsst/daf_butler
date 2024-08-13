@@ -42,14 +42,23 @@ from typing import Literal, TypeAlias, Union, final
 
 import astropy.time
 import erfa
-from lsst.sphgeom import Region
+import lsst.sphgeom
 
 from ..._timespan import Timespan
 from ...time_utils import TimeConverter
 from ._base import ColumnLiteralBase
 
 LiteralValue: TypeAlias = (
-    int | str | float | bytes | uuid.UUID | astropy.time.Time | datetime.datetime | Timespan | Region
+    int
+    | str
+    | float
+    | bytes
+    | uuid.UUID
+    | astropy.time.Time
+    | datetime.datetime
+    | Timespan
+    | lsst.sphgeom.Region
+    | lsst.sphgeom.LonLat
 )
 
 
@@ -310,10 +319,10 @@ class RegionColumnLiteral(ColumnLiteralBase):
     @cached_property
     def value(self) -> bytes:
         """The wrapped value."""
-        return Region.decode(b64decode(self.encoded))
+        return lsst.sphgeom.Region.decode(b64decode(self.encoded))
 
     @classmethod
-    def from_value(cls, value: Region) -> RegionColumnLiteral:
+    def from_value(cls, value: lsst.sphgeom.Region) -> RegionColumnLiteral:
         """Construct from the wrapped value.
 
         Parameters
@@ -374,6 +383,12 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
             return DateTimeColumnLiteral.from_value(astropy.time.Time(value))
         case Timespan():
             return TimespanColumnLiteral.from_value(value)
-        case Region():
+        case lsst.sphgeom.Region():
             return RegionColumnLiteral.from_value(value)
+        case lsst.sphgeom.LonLat():
+            vec = lsst.sphgeom.UnitVector3d(value)
+            # Convert the point to a Region by representing it as a zero-radius
+            # Circle.
+            region = lsst.sphgeom.Circle(vec)
+            return RegionColumnLiteral.from_value(region)
     raise TypeError(f"Invalid type {type(value).__name__!r} of value {value!r} for column literal.")

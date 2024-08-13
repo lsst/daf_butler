@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 if TYPE_CHECKING:
     import astropy.time
 
-    from .exprTree import Node, RangeLiteral
+    from .exprTree import Node, PointNode, RangeLiteral
 
 
 T = TypeVar("T")
@@ -228,7 +228,7 @@ class TreeVisitor(Generic[T]):
         raise ValueError(f"Unknown function '{name}' in expression")
 
     @abstractmethod
-    def visitPointNode(self, ra: T, dec: T, node: Node) -> T:
+    def visitPointNode(self, ra: T, dec: T, node: PointNode) -> T:
         """Visit PointNode node.
 
         Parameters

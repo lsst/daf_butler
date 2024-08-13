@@ -45,6 +45,7 @@ __all__ = [
     "IsIn",
     "NumericLiteral",
     "Parens",
+    "PointNode",
     "RangeLiteral",
     "StringLiteral",
     "TimeLiteral",
