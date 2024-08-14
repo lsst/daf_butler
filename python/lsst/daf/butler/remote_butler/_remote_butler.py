@@ -55,7 +55,12 @@ from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
-from ..datastore import DatasetRefURIs
+from ..datastore import DatasetRefURIs, DatastoreConfig
+from ..datastore.cache_manager import (
+    AbstractDatastoreCacheManager,
+    DatastoreCacheManager,
+    DatastoreDisabledCacheManager,
+)
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
@@ -106,6 +111,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _connection: RemoteButlerHttpConnection
     _cache: RemoteButlerCache
     _registry: Registry
+    _datastore_cache_manager: AbstractDatastoreCacheManager | None
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -127,6 +133,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
         self._connection = connection
         self._cache = cache
+        self._datastore_cache_manager = None
 
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
@@ -186,6 +193,25 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if cache.dimensions is None:
                 cache.dimensions = universe
             return cache.dimensions
+
+    @property
+    def datastore_cache_manager(self) -> AbstractDatastoreCacheManager:
+        """Cache manager to use when reading files from the butler."""
+        # RemoteButler does not get any cache configuration from the server.
+        # Read the Datastore default config (which is a FileDatastore)
+        # and obtain the default cache manager configuration. Overrides will
+        # come from environment variables. This will not work properly if the
+        # defaults for DatastoreConfig no longer include the cache.
+        if self._datastore_cache_manager is None:
+            datastore_config = DatastoreConfig()
+            self._datastore_cache_manager: AbstractDatastoreCacheManager
+            if "cached" in datastore_config:
+                self._datastore_cache_manager = DatastoreCacheManager(
+                    datastore_config["cached"], universe=self.dimensions
+                )
+            else:
+                self._datastore_cache_manager = DatastoreDisabledCacheManager("", universe=self.dimensions)
+        return self._datastore_cache_manager
 
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
@@ -269,6 +295,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             ref,
             _to_file_payload(model),
             parameters=parameters,
+            cache_manager=self.datastore_cache_manager,
         )
 
     def _get_file_info(
