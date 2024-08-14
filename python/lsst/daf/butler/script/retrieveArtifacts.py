@@ -30,7 +30,6 @@ from __future__ import annotations
 __all__ = ("retrieveArtifacts",)
 
 import logging
-from types import EllipsisType
 from typing import TYPE_CHECKING
 
 from .._butler import Butler
@@ -85,7 +84,7 @@ def retrieveArtifacts(
         The destination URIs of every transferred artifact.
     """
     query_types = dataset_type or ...
-    query_collections: tuple[str, ...] | EllipsisType = collections or ...
+    query_collections: tuple[str, ...] = collections or ("*",)
 
     butler = Butler.from_config(repo, writeable=False)
 
@@ -94,7 +93,7 @@ def retrieveArtifacts(
     dataset_types = butler.registry.queryDatasetTypes(query_types)
     refs: list[DatasetRef] = []
     with butler._query() as query:
-        expanded_collections = butler.registry.queryCollections(query_collections)
+        expanded_collections = butler.collections.query(query_collections)
         for dt in dataset_types:
             results = query.datasets(dt, collections=expanded_collections, find_first=find_first)
             if where:

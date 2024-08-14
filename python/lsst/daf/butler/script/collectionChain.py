@@ -32,7 +32,6 @@ from collections.abc import Iterable
 from .._butler import Butler
 from .._collection_type import CollectionType
 from ..registry import MissingCollectionError
-from ..registry.wildcards import CollectionWildcard
 
 
 def collectionChain(
@@ -80,7 +79,7 @@ def collectionChain(
         raise RuntimeError(f"Must provide children when defining a collection chain in mode {mode}.")
 
     try:
-        butler.registry.getCollectionType(parent)
+        butler.collections.get_info(parent)
     except MissingCollectionError:
         # Create it -- but only if mode can work with empty chain.
         if mode in ("redefine", "extend", "prepend"):
@@ -96,12 +95,11 @@ def collectionChain(
     if flatten:
         if mode not in ("redefine", "prepend", "extend"):
             raise RuntimeError(f"'flatten' flag is not allowed for {mode}")
-        wildcard = CollectionWildcard.from_names(children)
-        children = butler.registry.queryCollections(wildcard, flattenChains=True)
+        children = butler.collections.query(children, flatten_chains=True)
 
     _modify_collection_chain(butler, mode, parent, children)
 
-    return tuple(butler.registry.getCollectionChain(parent))
+    return butler.collections.get_info(parent).children
 
 
 def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: Iterable[str]) -> None:
@@ -125,7 +123,8 @@ def _find_children_to_pop(butler: Butler, parent: str, children: Iterable[str]) 
     the given indexes.
     """
     children = list(children)
-    current = butler.registry.getCollectionChain(parent)
+    collection_info = butler.collections.get_info(parent)
+    current = collection_info.children
     n_current = len(current)
     if children:
 

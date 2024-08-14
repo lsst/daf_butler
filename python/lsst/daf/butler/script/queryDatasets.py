@@ -29,7 +29,6 @@ from __future__ import annotations
 import dataclasses
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -214,14 +213,14 @@ class QueryDatasets:
             Dataset references matching the given query criteria.
         """
         datasetTypes = self._dataset_type_glob or ...
-        query_collections: Iterable[str] | EllipsisType = self._collections_wildcard or ...
+        query_collections: Iterable[str] = self._collections_wildcard or ["*"]
 
         # Currently need to use old interface to get all the matching
         # dataset types and loop over the dataset types executing a new
         # query each time.
         dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
         with self.butler._query() as query:
-            query_collections = self.butler.registry.queryCollections(query_collections)
+            query_collections = self.butler.collections.query(query_collections)
             # Accumulate over dataset types.
             for dt in dataset_types:
                 results = query.datasets(dt, collections=query_collections, find_first=self._find_first)

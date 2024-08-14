@@ -68,7 +68,7 @@ def find_calibration_datasets(
     RuntimeError
         Raised if the collection to search is not a CALIBRATION collection.
     """
-    if butler.registry.getCollectionType(collection) != CollectionType.CALIBRATION:
+    if butler.collections.get_info(collection).type != CollectionType.CALIBRATION:
         raise RuntimeError(f"Collection {collection} is not a CALIBRATION collection.")
 
     exportDatasets = []
@@ -122,7 +122,7 @@ def exportCalibs(
     butler = Butler.from_config(repo, writeable=False)
 
     dataset_type_query = dataset_type or ...
-    collections_query = collections or ...
+    collections_query = collections or "*"
 
     calibTypes = [
         datasetType
@@ -133,18 +133,18 @@ def exportCalibs(
     collectionsToExport = []
     datasetsToExport = []
 
-    for collection in butler.registry.queryCollections(
+    for collection in butler.collections.query(
         collections_query,
-        flattenChains=True,
-        includeChains=True,
-        collectionTypes={CollectionType.CALIBRATION, CollectionType.CHAINED},
+        flatten_chains=True,
+        include_chains=True,
+        collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
     ):
         log.info("Checking collection: %s", collection)
 
         # Get collection information.
         collectionsToExport.append(collection)
-        collectionType = butler.registry.getCollectionType(collection)
-        if collectionType == CollectionType.CALIBRATION:
+        info = butler.collections.get_info(collection)
+        if info.type == CollectionType.CALIBRATION:
             exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
             datasetsToExport.extend(exportDatasets)
 

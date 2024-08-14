@@ -29,7 +29,6 @@ from __future__ import annotations
 __all__ = ("transferDatasets",)
 
 import logging
-from types import EllipsisType
 
 from lsst.daf.butler import DatasetRef
 
@@ -79,12 +78,12 @@ def transferDatasets(
     dest_butler = Butler.from_config(dest, writeable=True)
 
     dataset_type_expr = dataset_type or ...
-    collections_expr: tuple[str, ...] | EllipsisType = collections or ...
+    collections_expr: tuple[str, ...] = collections or ("*",)
 
     dataset_types = source_butler.registry.queryDatasetTypes(dataset_type_expr)
     source_refs: list[DatasetRef] = []
     with source_butler._query() as query:
-        query_collections = source_butler.registry.queryCollections(collections_expr)
+        query_collections = source_butler.collections.query(collections_expr)
         # Loop over dataset types and accumulate.
         for dt in dataset_types:
             results = query.datasets(dt, collections=query_collections, find_first=find_first)

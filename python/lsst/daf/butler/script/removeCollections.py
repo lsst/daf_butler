@@ -85,30 +85,18 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo, without_datastore=True)
     try:
-        names = sorted(
-            butler.registry.queryCollections(
-                collectionTypes=frozenset(
-                    (
-                        CollectionType.RUN,
-                        CollectionType.TAGGED,
-                        CollectionType.CHAINED,
-                        CollectionType.CALIBRATION,
-                    )
-                ),
-                expression=collection,
-                includeChains=True,
-            )
-        )
+        names = sorted(butler.collections.query(collection, include_chains=True))
     except MissingCollectionError:
+        # Hide the error and act like no collections should be removed.
         names = []
     collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
     runCollections = Table(names=("Collection",), dtype=(str,))
     for name in names:
-        collectionType = butler.registry.getCollectionType(name).name
-        if collectionType == "RUN":
+        collection_info = butler.collections.get_info(name)
+        if collection_info.type == CollectionType.RUN:
             runCollections.add_row((name,))
         else:
-            collections.add_row((name, collectionType))
+            collections.add_row((name, collection_info.type.name))
 
     return CollectionInfo(collections, runCollections)
 
