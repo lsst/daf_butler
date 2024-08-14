@@ -44,7 +44,7 @@
 #   - Runs a non-root user.
 #   - Sets up the entrypoint and port.
 
-FROM python:3.12.1-slim-bookworm as base-image
+FROM python:3.12.1-slim-bookworm AS base-image
 
 # Update system packages
 COPY server/scripts/install-base-packages.sh .
