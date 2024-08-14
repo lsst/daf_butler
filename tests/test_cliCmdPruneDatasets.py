@@ -472,7 +472,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exPruneDatasetsCallArgs=None,
             exQueryDatasetsCallArgs=None,
             exGetTablesCalled=False,
-            exMsgs=(pruneDatasets_errPruneOnNotRun.format(collection=collectionName)),
+            exMsgs=(pruneDatasets_errPruneOnNotRun.format(collection=collectionName),),
             exPruneDatasetsExitCode=1,
         )
 
