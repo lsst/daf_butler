@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .._butler import Butler
-from ..registry import CollectionType
+from .._collection_type import CollectionType
 from .queryDatasets import QueryDatasets
 
 

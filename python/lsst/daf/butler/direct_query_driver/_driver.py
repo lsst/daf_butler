@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any, cast, overload
 import sqlalchemy
 
 from .. import ddl
+from .._collection_type import CollectionType
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
@@ -62,7 +63,7 @@ from ..queries.result_specs import (
     GeneralResultSpec,
     ResultSpec,
 )
-from ..registry import CollectionSummary, CollectionType, NoDefaultCollectionError
+from ..registry import CollectionSummary, NoDefaultCollectionError
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.wildcards import CollectionWildcard

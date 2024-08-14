@@ -40,6 +40,7 @@ import astropy.time
 import sqlalchemy
 from lsst.daf.relation import Relation, sql
 
+from ...._collection_type import CollectionType
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ...._column_type_info import LogicalColumn
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
@@ -50,7 +51,6 @@ from ....dimensions import DataCoordinate
 from ....direct_query_driver import QueryBuilder, QueryJoiner  # new query system, server+direct only
 from ....queries import tree as qt  # new query system, both clients + server
 from ..._collection_summary import CollectionSummary
-from ..._collection_type import CollectionType
 from ..._exceptions import ConflictingDefinitionError
 from ...interfaces import DatasetRecordStorage
 from ...queries import SqlQueryContext  # old registry query system

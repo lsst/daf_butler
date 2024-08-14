@@ -33,6 +33,7 @@ from typing import Any
 
 from lsst.utils.iteration import ensure_iterable
 
+from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
@@ -49,7 +50,6 @@ from ..dimensions import (
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
-    CollectionType,
     CollectionTypeError,
     DatasetTypeError,
     DatasetTypeExpressionError,

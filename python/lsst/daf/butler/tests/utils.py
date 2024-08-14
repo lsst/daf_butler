@@ -42,7 +42,7 @@ import astropy
 from astropy.table import Table as AstropyTable
 
 from .. import Butler, Config, DatasetRef, StorageClassFactory, Timespan
-from ..registry import CollectionType
+from .._collection_type import CollectionType
 from ..tests import MetricsExample, addDatasetType
 
 if TYPE_CHECKING:

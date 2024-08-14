@@ -29,8 +29,8 @@ from __future__ import annotations
 import astropy.time
 
 from .._butler import Butler
+from .._collection_type import CollectionType
 from .._timespan import Timespan
-from ..registry import CollectionType
 
 
 def certifyCalibrations(

@@ -54,6 +54,7 @@ from sqlalchemy.exc import IntegrityError
 from .._butler import Butler
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
+from .._collection_type import CollectionType
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
@@ -69,7 +70,6 @@ from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
 from ..queries import Query
 from ..registry import (
-    CollectionType,
     ConflictingDefinitionError,
     DataIdError,
     MissingDatasetTypeError,

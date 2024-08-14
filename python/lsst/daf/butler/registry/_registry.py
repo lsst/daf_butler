@@ -37,6 +37,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
@@ -51,7 +52,6 @@ from ..dimensions import (
     DimensionUniverse,
 )
 from ._collection_summary import CollectionSummary
-from ._collection_type import CollectionType
 from ._defaults import RegistryDefaults
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from .wildcards import CollectionWildcard

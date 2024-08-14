@@ -33,12 +33,12 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Set
 from typing import TYPE_CHECKING
 
+from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
 from .._file_dataset import FileDataset
 from ..dimensions import DataCoordinate, DimensionElement, DimensionRecord
-from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 
 if TYPE_CHECKING:

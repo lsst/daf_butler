@@ -60,7 +60,7 @@ from functools import partial
 from typing import Any
 
 import click
-from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler import CollectionType
 
 from ..cliLog import CliLog
 from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, yaml_presets

@@ -33,7 +33,8 @@ from functools import partial
 from astropy.table import Table
 
 from .._butler import Butler
-from ..registry import CollectionType, MissingCollectionError
+from .._collection_type import CollectionType
+from ..registry import MissingCollectionError
 
 
 @dataclass

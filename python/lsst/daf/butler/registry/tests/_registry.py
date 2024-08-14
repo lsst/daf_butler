@@ -57,6 +57,7 @@ except ImportError:
 import lsst.sphgeom
 from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iteration, sql
 
+from ..._collection_type import CollectionType
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
@@ -74,7 +75,6 @@ from ..._storage_class import StorageClass
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate, DataCoordinateSet, SkyPixDimension
 from .._collection_summary import CollectionSummary
-from .._collection_type import CollectionType
 from .._config import RegistryConfig
 from .._exceptions import (
     ArgumentError,

@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .._collection_type import CollectionType
+
 # Re-export some top-level exception types for backwards compatibility -- these
 # used to be part of registry.
 from .._exceptions import (
@@ -40,7 +42,6 @@ from .._exceptions_legacy import CollectionError, DataIdError, DatasetTypeError,
 # Registry imports.
 from . import interfaces, managers, queries, wildcards
 from ._collection_summary import *
-from ._collection_type import *
 from ._config import *
 from ._defaults import *
 from ._exceptions import *

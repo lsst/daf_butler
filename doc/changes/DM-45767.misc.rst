@@ -1,0 +1,2 @@
+Moved ``CollectionType`` to the top level of the package hierarchy.
+There should be no change visible to external users but if previously you were using the deprecated ``from lsst.daf.butler.registry import CollectionType`` please change to ``from lsst.daf.butler import CollectionType`` (which has always worked).

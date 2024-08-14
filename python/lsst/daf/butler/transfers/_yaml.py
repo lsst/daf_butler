@@ -44,6 +44,7 @@ from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
+from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
@@ -52,7 +53,6 @@ from .._named import NamedValueSet
 from .._timespan import Timespan
 from ..datastore import Datastore
 from ..dimensions import DimensionElement, DimensionRecord, DimensionUniverse
-from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
 from ..registry.sql_registry import SqlRegistry
 from ..registry.versions import IncompatibleVersionError

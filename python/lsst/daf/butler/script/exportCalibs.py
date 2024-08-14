@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 from astropy.table import Table
 
 from .._butler import Butler
-from ..registry import CollectionType
+from .._collection_type import CollectionType
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef, DatasetType
