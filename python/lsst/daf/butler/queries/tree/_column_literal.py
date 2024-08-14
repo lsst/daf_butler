@@ -390,6 +390,12 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
             return _make_region_literal_from_lonlat(value)
         case astropy.coordinates.SkyCoord():
             icrs = value.transform_to("icrs")
+            if not icrs.isscalar:
+                raise ValueError(
+                    "Astropy SkyCoord contained an array of points,"
+                    f" but it should be only a single point: {value}"
+                )
+
             ra = icrs.ra.degree
             dec = icrs.dec.degree
             lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra, dec)

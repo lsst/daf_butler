@@ -676,6 +676,17 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             ):
                 query.where(f"visit_detector_region.region OVERLAPS POINT({ra}, 'not-a-number')")
 
+            # astropy's SkyCoord can be array-valued, but we expect only a
+            # single point.
+            array_point = astropy.coordinates.SkyCoord(
+                ra=[10, 11, 12, 13], dec=[41, -5, 42, 0], unit="deg", frame="icrs"
+            )
+            with self.assertRaisesRegex(ValueError, "Astropy SkyCoord contained an array of points"):
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": array_point},
+                )
+
     def test_common_skypix_overlaps(self) -> None:
         """Test spatial overlap queries that return htm7 records."""
         butler = self.make_butler("base.yaml", "spatial.yaml")
