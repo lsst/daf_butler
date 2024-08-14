@@ -37,8 +37,9 @@ from operator import attrgetter
 from typing import ClassVar
 from uuid import UUID
 
+import astropy.coordinates
 import astropy.time
-from lsst.sphgeom import Region
+from lsst.sphgeom import LonLat, Region
 
 from .._butler import Butler
 from .._collection_type import CollectionType
@@ -47,7 +48,7 @@ from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
-from ..queries import DimensionRecordQueryResults
+from ..queries import DimensionRecordQueryResults, Query
 from ..queries.tree import Predicate
 from ..registry import NoDefaultCollectionError, RegistryDefaults
 from ..registry.sql_registry import SqlRegistry
@@ -597,6 +598,94 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [],
                 has_postprocessing=True,
             )
+
+            # Check spatial queries using points instead of regions.
+            # This (ra, dec) is a point in the center of the region for visit
+            # 1, detector 3.
+            ra = 0.25209391431545386  # degrees
+            dec = 0.9269112711026793  # degrees
+
+            def _check_visit_id(query: Query) -> None:
+                result = list(query.data_ids(["visit", "detector"]))
+                self.assertEqual(len(result), 1)
+                id = result[0]
+                self.assertEqual(id["visit"], 1)
+                self.assertEqual(id["detector"], 3)
+
+            # Basic POINT() syntax.
+            _check_visit_id(query.where(f"visit_detector_region.region OVERLAPS POINT({ra}, {dec})"))
+            _check_visit_id(query.where(f"POINT({ra}, {dec}) OVERLAPS visit_detector_region.region"))
+
+            # dec of 1 is close enough to still be in the region, and tests
+            # conversion of integer to float.
+            _check_visit_id(query.where(f"visit_detector_region.region OVERLAPS POINT({ra}, 1)"))
+
+            # Substitute ra and dec values via bind instead of literals in the
+            # string.
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS POINT(ra, dec)", bind={"ra": ra, "dec": dec}
+                )
+            )
+
+            # Bind in a point object instead of specifying ra/dec separately.
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": LonLat.fromDegrees(ra, dec)},
+                )
+            )
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": astropy.coordinates.SkyCoord(ra, dec, frame="icrs", unit="deg")},
+                )
+            )
+            # Make sure alternative coordinate frames in astropy SkyCoord are
+            # handled.
+            _check_visit_id(
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={
+                        "my_point": astropy.coordinates.SkyCoord(
+                            ra, dec, frame="icrs", unit="deg"
+                        ).transform_to("galactic")
+                    },
+                )
+            )
+
+            # Compare against literal values using ExpressionFactory.
+            _check_visit_id(
+                query.where(_x.visit_detector_region.region.overlaps(LonLat.fromDegrees(ra, dec)))
+            )
+            _check_visit_id(
+                query.where(
+                    _x.visit_detector_region.region.overlaps(
+                        astropy.coordinates.SkyCoord(ra, dec, frame="icrs", unit="deg")
+                    )
+                )
+            )
+
+            # Check errors for invalid syntax.
+            with self.assertRaisesRegex(
+                InvalidQueryError, r"Expression 'visit.id' in POINT\(\) is not a literal number."
+            ):
+                query.where(f"visit_detector_region.region OVERLAPS POINT(visit.id, {dec})"),
+            with self.assertRaisesRegex(
+                InvalidQueryError, r"Expression ''not-a-number'' in POINT\(\) is not a literal number."
+            ):
+                query.where(f"visit_detector_region.region OVERLAPS POINT({ra}, 'not-a-number')")
+
+            # astropy's SkyCoord can be array-valued, but we expect only a
+            # single point.
+            array_point = astropy.coordinates.SkyCoord(
+                ra=[10, 11, 12, 13], dec=[41, -5, 42, 0], unit="deg", frame="icrs"
+            )
+            with self.assertRaisesRegex(ValueError, "Astropy SkyCoord contained an array of points"):
+                query.where(
+                    "visit_detector_region.region OVERLAPS my_point",
+                    bind={"my_point": array_point},
+                )
 
     def test_common_skypix_overlaps(self) -> None:
         """Test spatial overlap queries that return htm7 records."""

@@ -31,13 +31,14 @@ from collections.abc import Set
 from typing import Literal, NamedTuple, TypeAlias
 
 import astropy.time
+import lsst.sphgeom
 
 from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..column_spec import ColumnType
 from ..dimensions import DimensionUniverse
 from ..registry.queries.expressions.categorize import ExpressionConstant, categorizeConstant
-from ..registry.queries.expressions.parser import Node, RangeLiteral, TreeVisitor, parse_expression
+from ..registry.queries.expressions.parser import Node, PointNode, RangeLiteral, TreeVisitor, parse_expression
 from ._identifiers import IdentifierContext, interpret_identifier
 from .tree import (
     BinaryExpression,
@@ -239,8 +240,12 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
     def visitParens(self, expression: _VisitorResult, node: Node) -> _VisitorResult:
         return expression
 
-    def visitPointNode(self, ra: _VisitorResult, dec: _VisitorResult, node: Node) -> _VisitorResult:
-        raise NotImplementedError("POINT() function is not supported yet")
+    def visitPointNode(self, ra: _VisitorResult, dec: _VisitorResult, node: PointNode) -> _VisitorResult:
+        ra_value = _get_float_literal_value(ra, node.ra)
+        dec_value = _get_float_literal_value(dec, node.dec)
+
+        lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra_value, dec_value)
+        return _make_literal(lon_lat)
 
     def visitRangeLiteral(
         self, start: int, stop: int, stride: int | None, node: RangeLiteral
@@ -346,3 +351,18 @@ def _get_boolean_column_reference(predicate: Predicate) -> ColumnReference | Non
             return predicate_leaf.operand
 
     return None
+
+
+def _get_float_literal_value(value: _VisitorResult, node: Node) -> float:
+    """If the given ``value`` is a literal `float` or `int` expression, return
+    it as a float.  Otherwise raise an `InvalidQueryError` identifying a
+    problem with the given ``node``.
+    """
+    if isinstance(value, _ColExpr):
+        expr = value.value
+        if expr.expression_type == "float":
+            return expr.value
+        elif expr.expression_type == "int":
+            return float(expr.value)
+
+    raise InvalidQueryError(f"Expression '{node}' in POINT() is not a literal number.")

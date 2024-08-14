@@ -292,29 +292,16 @@ Here are few examples for checking containment in a time range:
     timestamp_id IN (interval.begin, interval.end)
     range_id NOT IN (interval_id)
 
-The same ``IN`` operator can be used for checking containment of a point or
-region inside other region. Presently there are no special literal type for
-regions, so this can only be done with regions represented by identifiers. Few
-examples of region containment:
-
-.. code-block:: sql
-
-    POINT(ra, dec) IN (region1)
-    region2 NOT IN (region1)
-
-
 OVERLAPS operator
 ^^^^^^^^^^^^^^^^^
 
 The ``OVERLAPS`` operator checks for overlapping time ranges or regions, its
 arguments have to have consistent types. Like with ``IN`` operator time ranges
 can be represented with a tuple of two timestamps (literals or identifiers) or
-with a single identifier. Regions can only be used as identifiers.
-``OVERLAPS`` syntax is similar to ``IN`` but it does not require  parentheses
-on right hand side when there is a single identifier representing a time range
-or a region.
+with a single identifier.
 
-Few examples of the syntax:
+
+Examples of the syntax for time ranges:
 
 .. code-block:: sql
 
@@ -322,8 +309,24 @@ Few examples of the syntax:
     (interval.begin, interval.end) OVERLAPS interval_2
     interval_1 OVERLAPS interval_2
 
-    NOT (region_1 OVERLAPS region_2)
+You can check for overlap of a region with a point using the ``POINT(ra, dec)`` syntax,
+where ``ra`` and ``dec`` are specified as an ICRS sky position in degrees.
 
+.. code-block:: sql
+
+    visit.region OVERLAPS POINT(53.6, -32.7)
+
+You can check overlaps with arbitrary sky regions by binding values (see
+:ref:`_daf_butler_dimension_expressions_identifiers`).  Bound region values may
+be specified as the following object types:
+
+-  ``lsst.sphgeom.Region``
+-  ``lsst.sphgeom.LonLat``
+-  ``astropy.coordinates.SkyCoord``
+
+.. code-block:: sql
+
+    visit.region OVERLAPS my_region
 
 Boolean operators
 ^^^^^^^^^^^^^^^^^
