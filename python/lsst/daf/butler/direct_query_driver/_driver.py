@@ -79,6 +79,7 @@ from ._result_page_converter import (
     DataCoordinateResultPageConverter,
     DatasetRefResultPageConverter,
     DimensionRecordResultPageConverter,
+    GeneralResultPageConverter,
     ResultPageConverter,
     ResultPageConverterContext,
 )
@@ -271,6 +272,8 @@ class DirectQueryDriver(QueryDriver):
                 return DatasetRefResultPageConverter(
                     spec, self.get_dataset_type(spec.dataset_type_name), context
                 )
+            case GeneralResultSpec():
+                return GeneralResultPageConverter(spec, context)
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")
 

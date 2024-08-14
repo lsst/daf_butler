@@ -37,7 +37,7 @@ __all__ = [
     "GetCollectionSummaryResponseModel",
 ]
 
-from typing import Annotated, Literal, NewType, TypeAlias
+from typing import Annotated, Any, Literal, NewType, TypeAlias
 from uuid import UUID
 
 import pydantic
@@ -276,6 +276,13 @@ class DatasetRefResultModel(pydantic.BaseModel):
     rows: list[SerializedDatasetRef]
 
 
+class GeneralResultModel(pydantic.BaseModel):
+    """Result model for /query/execute/ when user requested general results."""
+
+    type: Literal["general"] = "general"
+    rows: list[tuple[Any, ...]]
+
+
 class QueryErrorResultModel(pydantic.BaseModel):
     """Result model for /query/execute when an error occurs part-way through
     returning rows.
@@ -293,7 +300,11 @@ class QueryErrorResultModel(pydantic.BaseModel):
 
 
 QueryExecuteResultData: TypeAlias = Annotated[
-    DataCoordinateResultModel | DimensionRecordsResultModel | DatasetRefResultModel | QueryErrorResultModel,
+    DataCoordinateResultModel
+    | DimensionRecordsResultModel
+    | DatasetRefResultModel
+    | GeneralResultModel
+    | QueryErrorResultModel,
     pydantic.Field(discriminator="type"),
 ]
 

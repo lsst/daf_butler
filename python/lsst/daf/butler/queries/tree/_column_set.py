@@ -376,6 +376,9 @@ class ResultColumn(NamedTuple):
     """Column associated with the dimension element or dataset type, or `None`
     if it is a dimension key column."""
 
+    def __str__(self) -> str:
+        return self.logical_table if self.field is None else f"{self.logical_table}.{self.field}"
+
 
 class ColumnOrder:
     """Defines the position of columns within a result row and provides helper

@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 from collections.abc import Iterable, Mapping, Set
+from types import EllipsisType
 from typing import Any, final
 
 from lsst.utils.iteration import ensure_iterable
@@ -43,11 +44,28 @@ from ._base import QueryBase
 from ._data_coordinate_query_results import DataCoordinateQueryResults
 from ._dataset_query_results import DatasetRefQueryResults
 from ._dimension_record_query_results import DimensionRecordQueryResults
+from ._general_query_results import GeneralQueryResults
+from ._identifiers import IdentifierContext, interpret_identifier
 from .convert_args import convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
-from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
-from .tree import DatasetSearch, Predicate, QueryTree, make_identity_query_tree
+from .result_specs import (
+    DataCoordinateResultSpec,
+    DatasetRefResultSpec,
+    DimensionRecordResultSpec,
+    GeneralResultSpec,
+)
+from .tree import (
+    DATASET_FIELD_NAMES,
+    DatasetFieldName,
+    DatasetFieldReference,
+    DatasetSearch,
+    DimensionFieldReference,
+    DimensionKeyReference,
+    Predicate,
+    QueryTree,
+    make_identity_query_tree,
+)
 
 
 @final
@@ -291,6 +309,79 @@ class Query(QueryBase):
             tree = tree.join_dimensions(self._driver.universe[element].minimal_group)
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
         return DimensionRecordQueryResults(self._driver, tree, result_spec)
+
+    def general(
+        self,
+        dimensions: DimensionGroup,
+        *names: str,
+        dimension_fields: Mapping[str, Set[str]] = {},
+        dataset_fields: Mapping[str, Set[DatasetFieldName] | EllipsisType] = {},
+        find_first: bool = False,
+    ) -> GeneralQueryResults:
+        """Execute query returning general result.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            The dimensions that span all fields returned by this query.
+        *names : `str`
+            Names of dimensions fields (in  "dimension.field" format), dataset
+            fields (in  "dataset_type.field" format) to include in this query.
+        dimension_fields : `~collections.abc.Mapping` [`str`, \
+                `~collections.abc.Set`[`str`]], optional
+            Dimension record fields included in this query, the key in the
+            mapping is dimension name.
+        dataset_fields : `~collections.abc.Mapping` [`str`, \
+            `~collections.abc.Set`[`DatasetFieldName`] | ...], optional
+            Dataset fields included in this query, the key in the mapping is
+            dataset type name. Ellipsis (``...``) can be used for value
+            to include all dataset fields.
+        find_first : bool, optional
+            Whether this query requires find-first resolution for a dataset.
+            This can only be `True` if exactly one dataset type's fields are
+            included in the results.
+
+        Returns
+        -------
+        result : `GeneralQueryResults`
+            Query result that can be iterated over.
+        """
+        dimension_fields_dict = {name: set(fields) for name, fields in dimension_fields.items()}
+        dataset_fields_dict = {
+            name: set(DATASET_FIELD_NAMES) if fields is ... else set(fields)
+            for name, fields in dataset_fields.items()
+        }
+        # Parse all names.
+        context = IdentifierContext(dimensions, set(self._tree.datasets))
+        extra_dimension_names: set[str] = set()
+        for name in names:
+            identifier = interpret_identifier(context, name)
+            match identifier:
+                case DimensionKeyReference(dimension=dimension):
+                    # Could be because someone asked for the key field.
+                    extra_dimension_names.add(dimension.name)
+                case DimensionFieldReference(element=element, field=field):
+                    extra_dimension_names.add(element.name)
+                    dimension_fields_dict.setdefault(element.name, set()).add(field)
+                case DatasetFieldReference(dataset_type=dataset_type, field=dataset_field):
+                    dataset_fields_dict.setdefault(dataset_type, set()).add(dataset_field)
+                case _:
+                    raise TypeError(f"Unexpected type of identifier ({name}): {identifier}")
+
+        extra_dimensions = dimensions.universe.conform(extra_dimension_names)
+
+        # Merge missing dimensions into the tree.
+        tree = self._tree
+        if not extra_dimensions <= tree.dimensions:
+            tree = tree.join_dimensions(extra_dimensions)
+
+        result_spec = GeneralResultSpec(
+            dimensions=dimensions.union(extra_dimensions),
+            dimension_fields=dimension_fields_dict,
+            dataset_fields=dataset_fields_dict,
+            find_first=find_first,
+        )
+        return GeneralQueryResults(self._driver, tree=tree, spec=result_spec)
 
     def materialize(
         self,

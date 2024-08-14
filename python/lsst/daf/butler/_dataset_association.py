@@ -29,11 +29,16 @@ from __future__ import annotations
 
 __all__ = ("DatasetAssociation",)
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._dataset_ref import DatasetRef
+from ._dataset_type import DatasetType
 from ._timespan import Timespan
+
+if TYPE_CHECKING:
+    from .queries._general_query_results import GeneralQueryResults
 
 
 @dataclass(frozen=True, eq=True)
@@ -58,6 +63,26 @@ class DatasetAssociation:
     """Validity range of the dataset if this is a `~CollectionType.CALIBRATION`
     collection (`Timespan` or `None`).
     """
+
+    @classmethod
+    def from_query_result(
+        cls, result: GeneralQueryResults, dataset_type: DatasetType
+    ) -> Iterator[DatasetAssociation]:
+        """Construct dataset associations from the result of general query.
+
+        Parameters
+        ----------
+        result : `GeneralQueryResults`
+            General query result returned by `Query.general` method. The result
+            has to include "{dataset_type.name}.timespan" and
+            "{dataset_type.name}.collection" columns.
+        dataset_type : `DatasetType`
+            Dataset type, query has to include this dataset type.
+        """
+        timespan_key = f"{dataset_type.name}.timespan"
+        collection_key = f"{dataset_type.name}.collection"
+        for _, refs, row_dict in result.iter_tuples(dataset_type):
+            yield DatasetAssociation(refs[0], row_dict[collection_key], row_dict[timespan_key])
 
     def __lt__(self, other: Any) -> bool:
         # Allow sorting of associations
