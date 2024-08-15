@@ -1975,7 +1975,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     if registry := getattr(source_butler, "registry", None):
                         run_doc = registry.getCollectionDocumentation(run)
                     if not dry_run:
-                        registered = self._registry.registerRun(run, doc=run_doc)
+                        registered = self.collections.register(run, doc=run_doc)
                     else:
                         registered = True
                     handled_collections.add(run)

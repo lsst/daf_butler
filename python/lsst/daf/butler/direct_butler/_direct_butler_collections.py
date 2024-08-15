@@ -108,3 +108,6 @@ class DirectButlerCollections(ButlerCollections):
         if include_parents:
             parents = self._registry.getCollectionParentChains(name)
         return CollectionInfo(name=name, type=record.type, doc=doc, parents=parents, children=children)
+
+    def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
+        return self._registry.registerCollection(name, type, doc)

@@ -85,7 +85,7 @@ def collectionChain(
         if mode in ("redefine", "extend", "prepend"):
             if not doc:
                 doc = None
-            butler.registry.registerCollection(parent, CollectionType.CHAINED, doc)
+            butler.collections.register(parent, CollectionType.CHAINED, doc)
         else:
             raise RuntimeError(
                 f"Mode '{mode}' requires that the collection exists "

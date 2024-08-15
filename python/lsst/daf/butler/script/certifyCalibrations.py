@@ -87,5 +87,5 @@ def certifyCalibrations(
             raise RuntimeError(
                 f"No inputs found for dataset {dataset_type_name} in {input_collection}. {explanation}"
             )
-    butler.registry.registerCollection(output_collection, type=CollectionType.CALIBRATION)
+    butler.collections.register(output_collection, type=CollectionType.CALIBRATION)
     butler.registry.certify(output_collection, refs, timespan)

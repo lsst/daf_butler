@@ -95,3 +95,6 @@ class RemoteButlerCollections(ButlerCollections):
         children = info.children or ()
         parents = info.parents or set()
         return CollectionInfo(name=name, type=info.type, doc=doc, parents=parents, children=children)
+
+    def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
+        raise NotImplementedError("Not yet available.")

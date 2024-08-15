@@ -281,7 +281,7 @@ class MetricTestRepo:
 
         # New datasets will be added to run and tag, but we will only look in
         # tag when looking up datasets.
-        self.butler.registry.registerCollection(self._DEFAULT_TAG, CollectionType.TAGGED)
+        self.butler.collections.register(self._DEFAULT_TAG, CollectionType.TAGGED)
 
         # Create and register a DatasetType
         self.datasetType = addDatasetType(
@@ -351,7 +351,7 @@ class MetricTestRepo:
             A reference to the added dataset.
         """
         if run:
-            self.butler.registry.registerCollection(run, type=CollectionType.RUN)
+            self.butler.collections.register(run)
         else:
             run = self._DEFAULT_RUN
         metric = self._makeExampleMetrics()

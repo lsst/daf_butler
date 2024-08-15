@@ -270,3 +270,30 @@ class ButlerCollections(ABC, Sequence):
             Information on the requested collection.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
+        """Add a new collection if one with the given name does not exist.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to create.
+        type : `CollectionType`, optional
+            Enum value indicating the type of collection to create. Default
+            is to create a RUN collection.
+        doc : `str`, optional
+            Documentation string for the collection.
+
+        Returns
+        -------
+        registered : `bool`
+            Boolean indicating whether the collection was already registered
+            or was created by this call.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent
+        """
+        raise NotImplementedError()
