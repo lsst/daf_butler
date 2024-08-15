@@ -87,7 +87,7 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo)
     try:
-        collectionNames = butler.collections.query(collection, CollectionType.RUN, include_chains=False)
+        collectionNames = butler.collections.x_query(collection, CollectionType.RUN, include_chains=False)
     except MissingCollectionError:
         # Act as if no collections matched.
         collectionNames = []

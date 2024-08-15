@@ -358,7 +358,7 @@ class RepoExportContext:
             collectionTypes = {CollectionType.TAGGED}
             if datasetType.isCalibration():
                 collectionTypes.add(CollectionType.CALIBRATION)
-            resolved_collections = self._butler.collections.query(
+            resolved_collections = self._butler.collections.x_query(
                 self._collections.keys(),
                 collection_types=collectionTypes,
                 flatten_chains=False,

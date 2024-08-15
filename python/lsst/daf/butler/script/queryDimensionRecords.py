@@ -80,7 +80,7 @@ def queryDimensionRecords(
 
         if datasets:
             query_collections = collections or "*"
-            expanded_collections = butler.collections.query(query_collections)
+            expanded_collections = butler.collections.x_query(query_collections)
             dataset_types = list(butler.registry.queryDatasetTypes(datasets))
 
             sub_query = query.join_dataset_search(dataset_types.pop(0), collections=expanded_collections)

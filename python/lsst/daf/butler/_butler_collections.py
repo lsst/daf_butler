@@ -211,7 +211,7 @@ class ButlerCollections(ABC, Sequence):
         raise NotImplementedError()
 
     @abstractmethod
-    def query(
+    def x_query(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,

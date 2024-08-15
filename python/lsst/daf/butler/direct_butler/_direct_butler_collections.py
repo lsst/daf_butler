@@ -79,7 +79,7 @@ class DirectButlerCollections(ButlerCollections):
             parent_collection_name, list(ensure_iterable(child_collection_names))
         )
 
-    def query(
+    def x_query(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,

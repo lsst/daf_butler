@@ -220,7 +220,7 @@ class QueryDatasets:
         # query each time.
         dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
         with self.butler._query() as query:
-            query_collections = self.butler.collections.query(query_collections)
+            query_collections = self.butler.collections.x_query(query_collections)
             # Accumulate over dataset types.
             for dt in dataset_types:
                 results = query.datasets(dt, collections=query_collections, find_first=self._find_first)

@@ -95,7 +95,7 @@ def collectionChain(
     if flatten:
         if mode not in ("redefine", "prepend", "extend"):
             raise RuntimeError(f"'flatten' flag is not allowed for {mode}")
-        children = butler.collections.query(children, flatten_chains=True)
+        children = butler.collections.x_query(children, flatten_chains=True)
 
     _modify_collection_chain(butler, mode, parent, children)
 

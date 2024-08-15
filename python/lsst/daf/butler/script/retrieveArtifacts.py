@@ -93,7 +93,7 @@ def retrieveArtifacts(
     dataset_types = butler.registry.queryDatasetTypes(query_types)
     refs: list[DatasetRef] = []
     with butler._query() as query:
-        expanded_collections = butler.collections.query(query_collections)
+        expanded_collections = butler.collections.x_query(query_collections)
         for dt in dataset_types:
             results = query.datasets(dt, collections=expanded_collections, find_first=find_first)
             if where:
