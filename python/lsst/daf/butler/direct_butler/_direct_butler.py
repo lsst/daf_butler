@@ -1670,7 +1670,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         def doImport(importStream: TextIO | ResourceHandleProtocol) -> None:
             with self._caching_context():
-                backend = BackendClass(importStream, self._registry)  # type: ignore[call-arg]
+                backend = BackendClass(importStream, self)  # type: ignore[call-arg]
                 backend.register()
                 with self.transaction():
                     backend.load(

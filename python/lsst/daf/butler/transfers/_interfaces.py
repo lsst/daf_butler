@@ -140,13 +140,13 @@ class RepoImportBackend(ABC):
 
     Import backends are expected to be constructed with a description of
     the objects that need to be imported (from, e.g., a file written by the
-    corresponding export backend), along with a `Registry`.
+    corresponding export backend), along with a `Butler`.
     """
 
     @abstractmethod
     def register(self) -> None:
         """Register all runs and dataset types associated with the backend with
-        the `Registry` the backend was constructed with.
+        the `Butler` the backend was constructed with.
 
         These operations cannot be performed inside transactions, unlike those
         performed by `load`, and must in general be performed before `load`.
