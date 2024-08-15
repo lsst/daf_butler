@@ -35,9 +35,10 @@ from contextlib import contextmanager
 
 import astropy.time
 import sqlalchemy
-from lsst.daf.butler import Timespan, ddl
+from lsst.daf.butler import Butler, ButlerConfig, StorageClassFactory, Timespan, ddl
+from lsst.daf.butler.datastore import NullDatastore
+from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import _RegistryFactory
-from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 
 try:
@@ -213,13 +214,17 @@ class PostgresqlRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
+    def make_butler(self) -> Butler:
         config = self.makeRegistryConfig()
         self.postgres.patch_registry_config(config)
-        if share_repo_with:
-            config["namespace"] = share_repo_with._db.namespace
-            return _RegistryFactory(config).from_config()
-        return _RegistryFactory(config).create_from_config()
+        registry = _RegistryFactory(config).create_from_config()
+
+        return DirectButler(
+            config=ButlerConfig(),
+            registry=registry,
+            datastore=NullDatastore(None, None),
+            storageClasses=StorageClassFactory(),
+        )
 
 
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):

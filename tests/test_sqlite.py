@@ -33,12 +33,12 @@ import unittest
 from contextlib import contextmanager
 
 import sqlalchemy
-from lsst.daf.butler import ddl
+from lsst.daf.butler import Butler, Config, ddl
 from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
-from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests import makeTestRepo
+from lsst.daf.butler.tests.utils import create_populated_sqlite_registry, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -206,17 +206,10 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
-        if share_repo_with is None:
-            _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
-        else:
-            filename = share_repo_with._db.filename
-        config = self.makeRegistryConfig()
-        config["db"] = f"sqlite:///{filename}"
-        if share_repo_with is None:
-            return _RegistryFactory(config).create_from_config(butlerRoot=self.root)
-        else:
-            return _RegistryFactory(config).from_config(butlerRoot=self.root)
+    def make_butler(self) -> Butler:
+        config = Config()
+        config["registry"] = self.makeRegistryConfig()
+        return makeTestRepo(self.root, config=config)
 
 
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -237,9 +230,9 @@ class ClonedSqliteFileRegistryNameKeyCollMgrUUIDTestCase(
 ):
     """Test that NameKeyCollectionManager still works after cloning."""
 
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
-        original = super().makeRegistry(share_repo_with)
-        return original.copy()
+    def make_butler(self) -> Butler:
+        original = super().make_butler()
+        return original._clone()
 
 
 class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -265,12 +258,10 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry | None:
-        if share_repo_with is not None:
-            return None
-        config = self.makeRegistryConfig()
-        config["db"] = "sqlite://"
-        return _RegistryFactory(config).create_from_config()
+    def make_butler(self) -> Butler:
+        # This helper function always return in-memory registry
+        # with default managers.
+        return create_populated_sqlite_registry()
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which
