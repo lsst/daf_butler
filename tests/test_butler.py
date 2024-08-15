@@ -225,7 +225,7 @@ class ButlerPutGetTests(TestCaseMixin):
         """
         butler = self.create_empty_butler(run=run)
 
-        collections = set(butler.registry.queryCollections())
+        collections = set(butler.collections.x_query("*"))
         self.assertEqual(collections, {run})
         # Create and register a DatasetType
         dimensions = butler.dimensions.conform(["instrument", "visit"])
@@ -301,7 +301,7 @@ class ButlerPutGetTests(TestCaseMixin):
             # this by using a distinct run collection each time
             counter += 1
             this_run = f"put_run_{counter}"
-            butler.registry.registerCollection(this_run, type=CollectionType.RUN)
+            butler.collections.register(this_run)
             expected_collections.update({this_run})
 
             with self.subTest(args=args):
@@ -418,7 +418,7 @@ class ButlerPutGetTests(TestCaseMixin):
 
                 # Do explicit registry removal since we know they are
                 # empty
-                butler.registry.removeCollection(this_run)
+                butler.collections.x_remove(this_run)
                 expected_collections.remove(this_run)
 
         # Create DatasetRef for put using default run.
@@ -502,7 +502,7 @@ class ButlerPutGetTests(TestCaseMixin):
             butler.get(ref, parameters={"unsupported": True})
 
         # Check we have a collection
-        collections = set(butler.registry.queryCollections())
+        collections = set(butler.collections.x_query("*"))
         self.assertEqual(collections, expected_collections)
 
         # Clean up to check that we can remove something that may have
@@ -575,9 +575,9 @@ class ButlerPutGetTests(TestCaseMixin):
         metric = makeExampleMetrics()
         # Register a new run and put dataset.
         run = "deferred"
-        self.assertTrue(butler.registry.registerRun(run))
+        self.assertTrue(butler.collections.register(run))
         # Second time it will be allowed but indicate no-op
-        self.assertFalse(butler.registry.registerRun(run))
+        self.assertFalse(butler.collections.register(run))
         ref = butler.put(metric, datasetType, dataId, run=run)
         # Putting with no run should fail with TypeError.
         with self.assertRaises(CollectionError):
@@ -594,7 +594,7 @@ class ButlerPutGetTests(TestCaseMixin):
         with self.assertRaises(CollectionError):
             butler.get(datasetType, dataId)
         # Associate the dataset with a different collection.
-        butler.registry.registerCollection("tagged")
+        butler.collections.register("tagged", type=CollectionType.TAGGED)
         butler.registry.associate("tagged", [ref])
         # Deleting the dataset from the new collection should make it findable
         # in the original collection.
@@ -642,7 +642,7 @@ class ButlerTests(ButlerPutGetTests):
             butler = Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
-        collections = set(butler.registry.queryCollections())
+        collections = set(butler.collections.x_query("*"))
         self.assertEqual(collections, {self.default_run})
 
         # Check that some special characters can be included in run name.
@@ -1450,7 +1450,7 @@ class ButlerTests(ButlerPutGetTests):
     def testCollectionChainRemove(self) -> None:
         butler = self._setup_to_test_collection_chain()
 
-        butler.registry.setCollectionChain("chain", ["a", "b", "c", "d"])
+        butler.collections.redefine_chain("chain", ["a", "b", "c", "d"])
 
         butler.collections.remove_from_chain("chain", "c")
         self._check_chain(butler, ["a", "b", "d"])
@@ -1474,19 +1474,19 @@ class ButlerTests(ButlerPutGetTests):
     def _setup_to_test_collection_chain(self) -> Butler:
         butler = self.create_empty_butler(writeable=True)
 
-        butler.registry.registerCollection("chain", CollectionType.CHAINED)
+        butler.collections.register("chain", CollectionType.CHAINED)
 
         runs = ["a", "b", "c", "d"]
         for run in runs:
-            butler.registry.registerCollection(run)
+            butler.collections.register(run)
 
-        butler.registry.registerCollection("staticchain", CollectionType.CHAINED)
-        butler.registry.setCollectionChain("staticchain", ["a", "b"])
+        butler.collections.register("staticchain", CollectionType.CHAINED)
+        butler.collections.redefine_chain("staticchain", ["a", "b"])
 
         return butler
 
     def _check_chain(self, butler: Butler, expected: list[str]) -> None:
-        children = butler.registry.getCollectionChain("chain")
+        children = butler.collections.get_info("chain").children
         self.assertEqual(expected, list(children))
 
     def _test_common_chain_functionality(
@@ -1504,14 +1504,14 @@ class ButlerTests(ButlerPutGetTests):
 
         # Prevent collection cycles
         if not skip_cycle_check:
-            butler.registry.registerCollection("chain2", CollectionType.CHAINED)
+            butler.collections.register("chain2", CollectionType.CHAINED)
             func("chain2", "chain")
             with self.assertRaises(CollectionCycleError):
                 func("chain", "chain2")
 
         # Make sure none of the earlier operations interfered with unrelated
         # chains.
-        self.assertEqual(["a", "b"], list(butler.registry.getCollectionChain("staticchain")))
+        self.assertEqual(["a", "b"], list(butler.collections.get_info("staticchain").children))
 
         with butler._caching_context():
             with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
@@ -1706,9 +1706,9 @@ class FileDatastoreButlerTests(ButlerTests):
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
         # Add some RUN-type collection.
         run1 = "run1"
-        butler.registry.registerRun(run1)
+        butler.collections.register(run1)
         run2 = "run2"
-        butler.registry.registerRun(run2)
+        butler.collections.register(run2)
         # put a dataset in each
         metric = makeExampleMetrics()
         dimensions = butler.dimensions.conform(["instrument", "physical_filter"])
@@ -1729,9 +1729,9 @@ class FileDatastoreButlerTests(ButlerTests):
         # Should be nothing in registry for either one, and datastore should
         # not think either exists.
         with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(run1)
+            butler.collections.get_info(run1)
         with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(run2)
+            butler.collections.get_info(run1)
         self.assertFalse(butler.stored(ref1))
         self.assertFalse(butler.stored(ref2))
         # The ref we unstored should be gone according to the URI, but the
@@ -1767,9 +1767,9 @@ class FileDatastoreButlerTests(ButlerTests):
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
         # Add some RUN-type collections.
         run1 = "run1"
-        butler.registry.registerRun(run1)
+        butler.collections.register(run1)
         run2 = "run2"
-        butler.registry.registerRun(run2)
+        butler.collections.register(run2)
         # put some datasets.  ref1 and ref2 have the same data ID, and are in
         # different runs.  ref3 has a different data ID.
         metric = makeExampleMetrics()
@@ -2464,7 +2464,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
         run = "run1"
-        self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+        self.source_butler.collections.register(run)
 
         dimensions = self.source_butler.dimensions.conform(())
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
@@ -2513,7 +2513,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         # Create the run collections in the source butler.
         for run in runs:
-            self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+            self.source_butler.collections.register(run)
 
         # Create dimensions in source butler.
         n_exposures = 30
@@ -2746,7 +2746,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Now prune run2 collection and create instead a CHAINED collection.
         # This should block the transfer.
         self.target_butler.removeRuns(["run2"], unstore=True)
-        self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
+        self.target_butler.collections.register("run2", CollectionType.CHAINED)
         with self.assertRaises(CollectionTypeError):
             # Re-importing the run1 datasets can be problematic if they
             # use integer IDs so filter those out.
@@ -2797,8 +2797,8 @@ class NullDatastoreTestCase(unittest.TestCase):
         self.assertIsInstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.
-        butler.registry.registerRun("MYRUN")
-        collections = butler.registry.queryCollections(...)
+        butler.collections.register("MYRUN")
+        collections = butler.collections.x_query("*")
         self.assertIn("MYRUN", set(collections))
 
         # Create a ref.
