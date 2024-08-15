@@ -41,8 +41,11 @@ try:
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
-except ImportError:
+
+    reason_text = ""
+except ImportError as e:
     create_test_server = None
+    reason_text = str(e)
 
 from unittest.mock import NonCallableMock, patch
 
@@ -66,7 +69,7 @@ from lsst.resources.http import HttpResourcePath
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 

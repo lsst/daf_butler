@@ -38,13 +38,16 @@ from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
-except ImportError:
+
+    reason_text = ""
+except ImportError as e:
     create_test_server = None
+    reason_text = str(e)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
 class RemoteButlerQueryTests(ButlerQueryTests, unittest.TestCase):
     """Test query system using client/server butler."""
 

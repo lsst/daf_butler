@@ -42,20 +42,28 @@ from pydantic import ValidationError
 try:
     import httpx
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
-except ImportError:
+
+    remote_butler_import_fail_message = ""
+except ImportError as e:
     # httpx is not available in rubin-env yet, so skip these tests if it's not
     # available
     RemoteButler = None
+    remote_butler_import_fail_message = str(e)
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
-except ImportError:
+
+    server_import_fail_message = ""
+except ImportError as e:
     create_test_server = None
+    server_import_fail_message = str(e)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(RemoteButler is None, "httpx is not installed")
+@unittest.skipIf(
+    RemoteButler is None, f"Remote butler can not be imported: {remote_butler_import_fail_message}"
+)
 class RemoteButlerConfigTests(unittest.TestCase):
     """Test construction of RemoteButler via Butler()"""
 
@@ -64,7 +72,9 @@ class RemoteButlerConfigTests(unittest.TestCase):
             Butler({"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "!"}})
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed")
+@unittest.skipIf(
+    create_test_server is None, f"Server dependencies not installed: {server_import_fail_message}"
+)
 class RemoteButlerErrorHandlingTests(unittest.TestCase):
     """Test RemoteButler error handling."""
 
@@ -200,7 +210,9 @@ class RemoteButlerRegistryTests(RegistryTests):
         pass
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(
+    create_test_server is None, f"Server dependencies not installed: {server_import_fail_message}"
+)
 class RemoteButlerSqliteRegistryTests(RemoteButlerRegistryTests, unittest.TestCase):
     """Tests for RemoteButler's registry shim, with a SQLite DB backing the
     server.
@@ -209,7 +221,9 @@ class RemoteButlerSqliteRegistryTests(RemoteButlerRegistryTests, unittest.TestCa
     postgres = None
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(
+    create_test_server is None, f"Server dependencies not installed: {server_import_fail_message}"
+)
 class RemoteButlerPostgresRegistryTests(RemoteButlerRegistryTests, unittest.TestCase):
     """Tests for RemoteButler's registry shim, with a Postgres DB backing the
     server.
