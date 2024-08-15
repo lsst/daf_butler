@@ -134,7 +134,7 @@ def removeRuns(
         with butler.transaction():
             for run in runs:
                 for parent in run.parents:
-                    butler.collection_chains.remove_from_chain(parent, run.name)
+                    butler.collections.remove_from_chain(parent, run.name)
             butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(

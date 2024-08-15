@@ -104,16 +104,16 @@ def collectionChain(
 
 def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: Iterable[str]) -> None:
     if mode == "prepend":
-        butler.collection_chains.prepend_chain(parent, children)
+        butler.collections.prepend_chain(parent, children)
     elif mode == "redefine":
-        butler.collection_chains.redefine_chain(parent, children)
+        butler.collections.redefine_chain(parent, children)
     elif mode == "remove":
-        butler.collection_chains.remove_from_chain(parent, children)
+        butler.collections.remove_from_chain(parent, children)
     elif mode == "pop":
         children_to_pop = _find_children_to_pop(butler, parent, children)
-        butler.collection_chains.remove_from_chain(parent, children_to_pop)
+        butler.collections.remove_from_chain(parent, children_to_pop)
     elif mode == "extend":
-        butler.collection_chains.extend_chain(parent, children)
+        butler.collections.extend_chain(parent, children)
     else:
         raise ValueError(f"Unrecognized update mode: '{mode}'")
 

@@ -1390,85 +1390,85 @@ class ButlerTests(ButlerPutGetTests):
     def testCollectionChainRedefine(self):
         butler = self._setup_to_test_collection_chain()
 
-        butler.collection_chains.redefine_chain("chain", "a")
+        butler.collections.redefine_chain("chain", "a")
         self._check_chain(butler, ["a"])
 
         # Duplicates are removed from the list of children
-        butler.collection_chains.redefine_chain("chain", ["c", "b", "c"])
+        butler.collections.redefine_chain("chain", ["c", "b", "c"])
         self._check_chain(butler, ["c", "b"])
 
         # Empty list clears the chain
-        butler.collection_chains.redefine_chain("chain", [])
+        butler.collections.redefine_chain("chain", [])
         self._check_chain(butler, [])
 
-        self._test_common_chain_functionality(butler, butler.collection_chains.redefine_chain)
+        self._test_common_chain_functionality(butler, butler.collections.redefine_chain)
 
     def testCollectionChainPrepend(self):
         butler = self._setup_to_test_collection_chain()
 
         # Duplicates are removed from the list of children
-        butler.collection_chains.prepend_chain("chain", ["c", "b", "c"])
+        butler.collections.prepend_chain("chain", ["c", "b", "c"])
         self._check_chain(butler, ["c", "b"])
 
         # Prepend goes on the front of existing chain
-        butler.collection_chains.prepend_chain("chain", ["a"])
+        butler.collections.prepend_chain("chain", ["a"])
         self._check_chain(butler, ["a", "c", "b"])
 
         # Empty prepend does nothing
-        butler.collection_chains.prepend_chain("chain", [])
+        butler.collections.prepend_chain("chain", [])
         self._check_chain(butler, ["a", "c", "b"])
 
         # Prepending children that already exist in the chain removes them from
         # their current position.
-        butler.collection_chains.prepend_chain("chain", ["d", "b", "c"])
+        butler.collections.prepend_chain("chain", ["d", "b", "c"])
         self._check_chain(butler, ["d", "b", "c", "a"])
 
-        self._test_common_chain_functionality(butler, butler.collection_chains.prepend_chain)
+        self._test_common_chain_functionality(butler, butler.collections.prepend_chain)
 
     def testCollectionChainExtend(self):
         butler = self._setup_to_test_collection_chain()
 
         # Duplicates are removed from the list of children
-        butler.collection_chains.extend_chain("chain", ["c", "b", "c"])
+        butler.collections.extend_chain("chain", ["c", "b", "c"])
         self._check_chain(butler, ["c", "b"])
 
         # Extend goes on the end of existing chain
-        butler.collection_chains.extend_chain("chain", ["a"])
+        butler.collections.extend_chain("chain", ["a"])
         self._check_chain(butler, ["c", "b", "a"])
 
         # Empty extend does nothing
-        butler.collection_chains.extend_chain("chain", [])
+        butler.collections.extend_chain("chain", [])
         self._check_chain(butler, ["c", "b", "a"])
 
         # Extending children that already exist in the chain removes them from
         # their current position.
-        butler.collection_chains.extend_chain("chain", ["d", "b", "c"])
+        butler.collections.extend_chain("chain", ["d", "b", "c"])
         self._check_chain(butler, ["a", "d", "b", "c"])
 
-        self._test_common_chain_functionality(butler, butler.collection_chains.extend_chain)
+        self._test_common_chain_functionality(butler, butler.collections.extend_chain)
 
     def testCollectionChainRemove(self) -> None:
         butler = self._setup_to_test_collection_chain()
 
         butler.registry.setCollectionChain("chain", ["a", "b", "c", "d"])
 
-        butler.collection_chains.remove_from_chain("chain", "c")
+        butler.collections.remove_from_chain("chain", "c")
         self._check_chain(butler, ["a", "b", "d"])
 
         # Duplicates are allowed in the list of children
-        butler.collection_chains.remove_from_chain("chain", ["b", "b", "a"])
+        butler.collections.remove_from_chain("chain", ["b", "b", "a"])
         self._check_chain(butler, ["d"])
 
         # Empty remove does nothing
-        butler.collection_chains.remove_from_chain("chain", [])
+        butler.collections.remove_from_chain("chain", [])
         self._check_chain(butler, ["d"])
 
         # Removing children that aren't in the chain does nothing
-        butler.collection_chains.remove_from_chain("chain", ["a", "chain"])
+        butler.collections.remove_from_chain("chain", ["a", "chain"])
         self._check_chain(butler, ["d"])
 
         self._test_common_chain_functionality(
-            butler, butler.collection_chains.remove_from_chain, skip_cycle_check=True
+            butler, butler.collections.remove_from_chain, skip_cycle_check=True
         )
 
     def _setup_to_test_collection_chain(self) -> Butler:
