@@ -358,11 +358,10 @@ class RepoExportContext:
             collectionTypes = {CollectionType.TAGGED}
             if datasetType.isCalibration():
                 collectionTypes.add(CollectionType.CALIBRATION)
-            resolved_collections = self._butler._registry.queryCollections(
+            resolved_collections = self._butler.collections.query(
                 self._collections.keys(),
-                datasetType=datasetType,
-                collectionTypes=collectionTypes,
-                flattenChains=False,
+                collection_types=collectionTypes,
+                flatten_chains=False,
             )
             with self._butler._query() as query:
                 query = query.join_dataset_search(datasetType, resolved_collections)
