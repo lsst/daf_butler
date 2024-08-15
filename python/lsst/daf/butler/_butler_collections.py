@@ -297,3 +297,36 @@ class ButlerCollections(ABC, Sequence):
         able to perform its own transaction to be concurrent
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def x_remove(self, name: str) -> None:
+        """Remove the given collection from the registry.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to remove.
+
+        Raises
+        ------
+        lsst.daf.butler.registry.MissingCollectionError
+            Raised if no collection with the given name exists.
+        sqlalchemy.exc.IntegrityError
+            Raised if the database rows associated with the collection are
+            still referenced by some other table, such as a dataset in a
+            datastore (for `~CollectionType.RUN` collections only) or a
+            `~CollectionType.CHAINED` collection of which this collection is
+            a child.
+
+        Notes
+        -----
+        If this is a `~CollectionType.RUN` collection, all datasets and quanta
+        in it will removed from the `Registry` database.  This requires that
+        those datasets be removed (or at least trashed) from any datastores
+        that hold them first.
+
+        A collection may not be deleted as long as it is referenced by a
+        `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
+        be deleted or redefined first.
+        """
+        raise NotImplementedError()

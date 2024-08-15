@@ -98,3 +98,6 @@ class RemoteButlerCollections(ButlerCollections):
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         raise NotImplementedError("Not yet available.")
+
+    def x_remove(self, name: str) -> None:
+        raise NotImplementedError("Not yet available.")

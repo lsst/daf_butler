@@ -111,3 +111,6 @@ class DirectButlerCollections(ButlerCollections):
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         return self._registry.registerCollection(name, type, doc)
+
+    def x_remove(self, name: str) -> None:
+        self._registry.removeCollection(name)

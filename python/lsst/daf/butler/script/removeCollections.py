@@ -126,7 +126,7 @@ def removeCollections(
         """Perform the prune collection step."""
         butler = Butler.from_config(repo, writeable=True, without_datastore=True)
         for name in collections["Collection"]:
-            butler.registry.removeCollection(name)
+            butler.collections.x_remove(name)
 
     result = RemoveCollectionResult(
         onConfirmation=partial(_doRemove, collectionInfo.nonRunCollections),
