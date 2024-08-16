@@ -41,7 +41,6 @@ __all__ = (
     "COLLECTION_NAME_MAX_LENGTH",
 )
 
-import datetime
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
@@ -151,38 +150,6 @@ class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
     def deserialize(self, value: Any) -> Any:
         # Docstring inherited.
         return value if value is None else self._type_adapter.validate_python(value)
-
-
-class _DateTimeColumnValueSerializer(ColumnValueSerializer):
-    """Implementation of serializer for ingest_time column. That column can be
-    either in native database time appearing as `datetime.datetime` on Python
-    side or integer nanoseconds appearing as astropy.time.Time. We use pydantic
-    type adapter for astropy time, which serializes it into integer
-    nanoseconds. datetime is converted to string representation to distinguish
-    it from integer nanoseconds (timezone handling depends entirely on what
-    database returns).
-    """
-
-    def __init__(self) -> None:
-        self._astropy_adapter = pydantic.TypeAdapter(SerializableTime)
-
-    def serialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        if value is None:
-            return None
-        elif isinstance(value, datetime.datetime):
-            return value.isoformat()
-        else:
-            return self._astropy_adapter.dump_python(value)
-
-    def deserialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        if value is None:
-            return None
-        elif isinstance(value, str):
-            return datetime.datetime.fromisoformat(value)
-        else:
-            return self._astropy_adapter.validate_python(value)
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
@@ -459,7 +426,7 @@ class DateTimeColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DateTimeColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableTime))
 
 
 ColumnSpec = Annotated[

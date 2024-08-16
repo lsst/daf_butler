@@ -381,6 +381,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty(), None},
             )
 
+    def test_query_ingest_date(self) -> None:
+        """Test general query returning ingest_date field."""
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+
+        # Check that returned type of ingest_date is astropy Time, must work
+        # for schema versions 1 and 2 of datasets manager.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", "imported_g")
+            rows = list(query.general(dimensions, dataset_fields={"flat": ...}))
+            self.assertEqual(len(rows), 3)
+            for row in rows:
+                self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
+
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"
         storage, in which its values are the union of the values for it in a
