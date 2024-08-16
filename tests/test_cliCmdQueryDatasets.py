@@ -251,16 +251,16 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(
+                array(("alt_test_metric_comp", "ingest/run", "DummyCamComp", "425", "R", "d-r")),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+            ),
+            AstropyTable(
                 array(
                     (
                         ("test_metric_comp", "ingest/run", "DummyCamComp", "423", "R", "d-r"),
                         ("test_metric_comp", "ingest/run", "DummyCamComp", "424", "R", "d-r"),
                     )
                 ),
-                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
-            ),
-            AstropyTable(
-                array(("alt_test_metric_comp", "ingest/run", "DummyCamComp", "425", "R", "d-r")),
                 names=("type", "run", "instrument", "visit", "band", "physical_filter"),
             ),
         )

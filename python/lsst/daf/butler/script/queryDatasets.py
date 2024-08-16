@@ -218,11 +218,27 @@ class QueryDatasets:
         # Currently need to use old interface to get all the matching
         # dataset types and loop over the dataset types executing a new
         # query each time.
-        dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
+        dataset_types: set[str] = {d.name for d in self.butler.registry.queryDatasetTypes(datasetTypes)}
         with self.butler._query() as query:
-            query_collections = self.butler.collections.x_query(query_collections)
+            # If there is more than one dataset type being requested include
+            # the summary information so we can pre-filter. With only one
+            # let query.datasets work it out.
+            include_summary = True if len(dataset_types) > 1 else False
+            query_collections_info = self.butler.collections.x_query_info(
+                query_collections, include_summary=include_summary
+            )
+            query_collections = [c.name for c in query_collections_info]
+
+            # Only iterate over dataset types that are relevant for the query.
+            if include_summary:
+                collection_dataset_types: set[str] = set()
+                for info in query_collections_info:
+                    assert info.dataset_types is not None  # For mypy.
+                    collection_dataset_types.update(info.dataset_types)
+                dataset_types = dataset_types.intersection(collection_dataset_types)
+
             # Accumulate over dataset types.
-            for dt in dataset_types:
+            for dt in sorted(dataset_types):
                 results = query.datasets(dt, collections=query_collections, find_first=self._find_first)
                 if self._where:
                     results = results.where(self._where)
