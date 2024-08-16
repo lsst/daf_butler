@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from astropy.table import Table
 
 from .._butler import Butler
+from .._butler_collections import CollectionInfo
 from .._collection_type import CollectionType
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ log = logging.getLogger(__name__)
 
 
 def find_calibration_datasets(
-    butler: Butler, collection: str, datasetTypes: Iterable[DatasetType]
+    butler: Butler, collection: CollectionInfo, datasetTypes: Iterable[DatasetType]
 ) -> list[DatasetRef]:
     """Search a calibration collection for calibration datasets.
 
@@ -52,7 +53,7 @@ def find_calibration_datasets(
     ----------
     butler : `lsst.daf.butler.Butler`
         Butler to use.
-    collection : `str`
+    collection : `CollectionInfo`
         Collection to search.  This should be a CALIBRATION
         collection.
     datasetTypes : `list` [`lsst.daf.Butler.DatasetType`]
@@ -68,18 +69,18 @@ def find_calibration_datasets(
     RuntimeError
         Raised if the collection to search is not a CALIBRATION collection.
     """
-    if butler.collections.get_info(collection).type != CollectionType.CALIBRATION:
-        raise RuntimeError(f"Collection {collection} is not a CALIBRATION collection.")
+    if collection.type != CollectionType.CALIBRATION:
+        raise RuntimeError(f"Collection {collection.name} is not a CALIBRATION collection.")
 
     exportDatasets = []
     for calibType in datasetTypes:
         with butler._query() as query:
-            results = query.datasets(calibType, collections=collection, find_first=False)
+            results = query.datasets(calibType, collections=collection.name, find_first=False)
 
             try:
                 refs = list(results.with_dimension_records())
             except Exception as e:
-                e.add_note(f"Error from querying dataset type {calibType} and collection {collection}")
+                e.add_note(f"Error from querying dataset type {calibType} and collection {collection.name}")
                 raise
             exportDatasets.extend(refs)
 
@@ -133,18 +134,17 @@ def exportCalibs(
     collectionsToExport = []
     datasetsToExport = []
 
-    for collection in butler.collections.x_query(
+    for collection in butler.collections.x_query_info(
         collections_query,
         flatten_chains=True,
         include_chains=True,
         collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
     ):
-        log.info("Checking collection: %s", collection)
+        log.info("Checking collection: %s", collection.name)
 
         # Get collection information.
-        collectionsToExport.append(collection)
-        info = butler.collections.get_info(collection)
-        if info.type == CollectionType.CALIBRATION:
+        collectionsToExport.append(collection.name)
+        if collection.type == CollectionType.CALIBRATION:
             exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
             datasetsToExport.extend(exportDatasets)
 

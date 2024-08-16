@@ -71,21 +71,27 @@ class RemoteButlerCollections(ButlerCollections):
     ) -> None:
         raise NotImplementedError("Not yet available")
 
-    def x_query(
+    def x_query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
         flatten_chains: bool = False,
         include_chains: bool | None = None,
-    ) -> Sequence[str]:
+        include_parents: bool = False,
+    ) -> Sequence[CollectionInfo]:
+        # This should become a single call on the server in the future.
         if collection_types is None:
             collection_types = CollectionType.all()
-        return self._registry.queryCollections(
+
+        info = []
+        for name in self._registry.queryCollections(
             expression,
             collectionTypes=collection_types,
             flattenChains=flatten_chains,
             includeChains=include_chains,
-        )
+        ):
+            info.append(self.get_info(name, include_parents=include_parents))
+        return info
 
     def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
         info = self._registry._get_collection_info(

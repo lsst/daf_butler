@@ -88,12 +88,35 @@ class DirectButlerCollections(ButlerCollections):
     ) -> Sequence[str]:
         if collection_types is None:
             collection_types = CollectionType.all()
+        # Do not use base implementation for now to avoid the additional
+        # unused queries.
         return self._registry.queryCollections(
             expression,
             collectionTypes=collection_types,
             flattenChains=flatten_chains,
             includeChains=include_chains,
         )
+
+    def x_query_info(
+        self,
+        expression: str | Iterable[str],
+        collection_types: Set[CollectionType] | CollectionType | None = None,
+        flatten_chains: bool = False,
+        include_chains: bool | None = None,
+        include_parents: bool = False,
+    ) -> Sequence[CollectionInfo]:
+        info = []
+        with self._registry.caching_context():
+            if collection_types is None:
+                collection_types = CollectionType.all()
+            for name in self._registry.queryCollections(
+                expression,
+                collectionTypes=collection_types,
+                flattenChains=flatten_chains,
+                includeChains=include_chains,
+            ):
+                info.append(self.get_info(name, include_parents=include_parents))
+        return info
 
     def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
         record = self._registry.get_collection_record(name)

@@ -210,7 +210,6 @@ class ButlerCollections(ABC, Sequence):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def x_query(
         self,
         expression: str | Iterable[str],
@@ -219,6 +218,8 @@ class ButlerCollections(ABC, Sequence):
         include_chains: bool | None = None,
     ) -> Sequence[str]:
         """Query the butler for collections matching an expression.
+
+        **This is an experimental interface that can change at any time.**
 
         Parameters
         ----------
@@ -238,6 +239,61 @@ class ButlerCollections(ABC, Sequence):
         Returns
         -------
         collections : `~collections.abc.Sequence` [ `str` ]
+            The names of collections that match ``expression``.
+
+        Notes
+        -----
+        The order in which collections are returned is unspecified, except that
+        the children of a `~CollectionType.CHAINED` collection are guaranteed
+        to be in the order in which they are searched.  When multiple parent
+        `~CollectionType.CHAINED` collections match the same criteria, the
+        order in which the two lists appear is unspecified, and the lists of
+        children may be incomplete if a child has multiple parents.
+
+        The default implementation is a wrapper around `x_query_info`.
+        """
+        collections_info = self.x_query_info(
+            expression,
+            collection_types=collection_types,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+        )
+        return [info.name for info in collections_info]
+
+    @abstractmethod
+    def x_query_info(
+        self,
+        expression: str | Iterable[str],
+        collection_types: Set[CollectionType] | CollectionType | None = None,
+        flatten_chains: bool = False,
+        include_chains: bool | None = None,
+        include_parents: bool = False,
+    ) -> Sequence[CollectionInfo]:
+        """Query the butler for collections matching an expression and
+        return detailed information about those collections.
+
+        **This is an experimental interface that can change at any time.**
+
+        Parameters
+        ----------
+        expression : `str` or `~collections.abc.Iterable` [ `str` ]
+            One or more collection names or globs to include in the search.
+        collection_types : `set` [`CollectionType`], `CollectionType` or `None`
+            Restrict the types of collections to be searched. If `None` all
+            collection types are searched.
+        flatten_chains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        include_chains : `bool` or `None`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections. Default is the opposite of ``flatten_chains``:
+            include either CHAINED collections or their children, but not both.
+        include_parents : `bool`, optional
+            Whether the returned information includes parents.
+
+        Returns
+        -------
+        collections : `~collections.abc.Sequence` [ `CollectionInfo` ]
             The names of collections that match ``expression``.
 
         Notes
@@ -301,6 +357,8 @@ class ButlerCollections(ABC, Sequence):
     @abstractmethod
     def x_remove(self, name: str) -> None:
         """Remove the given collection from the registry.
+
+        **This is an experimental interface that can change at any time.**
 
         Parameters
         ----------

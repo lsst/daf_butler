@@ -77,18 +77,20 @@ class HybridButlerCollections(ButlerCollections):
             parent_collection_name, child_collection_names
         )
 
-    def x_query(
+    def x_query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
         flatten_chains: bool = False,
         include_chains: bool | None = None,
-    ) -> Sequence[str]:
-        return self._hybrid._remote_butler.collections.x_query(
+        include_parents: bool = False,
+    ) -> Sequence[CollectionInfo]:
+        return self._hybrid._remote_butler.collections.x_query_info(
             expression,
             collection_types=collection_types,
             flatten_chains=flatten_chains,
             include_chains=include_chains,
+            include_parents=include_parents,
         )
 
     def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
