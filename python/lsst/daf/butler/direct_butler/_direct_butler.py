@@ -46,6 +46,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
+from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
@@ -2149,6 +2150,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             raise ValidationError(";\n".join(messages))
 
     @property
+    @deprecated(
+        "Please use 'collections' instead. collection_chains will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def collection_chains(self) -> DirectButlerCollections:
         """Object with methods for modifying collection chains."""
         return DirectButlerCollections(self._registry)

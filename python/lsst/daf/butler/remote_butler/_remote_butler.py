@@ -35,6 +35,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
+from deprecated.sphinx import deprecated
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
@@ -144,6 +145,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return False
 
     @property
+    @deprecated(
+        "Please use 'collections' instead. collection_chains will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def collection_chains(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
         from ._registry import RemoteButlerRegistry
