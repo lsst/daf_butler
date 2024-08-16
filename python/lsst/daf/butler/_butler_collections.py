@@ -31,7 +31,7 @@ __all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence, Set
-from typing import overload
+from typing import Any, overload
 
 from pydantic import BaseModel
 
@@ -51,6 +51,12 @@ class CollectionInfo(BaseModel):
     """Children of this collection (only if CHAINED)."""
     parents: frozenset[str] = frozenset()
     """Any parents of this collection."""
+
+    def __lt__(self, other: Any) -> bool:
+        """Compare objects by collection name."""
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.name < other.name
 
 
 class ButlerCollections(ABC, Sequence):
