@@ -127,7 +127,7 @@ storageClasses:
       astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_pandas
       numpy.ndarray: pandas.DataFrame.from_records
       dict: pandas.DataFrame.from_records
-    delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: DataFrameIndex
       rowcount: int
@@ -179,7 +179,7 @@ storageClasses:
       pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_astropy
       numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_astropy
       dict: astropy.table.Table
-    delegate: lsst.daf.butler.delegates.arrowastropy.ArrowAstropyDelegate
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
@@ -200,7 +200,7 @@ storageClasses:
       pandas.core.frame.DataFrame: pandas.DataFrame.to_records
       astropy.table.Table: astropy.table.Table.as_array
       dict: lsst.daf.butler.formatters.parquet._numpy_dict_to_numpy
-    delegate: lsst.daf.butler.delegates.arrownumpy.ArrowNumpyDelegate
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
@@ -221,7 +221,7 @@ storageClasses:
       pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet._pandas_to_numpy_dict
       astropy.table.Table: lsst.daf.butler.formatters.parquet._astropy_to_numpy_dict
       numpy.ndarray: lsst.daf.butler.formatters.parquet._numpy_to_numpy_dict
-    delegate: lsst.daf.butler.delegates.arrownumpydict.ArrowNumpyDictDelegate
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
