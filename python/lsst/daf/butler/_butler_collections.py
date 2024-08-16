@@ -31,7 +31,7 @@ __all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence, Set
-from typing import Any, overload
+from typing import overload
 
 from pydantic import BaseModel
 
@@ -67,12 +67,6 @@ class ButlerCollections(ABC, Sequence):
 
     def __len__(self) -> int:
         return len(self.defaults)
-
-    def __eq__(self, other: Any) -> bool:
-        # Do not try to compare registry instances.
-        if not isinstance(other, type(self)):
-            return False
-        return self.defaults == other.defaults
 
     @property
     @abstractmethod

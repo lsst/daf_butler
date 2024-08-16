@@ -1092,7 +1092,7 @@ class ButlerTests(ButlerPutGetTests):
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
-        self.assertEqual(butlerOut.collections, butler.collections)
+        self.assertEqual(list(butlerOut.collections.defaults), list(butler.collections.defaults))
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self) -> None:
