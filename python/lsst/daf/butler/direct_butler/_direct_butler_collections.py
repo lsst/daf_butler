@@ -118,11 +118,9 @@ class DirectButlerCollections(ButlerCollections):
                 info.append(self.get_info(name, include_parents=include_parents))
         return info
 
-    def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
+    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
         record = self._registry.get_collection_record(name)
-        doc = ""
-        if include_doc:
-            doc = self._registry.getCollectionDocumentation(name) or ""
+        doc = self._registry.getCollectionDocumentation(name) or ""
         children: tuple[str, ...] = tuple()
         if record.type == CollectionType.CHAINED:
             assert isinstance(record, ChainedCollectionRecord)

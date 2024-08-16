@@ -158,7 +158,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     @property
     def collections(self) -> ButlerCollections:
-        """Object with methods for modifying collection chains."""
+        """Object with methods for modifying and querying collections."""
         from ._registry import RemoteButlerRegistry
 
         return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))

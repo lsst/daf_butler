@@ -308,15 +308,13 @@ class ButlerCollections(ABC, Sequence):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
+    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
         """Obtain information for a specific collection.
 
         Parameters
         ----------
         name : `str`
             The name of the collection of interest.
-        include_doc : `bool`, optional
-            If `True` any documentation about this collection will be included.
         include_parents : `bool`, optional
            If `True` any parents of this collection will be included.
 

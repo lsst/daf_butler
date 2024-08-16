@@ -93,10 +93,8 @@ class HybridButlerCollections(ButlerCollections):
             include_parents=include_parents,
         )
 
-    def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
-        return self._hybrid._remote_butler.collections.get_info(
-            name, include_doc=include_doc, include_parents=include_parents
-        )
+    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
+        return self._hybrid._remote_butler.collections.get_info(name, include_parents=include_parents)
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         return self._hybrid._direct_butler.collections.register(name, type=type, doc=doc)

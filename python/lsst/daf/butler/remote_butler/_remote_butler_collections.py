@@ -93,10 +93,8 @@ class RemoteButlerCollections(ButlerCollections):
             info.append(self.get_info(name, include_parents=include_parents))
         return info
 
-    def get_info(self, name: str, include_doc: bool = False, include_parents: bool = False) -> CollectionInfo:
-        info = self._registry._get_collection_info(
-            name, include_doc=include_doc, include_parents=include_parents
-        )
+    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
+        info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
         doc = info.doc or ""
         children = info.children or ()
         parents = info.parents or set()
