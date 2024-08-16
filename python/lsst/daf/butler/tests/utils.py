@@ -183,7 +183,7 @@ class ButlerTestHelper:
             original_max = self.maxDiff
             self.maxDiff = None  # This is required to get the full diff.
             try:
-                self.assertEqual(table1, expected1)
+                self.assertEqual(table1, expected1, f"Table:\n{table}\n\nvs Expected:\n{expected}")
             finally:
                 self.maxDiff = original_max
 
