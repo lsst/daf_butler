@@ -104,6 +104,7 @@ class DirectButlerCollections(ButlerCollections):
         flatten_chains: bool = False,
         include_chains: bool | None = None,
         include_parents: bool = False,
+        include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
         info = []
         with self._registry.caching_context():
@@ -115,10 +116,14 @@ class DirectButlerCollections(ButlerCollections):
                 flattenChains=flatten_chains,
                 includeChains=include_chains,
             ):
-                info.append(self.get_info(name, include_parents=include_parents))
+                info.append(
+                    self.get_info(name, include_parents=include_parents, include_summary=include_summary)
+                )
         return info
 
-    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
+    def get_info(
+        self, name: str, include_parents: bool = False, include_summary: bool = False
+    ) -> CollectionInfo:
         record = self._registry.get_collection_record(name)
         doc = self._registry.getCollectionDocumentation(name) or ""
         children: tuple[str, ...] = tuple()
@@ -128,7 +133,22 @@ class DirectButlerCollections(ButlerCollections):
         parents: set[str] | None = None
         if include_parents:
             parents = self._registry.getCollectionParentChains(name)
-        return CollectionInfo(name=name, type=record.type, doc=doc, parents=parents, children=children)
+        governors: dict[str, frozenset[str]] | None = None
+        dataset_types: Set[str] | None = None
+        if include_summary:
+            summary = self._registry.getCollectionSummary(name)
+            dataset_types = frozenset([dt.name for dt in summary.dataset_types])
+            governors = {k: frozenset(v) for k, v in summary.governors.items()}
+
+        return CollectionInfo(
+            name=name,
+            type=record.type,
+            doc=doc,
+            parents=parents,
+            children=children,
+            dataset_types=dataset_types,
+            governors=governors,
+        )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         return self._registry.registerCollection(name, type, doc)

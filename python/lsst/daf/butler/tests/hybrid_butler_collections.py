@@ -84,6 +84,7 @@ class HybridButlerCollections(ButlerCollections):
         flatten_chains: bool = False,
         include_chains: bool | None = None,
         include_parents: bool = False,
+        include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
         return self._hybrid._remote_butler.collections.x_query_info(
             expression,
@@ -91,10 +92,15 @@ class HybridButlerCollections(ButlerCollections):
             flatten_chains=flatten_chains,
             include_chains=include_chains,
             include_parents=include_parents,
+            include_summary=include_summary,
         )
 
-    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
-        return self._hybrid._remote_butler.collections.get_info(name, include_parents=include_parents)
+    def get_info(
+        self, name: str, include_parents: bool = False, include_summary: bool = False
+    ) -> CollectionInfo:
+        return self._hybrid._remote_butler.collections.get_info(
+            name, include_parents=include_parents, include_summary=include_summary
+        )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         return self._hybrid._direct_butler.collections.register(name, type=type, doc=doc)

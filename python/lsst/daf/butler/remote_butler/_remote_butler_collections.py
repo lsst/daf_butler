@@ -78,6 +78,7 @@ class RemoteButlerCollections(ButlerCollections):
         flatten_chains: bool = False,
         include_chains: bool | None = None,
         include_parents: bool = False,
+        include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
         # This should become a single call on the server in the future.
         if collection_types is None:
@@ -90,14 +91,30 @@ class RemoteButlerCollections(ButlerCollections):
             flattenChains=flatten_chains,
             includeChains=include_chains,
         ):
-            info.append(self.get_info(name, include_parents=include_parents))
+            info.append(self.get_info(name, include_parents=include_parents, include_summary=include_summary))
         return info
 
-    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
+    def get_info(
+        self, name: str, include_parents: bool = False, include_summary: bool = False
+    ) -> CollectionInfo:
         info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
         doc = info.doc or ""
         children = info.children or ()
-        return CollectionInfo(name=name, type=info.type, doc=doc, parents=info.parents, children=children)
+        governors: dict[str, frozenset[str]] | None = None
+        dataset_types: Set[str] | None = None
+        if include_summary:
+            summary = self._registry.getCollectionSummary(name)
+            dataset_types = frozenset([dt.name for dt in summary.dataset_types])
+            governors = {k: frozenset(v) for k, v in summary.governors.items()}
+        return CollectionInfo(
+            name=name,
+            type=info.type,
+            doc=doc,
+            parents=info.parents,
+            children=children,
+            dataset_types=dataset_types,
+            governors=governors,
+        )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         raise NotImplementedError("Not yet available.")

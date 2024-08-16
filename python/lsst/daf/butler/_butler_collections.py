@@ -54,6 +54,17 @@ class CollectionInfo(BaseModel):
 
     `None` if the parents were not requested.
     """
+    dataset_types: frozenset[str] | None = None
+    """Names of any dataset types associated with datasets in this collection.
+
+    `None` if no dataset type information was requested
+    """
+    governors: dict[str, frozenset[str]] | None = None
+    """Values of any governor dimensions associated with datasets in this
+    collection.
+
+    `None` if no governor information was requested.
+    """
 
     def __lt__(self, other: Any) -> bool:
         """Compare objects by collection name."""
@@ -271,6 +282,7 @@ class ButlerCollections(ABC, Sequence):
         flatten_chains: bool = False,
         include_chains: bool | None = None,
         include_parents: bool = False,
+        include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
         """Query the butler for collections matching an expression and
         return detailed information about those collections.
@@ -293,6 +305,9 @@ class ButlerCollections(ABC, Sequence):
             include either CHAINED collections or their children, but not both.
         include_parents : `bool`, optional
             Whether the returned information includes parents.
+        include_summary : `bool`, optional
+            Whether the returned information includes dataset type and
+            governor information for the collections.
 
         Returns
         -------
@@ -311,7 +326,9 @@ class ButlerCollections(ABC, Sequence):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_info(self, name: str, include_parents: bool = False) -> CollectionInfo:
+    def get_info(
+        self, name: str, include_parents: bool = False, include_summary: bool = False
+    ) -> CollectionInfo:
         """Obtain information for a specific collection.
 
         Parameters
@@ -320,6 +337,9 @@ class ButlerCollections(ABC, Sequence):
             The name of the collection of interest.
         include_parents : `bool`, optional
            If `True` any parents of this collection will be included.
+        include_summary : `bool`, optional
+           If `True` dataset type names and governor dimensions of datasets
+           stored in this collection will be included in the result.
 
         Returns
         -------
