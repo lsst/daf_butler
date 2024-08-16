@@ -399,7 +399,13 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         """
         # May need to coerce the in memory dataset to the correct
         # python type, otherwise parameters may not work.
-        inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
+        try:
+            delegate = ref.datasetType.storageClass.delegate()
+        except TypeError:
+            # TypeError is raised when a storage class doesn't have a delegate.
+            delegate = None
+        if not delegate or not delegate.can_accept(inMemoryDataset):
+            inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
 
         self._validate_put_parameters(inMemoryDataset, ref)
 

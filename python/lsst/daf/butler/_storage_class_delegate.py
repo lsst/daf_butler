@@ -86,6 +86,31 @@ class StorageClassDelegate:
         assert storageClass is not None
         self.storageClass = storageClass
 
+    def can_accept(self, inMemoryDataset: Any) -> bool:
+        """Indicate whether this delegate can accept the specified
+        storage class directly.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The dataset that is to be stored.
+
+        Returns
+        -------
+        accepts : `bool`
+            If `True` the delegate can handle data of this type without
+            requiring datastore to convert it. If `False` the datastore
+            will attempt to convert before storage.
+
+        Notes
+        -----
+        The base class always returns `False` even if the given type is an
+        instance of the delegate type. This will result in a storage class
+        conversion no-op but also allows mocks with mocked storage classes
+        to work properly.
+        """
+        return False
+
     @staticmethod
     def _attrNames(componentName: str, getter: bool = True) -> tuple[str, ...]:
         """Return list of suitable attribute names to attempt to use.
