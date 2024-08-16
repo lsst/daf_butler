@@ -1179,7 +1179,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyTableEquality(tab1, tab2)
+        _checkNumpyTableEquality(tab1, tab2)
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(tab1.dtype.names))
@@ -1193,9 +1193,9 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.assertEqual(schema, ArrowNumpySchema(tab1.dtype))
         # Read just some columns a few different ways.
         tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
-        self._checkNumpyTableEquality(tab1[["a", "c"]], tab3)
+        _checkNumpyTableEquality(tab1[["a", "c"]], tab3)
         tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "a",
@@ -1204,9 +1204,9 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             tab4,
         )
         tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
-        self._checkNumpyTableEquality(tab1[["index", "a"]], tab5)
+        _checkNumpyTableEquality(tab1[["index", "a"]], tab5)
         tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "ddd",
@@ -1215,7 +1215,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             tab6,
         )
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "a",
@@ -1233,7 +1233,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyTableEquality(tab1, tab2, has_bigendian=True)
+        _checkNumpyTableEquality(tab1, tab2, has_bigendian=True)
 
     def testArrowNumpySchema(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1275,7 +1275,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
         tab2_numpy = arrow_to_numpy(tab2)
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
         # Check reading the columns.
         columns = tab2.schema.names
@@ -1330,7 +1330,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
         tab2_numpy = tab2.as_array()
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
         # Check reading the columns.
         columns = list(tab2.columns.keys())
@@ -1355,7 +1355,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
         tab2_numpy = _numpy_dict_to_numpy(tab2)
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
     def testBadNumpyColumnParquet(self):
         tab1 = _makeSimpleAstropyTable()
@@ -1675,12 +1675,12 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
         # Read back out as a numpy table.
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
-        self._checkNumpyTableEquality(tab1, tab2)
+        _checkNumpyTableEquality(tab1, tab2)
 
         # Read back out as an arrow table, convert to numpy table.
         atab3 = self.butler.get(self.datasetType, dataId={})
         tab3 = arrow_to_numpy(atab3)
-        self._checkNumpyTableEquality(tab1, tab3)
+        _checkNumpyTableEquality(tab1, tab3)
 
         # Check reading the columns.
         columns = list(tab2.dtype.names)
@@ -1792,7 +1792,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         self.butler.put(dict1, self.datasetType, dataId={})
         # Read the whole table.
         dict2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyDictEquality(dict1, dict2)
+        _checkNumpyDictEquality(dict1, dict2)
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(dict1.keys()))
@@ -1807,19 +1807,19 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         # Read just some columns a few different ways.
         tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
         subdict = {key: dict1[key] for key in ["a", "c"]}
-        self._checkNumpyDictEquality(subdict, tab3)
+        _checkNumpyDictEquality(subdict, tab3)
         tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
         subdict = {key: dict1[key] for key in ["a"]}
-        self._checkNumpyDictEquality(subdict, tab4)
+        _checkNumpyDictEquality(subdict, tab4)
         tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
         subdict = {key: dict1[key] for key in ["index", "a"]}
-        self._checkNumpyDictEquality(subdict, tab5)
+        _checkNumpyDictEquality(subdict, tab5)
         tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
         subdict = {key: dict1[key] for key in ["ddd"]}
-        self._checkNumpyDictEquality(subdict, tab6)
+        _checkNumpyDictEquality(subdict, tab6)
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         subdict = {key: dict1[key] for key in ["a"]}
-        self._checkNumpyDictEquality(subdict, tab7)
+        _checkNumpyDictEquality(subdict, tab7)
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -1835,7 +1835,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
 
         tab2_dict = arrow_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     @unittest.skipUnless(pd is not None, "Cannot test reading as a dataframe without pandas.")
     def testWriteNumpyDictReadAsDataFrame(self):
@@ -1865,7 +1865,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
         tab2_dict = _astropy_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     def testWriteNumpyDictReadAsNumpyTable(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1876,7 +1876,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
         tab2_dict = _numpy_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     def testWriteNumpyDictBad(self):
         dict1 = {"a": 4, "b": np.ndarray([1])}
@@ -2186,6 +2186,39 @@ def _checkAstropyTableEquality(table1, table2, skip_units=False, has_bigendian=F
         if has_masked:
             np.testing.assert_array_equal(np.array(c1), np.array(c2))
             np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
+
+
+def _checkNumpyTableEquality(table1, table2, has_bigendian=False):
+    """Check if two numpy tables have the same columns/values
+
+    Parameters
+    ----------
+    table1 : `numpy.ndarray`
+    table2 : `numpy.ndarray`
+    has_bigendian : `bool`
+    """
+    assert table1.dtype.names == table2.dtype.names
+    for name in table1.dtype.names:
+        if not has_bigendian:
+            assert table1.dtype[name] == table2.dtype[name]
+        else:
+            # Only check type matches, force to little-endian.
+            assert table1.dtype[name].newbyteorder(">") == table2.dtype[name].newbyteorder(">")
+        assert np.all(table1 == table2)
+
+
+def _checkNumpyDictEquality(dict1, dict2):
+    """Check if two numpy dicts have the same columns/values.
+
+    Parameters
+    ----------
+    dict1 : `dict` [`str`, `np.ndarray`]
+    dict2 : `dict` [`str`, `np.ndarray`]
+    """
+    assert set(dict1.keys()) == set(dict2.keys())
+    for name in dict1:
+        assert dict1[name].dtype == dict2[name].dtype
+        assert np.all(dict1[name] == dict2[name])
 
 
 if __name__ == "__main__":
