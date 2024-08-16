@@ -49,8 +49,11 @@ class CollectionInfo(BaseModel):
     """Documentation string associated with this collection."""
     children: tuple[str, ...] = tuple()
     """Children of this collection (only if CHAINED)."""
-    parents: frozenset[str] = frozenset()
-    """Any parents of this collection."""
+    parents: frozenset[str] | None = None
+    """Any parents of this collection.
+
+    `None` if the parents were not requested.
+    """
 
     def __lt__(self, other: Any) -> bool:
         """Compare objects by collection name."""

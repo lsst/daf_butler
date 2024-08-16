@@ -125,7 +125,7 @@ class DirectButlerCollections(ButlerCollections):
         if record.type == CollectionType.CHAINED:
             assert isinstance(record, ChainedCollectionRecord)
             children = tuple(record.children)
-        parents: set[str] = set()
+        parents: set[str] | None = None
         if include_parents:
             parents = self._registry.getCollectionParentChains(name)
         return CollectionInfo(name=name, type=record.type, doc=doc, parents=parents, children=children)

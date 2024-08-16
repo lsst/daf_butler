@@ -97,7 +97,7 @@ def _getCollectionInfo(
     runs = []
     datasets: dict[str, int] = defaultdict(int)
     for collection_info in collections:
-        assert collection_info.type == CollectionType.RUN
+        assert collection_info.type == CollectionType.RUN and collection_info.parents is not None
         runs.append(RemoveRun(collection_info.name, list(collection_info.parents)))
         with butler._query() as query:
             for dt in dataset_types:

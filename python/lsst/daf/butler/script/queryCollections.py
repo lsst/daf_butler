@@ -148,6 +148,7 @@ def _getTree(
     def addCollection(info: CollectionInfo, level: int = 0) -> None:
         table.add_row(("  " * level + info.name, info.type.name))
         if inverse:
+            assert info.parents is not None  # For mypy.
             for pname in sorted(info.parents):
                 pinfo = butler.collections.get_info(pname, include_parents=inverse)
                 addCollection(pinfo, level + 1)
