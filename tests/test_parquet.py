@@ -63,23 +63,10 @@ from lsst.daf.butler import (
 )
 
 try:
-    from lsst.daf.butler.delegates.arrowastropy import ArrowAstropyDelegate
-except ImportError:
-    atable = None
-    pa = None
-try:
-    from lsst.daf.butler.delegates.arrownumpy import ArrowNumpyDelegate
-except ImportError:
-    np = None
-    pa = None
-try:
     from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
 except ImportError:
     pa = None
-try:
-    from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
-except ImportError:
-    pd = None
+
 try:
     from lsst.daf.butler.formatters.parquet import (
         ArrowAstropySchema,
@@ -797,9 +784,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         _checkNumpyDictEquality(dict1, dict2)
 
 
-@unittest.skipUnless(pd is not None, "Cannot test InMemoryDataFrameDelegate without pandas.")
+@unittest.skipUnless(pd is not None, "Cannot test InMemoryDatastore with DataFrames without pandas.")
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
-    """Tests for InMemoryDatastore, using DataFrameDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with Dataframe."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -821,7 +808,7 @@ class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
 
     def testBadInput(self):
         df1, _ = _makeSingleIndexDataFrame()
-        delegate = DataFrameDelegate("DataFrame")
+        delegate = ArrowTableDelegate("DataFrame")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_a_dataframe")
@@ -1166,9 +1153,11 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
             self.butler.put(bad_tab, self.datasetType, dataId={})
 
 
-@unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
+@unittest.skipUnless(atable is not None, "Cannot test InMemoryDatastore with AstropyTable without astropy.")
 class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase):
-    """Tests for InMemoryDatastore, using ArrowAstropyDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    AstropyTable.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -1182,7 +1171,7 @@ class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase)
 
     def testBadInput(self):
         tab1 = _makeSimpleAstropyTable()
-        delegate = ArrowAstropyDelegate("ArrowAstropy")
+        delegate = ArrowTableDelegate("ArrowAstropy")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_an_astropy_table")
@@ -1440,9 +1429,11 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
+@unittest.skipUnless(np is not None, "Cannot test ImMemoryDatastore with Numpy table without numpy.")
 class InMemoryArrowNumpyDelegateTestCase(ParquetFormatterArrowNumpyTestCase):
-    """Tests for InMemoryDatastore, using ArrowNumpyDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    Numpy table.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -1452,7 +1443,7 @@ class InMemoryArrowNumpyDelegateTestCase(ParquetFormatterArrowNumpyTestCase):
 
     def testBadInput(self):
         tab1 = _makeSimpleNumpyTable()
-        delegate = ArrowNumpyDelegate("ArrowNumpy")
+        delegate = ArrowTableDelegate("ArrowNumpy")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_a_numpy_table")
@@ -1754,7 +1745,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(pa is not None, "Cannot test InMemoryArrowTableDelegate without pyarrow.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with ArroWTable without pyarrow.")
 class InMemoryArrowTableDelegateTestCase(ParquetFormatterArrowTableTestCase):
     """Tests for InMemoryDatastore, using ArrowTableDelegate."""
 
@@ -1935,10 +1926,12 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
-@unittest.skipUnless(pa is not None, "Cannot test ParquetFormatterArrowNumpy without pyarrow.")
+@unittest.skipUnless(np is not None, "Cannot test InMemoryDatastore with NumpyDict without numpy.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with NumpyDict without pyarrow.")
 class InMemoryNumpyDictDelegateTestCase(ParquetFormatterArrowNumpyDictTestCase):
-    """Tests for InMemoryDatastore, using ArrowNumpyDictDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    Numpy dict.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -2109,7 +2102,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         self.assertEqual(np_schema2, np_schema1)
 
 
-@unittest.skipUnless(pa is not None, "Cannot test InMemoryArrowSchemaDelegate without pyarrow.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with ArrowSchema without pyarrow.")
 class InMemoryArrowSchemaDelegateTestCase(ParquetFormatterArrowSchemaTestCase):
     """Tests for InMemoryDatastore and ArrowSchema."""
 
