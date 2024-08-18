@@ -57,6 +57,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pyarrow as pa
 import pyarrow.parquet as pq
 from lsst.daf.butler import FormatterV2
+from lsst.daf.butler.delegates.arrowtable import _checkArrowCompatibleType
 from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
@@ -79,32 +80,7 @@ class ParquetFormatter(FormatterV2):
 
     def can_accept(self, in_memory_dataset: Any) -> bool:
         # Docstring inherited.
-        import numpy as np
-        from astropy.table import Table as astropyTable
-
-        # Note: we do not check for a dict of numpy arrays as that
-        # is (a) heavy because it requires a full conversion, and
-        # (b) the storage class conversion will work fine and will
-        # be lossless in any case because of the simplicity of the
-        # format.
-
-        if isinstance(in_memory_dataset, pa.Table):
-            return True
-        elif isinstance(in_memory_dataset, astropyTable):
-            return True
-        elif isinstance(in_memory_dataset, np.ndarray):
-            return True
-        elif hasattr(in_memory_dataset, "to_parquet"):
-            # This may be a pandas DataFrame
-            try:
-                import pandas as pd
-            except ImportError:
-                pd = None
-
-            if pd is not None and isinstance(in_memory_dataset, pd.DataFrame):
-                return True
-
-        return False
+        return _checkArrowCompatibleType(in_memory_dataset) is not None
 
     def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
         # Docstring inherited from Formatter.read.
@@ -172,43 +148,29 @@ class ParquetFormatter(FormatterV2):
         return arrow_table
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
-        import numpy as np
-        from astropy.table import Table as astropyTable
 
-        arrow_table = None
-        if isinstance(in_memory_dataset, pa.Table):
-            # This will be the most likely match.
-            arrow_table = in_memory_dataset
-        elif isinstance(in_memory_dataset, astropyTable):
-            arrow_table = astropy_to_arrow(in_memory_dataset)
-        elif isinstance(in_memory_dataset, np.ndarray):
-            arrow_table = numpy_to_arrow(in_memory_dataset)
-        elif isinstance(in_memory_dataset, dict):
-            try:
-                arrow_table = numpy_dict_to_arrow(in_memory_dataset)
-            except (TypeError, AttributeError) as e:
-                raise ValueError(
-                    "Input dict for inMemoryDataset does not appear to be a dict of numpy arrays."
-                ) from e
-        elif isinstance(in_memory_dataset, pa.Schema):
+        if isinstance(in_memory_dataset, pa.Schema):
             pq.write_metadata(in_memory_dataset, uri.ospath)
             return
-        else:
-            if hasattr(in_memory_dataset, "to_parquet"):
-                # This may be a pandas DataFrame
-                try:
-                    import pandas as pd
-                except ImportError:
-                    pd = None
 
-                if pd is not None and isinstance(in_memory_dataset, pd.DataFrame):
-                    arrow_table = pandas_to_arrow(in_memory_dataset)
+        type_string = _checkArrowCompatibleType(in_memory_dataset)
 
-        if arrow_table is None:
+        if type_string is None:
             raise ValueError(
                 f"Unsupported type {get_full_type_name(in_memory_dataset)} of "
                 "inMemoryDataset for ParquetFormatter."
             )
+
+        if type_string == "arrow":
+            arrow_table = in_memory_dataset
+        elif type_string == "astropy":
+            arrow_table = astropy_to_arrow(in_memory_dataset)
+        elif type_string == "numpy":
+            arrow_table = numpy_to_arrow(in_memory_dataset)
+        elif type_string == "numpydict":
+            arrow_table = numpy_dict_to_arrow(in_memory_dataset)
+        else:
+            arrow_table = pandas_to_arrow(in_memory_dataset)
 
         row_group_size = compute_row_group_size(arrow_table.schema)
 
