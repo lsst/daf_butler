@@ -1,0 +1,4 @@
+* Added ``--collections`` option to ``butler query-dataset-types`` to allow the resultant dataset types to be constrained by those that are used by specific collections.
+* Changed the ``Butler.collections`` property to be a ``ButlerCollections`` instance.
+  This object can still act as a sequence equivalent to ``ButlerCollections.defaults`` but adds new APIs for querying and manipulating collections.
+  Any methods with names starting with ``x_`` are deemed to be an experimental API that may change in the future.
