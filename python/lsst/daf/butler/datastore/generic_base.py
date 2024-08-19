@@ -35,7 +35,6 @@ import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from .._exceptions import DatasetTypeNotSupportedError
 from ..datastore._datastore import Datastore
 from .stored_file_info import StoredDatastoreItemInfo
 
@@ -53,34 +52,6 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
 
     Should always be sub-classed since key abstract methods are missing.
     """
-
-    def _validate_put_parameters(self, inMemoryDataset: object, ref: DatasetRef) -> None:
-        """Validate the supplied arguments for put.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            The dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-        """
-        storageClass = ref.datasetType.storageClass
-
-        # Sanity check
-        if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise TypeError(
-                f"Inconsistency between supplied object ({type(inMemoryDataset)}) "
-                f"and storage class type ({storageClass.pytype})"
-            )
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(
-                f"Dataset {ref} has been rejected by this datastore via configuration."
-            )
-
-        return
 
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the Datastore that a dataset can be removed.

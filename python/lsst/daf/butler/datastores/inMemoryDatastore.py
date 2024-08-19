@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
+from lsst.daf.butler._exceptions import DatasetTypeNotSupportedError
 from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig
 from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore, post_process_get
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
@@ -397,11 +398,21 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(
+                f"Dataset {ref} has been rejected by this datastore via configuration."
+            )
+
         # May need to coerce the in memory dataset to the correct
         # python type, otherwise parameters may not work.
-        inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
-
-        self._validate_put_parameters(inMemoryDataset, ref)
+        try:
+            delegate = ref.datasetType.storageClass.delegate()
+        except TypeError:
+            # TypeError is raised when a storage class doesn't have a delegate.
+            delegate = None
+        if not delegate or not delegate.can_accept(inMemoryDataset):
+            inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
 
         self.datasets[ref.id] = inMemoryDataset
         log.debug("Store %s in %s", ref, self.name)

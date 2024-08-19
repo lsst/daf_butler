@@ -63,23 +63,10 @@ from lsst.daf.butler import (
 )
 
 try:
-    from lsst.daf.butler.delegates.arrowastropy import ArrowAstropyDelegate
-except ImportError:
-    atable = None
-    pa = None
-try:
-    from lsst.daf.butler.delegates.arrownumpy import ArrowNumpyDelegate
-except ImportError:
-    np = None
-    pa = None
-try:
     from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
 except ImportError:
     pa = None
-try:
-    from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
-except ImportError:
-    pd = None
+
 try:
     from lsst.daf.butler.formatters.parquet import (
         ArrowAstropySchema,
@@ -751,10 +738,55 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.butler.put(bad_df, self.datasetType, dataId={})
 
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableLossless(self):
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-@unittest.skipUnless(pd is not None, "Cannot test InMemoryDataFrameDelegate without pandas.")
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+
+        _checkAstropyTableEquality(tab1, tab2)
+
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
+    def testWriteReadNumpyTableLossless(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
+
+        _checkNumpyTableEquality(tab1, tab2)
+
+    @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
+    def testWriteReadArrowTableLossless(self):
+        tab1 = _makeSimpleArrowTable(include_multidim=False, include_masked=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowTable")
+
+        self.assertEqual(tab1.schema, tab2.schema)
+        tab1_np = arrow_to_numpy(tab1)
+        tab2_np = arrow_to_numpy(tab2)
+        for col in tab1.column_names:
+            np.testing.assert_array_equal(tab2_np[col], tab1_np[col])
+
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy dict without numpy.")
+    def testWriteReadNumpyDictLossless(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        dict2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+
+        _checkNumpyDictEquality(dict1, dict2)
+
+
+@unittest.skipUnless(pd is not None, "Cannot test InMemoryDatastore with DataFrames without pandas.")
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
-    """Tests for InMemoryDatastore, using DataFrameDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with Dataframe."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -776,7 +808,7 @@ class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
 
     def testBadInput(self):
         df1, _ = _makeSingleIndexDataFrame()
-        delegate = DataFrameDelegate("DataFrame")
+        delegate = ArrowTableDelegate("DataFrame")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_a_dataframe")
@@ -832,7 +864,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkAstropyTableEquality(tab1, tab2)
+        _checkAstropyTableEquality(tab1, tab2)
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(tab1.dtype.names))
@@ -846,15 +878,15 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.assertEqual(schema, ArrowAstropySchema(tab1))
         # Read just some columns a few different ways.
         tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
-        self._checkAstropyTableEquality(tab1[("a", "c")], tab3)
+        _checkAstropyTableEquality(tab1[("a", "c")], tab3)
         tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
-        self._checkAstropyTableEquality(tab1[("a",)], tab4)
+        _checkAstropyTableEquality(tab1[("a",)], tab4)
         tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
-        self._checkAstropyTableEquality(tab1[("index", "a")], tab5)
+        _checkAstropyTableEquality(tab1[("index", "a")], tab5)
         tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
-        self._checkAstropyTableEquality(tab1[("ddd",)], tab6)
+        _checkAstropyTableEquality(tab1[("ddd",)], tab6)
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
-        self._checkAstropyTableEquality(tab1[("a",)], tab7)
+        _checkAstropyTableEquality(tab1[("a",)], tab7)
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -865,7 +897,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkAstropyTableEquality(tab1, tab2, has_bigendian=True)
+        _checkAstropyTableEquality(tab1, tab2, has_bigendian=True)
 
     def testAstropyTableWithMetadata(self):
         tab1 = _makeSimpleAstropyTable(include_multidim=True)
@@ -884,7 +916,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
         # This will check that the metadata is equivalent as well.
-        self._checkAstropyTableEquality(tab1, tab2)
+        _checkAstropyTableEquality(tab1, tab2)
 
     def testArrowAstropySchema(self):
         tab1 = _makeSimpleAstropyTable()
@@ -945,7 +977,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         tab2a = self.butler.get(self.datasetType, dataId={})
         tab2b = self.butler.get("astropy_parquet", dataId={})
-        self._checkAstropyTableEquality(tab2a, tab2b)
+        _checkAstropyTableEquality(tab2a, tab2b)
 
         columns2a = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         columns2b = self.butler.get("astropy_parquet.columns", dataId={})
@@ -971,7 +1003,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowTable")
 
         tab2_astropy = arrow_to_astropy(tab2)
-        self._checkAstropyTableEquality(tab1, tab2_astropy)
+        _checkAstropyTableEquality(tab1, tab2_astropy)
 
         # Check reading the columns.
         columns = tab2.schema.names
@@ -1056,7 +1088,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         df1_tab = pandas_to_astropy(df1)
 
-        self._checkAstropyTableEquality(df1_tab, tab2)
+        _checkAstropyTableEquality(df1_tab, tab2)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteAstropyReadAsNumpyTable(self):
@@ -1068,7 +1100,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         # This is tricky because it loses the units.
         tab2_astropy = atable.Table(tab2)
 
-        self._checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
+        _checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
 
         # Check reading the columns.
         columns = list(tab2.dtype.names)
@@ -1095,7 +1127,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         # This is tricky because it loses the units.
         tab2_astropy = atable.Table(tab2)
 
-        self._checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
+        _checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
 
     def testBadAstropyColumnParquet(self):
         tab1 = _makeSimpleAstropyTable()
@@ -1120,52 +1152,12 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.butler.put(bad_tab, self.datasetType, dataId={})
 
-    def _checkAstropyTableEquality(self, table1, table2, skip_units=False, has_bigendian=False):
-        """Check if two astropy tables have the same columns/values.
 
-        Parameters
-        ----------
-        table1 : `astropy.table.Table`
-        table2 : `astropy.table.Table`
-        skip_units : `bool`
-        has_bigendian : `bool`
-        """
-        if not has_bigendian:
-            self.assertEqual(table1.dtype, table2.dtype)
-        else:
-            for name in table1.dtype.names:
-                # Only check type matches, force to little-endian.
-                self.assertEqual(table1.dtype[name].newbyteorder(">"), table2.dtype[name].newbyteorder(">"))
-
-        self.assertEqual(table1.meta, table2.meta)
-        if not skip_units:
-            for name in table1.columns:
-                self.assertEqual(table1[name].unit, table2[name].unit)
-                self.assertEqual(table1[name].description, table2[name].description)
-                self.assertEqual(table1[name].format, table2[name].format)
-                # We need to check masked/regular columns after filling.
-                has_masked = False
-                if isinstance(table1[name], atable.column.MaskedColumn):
-                    c1 = table1[name].filled()
-                    has_masked = True
-                else:
-                    c1 = np.array(table1[name])
-                if has_masked:
-                    self.assertIsInstance(table2[name], atable.column.MaskedColumn)
-                    c2 = table2[name].filled()
-                else:
-                    self.assertFalse(isinstance(table2[name], atable.column.MaskedColumn))
-                    c2 = np.array(table2[name])
-                np.testing.assert_array_equal(c1, c2)
-                # If we have a masked column then we test the underlying data.
-                if has_masked:
-                    np.testing.assert_array_equal(np.array(c1), np.array(c2))
-                    np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
-
-
-@unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
+@unittest.skipUnless(atable is not None, "Cannot test InMemoryDatastore with AstropyTable without astropy.")
 class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase):
-    """Tests for InMemoryDatastore, using ArrowAstropyDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    AstropyTable.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -1179,7 +1171,7 @@ class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase)
 
     def testBadInput(self):
         tab1 = _makeSimpleAstropyTable()
-        delegate = ArrowAstropyDelegate("ArrowAstropy")
+        delegate = ArrowTableDelegate("ArrowAstropy")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_an_astropy_table")
@@ -1221,7 +1213,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyTableEquality(tab1, tab2)
+        _checkNumpyTableEquality(tab1, tab2)
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(tab1.dtype.names))
@@ -1235,9 +1227,9 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.assertEqual(schema, ArrowNumpySchema(tab1.dtype))
         # Read just some columns a few different ways.
         tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
-        self._checkNumpyTableEquality(tab1[["a", "c"]], tab3)
+        _checkNumpyTableEquality(tab1[["a", "c"]], tab3)
         tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "a",
@@ -1246,9 +1238,9 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             tab4,
         )
         tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
-        self._checkNumpyTableEquality(tab1[["index", "a"]], tab5)
+        _checkNumpyTableEquality(tab1[["index", "a"]], tab5)
         tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "ddd",
@@ -1257,7 +1249,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             tab6,
         )
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
-        self._checkNumpyTableEquality(
+        _checkNumpyTableEquality(
             tab1[
                 [
                     "a",
@@ -1275,7 +1267,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyTableEquality(tab1, tab2, has_bigendian=True)
+        _checkNumpyTableEquality(tab1, tab2, has_bigendian=True)
 
     def testArrowNumpySchema(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1317,7 +1309,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
         tab2_numpy = arrow_to_numpy(tab2)
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
         # Check reading the columns.
         columns = tab2.schema.names
@@ -1372,7 +1364,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
         tab2_numpy = tab2.as_array()
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
         # Check reading the columns.
         columns = list(tab2.columns.keys())
@@ -1397,7 +1389,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
         tab2_numpy = _numpy_dict_to_numpy(tab2)
 
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
     def testBadNumpyColumnParquet(self):
         tab1 = _makeSimpleAstropyTable()
@@ -1426,28 +1418,22 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.butler.put(bad_tab_np, self.datasetType, dataId={})
 
-    def _checkNumpyTableEquality(self, table1, table2, has_bigendian=False):
-        """Check if two numpy tables have the same columns/values
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableLossless(self):
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-        Parameters
-        ----------
-        table1 : `numpy.ndarray`
-        table2 : `numpy.ndarray`
-        has_bigendian : `bool`
-        """
-        self.assertEqual(table1.dtype.names, table2.dtype.names)
-        for name in table1.dtype.names:
-            if not has_bigendian:
-                self.assertEqual(table1.dtype[name], table2.dtype[name])
-            else:
-                # Only check type matches, force to little-endian.
-                self.assertEqual(table1.dtype[name].newbyteorder(">"), table2.dtype[name].newbyteorder(">"))
-        self.assertTrue(np.all(table1 == table2))
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+
+        _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
+@unittest.skipUnless(np is not None, "Cannot test ImMemoryDatastore with Numpy table without numpy.")
 class InMemoryArrowNumpyDelegateTestCase(ParquetFormatterArrowNumpyTestCase):
-    """Tests for InMemoryDatastore, using ArrowNumpyDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    Numpy table.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -1457,7 +1443,7 @@ class InMemoryArrowNumpyDelegateTestCase(ParquetFormatterArrowNumpyTestCase):
 
     def testBadInput(self):
         tab1 = _makeSimpleNumpyTable()
-        delegate = ArrowNumpyDelegate("ArrowNumpy")
+        delegate = ArrowTableDelegate("ArrowNumpy")
 
         with self.assertRaises(ValueError):
             delegate.handleParameters(inMemoryDataset="not_a_numpy_table")
@@ -1674,12 +1660,12 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
         # Read back out as an astropy table.
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
-        self._checkAstropyTableEquality(tab1, tab2)
+        _checkAstropyTableEquality(tab1, tab2)
 
         # Read back out as an arrow table, convert to astropy table.
         atab3 = self.butler.get(self.datasetType, dataId={})
         tab3 = arrow_to_astropy(atab3)
-        self._checkAstropyTableEquality(tab1, tab3)
+        _checkAstropyTableEquality(tab1, tab3)
 
         # Check reading the columns.
         columns = list(tab2.columns.keys())
@@ -1717,12 +1703,12 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
         # Read back out as a numpy table.
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
-        self._checkNumpyTableEquality(tab1, tab2)
+        _checkNumpyTableEquality(tab1, tab2)
 
         # Read back out as an arrow table, convert to numpy table.
         atab3 = self.butler.get(self.datasetType, dataId={})
         tab3 = arrow_to_numpy(atab3)
-        self._checkNumpyTableEquality(tab1, tab3)
+        _checkNumpyTableEquality(tab1, tab3)
 
         # Check reading the columns.
         columns = list(tab2.dtype.names)
@@ -1746,55 +1732,20 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
         tab2_numpy = _numpy_dict_to_numpy(tab2)
-        self._checkNumpyTableEquality(tab1, tab2_numpy)
+        _checkNumpyTableEquality(tab1, tab2_numpy)
 
-    def _checkAstropyTableEquality(self, table1, table2):
-        """Check if two astropy tables have the same columns/values
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableLossless(self):
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-        Parameters
-        ----------
-        table1 : `astropy.table.Table`
-        table2 : `astropy.table.Table`
-        """
-        self.assertEqual(table1.dtype, table2.dtype)
-        for name in table1.columns:
-            self.assertEqual(table1[name].unit, table2[name].unit)
-            self.assertEqual(table1[name].description, table2[name].description)
-            self.assertEqual(table1[name].format, table2[name].format)
-            # We need to check masked/regular columns after filling.
-            has_masked = False
-            if isinstance(table1[name], atable.column.MaskedColumn):
-                c1 = table1[name].filled()
-                has_masked = True
-            else:
-                c1 = np.array(table1[name])
-            if has_masked:
-                self.assertIsInstance(table2[name], atable.column.MaskedColumn)
-                c2 = table2[name].filled()
-            else:
-                self.assertFalse(isinstance(table2[name], atable.column.MaskedColumn))
-                c2 = np.array(table2[name])
-            np.testing.assert_array_equal(c1, c2)
-            # If we have a masked column then we test the underlying data.
-            if has_masked:
-                np.testing.assert_array_equal(np.array(c1), np.array(c2))
-                np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
+        self.butler.put(tab1, self.datasetType, dataId={})
 
-    def _checkNumpyTableEquality(self, table1, table2):
-        """Check if two numpy tables have the same columns/values
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
 
-        Parameters
-        ----------
-        table1 : `numpy.ndarray`
-        table2 : `numpy.ndarray`
-        """
-        self.assertEqual(table1.dtype.names, table2.dtype.names)
-        for name in table1.dtype.names:
-            self.assertEqual(table1.dtype[name], table2.dtype[name])
-        self.assertTrue(np.all(table1 == table2))
+        _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(pa is not None, "Cannot test InMemoryArrowTableDelegate without pyarrow.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with ArroWTable without pyarrow.")
 class InMemoryArrowTableDelegateTestCase(ParquetFormatterArrowTableTestCase):
     """Tests for InMemoryDatastore, using ArrowTableDelegate."""
 
@@ -1861,7 +1812,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         self.butler.put(dict1, self.datasetType, dataId={})
         # Read the whole table.
         dict2 = self.butler.get(self.datasetType, dataId={})
-        self._checkNumpyDictEquality(dict1, dict2)
+        _checkNumpyDictEquality(dict1, dict2)
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(dict1.keys()))
@@ -1876,19 +1827,19 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         # Read just some columns a few different ways.
         tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
         subdict = {key: dict1[key] for key in ["a", "c"]}
-        self._checkNumpyDictEquality(subdict, tab3)
+        _checkNumpyDictEquality(subdict, tab3)
         tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
         subdict = {key: dict1[key] for key in ["a"]}
-        self._checkNumpyDictEquality(subdict, tab4)
+        _checkNumpyDictEquality(subdict, tab4)
         tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
         subdict = {key: dict1[key] for key in ["index", "a"]}
-        self._checkNumpyDictEquality(subdict, tab5)
+        _checkNumpyDictEquality(subdict, tab5)
         tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
         subdict = {key: dict1[key] for key in ["ddd"]}
-        self._checkNumpyDictEquality(subdict, tab6)
+        _checkNumpyDictEquality(subdict, tab6)
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         subdict = {key: dict1[key] for key in ["a"]}
-        self._checkNumpyDictEquality(subdict, tab7)
+        _checkNumpyDictEquality(subdict, tab7)
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -1904,7 +1855,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
 
         tab2_dict = arrow_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     @unittest.skipUnless(pd is not None, "Cannot test reading as a dataframe without pandas.")
     def testWriteNumpyDictReadAsDataFrame(self):
@@ -1934,7 +1885,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
         tab2_dict = _astropy_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     def testWriteNumpyDictReadAsNumpyTable(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1945,7 +1896,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
         tab2_dict = _numpy_to_numpy_dict(tab2)
 
-        self._checkNumpyDictEquality(dict1, tab2_dict)
+        _checkNumpyDictEquality(dict1, tab2_dict)
 
     def testWriteNumpyDictBad(self):
         dict1 = {"a": 4, "b": np.ndarray([1])}
@@ -1964,24 +1915,23 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.butler.put(dict4, self.datasetType, dataId={})
 
-    def _checkNumpyDictEquality(self, dict1, dict2):
-        """Check if two numpy dicts have the same columns/values.
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableLossless(self):
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-        Parameters
-        ----------
-        dict1 : `dict` [`str`, `np.ndarray`]
-        dict2 : `dict` [`str`, `np.ndarray`]
-        """
-        self.assertEqual(set(dict1.keys()), set(dict2.keys()))
-        for name in dict1:
-            self.assertEqual(dict1[name].dtype, dict2[name].dtype)
-            self.assertTrue(np.all(dict1[name] == dict2[name]))
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+
+        _checkAstropyTableEquality(tab1, tab2)
 
 
-@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
-@unittest.skipUnless(pa is not None, "Cannot test ParquetFormatterArrowNumpy without pyarrow.")
+@unittest.skipUnless(np is not None, "Cannot test InMemoryDatastore with NumpyDict without numpy.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with NumpyDict without pyarrow.")
 class InMemoryNumpyDictDelegateTestCase(ParquetFormatterArrowNumpyDictTestCase):
-    """Tests for InMemoryDatastore, using ArrowNumpyDictDelegate."""
+    """Tests for InMemoryDatastore, using ArrowTableDelegate with
+    Numpy dict.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -2152,7 +2102,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         self.assertEqual(np_schema2, np_schema1)
 
 
-@unittest.skipUnless(pa is not None, "Cannot test InMemoryArrowSchemaDelegate without pyarrow.")
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryDatastore with ArrowSchema without pyarrow.")
 class InMemoryArrowSchemaDelegateTestCase(ParquetFormatterArrowSchemaTestCase):
     """Tests for InMemoryDatastore and ArrowSchema."""
 
@@ -2210,6 +2160,84 @@ class ComputeRowGroupSizeTestCase(unittest.TestCase):
         row_group_size = compute_row_group_size(arrowTable.schema)
 
         self.assertGreater(row_group_size, 1_000_000)
+
+
+def _checkAstropyTableEquality(table1, table2, skip_units=False, has_bigendian=False):
+    """Check if two astropy tables have the same columns/values.
+
+    Parameters
+    ----------
+    table1 : `astropy.table.Table`
+    table2 : `astropy.table.Table`
+    skip_units : `bool`
+    has_bigendian : `bool`
+    """
+    if not has_bigendian:
+        assert table1.dtype == table2.dtype
+    else:
+        for name in table1.dtype.names:
+            # Only check type matches, force to little-endian.
+            assert table1.dtype[name].newbyteorder(">") == table2.dtype[name].newbyteorder(">")
+
+    assert table1.meta == table2.meta
+    if not skip_units:
+        for name in table1.columns:
+            assert table1[name].unit == table2[name].unit
+            assert table1[name].description == table2[name].description
+            assert table1[name].format == table2[name].format
+
+    for name in table1.columns:
+        # We need to check masked/regular columns after filling.
+        has_masked = False
+        if isinstance(table1[name], atable.column.MaskedColumn):
+            c1 = table1[name].filled()
+            has_masked = True
+        else:
+            c1 = np.array(table1[name])
+        if has_masked:
+            assert isinstance(table2[name], atable.column.MaskedColumn)
+            c2 = table2[name].filled()
+        else:
+            assert not isinstance(table2[name], atable.column.MaskedColumn)
+            c2 = np.array(table2[name])
+        np.testing.assert_array_equal(c1, c2)
+        # If we have a masked column then we test the underlying data.
+        if has_masked:
+            np.testing.assert_array_equal(np.array(c1), np.array(c2))
+            np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
+
+
+def _checkNumpyTableEquality(table1, table2, has_bigendian=False):
+    """Check if two numpy tables have the same columns/values
+
+    Parameters
+    ----------
+    table1 : `numpy.ndarray`
+    table2 : `numpy.ndarray`
+    has_bigendian : `bool`
+    """
+    assert table1.dtype.names == table2.dtype.names
+    for name in table1.dtype.names:
+        if not has_bigendian:
+            assert table1.dtype[name] == table2.dtype[name]
+        else:
+            # Only check type matches, force to little-endian.
+            assert table1.dtype[name].newbyteorder(">") == table2.dtype[name].newbyteorder(">")
+        assert np.all(table1 == table2)
+
+
+def _checkNumpyDictEquality(dict1, dict2):
+    """Check if two numpy dicts have the same columns/values.
+
+    Parameters
+    ----------
+    dict1 : `dict` [`str`, `np.ndarray`]
+    dict2 : `dict` [`str`, `np.ndarray`]
+    """
+    assert set(dict1.keys()) == set(dict2.keys())
+    for name in dict1:
+        assert dict1[name].dtype == dict2[name].dtype
+        assert np.all(dict1[name] == dict2[name])
 
 
 if __name__ == "__main__":
