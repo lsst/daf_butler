@@ -27,11 +27,13 @@
 
 from __future__ import annotations
 
+import datetime
 from abc import abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import astropy.time
 import sqlalchemy
 
 from .._dataset_ref import DatasetRef
@@ -331,6 +333,8 @@ class GeneralResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
             column_name = qt.ColumnSet.get_qualified_name(column.logical_table, column.field)
             if column.field == TimespanDatabaseRepresentation.NAME:
                 self.converters.append(_TimespanGeneralColumnConverter(column_name, ctx.db))
+            elif column.field == "ingest_date":
+                self.converters.append(_TimestampGeneralColumnConverter(column_name))
             else:
                 self.converters.append(_DefaultGeneralColumnConverter(column_name))
 
@@ -375,6 +379,29 @@ class _DefaultGeneralColumnConverter(_GeneralColumnConverter):
 
     def convert(self, row: sqlalchemy.Row) -> Any:
         return row._mapping[self.name]
+
+
+class _TimestampGeneralColumnConverter(_GeneralColumnConverter):
+    """Converter that transforms ``datetime`` instances into astropy Time. Only
+    ``dataset.ingest_date`` column was using native timestamps in the initial
+    schema version, and we are switching to our common nanoseconds-since-epoch
+    representation for that column in newer schema versions. For both schema
+    versions we want to return astropy time to clients.
+
+    Parameters
+    ----------
+    name : `str`
+        Column name
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def convert(self, row: sqlalchemy.Row) -> Any:
+        value = row._mapping[self.name]
+        if isinstance(value, datetime.datetime):
+            value = astropy.time.Time(value, scale="utc").tai
+        return value
 
 
 class _TimespanGeneralColumnConverter(_GeneralColumnConverter):

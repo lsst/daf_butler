@@ -381,6 +381,35 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty(), None},
             )
 
+    def test_query_ingest_date(self) -> None:
+        """Test general query returning ingest_date field."""
+        before_ingest = astropy.time.Time.now()
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+
+        # Check that returned type of ingest_date is astropy Time, must work
+        # for schema versions 1 and 2 of datasets manager.
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", "imported_g")
+            rows = list(query.general(dimensions, dataset_fields={"flat": ...}))
+            self.assertEqual(len(rows), 3)
+            for row in rows:
+                self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
+
+        # Check that WHERE accepts astropy time
+        with butler._query() as query:
+            query = query.join_dataset_search("flat", "imported_g")
+            query1 = query.where("flat.ingest_date < before_ingest", bind={"before_ingest": before_ingest})
+            rows = list(query1.general(dimensions))
+            self.assertEqual(len(rows), 0)
+            query1 = query.where("flat.ingest_date >= before_ingest", bind={"before_ingest": before_ingest})
+            rows = list(query1.general(dimensions))
+            self.assertEqual(len(rows), 3)
+            # Same with a time in string literal.
+            query1 = query.where(f"flat.ingest_date < T'mjd/{before_ingest.tai.mjd}'")
+            rows = list(query1.general(dimensions))
+            self.assertEqual(len(rows), 0)
+
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"
         storage, in which its values are the union of the values for it in a
