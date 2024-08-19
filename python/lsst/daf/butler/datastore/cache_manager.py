@@ -480,6 +480,54 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
         super().__init__(config, universe)
 
+        # Expiration mode. Read from config but allow override from
+        # the environment.
+        expiration_mode = self.config.get(("expiry", "mode"))
+        threshold = self.config.get(("expiry", "threshold"))
+
+        external_mode = os.environ.get("DAF_BUTLER_CACHE_EXPIRATION_MODE")
+        if external_mode:
+            if external_mode == "disabled":
+                expiration_mode = external_mode
+                threshold = 0
+            elif "=" in external_mode:
+                expiration_mode, expiration_threshold = external_mode.split("=", 1)
+                threshold = int(expiration_threshold)
+            else:
+                log.warning(
+                    "Unrecognized form (%s) for DAF_BUTLER_CACHE_EXPIRATION_MODE environment variable. "
+                    "Ignoring.",
+                    external_mode,
+                )
+        if expiration_mode is None:
+            # Force to None to avoid confusion.
+            threshold = None
+
+        allowed = ("disabled", "datasets", "age", "size", "files")
+        if expiration_mode and expiration_mode not in allowed:
+            raise ValueError(
+                f"Unrecognized value for cache expiration mode. Got {expiration_mode} but expected "
+                + ",".join(allowed)
+            )
+
+        self._expiration_mode: str | None = expiration_mode
+        self._expiration_threshold: int | None = threshold
+        if self._expiration_threshold is None and self._expiration_mode is not None:
+            raise ValueError(
+                f"Cache expiration threshold must be set for expiration mode {self._expiration_mode}"
+            )
+
+        # Files in cache, indexed by path within the cache directory.
+        self._cache_entries = CacheRegistry()
+
+        # No need for additional configuration if the cache has been disabled.
+        if self._expiration_mode == "disabled":
+            log.debug("Cache configured in disabled state.")
+            self._cache_directory: ResourcePath | None = ResourcePath(
+                "datastore_cache_disabled", forceAbsolute=False, forceDirectory=True
+            )
+            return
+
         # Set cache directory if it pre-exists, else defer creation until
         # requested. Allow external override from environment.
         root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY") or self.config.get("root")
@@ -510,34 +558,11 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # Default decision to for whether a dataset should be cached.
         self._caching_default = self.config.get("default", False)
 
-        # Expiration mode. Read from config but allow override from
-        # the environment.
-        expiration_mode = self.config.get(("expiry", "mode"))
-        threshold = self.config.get(("expiry", "threshold"))
-
-        external_mode = os.environ.get("DAF_BUTLER_CACHE_EXPIRATION_MODE")
-        if external_mode and "=" in external_mode:
-            expiration_mode, expiration_threshold = external_mode.split("=", 1)
-            threshold = int(expiration_threshold)
-        if expiration_mode is None:
-            # Force to None to avoid confusion.
-            threshold = None
-
-        self._expiration_mode: str | None = expiration_mode
-        self._expiration_threshold: int | None = threshold
-        if self._expiration_threshold is None and self._expiration_mode is not None:
-            raise ValueError(
-                f"Cache expiration threshold must be set for expiration mode {self._expiration_mode}"
-            )
-
         log.debug(
             "Cache configuration:\n- root: %s\n- expiration mode: %s",
             self._cache_directory if self._cache_directory else "tmpdir",
             f"{self._expiration_mode}={self._expiration_threshold}" if self._expiration_mode else "disabled",
         )
-
-        # Files in cache, indexed by path within the cache directory.
-        self._cache_entries = CacheRegistry()
 
     @property
     def cache_directory(self) -> ResourcePath:
@@ -625,6 +650,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         # Docstring inherited
+        if self._expiration_mode == "disabled":
+            return False
+
         matchName: LookupKey | str = f"{entity} (via default)"
         should_cache = self._caching_default
 
@@ -662,6 +690,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> ResourcePath | None:
         # Docstring inherited
+        if self._expiration_mode == "disabled":
+            return None
         if not self.should_be_cached(ref):
             return None
 
@@ -696,6 +726,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     @contextlib.contextmanager
     def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[ResourcePath | None]:
         # Docstring inherited
+        if self._expiration_mode == "disabled":
+            yield None
+            return
+
         # Short circuit this if the cache directory has not been created yet.
         if self._cache_directory is None:
             yield None
@@ -810,6 +844,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def scan_cache(self) -> None:
         """Scan the cache directory and record information about files."""
+        if self._expiration_mode == "disabled":
+            return
+
         found = set()
         for file in ResourcePath.findFileResources([self.cache_directory]):
             assert isinstance(file, ResourcePath), "Unexpectedly did not get ResourcePath from iterator"
@@ -865,6 +902,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         This method does not force the cache to be re-scanned and so can miss
         cached datasets that have recently been written by other processes.
         """
+        if self._expiration_mode == "disabled":
+            return False
         if self._cache_directory is None:
             return False
         if self.file_count == 0:
@@ -1002,6 +1041,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         return sorted(self._cache_entries, key=_sort_by_time)
 
     def __str__(self) -> str:
+        if self._expiration_mode == "disabled":
+            return f"""{type(self).__name__}(disabled)"""
         cachedir = self._cache_directory if self._cache_directory else "<tempdir>"
         return (
             f"{type(self).__name__}@{cachedir} ({self._expiration_mode}={self._expiration_threshold},"

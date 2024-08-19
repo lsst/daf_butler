@@ -1896,6 +1896,18 @@ cached:
         self.assertExpiration(cache_manager, 10, 6)
         self.assertIn(f"{mode}={threshold}", str(cache_manager))
 
+    def testDisabledCache(self) -> None:
+        threshold = 0
+        mode = "disabled"
+        config_str = self._expiration_config(mode, threshold)
+        cache_manager = self._make_cache_manager(config_str)
+        for uri, ref in zip(self.files, self.refs, strict=True):
+            self.assertFalse(cache_manager.should_be_cached(ref))
+            self.assertIsNone(cache_manager.move_to_cache(uri, ref))
+            self.assertFalse(cache_manager.known_to_cache(ref))
+            with cache_manager.find_in_cache(ref, ".txt") as found:
+                self.assertIsNone(found, msg=f"{cache_manager}")
+
     def assertExpiration(
         self, cache_manager: DatastoreCacheManager, n_datasets: int, n_retained: int
     ) -> None:
