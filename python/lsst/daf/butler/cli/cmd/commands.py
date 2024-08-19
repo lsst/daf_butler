@@ -439,6 +439,11 @@ def query_collections(*args: Any, **kwargs: Any) -> None:
     "dataset types to return."
 )
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
+@collections_option(
+    help="Constrain the resulting dataset types by these collections. "
+    "This constraint does not say that a dataset of this type is definitely present, "
+    "solely that one may have been present at some point."
+)
 @options_file_option()
 def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
