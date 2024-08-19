@@ -384,7 +384,7 @@ class ButlerCollections(ABC, Sequence):
         ------
         lsst.daf.butler.registry.MissingCollectionError
             Raised if no collection with the given name exists.
-        sqlalchemy.exc.IntegrityError
+        lsst.daf.butler.registry.OrphanedRecordError
             Raised if the database rows associated with the collection are
             still referenced by some other table, such as a dataset in a
             datastore (for `~CollectionType.RUN` collections only) or a

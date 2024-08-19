@@ -31,10 +31,12 @@ __all__ = ("DirectButlerCollections",)
 
 from collections.abc import Iterable, Sequence, Set
 
+import sqlalchemy
 from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
+from ..registry._exceptions import OrphanedRecordError
 from ..registry.interfaces import ChainedCollectionRecord
 from ..registry.sql_registry import SqlRegistry
 
@@ -151,4 +153,7 @@ class DirectButlerCollections(ButlerCollections):
         return self._registry.registerCollection(name, type, doc)
 
     def x_remove(self, name: str) -> None:
-        self._registry.removeCollection(name)
+        try:
+            self._registry.removeCollection(name)
+        except sqlalchemy.exc.IntegrityError as e:
+            raise OrphanedRecordError(f"Datasets in run {name} are still referenced elsewhere.") from e
