@@ -35,7 +35,7 @@ from unittest.mock import patch
 import lsst.daf.butler.registry.sql_registry
 import lsst.daf.butler.script
 from astropy.table import Table
-from lsst.daf.butler import CollectionType
+from lsst.daf.butler import CollectionInfo, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_askContinueMsg,
@@ -400,9 +400,9 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registry.sql_registry.SqlRegistry,
-        "getCollectionType",
-        side_effect=lambda x: CollectionType.RUN,
+        lsst.daf.butler.direct_butler._direct_butler_collections.DirectButlerCollections,
+        "get_info",
+        side_effect=lambda x: CollectionInfo(name="run", type=CollectionType.RUN),
     )
     def test_purgeImpliedArgs(self, mockGetCollectionType):
         """Verify the arguments implied by --purge.
@@ -432,9 +432,9 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registry.sql_registry.SqlRegistry,
-        "getCollectionType",
-        side_effect=lambda x: CollectionType.RUN,
+        lsst.daf.butler.direct_butler._direct_butler_collections.DirectButlerCollections,
+        "get_info",
+        side_effect=lambda x: CollectionInfo(name="run", type=CollectionType.RUN),
     )
     def test_purgeImpliedArgsWithCollections(self, mockGetCollectionType):
         """Verify the arguments implied by --purge, with a COLLECTIONS."""
@@ -457,9 +457,9 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registry.sql_registry.SqlRegistry,
-        "getCollectionType",
-        side_effect=lambda x: CollectionType.TAGGED,
+        lsst.daf.butler.direct_butler._direct_butler_collections.DirectButlerCollections,
+        "get_info",
+        side_effect=lambda x: CollectionInfo(name="myTaggedCollection", type=CollectionType.TAGGED),
     )
     def test_purgeOnNonRunCollection(self, mockGetCollectionType):
         """Verify calling run on a non-run collection fails with expected
@@ -472,7 +472,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exPruneDatasetsCallArgs=None,
             exQueryDatasetsCallArgs=None,
             exGetTablesCalled=False,
-            exMsgs=(pruneDatasets_errPruneOnNotRun.format(collection=collectionName)),
+            exMsgs=(pruneDatasets_errPruneOnNotRun.format(collection=collectionName),),
             exPruneDatasetsExitCode=1,
         )
 

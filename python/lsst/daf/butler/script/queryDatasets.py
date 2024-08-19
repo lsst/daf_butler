@@ -27,9 +27,9 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -41,6 +41,9 @@ from ..cli.utils import sortAstropyTable
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
     from lsst.resources import ResourcePath
+
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -205,6 +208,7 @@ class QueryDatasets:
 
         return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
 
+    # @profile
     def getDatasets(self) -> Iterator[DatasetRef]:
         """Get the datasets as a list.
 
@@ -214,16 +218,36 @@ class QueryDatasets:
             Dataset references matching the given query criteria.
         """
         datasetTypes = self._dataset_type_glob or ...
-        query_collections: Iterable[str] | EllipsisType = self._collections_wildcard or ...
+        query_collections: Iterable[str] = self._collections_wildcard or ["*"]
 
         # Currently need to use old interface to get all the matching
         # dataset types and loop over the dataset types executing a new
         # query each time.
-        dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
+        dataset_types: set[str] = {d.name for d in self.butler.registry.queryDatasetTypes(datasetTypes)}
+        n_dataset_types = len(dataset_types)
         with self.butler._query() as query:
-            query_collections = self.butler.registry.queryCollections(query_collections)
+            # Expand the collections query and include summary information.
+            query_collections_info = self.butler.collections.x_query_info(
+                query_collections, include_summary=True
+            )
+            query_collections = [c.name for c in query_collections_info]
+
+            # Only iterate over dataset types that are relevant for the query.
+            dataset_types = set(
+                self.butler.collections._filter_dataset_types(dataset_types, query_collections_info)
+            )
+
+            if (n_filtered := len(dataset_types)) != n_dataset_types:
+                _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
+            elif n_dataset_types == 0:
+                _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
+            else:
+                _LOG.info(
+                    "Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s"
+                )
+
             # Accumulate over dataset types.
-            for dt in dataset_types:
+            for dt in sorted(dataset_types):
                 results = query.datasets(dt, collections=query_collections, find_first=self._find_first)
                 if self._where:
                     results = results.where(self._where)

@@ -168,12 +168,23 @@ def queryDataIds(
     with butler._query() as query:
         if datasets:
             # Need to constrain results based on dataset type and collection.
-            query_collections = collections or ...
+            query_collections = collections or "*"
+            collections_info = butler.collections.x_query_info(query_collections, include_summary=True)
+            expanded_collections = [info.name for info in collections_info]
+            filtered_dataset_types = list(
+                butler.collections._filter_dataset_types([dt.name for dt in dataset_types], collections_info)
+            )
+            if not filtered_dataset_types:
+                return (
+                    None,
+                    f"No datasets of type {datasets!r} existed in the specified "
+                    f"collections {','.join(expanded_collections)}.",
+                )
 
-            expanded_collections = butler.registry.queryCollections(query_collections)
-
-            sub_query = query.join_dataset_search(dataset_types.pop(0), collections=expanded_collections)
-            for dt in dataset_types:
+            sub_query = query.join_dataset_search(
+                filtered_dataset_types.pop(0), collections=expanded_collections
+            )
+            for dt in filtered_dataset_types:
                 sub_query = sub_query.join_dataset_search(dt, collections=expanded_collections)
 
             results = sub_query.data_ids(dimensions)

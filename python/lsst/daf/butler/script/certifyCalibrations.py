@@ -70,13 +70,14 @@ def certifyCalibrations(
         collection, instead of just the most recent one.
     """
     butler = Butler.from_config(repo, writeable=True, without_datastore=True)
-    registry = butler.registry
     timespan = Timespan(
         begin=astropy.time.Time(begin_date, scale="tai") if begin_date is not None else None,
         end=astropy.time.Time(end_date, scale="tai") if end_date is not None else None,
     )
-    if not search_all_inputs and registry.getCollectionType(input_collection) is CollectionType.CHAINED:
-        input_collection = next(iter(registry.getCollectionChain(input_collection)))
+    if not search_all_inputs:
+        collection_info = butler.collections.get_info(input_collection)
+        if collection_info.type is CollectionType.CHAINED:
+            input_collection = collection_info.children[0]
 
     with butler._query() as query:
         results = query.datasets(dataset_type_name, collections=input_collection)
@@ -86,5 +87,5 @@ def certifyCalibrations(
             raise RuntimeError(
                 f"No inputs found for dataset {dataset_type_name} in {input_collection}. {explanation}"
             )
-    registry.registerCollection(output_collection, type=CollectionType.CALIBRATION)
-    registry.certify(output_collection, refs, timespan)
+    butler.collections.register(output_collection, type=CollectionType.CALIBRATION)
+    butler.registry.certify(output_collection, refs, timespan)

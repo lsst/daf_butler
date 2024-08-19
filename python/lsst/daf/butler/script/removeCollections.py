@@ -41,7 +41,7 @@ from ..registry import MissingCollectionError
 class RemoveCollectionResult:
     """Container to return to the cli command; holds tables describing the
     collections that will be removed, as well as any found RUN collections
-    which can not be removed by this command. Also holds the callback funciton
+    which can not be removed by this command. Also holds the callback function
     to execute the remove upon user confirmation.
     """
 
@@ -73,7 +73,7 @@ def _getCollectionInfo(
     Parameters
     ----------
     repo : `str`
-        The URI to the repostiory.
+        The URI to the repository.
     collection : `str`
         The collection string to search for. Same as the `expression`
         argument to `registry.queryCollections`.
@@ -85,30 +85,17 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo, without_datastore=True)
     try:
-        names = sorted(
-            butler.registry.queryCollections(
-                collectionTypes=frozenset(
-                    (
-                        CollectionType.RUN,
-                        CollectionType.TAGGED,
-                        CollectionType.CHAINED,
-                        CollectionType.CALIBRATION,
-                    )
-                ),
-                expression=collection,
-                includeChains=True,
-            )
-        )
+        collections_info = sorted(butler.collections.x_query_info(collection, include_chains=True))
     except MissingCollectionError:
-        names = []
+        # Hide the error and act like no collections should be removed.
+        collections_info = []
     collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
     runCollections = Table(names=("Collection",), dtype=(str,))
-    for name in names:
-        collectionType = butler.registry.getCollectionType(name).name
-        if collectionType == "RUN":
-            runCollections.add_row((name,))
+    for collection_info in collections_info:
+        if collection_info.type == CollectionType.RUN:
+            runCollections.add_row((collection_info.name,))
         else:
-            collections.add_row((name, collectionType))
+            collections.add_row((collection_info.name, collection_info.type.name))
 
     return CollectionInfo(collections, runCollections)
 
@@ -138,7 +125,7 @@ def removeCollections(
         """Perform the prune collection step."""
         butler = Butler.from_config(repo, writeable=True, without_datastore=True)
         for name in collections["Collection"]:
-            butler.registry.removeCollection(name)
+            butler.collections.x_remove(name)
 
     result = RemoveCollectionResult(
         onConfirmation=partial(_doRemove, collectionInfo.nonRunCollections),

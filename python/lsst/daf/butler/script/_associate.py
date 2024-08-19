@@ -60,7 +60,7 @@ def associate(
     """
     butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
-    butler.registry.registerCollection(collection, CollectionType.TAGGED)
+    butler.collections.register(collection, CollectionType.TAGGED)
 
     results = QueryDatasets(
         butler=butler,

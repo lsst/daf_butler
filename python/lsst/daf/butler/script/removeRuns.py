@@ -87,29 +87,26 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo)
     try:
-        collectionNames = list(
-            butler.registry.queryCollections(
-                collectionTypes=frozenset((CollectionType.RUN,)),
-                expression=collection,
-                includeChains=False,
-            )
+        collections = butler.collections.x_query_info(
+            collection, CollectionType.RUN, include_chains=False, include_parents=True, include_summary=True
         )
     except MissingCollectionError:
-        collectionNames = []
+        # Act as if no collections matched.
+        collections = []
+    dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(...)]
+    dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections))
 
-    dataset_types = butler.registry.queryDatasetTypes(...)
     runs = []
     datasets: dict[str, int] = defaultdict(int)
-    for collectionName in collectionNames:
-        assert butler.registry.getCollectionType(collectionName).name == "RUN"
-        parents = butler.registry.getCollectionParentChains(collectionName)
-        runs.append(RemoveRun(collectionName, list(parents)))
+    for collection_info in collections:
+        assert collection_info.type == CollectionType.RUN and collection_info.parents is not None
+        runs.append(RemoveRun(collection_info.name, list(collection_info.parents)))
         with butler._query() as query:
             for dt in dataset_types:
-                results = query.datasets(dt, collections=collectionName)
+                results = query.datasets(dt, collections=collection_info.name)
                 count = results.count(exact=False)
                 if count:
-                    datasets[dt.name] += count
+                    datasets[dt] += count
 
     return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 
@@ -140,7 +137,7 @@ def removeRuns(
         with butler.transaction():
             for run in runs:
                 for parent in run.parents:
-                    butler.collection_chains.remove_from_chain(parent, run.name)
+                    butler.collections.remove_from_chain(parent, run.name)
             butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(

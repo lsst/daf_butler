@@ -223,8 +223,8 @@ def pruneDatasets(
     # If purging, verify that the collection to purge is RUN type collection.
     if purge_run:
         butler = Butler.from_config(repo, without_datastore=True)
-        collectionType = butler.registry.getCollectionType(purge_run)
-        if collectionType is not CollectionType.RUN:
+        collection_info = butler.collections.get_info(purge_run)
+        if collection_info.type is not CollectionType.RUN:
             return PruneDatasetsResult(
                 state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN, errDict=dict(collection=purge_run)
             )

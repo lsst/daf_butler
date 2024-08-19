@@ -27,22 +27,20 @@
 
 from __future__ import annotations
 
-__all__ = ("DirectButlerCollections",)
+__all__ = ("RemoteButlerCollections",)
 
 from collections.abc import Iterable, Sequence, Set
-
-import sqlalchemy
-from lsst.utils.iteration import ensure_iterable
+from typing import TYPE_CHECKING
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
-from ..registry._exceptions import OrphanedRecordError
-from ..registry.interfaces import ChainedCollectionRecord
-from ..registry.sql_registry import SqlRegistry
+
+if TYPE_CHECKING:
+    from ._registry import RemoteButlerRegistry
 
 
-class DirectButlerCollections(ButlerCollections):
-    """Implementation of ButlerCollections for DirectButler.
+class RemoteButlerCollections(ButlerCollections):
+    """Implementation of ButlerCollections for RemoteButler.
 
     Parameters
     ----------
@@ -50,7 +48,7 @@ class DirectButlerCollections(ButlerCollections):
         Registry object used to work with the collections database.
     """
 
-    def __init__(self, registry: SqlRegistry):
+    def __init__(self, registry: RemoteButlerRegistry):
         self._registry = registry
 
     @property
@@ -58,46 +56,20 @@ class DirectButlerCollections(ButlerCollections):
         return self._registry.defaults.collections
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
-        return self._registry._managers.collections.extend_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def prepend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
-        return self._registry._managers.collections.prepend_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def redefine_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
-        self._registry._managers.collections.update_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
+        raise NotImplementedError("Not yet available")
 
     def remove_from_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
-        return self._registry._managers.collections.remove_from_collection_chain(
-            parent_collection_name, list(ensure_iterable(child_collection_names))
-        )
-
-    def x_query(
-        self,
-        expression: str | Iterable[str],
-        collection_types: Set[CollectionType] | CollectionType | None = None,
-        flatten_chains: bool = False,
-        include_chains: bool | None = None,
-    ) -> Sequence[str]:
-        if collection_types is None:
-            collection_types = CollectionType.all()
-        # Do not use base implementation for now to avoid the additional
-        # unused queries.
-        return self._registry.queryCollections(
-            expression,
-            collectionTypes=collection_types,
-            flattenChains=flatten_chains,
-            includeChains=include_chains,
-        )
+        raise NotImplementedError("Not yet available")
 
     def x_query_info(
         self,
@@ -108,52 +80,41 @@ class DirectButlerCollections(ButlerCollections):
         include_parents: bool = False,
         include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
+        # This should become a single call on the server in the future.
+        if collection_types is None:
+            collection_types = CollectionType.all()
+
         info = []
-        with self._registry.caching_context():
-            if collection_types is None:
-                collection_types = CollectionType.all()
-            for name in self._registry.queryCollections(
-                expression,
-                collectionTypes=collection_types,
-                flattenChains=flatten_chains,
-                includeChains=include_chains,
-            ):
-                info.append(
-                    self.get_info(name, include_parents=include_parents, include_summary=include_summary)
-                )
+        for name in self._registry.queryCollections(
+            expression,
+            collectionTypes=collection_types,
+            flattenChains=flatten_chains,
+            includeChains=include_chains,
+        ):
+            info.append(self.get_info(name, include_parents=include_parents, include_summary=include_summary))
         return info
 
     def get_info(
         self, name: str, include_parents: bool = False, include_summary: bool = False
     ) -> CollectionInfo:
-        record = self._registry.get_collection_record(name)
-        doc = self._registry.getCollectionDocumentation(name) or ""
-        children: tuple[str, ...] = tuple()
-        if record.type == CollectionType.CHAINED:
-            assert isinstance(record, ChainedCollectionRecord)
-            children = tuple(record.children)
-        parents: set[str] | None = None
-        if include_parents:
-            parents = self._registry.getCollectionParentChains(name)
+        info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
+        doc = info.doc or ""
+        children = info.children or ()
         dataset_types: Set[str] | None = None
         if include_summary:
             summary = self._registry.getCollectionSummary(name)
             dataset_types = frozenset([dt.name for dt in summary.dataset_types])
-
         return CollectionInfo(
             name=name,
-            type=record.type,
+            type=info.type,
             doc=doc,
-            parents=parents,
+            parents=info.parents,
             children=children,
             dataset_types=dataset_types,
         )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
-        return self._registry.registerCollection(name, type, doc)
+        raise NotImplementedError("Not yet available.")
 
     def x_remove(self, name: str) -> None:
-        try:
-            self._registry.removeCollection(name)
-        except sqlalchemy.exc.IntegrityError as e:
-            raise OrphanedRecordError(f"Datasets in run {name} are still referenced elsewhere.") from e
+        raise NotImplementedError("Not yet available.")

@@ -434,9 +434,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """
         butler = self.make_butler("base.yaml", "datasets.yaml")
         butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
-        butler.registry.registerCollection("empty", CollectionType.RUN)
-        butler.registry.registerCollection("chain", CollectionType.CHAINED)
-        butler.registry.setCollectionChain("chain", ["imported_g", "empty", "imported_r"])
+        butler.collections.register("empty", CollectionType.RUN)
+        butler.collections.register("chain", CollectionType.CHAINED)
+        butler.collections.redefine_chain("chain", ["imported_g", "empty", "imported_r"])
         with butler._query() as query:
             # No collections here or in defaults is an error.
             with self.assertRaises(NoDefaultCollectionError):

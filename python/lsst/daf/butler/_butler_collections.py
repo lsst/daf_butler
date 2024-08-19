@@ -27,14 +27,66 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerCollections",)
+__all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence, Set
+from typing import Any, overload
+
+from pydantic import BaseModel
+
+from ._collection_type import CollectionType
 
 
-class ButlerCollections(ABC):
+class CollectionInfo(BaseModel):
+    """Information about a single Butler collection."""
+
+    name: str
+    """Name of the collection."""
+    type: CollectionType
+    """Type of the collection."""
+    doc: str = ""
+    """Documentation string associated with this collection."""
+    children: tuple[str, ...] = tuple()
+    """Children of this collection (only if CHAINED)."""
+    parents: frozenset[str] | None = None
+    """Any parents of this collection.
+
+    `None` if the parents were not requested.
+    """
+    dataset_types: frozenset[str] | None = None
+    """Names of any dataset types associated with datasets in this collection.
+
+    `None` if no dataset type information was requested
+    """
+
+    def __lt__(self, other: Any) -> bool:
+        """Compare objects by collection name."""
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.name < other.name
+
+
+class ButlerCollections(ABC, Sequence):
     """Methods for working with collections stored in the Butler."""
+
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[str]: ...
+
+    def __getitem__(self, index: int | slice) -> str | Sequence[str]:
+        return self.defaults[index]
+
+    def __len__(self) -> int:
+        return len(self.defaults)
+
+    @property
+    @abstractmethod
+    def defaults(self) -> Sequence[str]:
+        """Collection defaults associated with this butler."""
+        raise NotImplementedError("Defaults must be implemented by a subclass")
 
     @abstractmethod
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
@@ -165,3 +217,201 @@ class ButlerCollections(ABC):
         transactions short.
         """
         raise NotImplementedError()
+
+    def x_query(
+        self,
+        expression: str | Iterable[str],
+        collection_types: Set[CollectionType] | CollectionType | None = None,
+        flatten_chains: bool = False,
+        include_chains: bool | None = None,
+    ) -> Sequence[str]:
+        """Query the butler for collections matching an expression.
+
+        **This is an experimental interface that can change at any time.**
+
+        Parameters
+        ----------
+        expression : `str` or `~collections.abc.Iterable` [ `str` ]
+            One or more collection names or globs to include in the search.
+        collection_types : `set` [`CollectionType`], `CollectionType` or `None`
+            Restrict the types of collections to be searched. If `None` all
+            collection types are searched.
+        flatten_chains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        include_chains : `bool` or `None`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections. Default is the opposite of ``flatten_chains``:
+            include either CHAINED collections or their children, but not both.
+
+        Returns
+        -------
+        collections : `~collections.abc.Sequence` [ `str` ]
+            The names of collections that match ``expression``.
+
+        Notes
+        -----
+        The order in which collections are returned is unspecified, except that
+        the children of a `~CollectionType.CHAINED` collection are guaranteed
+        to be in the order in which they are searched.  When multiple parent
+        `~CollectionType.CHAINED` collections match the same criteria, the
+        order in which the two lists appear is unspecified, and the lists of
+        children may be incomplete if a child has multiple parents.
+
+        The default implementation is a wrapper around `x_query_info`.
+        """
+        collections_info = self.x_query_info(
+            expression,
+            collection_types=collection_types,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+        )
+        return [info.name for info in collections_info]
+
+    @abstractmethod
+    def x_query_info(
+        self,
+        expression: str | Iterable[str],
+        collection_types: Set[CollectionType] | CollectionType | None = None,
+        flatten_chains: bool = False,
+        include_chains: bool | None = None,
+        include_parents: bool = False,
+        include_summary: bool = False,
+    ) -> Sequence[CollectionInfo]:
+        """Query the butler for collections matching an expression and
+        return detailed information about those collections.
+
+        **This is an experimental interface that can change at any time.**
+
+        Parameters
+        ----------
+        expression : `str` or `~collections.abc.Iterable` [ `str` ]
+            One or more collection names or globs to include in the search.
+        collection_types : `set` [`CollectionType`], `CollectionType` or `None`
+            Restrict the types of collections to be searched. If `None` all
+            collection types are searched.
+        flatten_chains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        include_chains : `bool` or `None`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections. Default is the opposite of ``flatten_chains``:
+            include either CHAINED collections or their children, but not both.
+        include_parents : `bool`, optional
+            Whether the returned information includes parents.
+        include_summary : `bool`, optional
+            Whether the returned information includes dataset type and
+            governor information for the collections.
+
+        Returns
+        -------
+        collections : `~collections.abc.Sequence` [ `CollectionInfo` ]
+            The names of collections that match ``expression``.
+
+        Notes
+        -----
+        The order in which collections are returned is unspecified, except that
+        the children of a `~CollectionType.CHAINED` collection are guaranteed
+        to be in the order in which they are searched.  When multiple parent
+        `~CollectionType.CHAINED` collections match the same criteria, the
+        order in which the two lists appear is unspecified, and the lists of
+        children may be incomplete if a child has multiple parents.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_info(
+        self, name: str, include_parents: bool = False, include_summary: bool = False
+    ) -> CollectionInfo:
+        """Obtain information for a specific collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection of interest.
+        include_parents : `bool`, optional
+           If `True` any parents of this collection will be included.
+        include_summary : `bool`, optional
+           If `True` dataset type names and governor dimensions of datasets
+           stored in this collection will be included in the result.
+
+        Returns
+        -------
+        info : `CollectionInfo`
+            Information on the requested collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
+        """Add a new collection if one with the given name does not exist.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to create.
+        type : `CollectionType`, optional
+            Enum value indicating the type of collection to create. Default
+            is to create a RUN collection.
+        doc : `str`, optional
+            Documentation string for the collection.
+
+        Returns
+        -------
+        registered : `bool`
+            Boolean indicating whether the collection was already registered
+            or was created by this call.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def x_remove(self, name: str) -> None:
+        """Remove the given collection from the registry.
+
+        **This is an experimental interface that can change at any time.**
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to remove.
+
+        Raises
+        ------
+        lsst.daf.butler.registry.MissingCollectionError
+            Raised if no collection with the given name exists.
+        lsst.daf.butler.registry.OrphanedRecordError
+            Raised if the database rows associated with the collection are
+            still referenced by some other table, such as a dataset in a
+            datastore (for `~CollectionType.RUN` collections only) or a
+            `~CollectionType.CHAINED` collection of which this collection is
+            a child.
+
+        Notes
+        -----
+        If this is a `~CollectionType.RUN` collection, all datasets and quanta
+        in it will removed from the `Registry` database.  This requires that
+        those datasets be removed (or at least trashed) from any datastores
+        that hold them first.
+
+        A collection may not be deleted as long as it is referenced by a
+        `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
+        be deleted or redefined first.
+        """
+        raise NotImplementedError()
+
+    def _filter_dataset_types(
+        self, dataset_types: Iterable[str], collections: Iterable[CollectionInfo]
+    ) -> Iterable[str]:
+        dataset_types_set = set(dataset_types)
+        collection_dataset_types: set[str] = set()
+        for info in collections:
+            if info.dataset_types is None:
+                raise RuntimeError("Can only filter by collections if include_summary was True")
+            collection_dataset_types.update(info.dataset_types)
+        dataset_types_set = dataset_types_set.intersection(collection_dataset_types)
+        return dataset_types_set

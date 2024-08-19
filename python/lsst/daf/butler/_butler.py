@@ -1422,15 +1422,17 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """Object with methods for modifying collection chains
         (`~lsst.daf.butler.ButlerCollections`).
 
-        Use of this object is preferred over `registry` wherever possible.
+        Deprecated. Replaced with ``collections`` property.
         """
         raise NotImplementedError()
 
     @property
     @abstractmethod
-    def collections(self) -> Sequence[str]:
-        """The collections to search by default, in order
-        (`~collections.abc.Sequence` [ `str` ]).
+    def collections(self) -> ButlerCollections:
+        """Object with methods for modifying and querying collections
+        (`~lsst.daf.butler.ButlerCollections`).
+
+        Use of this object is preferred over `registry` wherever possible.
         """
         raise NotImplementedError()
 

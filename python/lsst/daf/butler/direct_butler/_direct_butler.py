@@ -46,6 +46,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
+from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
@@ -296,7 +297,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             DirectButler._unpickle,
             (
                 self._config,
-                self.collections,
+                self.collections.defaults,
                 self.run,
                 dict(self._registry.defaults.dataId.required),
                 self._registry.isWriteable(),
@@ -1975,7 +1976,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     if registry := getattr(source_butler, "registry", None):
                         run_doc = registry.getCollectionDocumentation(run)
                     if not dry_run:
-                        registered = self._registry.registerRun(run, doc=run_doc)
+                        registered = self.collections.register(run, doc=run_doc)
                     else:
                         registered = True
                     handled_collections.add(run)
@@ -2149,21 +2150,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             raise ValidationError(";\n".join(messages))
 
     @property
+    @deprecated(
+        "Please use 'collections' instead. collection_chains will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def collection_chains(self) -> DirectButlerCollections:
         """Object with methods for modifying collection chains."""
         return DirectButlerCollections(self._registry)
 
     @property
-    def collections(self) -> Sequence[str]:
-        """The collections to search by default, in order
-        (`~collections.abc.Sequence` [ `str` ]).
-
-        This is an alias for ``self.registry.defaults.collections``.  It cannot
-        be set directly in isolation, but all defaults may be changed together
-        by assigning a new `RegistryDefaults` instance to
-        ``self.registry.defaults``.
-        """
-        return self._registry.defaults.collections
+    def collections(self) -> DirectButlerCollections:
+        """Object with methods for modifying and inspecting collections."""
+        return DirectButlerCollections(self._registry)
 
     @property
     def run(self) -> str | None:

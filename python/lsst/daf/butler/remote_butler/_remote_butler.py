@@ -35,6 +35,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
+from deprecated.sphinx import deprecated
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
@@ -61,6 +62,7 @@ from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, Re
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
+from ._remote_butler_collections import RemoteButlerCollections
 from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
@@ -143,9 +145,23 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return False
 
     @property
+    @deprecated(
+        "Please use 'collections' instead. collection_chains will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def collection_chains(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
-        raise NotImplementedError()
+        from ._registry import RemoteButlerRegistry
+
+        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
+
+    @property
+    def collections(self) -> ButlerCollections:
+        """Object with methods for modifying and querying collections."""
+        from ._registry import RemoteButlerRegistry
+
+        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -509,11 +525,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
-
-    @property
-    def collections(self) -> Sequence[str]:
-        # Docstring inherited.
-        return self._registry_defaults.collections
 
     @property
     def run(self) -> str | None:

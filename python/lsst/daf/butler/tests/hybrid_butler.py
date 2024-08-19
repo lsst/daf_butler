@@ -57,6 +57,7 @@ from ..queries import Query
 from ..registry import Registry
 from ..remote_butler import RemoteButler
 from ..transfers import RepoExportContext
+from .hybrid_butler_collections import HybridButlerCollections
 from .hybrid_butler_registry import HybridButlerRegistry
 
 
@@ -322,10 +323,6 @@ class HybridButler(Butler):
         return self._direct_butler.validateConfiguration(logFailures, datasetTypeNames, ignore)
 
     @property
-    def collections(self) -> Sequence[str]:
-        return self._remote_butler.collections
-
-    @property
     def run(self) -> str | None:
         return self._remote_butler.run
 
@@ -458,4 +455,8 @@ class HybridButler(Butler):
 
     @property
     def collection_chains(self) -> ButlerCollections:
-        return self._direct_butler.collection_chains
+        return HybridButlerCollections(self)
+
+    @property
+    def collections(self) -> ButlerCollections:
+        return HybridButlerCollections(self)

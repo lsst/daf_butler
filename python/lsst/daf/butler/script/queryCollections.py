@@ -32,6 +32,7 @@ from collections.abc import Iterable
 from astropy.table import Table
 
 from .._butler import Butler
+from .._butler_collections import CollectionInfo
 from .._collection_type import CollectionType
 
 
@@ -71,38 +72,36 @@ def _getTable(
         dtype=(str, str, str),
     )
     butler = Butler.from_config(repo)
-    names = sorted(
-        butler.registry.queryCollections(collectionTypes=frozenset(collection_type), expression=glob or ...)
+    collections = sorted(
+        butler.collections.x_query_info(
+            glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
+        )
     )
     if inverse:
-        for name in names:
-            type = butler.registry.getCollectionType(name)
-            parentNames = butler.registry.getCollectionParentChains(name)
-            if parentNames:
+        for info in collections:
+            if info.parents:
                 first = True
-                for parentName in sorted(parentNames):
-                    table.add_row((name if first else "", type.name if first else "", parentName))
+                for parentName in sorted(info.parents):
+                    table.add_row((info.name if first else "", info.type.name if first else "", parentName))
                     first = False
             else:
-                table.add_row((name, type.name, ""))
+                table.add_row((info.name, info.type.name, ""))
         # If none of the datasets has a parent dataset then remove the
         # description column.
         if not any(c for c in table[descriptionCol]):
             del table[descriptionCol]
     else:
-        for name in names:
-            type = butler.registry.getCollectionType(name)
-            if type == CollectionType.CHAINED:
-                children = butler.registry.getCollectionChain(name)
-                if children:
+        for info in collections:
+            if info.type == CollectionType.CHAINED:
+                if info.children:
                     first = True
-                    for child in children:
-                        table.add_row((name if first else "", type.name if first else "", child))
+                    for child in info.children:
+                        table.add_row((info.name if first else "", info.type.name if first else "", child))
                         first = False
                 else:
-                    table.add_row((name, type.name, ""))
+                    table.add_row((info.name, info.type.name, ""))
             else:
-                table.add_row((name, type.name, ""))
+                table.add_row((info.name, info.type.name, ""))
         # If there aren't any CHAINED datasets in the results then remove the
         # description column.
         if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
@@ -146,21 +145,21 @@ def _getTree(
     )
     butler = Butler.from_config(repo, without_datastore=True)
 
-    def addCollection(name: str, level: int = 0) -> None:
-        collectionType = butler.registry.getCollectionType(name)
-        table.add_row(("  " * level + name, collectionType.name))
+    def addCollection(info: CollectionInfo, level: int = 0) -> None:
+        table.add_row(("  " * level + info.name, info.type.name))
         if inverse:
-            parentNames = butler.registry.getCollectionParentChains(name)
-            for pname in sorted(parentNames):
-                addCollection(pname, level + 1)
+            assert info.parents is not None  # For mypy.
+            for pname in sorted(info.parents):
+                pinfo = butler.collections.get_info(pname, include_parents=inverse)
+                addCollection(pinfo, level + 1)
         else:
-            if collectionType == CollectionType.CHAINED:
-                childNames = butler.registry.getCollectionChain(name)
-                for name in childNames:
-                    addCollection(name, level + 1)
+            if info.type == CollectionType.CHAINED:
+                for name in info.children:
+                    cinfo = butler.collections.get_info(name)
+                    addCollection(cinfo, level + 1)
 
-    collections = butler.registry.queryCollections(
-        collectionTypes=frozenset(collection_type), expression=glob or ...
+    collections = butler.collections.x_query_info(
+        glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
     )
     for collection in sorted(collections):
         addCollection(collection)
@@ -173,14 +172,14 @@ def _getFlatten(
     collection_type: Iterable[CollectionType],
 ) -> Table:
     butler = Butler.from_config(repo)
-    collectionNames = list(
-        butler.registry.queryCollections(
-            collectionTypes=frozenset(collection_type), flattenChains=True, expression=glob or ...
+    collections = list(
+        butler.collections.x_query_info(
+            glob or "*", collection_types=frozenset(collection_type), flatten_chains=True
         )
     )
-
-    collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
-    return Table((collectionNames, collectionTypes), names=("Name", "Type"))
+    names = [c.name for c in collections]
+    types = [c.type.name for c in collections]
+    return Table((names, types), names=("Name", "Type"))
 
 
 def queryCollections(

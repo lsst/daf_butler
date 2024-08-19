@@ -1060,7 +1060,7 @@ class RegistryTests(ABC):
                     # be committed).
                     registry.insertDimensionData(dimension, dataId2)
                     checkpointReached = True
-                    # This should conflict and raise, triggerring a rollback
+                    # This should conflict and raise, triggering a rollback
                     # of the previous insertion within the same transaction
                     # context, but not the original insertion in the outer
                     # block.
@@ -2968,7 +2968,7 @@ class RegistryTests(ABC):
         # Second query should yield no results, which we should see when
         # we attempt to expand the data ID.
         query2 = registry.queryDataIds(["physical_filter"], band="h")
-        # There's no execute=False, exact=Fals test here because the behavior
+        # There's no execute=False, exact=False test here because the behavior
         # not something we want to guarantee in this case (and exact=False
         # says either answer is legal).
         self.assertFalse(query2.any(execute=True, exact=False))
@@ -3684,7 +3684,7 @@ class RegistryTests(ABC):
         else:
             raise RuntimeError("Could not find usable skypix ID for this dimension configuration.")
         # New query system does not support non-common skypix constraints
-        # and we are deprecating it to replace with region-based constrints.
+        # and we are deprecating it to replace with region-based constraints.
         # TODO: Drop this tests once we remove support for non-common skypix.
         with contextlib.suppress(NotImplementedError):
             self.assertEqual(
@@ -3895,7 +3895,7 @@ class RegistryTests(ABC):
         # against only one of the two collections.  This should work even
         # though the relation returned by queryDataIds ends with
         # iteration-engine region-filtering, because we can recognize before
-        # running the query that there is only one collecton to search and
+        # running the query that there is only one collection to search and
         # hence the (default) findFirst=True is irrelevant, and joining in the
         # dataset query commutes past the iteration-engine postprocessing.
         query1 = registry.queryDataIds(
