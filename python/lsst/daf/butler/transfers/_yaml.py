@@ -301,7 +301,7 @@ class YamlRepoImportBackend(RepoImportBackend):
     stream : `io.IO`
         A readable file-like object.
     registry : `SqlRegistry`
-        The registry datasets will be imported into.  Only used to retreive
+        The registry datasets will be imported into.  Only used to retrieve
         dataset types during construction; all write happen in `register`
         and `load`.
     """
@@ -440,7 +440,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # Must create the visit_system_membership records.
                         # But first create empty list for visits since other
                         # logic in this file depends on self.dimensions being
-                        # populated in an order consisteny with primary keys.
+                        # populated in an order consistent with primary keys.
                         self.dimensions[self.registry.dimensions["visit"]] = []
                         element = self.registry.dimensions["visit_system_membership"]
                         RecordClass = element.RecordClass
@@ -509,7 +509,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                         if not isinstance(child, str):
                             warnings.warn(
                                 f"CHAINED collection {data['name']} includes restrictions on child "
-                                "collection searches, which are no longer suppored and will be ignored.",
+                                "collection searches, which are no longer supported and will be ignored.",
                                 stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                             )
                             # Old form with dataset type restrictions only,

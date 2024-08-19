@@ -41,7 +41,7 @@ from ..registry import MissingCollectionError
 class RemoveCollectionResult:
     """Container to return to the cli command; holds tables describing the
     collections that will be removed, as well as any found RUN collections
-    which can not be removed by this command. Also holds the callback funciton
+    which can not be removed by this command. Also holds the callback function
     to execute the remove upon user confirmation.
     """
 
@@ -73,7 +73,7 @@ def _getCollectionInfo(
     Parameters
     ----------
     repo : `str`
-        The URI to the repostiory.
+        The URI to the repository.
     collection : `str`
         The collection string to search for. Same as the `expression`
         argument to `registry.queryCollections`.
