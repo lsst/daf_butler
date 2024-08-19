@@ -88,12 +88,14 @@ def _getCollectionInfo(
     butler = Butler.from_config(repo)
     try:
         collections = butler.collections.x_query_info(
-            collection, CollectionType.RUN, include_chains=False, include_parents=True
+            collection, CollectionType.RUN, include_chains=False, include_parents=True, include_summary=True
         )
     except MissingCollectionError:
         # Act as if no collections matched.
         collections = []
-    dataset_types = butler.registry.queryDatasetTypes(...)
+    dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(...)]
+    dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections))
+
     runs = []
     datasets: dict[str, int] = defaultdict(int)
     for collection_info in collections:
@@ -104,7 +106,7 @@ def _getCollectionInfo(
                 results = query.datasets(dt, collections=collection_info.name)
                 count = results.count(exact=False)
                 if count:
-                    datasets[dt.name] += count
+                    datasets[dt] += count
 
     return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 

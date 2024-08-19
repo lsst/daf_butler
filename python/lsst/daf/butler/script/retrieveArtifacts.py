@@ -90,10 +90,12 @@ def retrieveArtifacts(
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.
-    dataset_types = butler.registry.queryDatasetTypes(query_types)
+    dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(query_types)]
     refs: list[DatasetRef] = []
     with butler._query() as query:
-        expanded_collections = butler.collections.x_query(query_collections)
+        collections_info = butler.collections.x_query_info(query_collections, include_summary=True)
+        expanded_collections = [info.name for info in collections_info]
+        dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections_info))
         for dt in dataset_types:
             results = query.datasets(dt, collections=expanded_collections, find_first=find_first)
             if where:

@@ -403,3 +403,15 @@ class ButlerCollections(ABC, Sequence):
         be deleted or redefined first.
         """
         raise NotImplementedError()
+
+    def _filter_dataset_types(
+        self, dataset_types: Iterable[str], collections: Iterable[CollectionInfo]
+    ) -> Iterable[str]:
+        dataset_types_set = set(dataset_types)
+        collection_dataset_types: set[str] = set()
+        for info in collections:
+            if info.dataset_types is None:
+                raise RuntimeError("Can only filter by collections if include_summary was True")
+            collection_dataset_types.update(info.dataset_types)
+        dataset_types_set = dataset_types_set.intersection(collection_dataset_types)
+        return dataset_types_set
