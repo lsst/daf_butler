@@ -133,12 +133,10 @@ class DirectButlerCollections(ButlerCollections):
         parents: set[str] | None = None
         if include_parents:
             parents = self._registry.getCollectionParentChains(name)
-        governors: dict[str, frozenset[str]] | None = None
         dataset_types: Set[str] | None = None
         if include_summary:
             summary = self._registry.getCollectionSummary(name)
             dataset_types = frozenset([dt.name for dt in summary.dataset_types])
-            governors = {k: frozenset(v) for k, v in summary.governors.items()}
 
         return CollectionInfo(
             name=name,
@@ -147,7 +145,6 @@ class DirectButlerCollections(ButlerCollections):
             parents=parents,
             children=children,
             dataset_types=dataset_types,
-            governors=governors,
         )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:

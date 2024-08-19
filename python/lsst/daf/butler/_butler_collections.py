@@ -59,12 +59,6 @@ class CollectionInfo(BaseModel):
 
     `None` if no dataset type information was requested
     """
-    governors: dict[str, frozenset[str]] | None = None
-    """Values of any governor dimensions associated with datasets in this
-    collection.
-
-    `None` if no governor information was requested.
-    """
 
     def __lt__(self, other: Any) -> bool:
         """Compare objects by collection name."""

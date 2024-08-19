@@ -100,12 +100,10 @@ class RemoteButlerCollections(ButlerCollections):
         info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
         doc = info.doc or ""
         children = info.children or ()
-        governors: dict[str, frozenset[str]] | None = None
         dataset_types: Set[str] | None = None
         if include_summary:
             summary = self._registry.getCollectionSummary(name)
             dataset_types = frozenset([dt.name for dt in summary.dataset_types])
-            governors = {k: frozenset(v) for k, v in summary.governors.items()}
         return CollectionInfo(
             name=name,
             type=info.type,
@@ -113,7 +111,6 @@ class RemoteButlerCollections(ButlerCollections):
             parents=info.parents,
             children=children,
             dataset_types=dataset_types,
-            governors=governors,
         )
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
