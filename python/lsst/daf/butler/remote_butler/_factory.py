@@ -87,7 +87,11 @@ class RemoteButlerFactory:
         return RemoteButlerFactory(server_url)
 
     def create_butler_for_access_token(
-        self, access_token: str, *, butler_options: ButlerInstanceOptions | None = None
+        self,
+        access_token: str,
+        *,
+        butler_options: ButlerInstanceOptions | None = None,
+        use_disabled_datastore_cache: bool = True,
     ) -> RemoteButler:
         if butler_options is None:
             butler_options = ButlerInstanceOptions()
@@ -97,10 +101,14 @@ class RemoteButlerFactory:
             ),
             options=butler_options,
             cache=self._cache,
+            use_disabled_datastore_cache=use_disabled_datastore_cache,
         )
 
     def create_butler_with_credentials_from_environment(
-        self, *, butler_options: ButlerInstanceOptions | None = None
+        self,
+        *,
+        butler_options: ButlerInstanceOptions | None = None,
+        use_disabled_datastore_cache: bool = True,
     ) -> RemoteButler:
         token = get_authentication_token_from_environment(self.server_url)
         if token is None:
@@ -108,4 +116,6 @@ class RemoteButlerFactory:
                 "Attempting to connect to Butler server,"
                 " but no access credentials were found in the environment."
             )
-        return self.create_butler_for_access_token(token, butler_options=butler_options)
+        return self.create_butler_for_access_token(
+            token, butler_options=butler_options, use_disabled_datastore_cache=use_disabled_datastore_cache
+        )

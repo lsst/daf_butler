@@ -224,10 +224,13 @@ class ButlerClientServerTestCase(unittest.TestCase):
                     self.assertEqual(butler._connection.server_url, server_url)
                     self.assertEqual(butler.collections.defaults, ("collection1", "collection2"))
                     self.assertEqual(butler.run, "collection2")
+                    # A butler created this way uses the default cache config.
+                    self.assertFalse(butler._use_disabled_datastore_cache)
 
                 butler_factory = LabeledButlerFactory({"server": server_url})
                 factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
                 self.assertIsInstance(factory_created_butler, RemoteButler)
+                self.assertTrue(factory_created_butler._use_disabled_datastore_cache)
                 self.assertEqual(factory_created_butler._connection.server_url, server_url)
 
     def test_get(self):
