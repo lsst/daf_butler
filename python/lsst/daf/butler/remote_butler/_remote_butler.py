@@ -195,7 +195,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return cache.dimensions
 
     @property
-    def datastore_cache_manager(self) -> AbstractDatastoreCacheManager:
+    def _cache_manager(self) -> AbstractDatastoreCacheManager:
         """Cache manager to use when reading files from the butler."""
         # RemoteButler does not get any cache configuration from the server.
         # Read the Datastore default config (which is a FileDatastore)
@@ -204,7 +204,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # defaults for DatastoreConfig no longer include the cache.
         if self._datastore_cache_manager is None:
             datastore_config = DatastoreConfig()
-            self._datastore_cache_manager: AbstractDatastoreCacheManager
             if "cached" in datastore_config:
                 self._datastore_cache_manager = DatastoreCacheManager(
                     datastore_config["cached"], universe=self.dimensions
@@ -295,7 +294,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             ref,
             _to_file_payload(model),
             parameters=parameters,
-            cache_manager=self.datastore_cache_manager,
+            cache_manager=self._cache_manager,
         )
 
     def _get_file_info(
