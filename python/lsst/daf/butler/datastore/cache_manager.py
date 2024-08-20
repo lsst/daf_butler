@@ -49,12 +49,12 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import ItemsView, Iterable, Iterator, KeysView, ValuesView
 from random import Random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from lsst.resources import ResourcePath
 from pydantic import BaseModel, PrivateAttr
 
-from .._config import ConfigSubset
+from .._config import Config, ConfigSubset
 from .._config_support import processLookupConfigs
 from .._dataset_ref import DatasetId, DatasetRef
 
@@ -601,6 +601,44 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     @property
     def file_count(self) -> int:
         return len(self._cache_entries)
+
+    @classmethod
+    def create_disabled(cls, universe: DimensionUniverse) -> Self:
+        """Create an instance that is disabled by default but can be
+        overridden by the environment.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            The universe to use if the datastore becomes enabled via the
+            environment.
+
+        Returns
+        -------
+        cache_manager : `DatastoreCacheManager`
+            A new cache manager, that is disabled by default but might be
+            enabled if environment variables are set.
+        """
+        # It is not sufficient to set the mode to disabled, there has to be
+        # enough configuration for the caching to work when enabled. This
+        # means setting the default to true (cache everything), inheriting
+        # inherit the FileDatastore default config (which works for Rubin but
+        # doesn't allow non-Rubin deployments to cache anything, but can in
+        # theory be overridden), or allowing a parameter to be passed in here
+        # defining the cacheable section of the config. For now cache
+        # everything. Supporting a JSON environment variable defining the
+        # cacheable storage classes is also a possibility.
+        config_str = """
+cached:
+  default: true
+  cacheable:
+    irrelevant: false
+  expiry:
+    mode: disabled
+    threshold: 0
+        """
+        config = Config.fromYaml(config_str)
+        return cls(DatastoreCacheManagerConfig(config), universe)
 
     @classmethod
     def set_fallback_cache_directory_if_unset(cls) -> tuple[bool, str]:

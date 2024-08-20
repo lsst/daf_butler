@@ -1866,6 +1866,17 @@ cached:
         self.assertExpiration(cache_manager, 5, threshold + 1)
         self.assertIn(f"{mode}={threshold}", str(cache_manager))
 
+    def testCacheExpiryDatasetsFromDisabled(self) -> None:
+        threshold = 2
+        mode = "datasets"
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": f"{mode}={threshold}"},
+        ):
+            cache_manager = DatastoreCacheManager.create_disabled(universe=DimensionUniverse())
+            self.assertExpiration(cache_manager, 5, threshold + 1)
+            self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
     def testCacheExpiryDatasetsComposite(self) -> None:
         threshold = 2  # Keep 2 datasets.
         mode = "datasets"
@@ -1901,12 +1912,17 @@ cached:
         mode = "disabled"
         config_str = self._expiration_config(mode, threshold)
         cache_manager = self._make_cache_manager(config_str)
-        for uri, ref in zip(self.files, self.refs, strict=True):
-            self.assertFalse(cache_manager.should_be_cached(ref))
-            self.assertIsNone(cache_manager.move_to_cache(uri, ref))
-            self.assertFalse(cache_manager.known_to_cache(ref))
-            with cache_manager.find_in_cache(ref, ".txt") as found:
-                self.assertIsNone(found, msg=f"{cache_manager}")
+
+        for cache_manager in (
+            self._make_cache_manager(config_str),
+            DatastoreCacheManager.create_disabled(universe=DimensionUniverse()),
+        ):
+            for uri, ref in zip(self.files, self.refs, strict=True):
+                self.assertFalse(cache_manager.should_be_cached(ref))
+                self.assertIsNone(cache_manager.move_to_cache(uri, ref))
+                self.assertFalse(cache_manager.known_to_cache(ref))
+                with cache_manager.find_in_cache(ref, ".txt") as found:
+                    self.assertIsNone(found, msg=f"{cache_manager}")
 
     def assertExpiration(
         self, cache_manager: DatastoreCacheManager, n_datasets: int, n_retained: int
