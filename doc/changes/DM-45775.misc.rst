@@ -1,0 +1,2 @@
+Enabled remote butler to utilize a datastore cache.
+By default clients created using a factory method will use a disabled cache that can be enabled by an environment variable and clients created from ``Butler()`` will use a default cache configuration.
