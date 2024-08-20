@@ -56,11 +56,7 @@ from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs, DatastoreConfig
-from ..datastore.cache_manager import (
-    AbstractDatastoreCacheManager,
-    DatastoreCacheManager,
-    DatastoreDisabledCacheManager,
-)
+from ..datastore.cache_manager import AbstractDatastoreCacheManager, DatastoreCacheManager
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
@@ -100,6 +96,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     cache : `RemoteButlerCache`
         Cache of data shared between multiple RemoteButler instances connected
         to the same server.
+    use_disabled_datastore_cache : `bool`, optional
+        If `True`, a datastore cache manager will be created with a default
+        disabled state which can be enabled by the environment. If `False`
+        a cache manager will be constructed from the default local
+        configuration, likely caching by default but only specific storage
+        classes.
 
     Notes
     -----
@@ -112,6 +114,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _cache: RemoteButlerCache
     _registry: Registry
     _datastore_cache_manager: AbstractDatastoreCacheManager | None
+    _use_disabled_datastore_cache: bool
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -127,6 +130,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         connection: RemoteButlerHttpConnection,
         options: ButlerInstanceOptions,
         cache: RemoteButlerCache,
+        use_disabled_datastore_cache: bool = True,
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
         self.storageClasses = StorageClassFactory()
@@ -134,6 +138,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._connection = connection
         self._cache = cache
         self._datastore_cache_manager = None
+        self._use_disabled_datastore_cache = use_disabled_datastore_cache
 
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
@@ -198,18 +203,20 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _cache_manager(self) -> AbstractDatastoreCacheManager:
         """Cache manager to use when reading files from the butler."""
         # RemoteButler does not get any cache configuration from the server.
-        # Read the Datastore default config (which is a FileDatastore)
-        # and obtain the default cache manager configuration. Overrides will
-        # come from environment variables. This will not work properly if the
-        # defaults for DatastoreConfig no longer include the cache.
+        # Either create a disabled cache manager which can be enabled via the
+        # environment, or create a cache manager from the default FileDatastore
+        # config. This will not work properly if the defaults for
+        # DatastoreConfig no longer include the cache.
         if self._datastore_cache_manager is None:
             datastore_config = DatastoreConfig()
-            if "cached" in datastore_config:
+            if not self._use_disabled_datastore_cache and "cached" in datastore_config:
                 self._datastore_cache_manager = DatastoreCacheManager(
                     datastore_config["cached"], universe=self.dimensions
                 )
             else:
-                self._datastore_cache_manager = DatastoreDisabledCacheManager("", universe=self.dimensions)
+                self._datastore_cache_manager = DatastoreCacheManager.create_disabled(
+                    universe=self.dimensions
+                )
         return self._datastore_cache_manager
 
     def _caching_context(self) -> AbstractContextManager[None]:
