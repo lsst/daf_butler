@@ -1558,6 +1558,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                     self.assertFalse(datastore.exists(ref))
 
 
+@unittest.mock.patch.dict(os.environ, {}, clear=True)
 class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
     """Tests for datastore caching infrastructure."""
 
