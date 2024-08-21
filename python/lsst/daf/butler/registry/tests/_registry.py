@@ -192,12 +192,7 @@ class RegistryTests(ABC):
         filename : `str`
             The name of the file to load.
         """
-        from ...transfers import YamlRepoImportBackend
-
-        with open(os.path.join(self.getDataDir(), filename)) as stream:
-            backend = YamlRepoImportBackend(stream, butler)
-        backend.register()
-        backend.load(datastore=None)
+        butler.import_(filename=os.path.join(self.getDataDir(), filename), without_datastore=True)
 
     def checkQueryResults(self, results, expected):
         """Check that a query results object contains expected values.

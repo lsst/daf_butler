@@ -35,7 +35,6 @@ from astropy.table import Table as AstropyTable
 from lsst.daf.butler import Butler, DatasetType, script
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, removeTestTempDir
-from lsst.daf.butler.transfers import YamlRepoImportBackend
 from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -74,13 +73,10 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         butler = Butler.from_config(self.repo, writeable=True)
         assert isinstance(butler, DirectButler), "Test expects DirectButler"
         for filename in filenames:
-            with open(os.path.join(TESTDIR, "data", "registry", filename)) as stream:
-                # Go behind the back of the import code a bit to deal with
-                # the fact that this is just registry content with no actual
-                # files for the datastore.
-                backend = YamlRepoImportBackend(stream, butler)
-                backend.register()
-                backend.load(datastore=None)
+            butler.import_(
+                filename=os.path.join(TESTDIR, "data", "registry", filename),
+                without_datastore=True,
+            )
         return butler
 
     def testDimensions(self):

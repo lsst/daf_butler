@@ -47,7 +47,6 @@ from ..datastore import NullDatastore
 from ..direct_butler import DirectButler
 from ..registry.sql_registry import SqlRegistry
 from ..tests import MetricsExample, addDatasetType
-from ..transfers import YamlRepoImportBackend
 
 if TYPE_CHECKING:
     import unittest
@@ -151,10 +150,7 @@ def create_populated_sqlite_registry(*args: str) -> Butler:
         storageClasses=StorageClassFactory(),
     )
     for arg in args:
-        with open(arg) as stream:
-            backend = YamlRepoImportBackend(stream, butler)
-        backend.register()
-        backend.load(datastore=None)
+        butler.import_(filename=arg, without_datastore=True)
     return butler
 
 

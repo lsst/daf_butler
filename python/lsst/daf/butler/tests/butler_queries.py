@@ -51,7 +51,6 @@ from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults, Query
 from ..queries.tree import Predicate
 from ..registry import NoDefaultCollectionError, RegistryDefaults
-from ..transfers import YamlRepoImportBackend
 from .utils import TestCaseMixin
 
 # Simplified tuples of the detector records we'll frequently be querying for.
@@ -119,10 +118,10 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         filename : `str`
             Location of test data.
         """
-        with open(os.path.join(self.data_dir, filename)) as stream:
-            backend = YamlRepoImportBackend(stream, butler)
-        backend.register()
-        backend.load(datastore=None)
+        butler.import_(
+            filename=os.path.join(self.data_dir, filename),
+            without_datastore=True,
+        )
 
     def check_detector_records(
         self,
