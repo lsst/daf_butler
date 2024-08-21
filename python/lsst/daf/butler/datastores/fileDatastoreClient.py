@@ -4,7 +4,10 @@ from typing import Any, Literal
 
 import pydantic
 from lsst.daf.butler import DatasetRef, Location
-from lsst.daf.butler.datastore.cache_manager import DatastoreDisabledCacheManager
+from lsst.daf.butler.datastore.cache_manager import (
+    AbstractDatastoreCacheManager,
+    DatastoreDisabledCacheManager,
+)
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo, StoredFileInfo
 from lsst.daf.butler.datastores.file_datastore.get import (
     DatasetLocationInformation,
@@ -47,6 +50,7 @@ def get_dataset_as_python_object(
     payload: FileDatastoreGetPayload,
     *,
     parameters: Mapping[str, Any] | None,
+    cache_manager: AbstractDatastoreCacheManager | None = None,
 ) -> Any:
     """Retrieve an artifact from storage and return it as a Python object.
 
@@ -60,6 +64,8 @@ def get_dataset_as_python_object(
     parameters : `Mapping`[`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters to be used when converting
         the artifact to a Python object.
+    cache_manager : `AbstractDatastoreCacheManager` or `None`, optional
+        Cache manager to use. If `None` the cache is disabled.
 
     Returns
     -------
@@ -76,6 +82,8 @@ def get_dataset_as_python_object(
         ref=ref,
         parameters=parameters,
     )
+    if cache_manager is None:
+        cache_manager = DatastoreDisabledCacheManager()
     return get_dataset_as_python_object_from_get_info(
-        datastore_file_info, ref=ref, parameters=parameters, cache_manager=DatastoreDisabledCacheManager()
+        datastore_file_info, ref=ref, parameters=parameters, cache_manager=cache_manager
     )

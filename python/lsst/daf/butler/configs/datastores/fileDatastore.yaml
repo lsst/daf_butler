@@ -23,6 +23,7 @@ datastore:
       # Expiry mode and associated threshold.
       # Options are:
       # - null (no expiry)
+      # - disabled (no caching)
       # - files (threshold is number of files)
       # - datasets (threshold is number of datasets)
       # - size (threshold is size in bytes)

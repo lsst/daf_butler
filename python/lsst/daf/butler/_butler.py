@@ -309,8 +309,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             case ButlerType.REMOTE:
                 from .remote_butler import RemoteButlerFactory
 
+                # Assume this is being created by a client who would like
+                # default caching of remote datasets.
                 factory = RemoteButlerFactory.create_factory_from_config(butler_config)
-                return factory.create_butler_with_credentials_from_environment(butler_options=options)
+                return factory.create_butler_with_credentials_from_environment(
+                    butler_options=options, use_disabled_datastore_cache=False
+                )
             case _:
                 raise TypeError(f"Unknown Butler type '{butler_type}'")
 

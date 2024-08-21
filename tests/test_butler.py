@@ -350,7 +350,7 @@ class ButlerPutGetTests(TestCaseMixin):
                         for preserve_path in (True, False):
                             destination = root_uri.join(f"{preserve_path}_{counter}/")
                             log = logging.getLogger("lsst.x")
-                            log.warning("Using destination %s for args %s", destination, args)
+                            log.debug("Using destination %s for args %s", destination, args)
                             # Use copy so that we can test that overwrite
                             # protection works (using "auto" for File URIs
                             # would use hard links and subsequent transfer

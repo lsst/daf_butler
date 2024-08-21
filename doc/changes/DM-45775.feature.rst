@@ -1,0 +1,2 @@
+Added an expiration mode of "disabled" to the datastore cache manager.
+This allows an environment variable to be used to disable caching completely, or allows for a default configuration to be disabled and for environment variables to enable caching.
