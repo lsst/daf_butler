@@ -47,7 +47,7 @@ from ._config import Config, ConfigSubset
 from ._exceptions import EmptyQueryResultError
 from ._limited_butler import LimitedButler
 from .datastore import Datastore
-from .dimensions import DimensionConfig
+from .dimensions import DataCoordinate, DimensionConfig
 from .registry import RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
 
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from ._storage_class import StorageClass
     from ._timespan import Timespan
     from .datastore import DatasetRefURIs
-    from .dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord
+    from .dimensions import DataId, DimensionGroup, DimensionRecord
     from .queries import Query
     from .registry import Registry
     from .transfers import RepoExportContext
