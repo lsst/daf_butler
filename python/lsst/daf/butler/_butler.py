@@ -1729,13 +1729,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             collection wildcard is passed when ``find_first`` is `True`, or
             when ``collections`` is `None` and default butler collections are
             not defined.
-
-        Notes
-        -----
-        When multiple dataset types are queried in a single call, the results
-        of this operation are equivalent to querying for each dataset type
-        separately in turn, and no information about the relationships between
-        datasets of different types is included.
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)

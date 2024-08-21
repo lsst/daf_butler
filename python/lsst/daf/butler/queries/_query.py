@@ -242,8 +242,7 @@ class Query(QueryBase):
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
             which a dataset of that dataset type appears (according to the
-            order of ``collections`` passed in).  If `True`, ``collections``
-            must not be ``...``.
+            order of ``collections`` passed in).
 
         Returns
         -------
