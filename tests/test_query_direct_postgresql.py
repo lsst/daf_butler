@@ -56,14 +56,15 @@ class DirectButlerPostgreSQLTests(ButlerQueryTests, unittest.TestCase):
         config = ButlerConfig()
         self.postgres.patch_butler_config(config)
         registry = SqlRegistry.createFromConfig(config)
-        for arg in args:
-            self.load_data(registry, arg)
-        return DirectButler(
+        butler = DirectButler(
             config=config,
             registry=registry,
             datastore=NullDatastore(None, None),
             storageClasses=StorageClassFactory(),
         )
+        for arg in args:
+            self.load_data(butler, arg)
+        return butler
 
 
 if __name__ == "__main__":

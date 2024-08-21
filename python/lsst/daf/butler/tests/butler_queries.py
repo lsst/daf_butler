@@ -51,7 +51,6 @@ from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults, Query
 from ..queries.tree import Predicate
 from ..registry import NoDefaultCollectionError, RegistryDefaults
-from ..registry.sql_registry import SqlRegistry
 from ..transfers import YamlRepoImportBackend
 from .utils import TestCaseMixin
 
@@ -106,7 +105,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """
         raise NotImplementedError()
 
-    def load_data(self, registry: SqlRegistry, filename: str) -> None:
+    def load_data(self, butler: Butler, filename: str) -> None:
         """Load registry test data from ``data_dir/<filename>``,
         which should be a YAML import/export file.
 
@@ -115,13 +114,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         Parameters
         ----------
-        registry : `SqlRegistry`
-            The registry to use.
+        butler : `~lsst.daf.butler.Butler`
+            The butler to use.
         filename : `str`
             Location of test data.
         """
         with open(os.path.join(self.data_dir, filename)) as stream:
-            backend = YamlRepoImportBackend(stream, registry)
+            backend = YamlRepoImportBackend(stream, butler)
         backend.register()
         backend.load(datastore=None)
 

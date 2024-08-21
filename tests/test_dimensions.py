@@ -50,10 +50,9 @@ from lsst.daf.butler import (
     DimensionUniverse,
     NamedKeyDict,
     NamedValueSet,
-    YamlRepoImportBackend,
     ddl,
 )
-from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
+from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 from lsst.daf.butler.timespan_database_representation import TimespanDatabaseRepresentation
 
 DIMENSION_DATA_FILE = os.path.normpath(
@@ -70,16 +69,10 @@ def loadDimensionData() -> DataCoordinateSequence:
         A set containing all data IDs in the export file.
     """
     # Create an in-memory SQLite database and Registry just to import the YAML
-    # data and retreive it as a set of DataCoordinate objects.
-    config = RegistryConfig()
-    config["db"] = "sqlite://"
-    registry = _RegistryFactory(config).create_from_config()
-    with open(DIMENSION_DATA_FILE) as stream:
-        backend = YamlRepoImportBackend(stream, registry)
-    backend.register()
-    backend.load(datastore=None)
-    dimensions = registry.dimensions.conform(["visit", "detector", "tract", "patch"])
-    return registry.queryDataIds(dimensions).expanded().toSequence()
+    # data and retrieve it as a set of DataCoordinate objects.
+    butler = create_populated_sqlite_registry(DIMENSION_DATA_FILE)
+    dimensions = butler.registry.dimensions.conform(["visit", "detector", "tract", "patch"])
+    return butler.registry.queryDataIds(dimensions).expanded().toSequence()
 
 
 class ConcreteTestDimensionPacker(DimensionPacker):

@@ -41,9 +41,13 @@ from typing import TYPE_CHECKING, Any
 import astropy
 from astropy.table import Table as AstropyTable
 
-from .. import Butler, Config, DatasetRef, StorageClassFactory, Timespan
+from .. import Butler, ButlerConfig, Config, DatasetRef, StorageClassFactory, Timespan
 from .._collection_type import CollectionType
+from ..datastore import NullDatastore
+from ..direct_butler import DirectButler
+from ..registry.sql_registry import SqlRegistry
 from ..tests import MetricsExample, addDatasetType
+from ..transfers import YamlRepoImportBackend
 
 if TYPE_CHECKING:
     import unittest
@@ -122,6 +126,36 @@ def safeTestTempDir(default_base: str) -> Iterator[str]:
         yield root
     finally:
         removeTestTempDir(root)
+
+
+def create_populated_sqlite_registry(*args: str) -> Butler:
+    """Create an in-memory registry-only sqlite butler and populate it.
+
+    Parameters
+    ----------
+    *args : `str`
+        Paths to export YAML files that should be imported.
+
+    Returns
+    -------
+    butler : `Butler`
+        New butler populated with the specified import files.
+    """
+    config = ButlerConfig()
+    config[".registry.db"] = "sqlite://"
+    registry = SqlRegistry.createFromConfig(config["registry"])
+    butler = DirectButler(
+        config=config,
+        registry=registry,
+        datastore=NullDatastore(None, None),
+        storageClasses=StorageClassFactory(),
+    )
+    for arg in args:
+        with open(arg) as stream:
+            backend = YamlRepoImportBackend(stream, butler)
+        backend.register()
+        backend.load(datastore=None)
+    return butler
 
 
 class ButlerTestHelper:

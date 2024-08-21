@@ -31,8 +31,8 @@ import unittest
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from lsst.daf.butler import DimensionRecordSet, DimensionRecordTable, YamlRepoImportBackend
-from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
+from lsst.daf.butler import DimensionRecordSet, DimensionRecordTable
+from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
 DIMENSION_DATA_FILES = [
     os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry", "base.yaml")),
@@ -47,20 +47,13 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
     def setUpClass(cls):
         # Create an in-memory SQLite database and Registry just to import the
         # YAML data.
-        config = RegistryConfig()
-        config["db"] = "sqlite://"
-        registry = _RegistryFactory(config).create_from_config()
-        for data_file in DIMENSION_DATA_FILES:
-            with open(data_file) as stream:
-                backend = YamlRepoImportBackend(stream, registry)
-            backend.register()
-            backend.load(datastore=None)
+        butler = create_populated_sqlite_registry(*DIMENSION_DATA_FILES)
         cls.records = {
-            element: tuple(list(registry.queryDimensionRecords(element)))
+            element: tuple(list(butler.registry.queryDimensionRecords(element)))
             for element in ("visit", "skymap", "patch")
         }
-        cls.universe = registry.dimensions
-        cls.data_ids = list(registry.queryDataIds(["visit", "patch"]).expanded())
+        cls.universe = butler.dimensions
+        cls.data_ids = list(butler.registry.queryDataIds(["visit", "patch"]).expanded())
 
     def test_record_table_schema_visit(self):
         """Test that the Arrow schema for 'visit' has the right types,

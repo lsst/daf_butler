@@ -78,7 +78,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
                 # Go behind the back of the import code a bit to deal with
                 # the fact that this is just registry content with no actual
                 # files for the datastore.
-                backend = YamlRepoImportBackend(stream, butler._registry)
+                backend = YamlRepoImportBackend(stream, butler)
                 backend.register()
                 backend.load(datastore=None)
         return butler
