@@ -606,7 +606,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         for data in datasetData:
             datasetType = self.datasetTypes.get(data["dataset_type"])
             if datasetType is None:
-                datasetType = self.butler.registry.getDatasetType(data["dataset_type"])
+                datasetType = self.butler.get_dataset_type(data["dataset_type"])
             self.datasets[data["dataset_type"], data["run"]].extend(
                 FileDataset(
                     d.get("path"),
@@ -631,14 +631,14 @@ class YamlRepoImportBackend(RepoImportBackend):
         for datasetType in self.datasetTypes:
             self.butler.registry.registerDatasetType(datasetType)
         for run in self.runs:
-            self.butler.registry.registerRun(run, doc=self.collectionDocs.get(run))
+            self.butler.collections.register(run, doc=self.collectionDocs.get(run))
             # No way to add extra run info to registry yet.
         for collection, collection_type in self.collections.items():
-            self.butler.registry.registerCollection(
+            self.butler.collections.register(
                 collection, collection_type, doc=self.collectionDocs.get(collection)
             )
         for chain, children in self.chains.items():
-            self.butler.registry.registerCollection(
+            self.butler.collections.register(
                 chain, CollectionType.CHAINED, doc=self.collectionDocs.get(chain)
             )
             self.butler.registry.setCollectionChain(chain, children)
