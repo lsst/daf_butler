@@ -1,0 +1,2 @@
+The internal import backend classes, such as ``YamlRepoImportBackend``, have been changed to use a butler rather than a registry.
+These are used by ``butler.import_()`` but there should be no impact external impact from this change.
