@@ -31,7 +31,7 @@ from .exprTree import Node
 from .parserYacc import ParserYacc  # type: ignore
 
 
-def parse_expression(expression: str) -> Node:
+def parse_expression(expression: str) -> Node | None:
     """Given a Butler query expression string, convert it to a tree form.
 
     Parameters
@@ -41,7 +41,7 @@ def parse_expression(expression: str) -> Node:
 
     Returns
     -------
-    node : `Node`
+    node : `Node` or `None`
         Tree form of expression query.
     """
     parser = ParserYacc()

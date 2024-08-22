@@ -134,6 +134,7 @@ def make_string_expression_predicate(
         tree = parse_expression(string)
     except Exception as exc:
         raise UserExpressionSyntaxError(f"Failed to parse user expression {string!r}.") from exc
+    assert tree is not None, "Should only happen if the string is empty, and that's handled above."
     if bind is None:
         bind = {}
     if bind:

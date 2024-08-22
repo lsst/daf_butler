@@ -1061,6 +1061,11 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [2],
             )
             self.check_detector_records(
+                # Empty string expression should evaluate to True.
+                query.where(_x.detector == 2, "").dimension_records("detector"),
+                [2],
+            )
+            self.check_detector_records(
                 query.where(_x.literal(2) == _x.detector).dimension_records("detector"),
                 [2],
             )

@@ -80,7 +80,8 @@ def convert_expression_string_to_predicate(
         tree = parse_expression(expression)
     except Exception as exc:
         raise InvalidQueryError(f"Failed to parse expression '{expression}'") from exc
-
+    if tree is None:
+        return Predicate.from_bool(True)
     converter = _ConversionVisitor(context, universe)
     predicate = tree.visit(converter)
     assert isinstance(
