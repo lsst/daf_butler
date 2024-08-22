@@ -76,15 +76,17 @@ class ParquetFormatter(FormatterV2):
     """
 
     default_extension = ".parq"
-    can_read_from_local_file = True
+    can_read_from_uri = True
 
     def can_accept(self, in_memory_dataset: Any) -> bool:
         # Docstring inherited.
         return _checkArrowCompatibleType(in_memory_dataset) is not None
 
-    def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # Docstring inherited from Formatter.read.
-        schema = pq.read_schema(path)
+        fs, path = uri.to_fsspec()
+
+        schema = pq.read_schema(path, filesystem=fs)
 
         schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
@@ -99,6 +101,7 @@ class ParquetFormatter(FormatterV2):
 
             temp_table = pq.read_table(
                 path,
+                filesystem=fs,
                 columns=[schema.names[0]],
                 use_threads=False,
                 use_pandas_metadata=False,
@@ -140,6 +143,7 @@ class ParquetFormatter(FormatterV2):
         metadata = schema.metadata if schema.metadata is not None else {}
         arrow_table = pq.read_table(
             path,
+            filesystem=fs,
             columns=par_columns,
             use_threads=False,
             use_pandas_metadata=(b"pandas" in metadata),
