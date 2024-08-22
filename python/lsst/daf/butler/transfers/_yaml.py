@@ -54,11 +54,11 @@ from .._timespan import Timespan
 from ..datastore import Datastore
 from ..dimensions import DimensionElement, DimensionRecord, DimensionUniverse
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
-from ..registry.sql_registry import SqlRegistry
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
 if TYPE_CHECKING:
+    from lsst.daf.butler import Butler
     from lsst.resources import ResourcePathExpression
 
 _LOG = logging.getLogger(__name__)
@@ -300,13 +300,13 @@ class YamlRepoImportBackend(RepoImportBackend):
     ----------
     stream : `io.IO`
         A readable file-like object.
-    registry : `SqlRegistry`
-        The registry datasets will be imported into.  Only used to retrieve
-        dataset types during construction; all write happen in `register`
+    butler : `Butler`
+        The butler datasets will be imported into.  Only used to retrieve
+        dataset types during construction; all writes happen in `register`
         and `load`.
     """
 
-    def __init__(self, stream: IO, registry: SqlRegistry):
+    def __init__(self, stream: IO, butler: Butler):
         # We read the file fully and convert its contents to Python objects
         # instead of loading incrementally so we can spot some problems early;
         # because `register` can't be put inside a transaction, we'd rather not
@@ -337,7 +337,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.tagAssociations: dict[str, list[DatasetId]] = defaultdict(list)
         self.calibAssociations: dict[str, dict[Timespan, list[DatasetId]]] = defaultdict(dict)
         self.refsByFileId: dict[DatasetId, DatasetRef] = {}
-        self.registry: SqlRegistry = registry
+        self.butler: Butler = butler
 
         universe_version = wrapper.get("universe_version", 0)
         universe_namespace = wrapper.get("universe_namespace", "daf_butler")
@@ -351,7 +351,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         if (
             universe_version < 2
             and universe_namespace == "daf_butler"
-            and "visit_system_membership" in self.registry.dimensions
+            and "visit_system_membership" in self.butler.dimensions
         ):
             migrate_visit_system = True
 
@@ -360,8 +360,8 @@ class YamlRepoImportBackend(RepoImportBackend):
         if (
             universe_version < 1
             and universe_namespace == "daf_butler"
-            and "visit" in self.registry.dimensions
-            and "seeing" not in self.registry.dimensions["visit"].metadata
+            and "visit" in self.butler.dimensions
+            and "seeing" not in self.butler.dimensions["visit"].metadata
         ):
             migrate_visit_seeing = True
 
@@ -371,8 +371,8 @@ class YamlRepoImportBackend(RepoImportBackend):
         if (
             universe_version < 6
             and universe_namespace == "daf_butler"
-            and "exposure" in self.registry.dimensions
-            and "group" in self.registry.dimensions["exposure"].implied
+            and "exposure" in self.butler.dimensions
+            and "group" in self.butler.dimensions["exposure"].implied
         ):
             migrate_group = True
 
@@ -385,11 +385,11 @@ class YamlRepoImportBackend(RepoImportBackend):
         day_obs_ids: set[tuple[str, int]] = set()
         if universe_version < 6 and universe_namespace == "daf_butler":
             if (
-                "exposure" in self.registry.dimensions
-                and "day_obs" in self.registry.dimensions["exposure"].implied
+                "exposure" in self.butler.dimensions
+                and "day_obs" in self.butler.dimensions["exposure"].implied
             ):
                 migrate_exposure_day_obs = True
-            if "visit" in self.registry.dimensions and "day_obs" in self.registry.dimensions["visit"].implied:
+            if "visit" in self.butler.dimensions and "day_obs" in self.butler.dimensions["visit"].implied:
                 migrate_visit_day_obs = True
 
         # If this is pre-v1 universe we may need to fill in a missing
@@ -399,8 +399,8 @@ class YamlRepoImportBackend(RepoImportBackend):
             universe_version < 1
             and universe_namespace == "daf_butler"
             and (
-                "day_obs" in self.registry.dimensions["visit"].implied
-                or "day_obs" in self.registry.dimensions["visit"].metadata
+                "day_obs" in self.butler.dimensions["visit"].implied
+                or "day_obs" in self.butler.dimensions["visit"].metadata
             )
         ):
             migrate_add_visit_day_obs = True
@@ -411,7 +411,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         instrument_classes: dict[str, int] = {}
         if migrate_exposure_day_obs or migrate_visit_day_obs or migrate_add_visit_day_obs:
             day_obs_offset_calculator = _DayObsOffsetCalculator()
-            for rec in self.registry.queryDimensionRecords("instrument"):
+            for rec in self.butler.registry.queryDimensionRecords("instrument"):
                 day_obs_offset_calculator[rec.name] = rec.class_name
 
         datasetData = []
@@ -441,8 +441,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # But first create empty list for visits since other
                         # logic in this file depends on self.dimensions being
                         # populated in an order consistent with primary keys.
-                        self.dimensions[self.registry.dimensions["visit"]] = []
-                        element = self.registry.dimensions["visit_system_membership"]
+                        self.dimensions[self.butler.dimensions["visit"]] = []
+                        element = self.butler.dimensions["visit_system_membership"]
                         RecordClass = element.RecordClass
                         self.dimensions[element].extend(
                             RecordClass(
@@ -468,13 +468,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # Poke the entry for this dimension to make sure it
                         # appears in the right order, even though we'll
                         # populate it later.
-                        self.dimensions[self.registry.dimensions["day_obs"]]
+                        self.dimensions[self.butler.dimensions["day_obs"]]
                         for record in data["records"]:
                             day_obs_ids.add((record["instrument"], record["day_obs"]))
 
                 if data["element"] == "exposure":
                     if migrate_group:
-                        element = self.registry.dimensions["group"]
+                        element = self.butler.dimensions["group"]
                         RecordClass = element.RecordClass
                         group_records = self.dimensions[element]
                         for exposure_record in data["records"]:
@@ -492,7 +492,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                         for record in data["records"]:
                             day_obs_ids.add((record["instrument"], record["day_obs"]))
 
-                element = self.registry.dimensions[data["element"]]
+                element = self.butler.dimensions[data["element"]]
                 RecordClass = element.RecordClass
                 self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
 
@@ -534,7 +534,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                         data["name"],
                         dimensions=dimensions,
                         storageClass=data["storage_class"],
-                        universe=self.registry.dimensions,
+                        universe=self.butler.dimensions,
                         isCalibration=data.get("is_calibration", False),
                     )
                 )
@@ -567,7 +567,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
 
         if day_obs_ids:
-            element = self.registry.dimensions["day_obs"]
+            element = self.butler.dimensions["day_obs"]
             RecordClass = element.RecordClass
             missing_offsets = set()
             for instrument, day_obs in day_obs_ids:
@@ -606,7 +606,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         for data in datasetData:
             datasetType = self.datasetTypes.get(data["dataset_type"])
             if datasetType is None:
-                datasetType = self.registry.getDatasetType(data["dataset_type"])
+                datasetType = self.butler.get_dataset_type(data["dataset_type"])
             self.datasets[data["dataset_type"], data["run"]].extend(
                 FileDataset(
                     d.get("path"),
@@ -629,19 +629,19 @@ class YamlRepoImportBackend(RepoImportBackend):
     def register(self) -> None:
         # Docstring inherited from RepoImportBackend.register.
         for datasetType in self.datasetTypes:
-            self.registry.registerDatasetType(datasetType)
+            self.butler.registry.registerDatasetType(datasetType)
         for run in self.runs:
-            self.registry.registerRun(run, doc=self.collectionDocs.get(run))
+            self.butler.collections.register(run, doc=self.collectionDocs.get(run))
             # No way to add extra run info to registry yet.
         for collection, collection_type in self.collections.items():
-            self.registry.registerCollection(
+            self.butler.collections.register(
                 collection, collection_type, doc=self.collectionDocs.get(collection)
             )
         for chain, children in self.chains.items():
-            self.registry.registerCollection(
+            self.butler.collections.register(
                 chain, CollectionType.CHAINED, doc=self.collectionDocs.get(chain)
             )
-            self.registry.setCollectionChain(chain, children)
+            self.butler.registry.setCollectionChain(chain, children)
 
     def load(
         self,
@@ -654,7 +654,7 @@ class YamlRepoImportBackend(RepoImportBackend):
     ) -> None:
         # Docstring inherited from RepoImportBackend.load.
         # Must ensure we insert in order supported by the universe.
-        for element in self.registry.dimensions.sorted(self.dimensions.keys()):
+        for element in self.butler.dimensions.sorted(self.dimensions.keys()):
             dimensionRecords = self.dimensions[element]
             if skip_dimensions and element in skip_dimensions:
                 continue
@@ -663,7 +663,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             # being imported.  It'd be ideal to check that, but that would mean
             # using syncDimensionData, which is not vectorized and is hence
             # unacceptably slo.
-            self.registry.insertDimensionData(element, *dimensionRecords, skip_existing=True)
+            self.butler.registry.insertDimensionData(element, *dimensionRecords, skip_existing=True)
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
         for records in self.datasets.values():
@@ -683,7 +683,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry._importDatasets(datasets)
+            resolvedRefs = self.butler.registry._importDatasets(datasets)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs, strict=True):
@@ -701,8 +701,10 @@ class YamlRepoImportBackend(RepoImportBackend):
             datastore.ingest(*fileDatasets, transfer=transfer, record_validation_info=record_validation_info)
         # Associate datasets with tagged collections.
         for collection, dataset_ids in self.tagAssociations.items():
-            self.registry.associate(collection, [self.refsByFileId[i] for i in dataset_ids])
+            self.butler.registry.associate(collection, [self.refsByFileId[i] for i in dataset_ids])
         # Associate datasets with calibration collections.
         for collection, idsByTimespan in self.calibAssociations.items():
             for timespan, dataset_ids in idsByTimespan.items():
-                self.registry.certify(collection, [self.refsByFileId[i] for i in dataset_ids], timespan)
+                self.butler.registry.certify(
+                    collection, [self.refsByFileId[i] for i in dataset_ids], timespan
+                )

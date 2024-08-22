@@ -47,7 +47,7 @@ from ._config import Config, ConfigSubset
 from ._exceptions import EmptyQueryResultError
 from ._limited_butler import LimitedButler
 from .datastore import Datastore
-from .dimensions import DimensionConfig
+from .dimensions import DataCoordinate, DimensionConfig
 from .registry import RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
 
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from ._storage_class import StorageClass
     from ._timespan import Timespan
     from .datastore import DatasetRefURIs
-    from .dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord
+    from .dimensions import DataId, DimensionGroup, DimensionRecord
     from .queries import Query
     from .registry import Registry
     from .transfers import RepoExportContext
@@ -1265,6 +1265,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         transfer: str | None = None,
         skip_dimensions: set | None = None,
         record_validation_info: bool = True,
+        without_datastore: bool = False,
     ) -> None:
         """Import datasets into this repository that were exported from a
         different butler repository via `~lsst.daf.butler.Butler.export`.
@@ -1297,6 +1298,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             or file sizes. This can be useful if such information is tracked
             in an external system or if the file is to be compressed in place.
             It is up to the datastore whether this parameter is relevant.
+        without_datastore : `bool`, optional
+            If `True` only registry records will be imported and the datastore
+            will be ignored.
 
         Raises
         ------

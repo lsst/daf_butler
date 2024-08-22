@@ -58,7 +58,7 @@ class RemoteButlerQueryTests(ButlerQueryTests, unittest.TestCase):
         butler = server_instance.hybrid_butler
 
         for arg in args:
-            self.load_data(butler.registry, arg)
+            self.load_data(butler, arg)
 
         return butler
 

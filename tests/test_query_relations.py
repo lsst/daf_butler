@@ -31,13 +31,13 @@ import os.path
 import re
 import unittest
 
-from lsst.daf.butler.registry import MissingSpatialOverlapError, RegistryConfig, _RegistryFactory
+from lsst.daf.butler.registry import MissingSpatialOverlapError
 from lsst.daf.butler.registry.queries import (
     DataCoordinateQueryResults,
     DatasetQueryResults,
     DimensionRecordQueryResults,
 )
-from lsst.daf.butler.transfers import YamlRepoImportBackend
+from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -61,9 +61,6 @@ class TestQueryRelationsTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        config = RegistryConfig()
-        config["db"] = "sqlite://"
-        cls.registry = _RegistryFactory(config).create_from_config()
         # We need just enough test data to have valid dimension records for
         # all of the dimensions we're concerned with, and we want to pick
         # values for each dimension that correspond to a spatiotemporal
@@ -71,12 +68,9 @@ class TestQueryRelationsTests(unittest.TestCase):
         # query system that simplify things as soon as it can spot that there
         # will be no overall results.
         data_file = os.path.normpath(os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
-        with open(data_file) as stream:
-            backend = YamlRepoImportBackend(stream, cls.registry)
-        backend.register()
-        backend.load(datastore=None)
+        cls.butler = create_populated_sqlite_registry(data_file)
         assert (
-            cls.registry.dimensions.commonSkyPix.name == "htm7"
+            cls.butler.dimensions.commonSkyPix.name == "htm7"
         ), "If this changes, update the skypix levels below to have one below and one above."
         cls.htm7 = 222340
         cls.htm11 = 56919188
@@ -86,7 +80,7 @@ class TestQueryRelationsTests(unittest.TestCase):
         cls.tract = 9615
         cls.detector = 0
         cls.patch = 14
-        cls.data_id = cls.registry.expandDataId(
+        cls.data_id = cls.butler.registry.expandDataId(
             htm7=cls.htm7,
             htm11=cls.htm11,
             instrument=cls.instrument,
@@ -172,10 +166,10 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["patch", "band"], instrument=self.instrument, visit=self.visit, detector=self.detector
             ),
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["patch", "band"],
                 where=(
                     f"instrument={self.instrument!r} "
@@ -214,14 +208,14 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["htm7"], instrument=self.instrument, visit=self.visit, detector=self.detector
             ),
             # For regular dimension constraints we can also support having the
             # data ID expressed as a 'where' expression.  The query would also
             # have the same behavior with only visit and detector specified
             # in the 'where' string, but it'd change the expected string.
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["htm7"],
                 where=(
                     f"instrument={self.instrument!r} "
@@ -238,7 +232,7 @@ class TestQueryRelationsTests(unittest.TestCase):
         # we might be able to fake it with an iteration-engine spatial join, or
         # utilize explicitly-materialized overlaps.
         with self.assertRaises(MissingSpatialOverlapError):
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["htm11"],
                 instrument=self.instrument,
                 visit=self.visit,
@@ -256,7 +250,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 σ[
                     regions_overlap(
                         patch.region,
-                        {self.registry.dimensions["htm11"].pixelization.pixel(self.htm11)}
+                        {self.butler.dimensions["htm11"].pixelization.pixel(self.htm11)}
                     )
                 ](
                     →[iteration](
@@ -271,7 +265,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(["patch"], htm11=self.htm11),
+            self.butler.registry.queryDataIds(["patch"], htm11=self.htm11),
         )
         # Constrain a regular spatial dimension (patch) from the common
         # skypix dimension.  This does not require post-query filtering.
@@ -285,7 +279,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(["patch"], htm7=self.htm7),
+            self.butler.registry.queryDataIds(["patch"], htm7=self.htm7),
         )
         # Constrain a regular dimension (detector) via a different dimension
         # (visit) that combine together to define a more fine-grained region,
@@ -300,7 +294,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 σ[
                     regions_overlap(
                         visit_detector_region.region,
-                        {self.registry.dimensions["htm11"].pixelization.pixel(self.htm11)}
+                        {self.butler.dimensions["htm11"].pixelization.pixel(self.htm11)}
                     )
                 ](
                     →[iteration](
@@ -325,7 +319,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["detector"], visit=self.visit, instrument=self.instrument, htm11=self.htm11
             ),
         )
@@ -353,7 +347,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.registry.queryDataIds(
+            self.butler.registry.queryDataIds(
                 ["detector"], visit=self.visit, instrument=self.instrument, htm7=self.htm7
             ),
         )

@@ -1625,6 +1625,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         transfer: str | None = None,
         skip_dimensions: set | None = None,
         record_validation_info: bool = True,
+        without_datastore: bool = False,
     ) -> None:
         # Docstring inherited.
         if not self.isWriteable():
@@ -1670,11 +1671,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         def doImport(importStream: TextIO | ResourceHandleProtocol) -> None:
             with self._caching_context():
-                backend = BackendClass(importStream, self._registry)  # type: ignore[call-arg]
+                backend = BackendClass(importStream, self)  # type: ignore[call-arg]
                 backend.register()
                 with self.transaction():
                     backend.load(
-                        self._datastore,
+                        datastore=self._datastore if not without_datastore else None,
                         directory=directory,
                         transfer=transfer,
                         skip_dimensions=skip_dimensions,

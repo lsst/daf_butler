@@ -1407,7 +1407,7 @@ class NullDatastore(Datastore):
         # was created.
         self.name = f"{type(self).__name__}@{time.time()}"
         _LOG.debug("Creating datastore %s", self.name)
-
+        self._transaction: DatastoreTransaction | None = None
         return
 
     def knows(self, ref: DatasetRef) -> bool:

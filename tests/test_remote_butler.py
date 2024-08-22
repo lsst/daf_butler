@@ -29,7 +29,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from lsst.daf.butler import Butler, Registry
+from lsst.daf.butler import Butler
 from lsst.daf.butler._exceptions import UnknownButlerUserError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
@@ -165,11 +165,8 @@ class RemoteButlerRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.join(TESTDIR, "data", "registry")
 
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry:
-        if share_repo_with is None:
-            return self.server_instance.hybrid_butler.registry
-        else:
-            return self.server_instance.hybrid_butler._clone().registry
+    def make_butler(self) -> Butler:
+        return self.server_instance.hybrid_butler
 
     def testBasicTransaction(self):
         # RemoteButler will never support transactions.

@@ -44,7 +44,7 @@ from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
-from typing import TypeVar, overload
+from typing import TypeVar
 
 import astropy.time
 import sqlalchemy
@@ -57,6 +57,7 @@ except ImportError:
 import lsst.sphgeom
 from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iteration, sql
 
+from ... import Butler
 from ..._collection_type import CollectionType
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
@@ -84,7 +85,6 @@ from .._exceptions import (
     NoDefaultCollectionError,
     OrphanedRecordError,
 )
-from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
 from ..sql_registry import SqlRegistry
 
@@ -170,46 +170,30 @@ class RegistryTests(ABC):
             config["managers", "datasets"] = self.datasetsManager
         return config
 
-    @overload
     @abstractmethod
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry | None: ...
-
-    @abstractmethod
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
-        """Return the Registry instance to be tested.
-
-        Parameters
-        ----------
-        share_repo_with : `Registry`, optional
-            If provided, the new registry should point to the same data
-            repository as this existing registry.
+    def make_butler(self) -> Butler:
+        """Return the butler to be tested.
 
         Returns
         -------
-        registry : `Registry` or `SqlRegistry` or `None`
-            New `Registry` instance, or `None` *only* if `share_repo_with`
-            is not `None` and this test case does not support that argument
-            (e.g. it is impossible with in-memory SQLite DBs).
+        butler : `~lsst.daf.butler.Butler`
+            The butler with a registry to be tested.
         """
         raise NotImplementedError()
 
-    def loadData(self, registry: SqlRegistry, filename: str) -> None:
+    def load_data(self, butler: Butler, *filenames: str) -> None:
         """Load registry test data from ``getDataDir/<filename>``,
         which should be a YAML import/export file.
 
         Parameters
         ----------
-        registry : `SqlRegistry`
-            The registry to load into.
-        filename : `str`
-            The name of the file to load.
+        butler : `Butler`
+            The butler to load into.
+        *filenames : `str`
+            The names of the files to load.
         """
-        from ...transfers import YamlRepoImportBackend
-
-        with open(os.path.join(self.getDataDir(), filename)) as stream:
-            backend = YamlRepoImportBackend(stream, registry)
-        backend.register()
-        backend.load(datastore=None)
+        for filename in filenames:
+            butler.import_(filename=os.path.join(self.getDataDir(), filename), without_datastore=True)
 
     def checkQueryResults(self, results, expected):
         """Check that a query results object contains expected values.
@@ -245,7 +229,8 @@ class RegistryTests(ABC):
         `SqlRegistry.insertOpaqueData`, `SqlRegistry.fetchOpaqueData`, and
         `SqlRegistry.deleteOpaqueData`.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         table = "opaque_table_for_testing"
         registry.registerOpaqueTable(
             table,
@@ -295,7 +280,8 @@ class RegistryTests(ABC):
         """Tests for `SqlRegistry.registerDatasetType` and
         `SqlRegistry.getDatasetType`.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         # Check valid insert
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
@@ -338,7 +324,8 @@ class RegistryTests(ABC):
         """Tests for `SqlRegistry.insertDimensionData`,
         `SqlRegistry.syncDimensionData`, and `SqlRegistry.expandDataId`.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         dimensionName = "instrument"
         dimension = registry.dimensions[dimensionName]
         dimensionValue = {
@@ -414,7 +401,8 @@ class RegistryTests(ABC):
     @unittest.skipIf(np is None, "numpy not available.")
     def testNumpyDataId(self):
         """Test that we can use a numpy int in a dataId."""
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}),
             ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
@@ -447,8 +435,9 @@ class RegistryTests(ABC):
         """Test that `SqlRegistry.expandDataId` raises an exception when the
         given keys are inconsistent.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        self.load_data(butler, "base.yaml")
+        registry = butler._registry
         # Insert a few more dimension records for the next test.
         registry.insertDimensionData(
             "day_obs",
@@ -505,8 +494,9 @@ class RegistryTests(ABC):
         """Basic tests for `SqlRegistry.insertDatasets`,
         `SqlRegistry.getDataset`, and `SqlRegistry.removeDatasets`.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         run = "tésτ"
         registry.registerRun(run)
         datasetType = registry.getDatasetType("bias")
@@ -522,8 +512,9 @@ class RegistryTests(ABC):
 
     def testFindDataset(self):
         """Tests for `SqlRegistry.findDataset`."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         run = "tésτ"
         datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 4}
@@ -550,7 +541,7 @@ class RegistryTests(ABC):
         # Search more than one collection, in which two have the right
         # dataset type and another does not.
         registry.registerRun("empty")
-        self.loadData(registry, "datasets.yaml")
+        self.load_data(butler, "datasets.yaml")
         bias1 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_g"])
         self.assertIsNotNone(bias1)
         bias2 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_r"])
@@ -614,8 +605,9 @@ class RegistryTests(ABC):
         """Test that SqlRegistry.removeDatasetType works when there are no
         datasets of that type present.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         registry.removeDatasetType("flat")
         with self.assertRaises(MissingDatasetTypeError):
             registry.getDatasetType("flat")
@@ -625,9 +617,9 @@ class RegistryTests(ABC):
         datasets of that type present or if the dataset type is for a
         component.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         with self.assertRaises(OrphanedRecordError):
             registry.removeDatasetType("flat")
         with self.assertRaises(DatasetTypeError):
@@ -643,8 +635,9 @@ class RegistryTests(ABC):
         ):
             self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
 
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         for run in range(6):
             registry.registerRun(f"run{run}")
         datasetTypeBias = registry.getDatasetType("bias")
@@ -708,9 +701,9 @@ class RegistryTests(ABC):
         Components can no longer be found by registry. This test checks
         that this now fails.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         # Test getting the child dataset type (which does still exist in the
         # Registry), and check for consistency with
         # DatasetRef.makeComponentRef.
@@ -728,10 +721,10 @@ class RegistryTests(ABC):
 
     def testCollections(self):
         """Tests for registry methods that manage collections."""
-        registry = self.makeRegistry()
-        other_registry = self.makeRegistry(share_repo_with=registry)
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler.registry
+        other_registry = butler._clone().registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         run1 = "imported_g"
         run2 = "imported_r"
         # Test setting a collection docstring after it has been created.
@@ -902,7 +895,8 @@ class RegistryTests(ABC):
             registry.getCollectionType(tag1)
 
     def testCollectionChainCaching(self):
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         with registry.caching_context():
             registry.registerCollection("a")
             registry.registerCollection("chain", CollectionType.CHAINED)
@@ -916,7 +910,8 @@ class RegistryTests(ABC):
         """Test that `SqlRegistry.setCollectionChain` obeys its 'flatten'
         option.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         registry.registerCollection("inner", CollectionType.CHAINED)
         registry.registerCollection("innermost", CollectionType.RUN)
         registry.setCollectionChain("inner", ["innermost"])
@@ -979,12 +974,15 @@ class RegistryTests(ABC):
         # 5. Allow both functions to run to completion.
 
         # Set up two registries pointing to the same DB
-        registry1 = self.makeRegistry()
+        butler1 = self.make_butler()
+        butler2 = butler1._clone()
+        registry1 = butler1._registry
         assert isinstance(registry1, SqlRegistry)
-        registry2 = self.makeRegistry(share_repo_with=registry1)
-        if registry2 is None:
-            # This will happen for in-memory SQL databases.
-            raise unittest.SkipTest("Testing concurrency requires two connections to the same DB.")
+        registry2 = butler2._registry
+
+        with contextlib.suppress(AttributeError):
+            if ":memory:" in str(registry2._db):
+                raise unittest.SkipTest("Testing concurrency requires two connections to the same DB.")
 
         registry1.registerCollection("chain", CollectionType.CHAINED)
         for collection in ["a", "b"]:
@@ -1024,7 +1022,8 @@ class RegistryTests(ABC):
         """Test that all operations within a single transaction block are
         rolled back if an exception propagates out of the block.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
         with registry.transaction():
@@ -1046,7 +1045,8 @@ class RegistryTests(ABC):
         if an exception propagates out of an inner transaction block and is
         then caught.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         dimension = registry.dimensions["instrument"]
         dataId1 = {"instrument": "DummyCam"}
         dataId2 = {"instrument": "DummyCam2"}
@@ -1074,7 +1074,8 @@ class RegistryTests(ABC):
         """Test queries involving only instrument dimensions, with no joins to
         skymap.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
 
         # need a bunch of dimensions and datasets for test
         registry.insertDimensionData(
@@ -1291,7 +1292,8 @@ class RegistryTests(ABC):
 
     def testSkyMapDimensions(self):
         """Tests involving only skymap dimensions, no joins to instrument."""
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
 
         # need a bunch of dimensions and datasets for test, we want
         # "band" in the test so also have to add physical_filter
@@ -1394,8 +1396,9 @@ class RegistryTests(ABC):
 
     def testSpatialJoin(self):
         """Test queries that involve spatial overlap joins."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "hsc-rc2-subset.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "hsc-rc2-subset.yaml")
 
         # Dictionary of spatial DatabaseDimensionElements, keyed by the name of
         # the TopologicalFamily they belong to.  We'll relate all elements in
@@ -1457,7 +1460,8 @@ class RegistryTests(ABC):
         bands.  This is tricky because band is
         backed by a query against physical_filter.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         registry.insertDimensionData("instrument", dict(name="DummyCam"))
         registry.insertDimensionData(
             "physical_filter",
@@ -1480,7 +1484,8 @@ class RegistryTests(ABC):
         # 6 managers with 2 records per manager, plus config for dimensions
         VERSION_COUNT = 6 * 2 + 1
 
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         attributes = registry._managers.attributes
 
         # check what get() returns for non-existing key
@@ -1531,9 +1536,9 @@ class RegistryTests(ABC):
         """Test that the findFirst option to queryDatasets selects datasets
         from collections in the order given".
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         self.assertCountEqual(
             list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"])),
             [
@@ -1570,9 +1575,9 @@ class RegistryTests(ABC):
             registry.queryDatasets("bias", collections="imported_*", findFirst=True)
 
     def testQueryDatasetsExtraDimensions(self):
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         # Bias dataset type does not include physical filter.  By adding
         # "physical_filter" to dimensions, we are effectively searching here
         # for bias datasets with an instrument that has a specific filter
@@ -1611,9 +1616,9 @@ class RegistryTests(ABC):
         """Test querying for data IDs and then manipulating the QueryResults
         object returned to perform other queries.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         bias = registry.getDatasetType("bias")
         flat = registry.getDatasetType("flat")
         # Obtain expected results from methods other than those we're testing
@@ -1831,8 +1836,9 @@ class RegistryTests(ABC):
         """Test that queries for datasets respect the storage class passed in
         as part of a full dataset type.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         dataset_type_in_registry = DatasetType(
             "tbl", dimensions=["instrument"], storageClass="Packages", universe=registry.dimensions
         )
@@ -1867,8 +1873,9 @@ class RegistryTests(ABC):
         dimensions.
         """
         # Set up test data: one dataset type, two runs, one dataset in each.
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         schema = DatasetType("schema", dimensions=registry.dimensions.empty, storageClass="Catalog")
         registry.registerDatasetType(schema)
         dataId = DataCoordinate.make_empty(registry.dimensions)
@@ -2035,7 +2042,8 @@ class RegistryTests(ABC):
         # and four child regions (the trixels within the parent at the next
         # level.  We'll use the parent as a tract/visit region and the children
         # as its patch/visit_detector regions.
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         htm6 = registry.dimensions.skypix["htm"][6].pixelization
         commonSkyPix = registry.dimensions.commonSkyPix.pixelization
         index = 12288
@@ -2239,9 +2247,9 @@ class RegistryTests(ABC):
         """
         # Setup - make a Registry, fill it with some datasets in
         # non-calibration collections.
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         # Set up some timestamps.
         t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
         t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
@@ -2641,9 +2649,9 @@ class RegistryTests(ABC):
 
     def testSkipCalibs(self):
         """Test how queries handle skipping of calibration collections."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
 
         coll_calib = "Cam1/calibs/default"
         registry.registerCollection(coll_calib, type=CollectionType.CALIBRATION)
@@ -2712,10 +2720,10 @@ class RegistryTests(ABC):
             self.assertGreater(len(datasets), 0)
 
     def testIngestTimeQuery(self):
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         dt0 = datetime.datetime.now(datetime.UTC)
-        self.loadData(registry, "datasets.yaml")
         dt1 = datetime.datetime.now(datetime.UTC)
 
         datasets = list(registry.queryDatasets(..., collections=...))
@@ -2765,8 +2773,9 @@ class RegistryTests(ABC):
 
     def testTimespanQueries(self):
         """Test query expressions involving timespans."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "hsc-rc2-subset.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "hsc-rc2-subset.yaml")
         # All exposures in the database; mapping from ID to timespan.
         visits = {record.id: record.timespan for record in registry.queryDimensionRecords("visit")}
         # Just those IDs, sorted (which is also temporal sorting, because HSC
@@ -2870,11 +2879,11 @@ class RegistryTests(ABC):
     def testCollectionSummaries(self):
         """Test recording and retrieval of collection summaries."""
         self.maxDiff = None
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         # Importing datasets from yaml should go through the code path where
         # we update collection summaries as we insert datasets.
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         flat = registry.getDatasetType("flat")
         expected1 = CollectionSummary()
         expected1.dataset_types.add(registry.getDatasetType("bias"))
@@ -2915,11 +2924,11 @@ class RegistryTests(ABC):
         """Test that the bind parameter is correctly forwarded in
         queryDatasets recursion.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         # Importing datasets from yaml should go through the code path where
         # we update collection summaries as we insert datasets.
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         self.assertEqual(
             set(registry.queryDatasets("flat", band="r", collections=...)),
             set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
@@ -2930,8 +2939,9 @@ class RegistryTests(ABC):
 
         Note that our expressions use inclusive stop values, unlike Python's.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         self.assertEqual(
             set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (1..2)")),
             {registry.expandDataId(instrument="Cam1", detector=n) for n in [1, 2]},
@@ -2949,10 +2959,9 @@ class RegistryTests(ABC):
         """Test summary methods like `count`, `any`, and `explain_no_results`
         on `DataCoordinateQueryResults` and `DatasetQueryResults`.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
         # Default test dataset has two collections, each with both flats and
         # biases.  Add a new collection with only biases.
         registry.registerCollection("biases", CollectionType.TAGGED)
@@ -3144,8 +3153,9 @@ class RegistryTests(ABC):
 
     def testQueryDataIdsExpressionError(self):
         """Test error checking of 'where' expressions in queryDataIds."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         bind = {"time": astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")}
         # The diagnostics raised are slightly different between the old query
         # system (ValueError, first error string) and the new query system
@@ -3164,10 +3174,9 @@ class RegistryTests(ABC):
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
 
         def do_query(dimensions=("visit", "tract"), datasets=None, collections=None):
             return registry.queryDataIds(
@@ -3312,10 +3321,9 @@ class RegistryTests(ABC):
 
     def testQueryDataIdsGovernorExceptions(self):
         """Test exceptions raised by queryDataIds() for incorrect governors."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
 
         def do_query(dimensions, dataId=None, where="", bind=None, **kwargs):
             return registry.queryDataIds(dimensions, dataId=dataId, where=where, bind=bind, **kwargs)
@@ -3376,10 +3384,9 @@ class RegistryTests(ABC):
         """Test order_by and limit on result returned by
         queryDimensionRecords().
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
 
         def do_query(element, datasets=None, collections=None):
             return registry.queryDimensionRecords(
@@ -3450,10 +3457,9 @@ class RegistryTests(ABC):
 
     def testQueryDimensionRecordsExceptions(self):
         """Test exceptions raised by queryDimensionRecords()."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
 
         result = registry.queryDimensionRecords("detector")
         self.assertEqual(result.count(), 4)
@@ -3499,9 +3505,9 @@ class RegistryTests(ABC):
         constraint whose dimensions extend beyond the requested dimension
         element's.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         # Query for physical_filter dimension records, using a dataset that
         # has both physical_filter and dataset dimensions.
         records = registry.queryDimensionRecords(
@@ -3518,8 +3524,9 @@ class RegistryTests(ABC):
         """Test that we can build queries involving skypix dimensions as long
         as a dataset type that uses those dimensions is included.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml")
         dataset_type = DatasetType(
             "a", dimensions=["htm7", "instrument"], universe=registry.dimensions, storageClass="int"
         )
@@ -3547,7 +3554,8 @@ class RegistryTests(ABC):
         """Simple test for DatasetIdFactory, mostly to catch potential changes
         in its API.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         factory = DatasetIdFactory()
         dataset_type = DatasetType(
             "datasetType",
@@ -3584,8 +3592,9 @@ class RegistryTests(ABC):
         need to translate queries that originally used the exposure dimension
         to use the (very similar) visit dimension instead.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "hsc-rc2-subset.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "hsc-rc2-subset.yaml")
         self.assertEqual(
             [
                 record.id
@@ -3627,7 +3636,8 @@ class RegistryTests(ABC):
         This is especially important for PostgreSQL, which truncates symbols
         longer than 64 chars, but it's worth testing for all DBs.
         """
-        registry = self.makeRegistry()
+        butler = self.make_butler()
+        registry = butler._registry
         name = "abcd" * 17
         registry.registerDatasetType(
             DatasetType(
@@ -3653,8 +3663,9 @@ class RegistryTests(ABC):
 
     def test_skypix_constraint_queries(self) -> None:
         """Test queries spatially constrained by a skypix data ID."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "hsc-rc2-subset.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "hsc-rc2-subset.yaml")
         patch_regions = {
             (data_id["tract"], data_id["patch"]): data_id.region
             for data_id in registry.queryDataIds(["patch"]).expanded()
@@ -3721,8 +3732,9 @@ class RegistryTests(ABC):
         ID or ``where`` string) constrains a different spatial dimension in the
         query result columns.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "hsc-rc2-subset.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "hsc-rc2-subset.yaml")
         patch_regions = {
             (data_id["tract"], data_id["patch"]): data_id.region
             for data_id in registry.queryDataIds(["patch"]).expanded()
@@ -3830,9 +3842,9 @@ class RegistryTests(ABC):
         drop post-query region filtering to ensure the query remains in
         the SQL engine.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "spatial.yaml")
 
         def pop_transfer(tree: Relation) -> Relation:
             """If a relation tree terminates with a transfer to a new engine,
@@ -3877,9 +3889,9 @@ class RegistryTests(ABC):
         # Setup: load some visit, tract, and patch records, and insert two
         # datasets with dimensions {visit, patch}, with one in each of two
         # RUN collections.
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "spatial.yaml")
         storage_class = StorageClass("Warpy")
         registry.storageClasses.registerStorageClass(storage_class)
         dataset_type = DatasetType(
@@ -3921,9 +3933,9 @@ class RegistryTests(ABC):
         should return empty result set (or None when applicable) and provide
         "doomed" diagnostics.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
 
         # Tests for registry.findDataset()
         with self.assertRaises(NoDefaultCollectionError):
@@ -3968,9 +3980,9 @@ class RegistryTests(ABC):
         """Test queryDataIds(...).findRelatedDatasets(...) where a spatial join
         is involved.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "spatial.yaml")
         pvi_dataset_type = DatasetType(
             "pvi", {"visit", "detector"}, storageClass="StructuredDataDict", universe=registry.dimensions
         )
@@ -4008,10 +4020,9 @@ class RegistryTests(ABC):
         """Tests for basic functionality of expanded() on queryDataIds and
         queryDatasets.
         """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "spatial.yaml")
-        self.loadData(registry, "datasets.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "spatial.yaml", "datasets.yaml")
 
         result_obj = (
             registry.queryDataIds(["visit"], where="instrument = 'Cam1' and (visit.id = 1 or visit.id = 2)")
@@ -4079,10 +4090,9 @@ class RegistryTests(ABC):
 
     def test_collection_summary(self) -> None:
         """Test for collection summary methods."""
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        self.loadData(registry, "spatial.yaml")
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml", "spatial.yaml")
 
         # Add one more dataset type, just for its existence to trigger a bug
         # in `associate` (DM-44311).

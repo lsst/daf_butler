@@ -33,11 +33,9 @@ from __future__ import annotations
 import os
 import unittest
 
-from lsst.daf.butler import Butler, ButlerConfig, StorageClassFactory
-from lsst.daf.butler.datastore import NullDatastore
-from lsst.daf.butler.direct_butler import DirectButler
-from lsst.daf.butler.registry.sql_registry import SqlRegistry
+from lsst.daf.butler import Butler
 from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
+from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -48,17 +46,13 @@ class DirectButlerSQLiteTests(ButlerQueryTests, unittest.TestCase):
     data_dir = os.path.join(TESTDIR, "data/registry")
 
     def make_butler(self, *args: str) -> Butler:
-        config = ButlerConfig()
-        config[".registry.db"] = "sqlite://"
-        registry = SqlRegistry.createFromConfig(config)
+        # Construct without arguments because `load_data` prepends data
+        # dir but create_populated_sqlite_registry does not and for consistency
+        # call load_data to match the other usages.
+        butler = create_populated_sqlite_registry()
         for arg in args:
-            self.load_data(registry, arg)
-        return DirectButler(
-            config=config,
-            registry=registry,
-            datastore=NullDatastore(None, None),
-            storageClasses=StorageClassFactory(),
-        )
+            self.load_data(butler, arg)
+        return butler
 
 
 if __name__ == "__main__":
