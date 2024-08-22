@@ -850,7 +850,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             with self.assertRaisesRegex(
                 InvalidQueryError, r"Expression 'visit.id' in POINT\(\) is not a literal number."
             ):
-                query.where(f"visit_detector_region.region OVERLAPS POINT(visit.id, {dec})"),
+                query.where(f"visit_detector_region.region OVERLAPS POINT(visit.id, {dec})")
             with self.assertRaisesRegex(
                 InvalidQueryError, r"Expression ''not-a-number'' in POINT\(\) is not a literal number."
             ):
