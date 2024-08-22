@@ -1642,6 +1642,120 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
             self.assertEqual(len(list(with_ts)), 16)
 
+    def test_calibration_join_queries(self) -> None:
+        """Test using the 'general' query result type to join observations to
+        calibration datasets temporally.
+
+        We have to use general results because we want calibration DatasetRefs
+        and data IDs that include the observation identifiers (which are not
+        part of the calibration dataset dimensions).
+        """
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        # Set up some timestamps.
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
+        t4 = astropy.time.Time("2020-01-01T04:00:00", format="isot", scale="tai")
+        t5 = astropy.time.Time("2020-01-01T05:00:00", format="isot", scale="tai")
+        # Insert some exposure records with timespans between each sequential
+        # pair of those.
+        butler.registry.insertDimensionData(
+            "day_obs", {"instrument": "Cam1", "id": 20200101, "timespan": Timespan(t1, t5)}
+        )
+        butler.registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "name": "group0"},
+            {"instrument": "Cam1", "name": "group1"},
+            {"instrument": "Cam1", "name": "group2"},
+            {"instrument": "Cam1", "name": "group3"},
+        )
+        butler.registry.insertDimensionData(
+            "exposure",
+            {
+                "instrument": "Cam1",
+                "id": 0,
+                "group": "group0",
+                "obs_id": "zero",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t1, t2),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 1,
+                "group": "group1",
+                "obs_id": "one",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t2, t3),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 2,
+                "group": "group2",
+                "obs_id": "two",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t3, t4),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 3,
+                "group": "group3",
+                "obs_id": "three",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t4, t5),
+            },
+        )
+        # Get references to the datasets we imported.
+        bias = butler.get_dataset_type("bias")
+        bias2a = butler.find_dataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        assert bias2a is not None
+        bias3a = butler.find_dataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        assert bias3a is not None
+        bias2b = butler.find_dataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        assert bias2b is not None
+        bias3b = butler.find_dataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        assert bias3b is not None
+        # Register the main calibration collection we'll be working with.
+        collection = "Cam1/calibs"
+        butler.collections.register(collection, type=CollectionType.CALIBRATION)
+        # Certify 2a dataset with [t2, t4) validity.
+        butler.registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # Certify 3a over [t1, t3).
+        butler.registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
+        # Certify 2b and 3b together over [t4, ∞).
+        butler.registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+        # Query for (bias, exposure, detector) combinations.
+        base_data_id = DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)
+        with butler.query() as q:
+            x = q.expression_factory
+            q = q.join_dimensions(["exposure"])
+            q = q.join_dataset_search("bias", [collection])
+            # Query for all calibs with an explicit temporal join.
+            self.assertCountEqual(
+                [
+                    (data_id, refs[0])
+                    for data_id, refs, _ in q.where(
+                        x["bias"].timespan.overlaps(x.exposure.timespan), base_data_id
+                    )
+                    .x_general(
+                        butler.dimensions.conform(["exposure", "detector"]),
+                        dataset_fields={"bias": ...},
+                    )
+                    .iter_tuples(bias)
+                ],
+                [
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=1), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=2), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=0), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=1), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=3), bias2b),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
+                ],
+            )
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []
