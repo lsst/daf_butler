@@ -471,7 +471,7 @@ class DatasetTypeProxy:
     @property
     def timespan(self) -> TimespanProxy:
         try:
-            expression = tree.DimensionFieldReference(element=self._element, field="timespan")
+            expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field="timespan")
         except InvalidQueryError:
             raise AttributeError("timespan")
         return TimespanProxy(expression)
