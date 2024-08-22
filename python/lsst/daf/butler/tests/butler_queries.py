@@ -1608,7 +1608,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 self.assertCountEqual(refs, simple_refs)
 
     def test_dataset_time_queries(self) -> None:
-        """Test region queries for datasets."""
+        """Test temporal queries for datasets."""
         # Import data to play with.
         butler = self.make_butler("base.yaml", "ci_hsc-subset.yaml")
 
