@@ -34,7 +34,7 @@ __all__ = (
     "SkyPixSystem",
 )
 
-from collections.abc import Iterator, Mapping, Set
+from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -45,7 +45,7 @@ from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 
 if TYPE_CHECKING:
-    from ._universe import DimensionUniverse
+    from ._group import DimensionGroup
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -79,18 +79,18 @@ class SkyPixSystem(TopologicalFamily):
         for level in range(maxLevel + 1):
             self._members[level] = SkyPixDimension(self, level)
 
-    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> SkyPixDimension:
+    def choose(self, dimensions: DimensionGroup) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
         best: SkyPixDimension | None = None
-        for endpoint_name in endpoints:
-            endpoint = universe[endpoint_name]
+        for endpoint_name in dimensions.skypix:
+            endpoint = dimensions.universe[endpoint_name]
             if endpoint not in self:
                 continue
             assert isinstance(endpoint, SkyPixDimension)
             if best is None or best.level < endpoint.level:
                 best = endpoint
         if best is None:
-            raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
+            raise RuntimeError(f"No recognized endpoints for {self.name} in {dimensions}.")
         return best
 
     def __getitem__(self, level: int) -> SkyPixDimension:

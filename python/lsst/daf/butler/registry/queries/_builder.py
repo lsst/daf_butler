@@ -227,8 +227,8 @@ class QueryBuilder:
             for family1, family2 in itertools.combinations(self.summary.dimensions.spatial, 2):
                 spatial_joins.append(
                     (
-                        family1.choose(self.summary.dimensions.elements, self.summary.universe).name,
-                        family2.choose(self.summary.dimensions.elements, self.summary.universe).name,
+                        family1.choose(self.summary.dimensions).name,
+                        family2.choose(self.summary.dimensions).name,
                     )
                 )
             self.relation = self._backend.make_dimension_relation(

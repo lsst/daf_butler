@@ -35,13 +35,13 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Set
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse
+    from .dimensions import DimensionGroup
 
 
 @enum.unique
@@ -110,7 +110,7 @@ class TopologicalFamily(ABC):
         return self.name
 
     @abstractmethod
-    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> TopologicalRelationshipEndpoint:
+    def choose(self, dimensions: DimensionGroup) -> TopologicalRelationshipEndpoint:
         """Select the best member of this family to use.
 
         These are to be used in a query join or data ID when more than one
@@ -120,17 +120,14 @@ class TopologicalFamily(ABC):
 
         Parameters
         ----------
-        endpoints : `~collections.abc.Set` [`str`]
-            Endpoints to choose from.  May include endpoints that are not
-            members of this family (which should be ignored).
-        universe : `DimensionUniverse`
-            Object that manages all known dimensions.
+        dimensions : `DimensionGroup`
+            Dimensions to choose from, if this is a dimension-based topological
+            family.
 
         Returns
         -------
         best : `TopologicalRelationshipEndpoint`
-            The best endpoint that is both a member of ``self`` and in
-            ``endpoints``.
+            The best endpoint from this family for these dimensions.
         """
         raise NotImplementedError()
 

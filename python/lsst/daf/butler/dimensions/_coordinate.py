@@ -647,7 +647,7 @@ class DataCoordinate:
         assert self.hasRecords(), "region may only be accessed if hasRecords() returns True."
         regions = []
         for family in self.dimensions.spatial:
-            element = family.choose(self.dimensions.elements, self.universe)
+            element = family.choose(self.dimensions)
             record = self._record(element.name)
             if record is None or record.region is None:
                 return None
@@ -670,7 +670,7 @@ class DataCoordinate:
         assert self.hasRecords(), "timespan may only be accessed if hasRecords() returns True."
         timespans = []
         for family in self.dimensions.temporal:
-            element = family.choose(self.dimensions.elements, self.universe)
+            element = family.choose(self.dimensions)
             record = self._record(element.name)
             # DimensionRecord subclasses for temporal elements always have
             # .timespan, but they're dynamic so this can't be type-checked.

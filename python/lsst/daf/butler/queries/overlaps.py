@@ -277,8 +277,8 @@ class OverlapsVisitor(SimplePredicateVisitor):
         (b_family,) = b_subset
         return [
             (
-                cast(DimensionElement, a_family.choose(self.dimensions.elements, self.dimensions.universe)),
-                cast(DimensionElement, b_family.choose(self.dimensions.elements, self.dimensions.universe)),
+                cast(DimensionElement, a_family.choose(self.dimensions)),
+                cast(DimensionElement, b_family.choose(self.dimensions)),
             )
         ]
 

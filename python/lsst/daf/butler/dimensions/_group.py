@@ -452,7 +452,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
     def _choose_dimension(self, families: NamedValueAbstractSet[TopologicalFamily]) -> str | None:
         if len(families) != 1:
             return None
-        return list(families)[0].choose(self.elements, self.universe).name
+        return list(families)[0].choose(self).name
 
     @property
     def region_dimension(self) -> str | None:

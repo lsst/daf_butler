@@ -47,7 +47,7 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 
 if TYPE_CHECKING:
     from ._governor import GovernorDimension
-    from ._universe import DimensionUniverse
+    from ._group import DimensionGroup
 
 
 class DatabaseTopologicalFamily(TopologicalFamily):
@@ -78,12 +78,12 @@ class DatabaseTopologicalFamily(TopologicalFamily):
         super().__init__(name, space)
         self.members = members
 
-    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> DimensionElement:
+    def choose(self, dimensions: DimensionGroup) -> DimensionElement:
         # Docstring inherited from TopologicalFamily.
         for member in self.members:
-            if member.name in endpoints:
+            if member.name in dimensions.elements:
                 return member
-        raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
+        raise RuntimeError(f"No recognized endpoints for {self.name} in {dimensions}.")
 
     @property
     @cached_getter
