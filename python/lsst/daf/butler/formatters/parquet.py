@@ -50,6 +50,7 @@ __all__ = (
 import collections.abc
 import itertools
 import json
+import logging
 import re
 from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, cast
@@ -62,10 +63,19 @@ from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
+log = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     import astropy.table as atable
     import numpy as np
     import pandas as pd
+
+    try:
+        import fsspec
+        from fsspec.spec import AbstractFileSystem
+    except ImportError:
+        fsspec = None
+        AbstractFileSystem = type
 
 TARGET_ROW_GROUP_BYTES = 1_000_000_000
 
@@ -76,15 +86,37 @@ class ParquetFormatter(FormatterV2):
     """
 
     default_extension = ".parq"
+    can_read_from_uri = True
     can_read_from_local_file = True
 
     def can_accept(self, in_memory_dataset: Any) -> bool:
         # Docstring inherited.
         return _checkArrowCompatibleType(in_memory_dataset) is not None
 
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
+        # Docstring inherited from Formatter.read.
+        try:
+            fs, path = uri.to_fsspec()
+        except ImportError:
+            log.debug("fsspec not available; falling back to local file access.")
+            # This signals to the formatter to use the read_from_local_file
+            # code path.
+            return NotImplemented
+
+        return self._read_parquet(path=path, fs=fs, component=component, expected_size=expected_size)
+
     def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
         # Docstring inherited from Formatter.read.
-        schema = pq.read_schema(path)
+        return self._read_parquet(path=path, component=component, expected_size=expected_size)
+
+    def _read_parquet(
+        self,
+        path: str,
+        fs: AbstractFileSystem | None = None,
+        component: str | None = None,
+        expected_size: int = -1,
+    ) -> Any:
+        schema = pq.read_schema(path, filesystem=fs)
 
         schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
@@ -99,6 +131,7 @@ class ParquetFormatter(FormatterV2):
 
             temp_table = pq.read_table(
                 path,
+                filesystem=fs,
                 columns=[schema.names[0]],
                 use_threads=False,
                 use_pandas_metadata=False,
@@ -140,6 +173,7 @@ class ParquetFormatter(FormatterV2):
         metadata = schema.metadata if schema.metadata is not None else {}
         arrow_table = pq.read_table(
             path,
+            filesystem=fs,
             columns=par_columns,
             use_threads=False,
             use_pandas_metadata=(b"pandas" in metadata),
