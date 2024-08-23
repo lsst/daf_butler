@@ -46,7 +46,7 @@ from .._collection_type import CollectionType
 from .._dataset_type import DatasetType
 from .._exceptions import EmptyQueryResultError, InvalidQueryError
 from .._timespan import Timespan
-from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecord
+from ..dimensions import DataCoordinate, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults, Query
 from ..queries.tree import Predicate
@@ -375,7 +375,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         # Use "flat" whose dimension group includes implied dimension.
         flat = butler.get_dataset_type("flat")
-        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+        dimensions = butler.dimensions.conform(["detector", "physical_filter"])
 
         # Do simple dataset queries in RUN collection.
         with butler.query() as query:
@@ -490,7 +490,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """Test general query returning ingest_date field."""
         before_ingest = astropy.time.Time.now()
         butler = self.make_butler("base.yaml", "datasets.yaml")
-        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+        dimensions = butler.dimensions.conform(["detector", "physical_filter"])
 
         # Check that returned type of ingest_date is astropy Time, must work
         # for schema versions 1 and 2 of datasets manager.
