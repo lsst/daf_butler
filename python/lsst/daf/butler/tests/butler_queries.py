@@ -1773,12 +1773,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
             # Query for all calibs with the temporal join implicit and the
-            # dimensions given as a list.
+            # dimensions given as an incomplete list (detector is added by
+            # the dataset results).
             self.assertCountEqual(
                 [
                     (data_id, refs[0])
                     for data_id, refs, _ in q.where(base_data_id)
-                    .x_general(["exposure", "detector"], dataset_fields={"bias": ...})
+                    .x_general(["exposure"], dataset_fields={"bias": ...}, find_first=True)
                     .iter_tuples(bias)
                 ],
                 [
