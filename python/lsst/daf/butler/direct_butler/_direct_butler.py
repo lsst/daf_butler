@@ -1401,9 +1401,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             filtered_dataset_types = self.collections._filter_dataset_types(
                 all_dataset_types, collections_info
             )
-            refs.extend(
-                self._registry.queryDatasets(filtered_dataset_types, collections=name, findFirst=True)
-            )
+            with self._query() as query:
+                for dt in filtered_dataset_types:
+                    refs.extend(query.datasets(dt, collections=name))
         with self._datastore.transaction(), self._registry.transaction():
             if unstore:
                 self._datastore.trash(refs)
