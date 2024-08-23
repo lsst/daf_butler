@@ -1772,6 +1772,24 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
                 ],
             )
+            # Query for all calibs with the temporal join implicit and the
+            # dimensions given as a list.
+            self.assertCountEqual(
+                [
+                    (data_id, refs[0])
+                    for data_id, refs, _ in q.where(base_data_id)
+                    .x_general(["exposure", "detector"], dataset_fields={"bias": ...})
+                    .iter_tuples(bias)
+                ],
+                [
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=1), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=2), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=0), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=1), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=3), bias2b),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
+                ],
+            )
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:

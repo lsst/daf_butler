@@ -32,7 +32,7 @@ any Butler or QueryDriver implementation.
 from __future__ import annotations
 
 import unittest
-from collections.abc import Iterable
+from collections.abc import Iterable, Set
 
 import astropy.time
 from lsst.daf.butler import DimensionUniverse, InvalidQueryError, Timespan
@@ -141,11 +141,13 @@ class ColumnSetTestCase(unittest.TestCase):
 
 
 class _RecordingOverlapsVisitor(OverlapsVisitor):
-    def __init__(self, dimensions: DimensionGroup):
-        super().__init__(dimensions)
+    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str] = frozenset()):
+        super().__init__(dimensions, calibration_dataset_types)
         self.spatial_constraints: list[tuple[str, PredicateVisitFlags]] = []
         self.spatial_joins: list[tuple[str, str, PredicateVisitFlags]] = []
         self.temporal_dimension_joins: list[tuple[str, str, PredicateVisitFlags]] = []
+        self.validity_range_dimension_joins: list[tuple[str, str, PredicateVisitFlags]] = []
+        self.validity_range_joins: list[tuple[str, str, PredicateVisitFlags]] = []
 
     def visit_spatial_constraint(
         self, element: DimensionElement, region: Region, flags: PredicateVisitFlags
@@ -165,6 +167,16 @@ class _RecordingOverlapsVisitor(OverlapsVisitor):
         self.temporal_dimension_joins.append((a.name, b.name, flags))
         return super().visit_temporal_dimension_join(a, b, flags)
 
+    def visit_validity_range_dimension_join(
+        self, a: str, b: DimensionElement, flags: PredicateVisitFlags
+    ) -> qt.Predicate | None:
+        self.validity_range_dimension_joins.append((a, b.name, flags))
+        return super().visit_validity_range_dimension_join(a, b, flags)
+
+    def visit_validity_range_join(self, a: str, b: str, flags: PredicateVisitFlags) -> qt.Predicate | None:
+        self.validity_range_joins.append((a, b, flags))
+        return super().visit_validity_range_join(a, b, flags)
+
 
 class OverlapsVisitorTestCase(unittest.TestCase):
     """Tests for lsst.daf.butler.queries.overlaps.OverlapsVisitor, which is
@@ -181,8 +193,9 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         predicate: qt.Predicate,
         expected: str | None = None,
         join_operands: Iterable[DimensionGroup] = (),
+        calibration_dataset_types: Set[str] = frozenset(),
     ) -> _RecordingOverlapsVisitor:
-        visitor = _RecordingOverlapsVisitor(self.universe.conform(dimensions))
+        visitor = _RecordingOverlapsVisitor(self.universe.conform(dimensions), calibration_dataset_types)
         if expected is None:
             expected = str(predicate)
         new_predicate = visitor.run(predicate, join_operands=join_operands)
@@ -456,10 +469,27 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         with self.assertRaises(InvalidQueryError):
             self.run_visitor(["exposure", "visit"], x.exposure.timespan.overlaps(x.visit.timespan))
         # Overlap join with a calibration dataset's validity ranges.
-        visitor = self.run_visitor(["exposure"], x.exposure.timespan.overlaps(x["bias"].timespan))
+        visitor = self.run_visitor(
+            ["exposure"], x.exposure.timespan.overlaps(x["bias"].timespan), calibration_dataset_types={"bias"}
+        )
         self.assertFalse(visitor.spatial_joins)
         self.assertFalse(visitor.spatial_constraints)
         self.assertFalse(visitor.temporal_dimension_joins)
+        self.assertEqual(
+            visitor.validity_range_dimension_joins, [("bias", "exposure", PredicateVisitFlags(0))]
+        )
+        self.assertFalse(visitor.validity_range_joins)
+        # Overlap join between two calibration dataset validity ranges.
+        # (It's not clear this kind of query is ever useful in practice, but
+        # there's a good consistency argument for what it ought to do).
+        visitor = self.run_visitor(
+            [], x["flat"].timespan.overlaps(x["bias"].timespan), calibration_dataset_types={"bias", "flat"}
+        )
+        self.assertFalse(visitor.spatial_joins)
+        self.assertFalse(visitor.spatial_constraints)
+        self.assertFalse(visitor.temporal_dimension_joins)
+        self.assertFalse(visitor.validity_range_dimension_joins)
+        self.assertEqual(visitor.validity_range_joins, [("flat", "bias", PredicateVisitFlags(0))])
 
     # There are no tests for temporal dimension joins, because the default
     # dimension universe only has one spatial family, and the untested logic

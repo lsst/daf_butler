@@ -883,6 +883,38 @@ class DirectQueryDriver(QueryDriver):
             potentially included, with the remainder still present in
             `QueryJoinPlans.predicate`.
         """
+        # Retrieve collection information for all collections in a tree.
+        collection_names = set(
+            itertools.chain.from_iterable(
+                dataset_search.collections for dataset_search in tree.datasets.values()
+            )
+        )
+        collection_records = {
+            record.name: record
+            for record in self.managers.collections.resolve_wildcard(
+                CollectionWildcard.from_names(collection_names), flatten_chains=True, include_chains=True
+            )
+        }
+        non_chain_records = [
+            record for record in collection_records.values() if record.type is not CollectionType.CHAINED
+        ]
+        # Fetch summaries for a subset of dataset types.
+        dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
+        summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
+        # Do a preliminary resolution for dataset searches to identify any
+        # calibration lookups that might participate in temporal joins.
+        calibration_dataset_types: set[str] = set()
+        summaries_by_dataset_type: dict[str, list[tuple[CollectionRecord, CollectionSummary]]] = {}
+        for dataset_type_name, dataset_search in tree.datasets.items():
+            collection_summaries = self._filter_collections(
+                dataset_search.collections, collection_records, summaries
+            )
+            summaries_by_dataset_type[dataset_type_name] = collection_summaries
+            resolved_dataset_search = self._resolve_dataset_search(
+                dataset_type_name, dataset_search, {}, collection_summaries
+            )
+            if resolved_dataset_search.is_calibration_search:
+                calibration_dataset_types.add(dataset_type_name)
         # Delegate to the dimensions manager to rewrite the predicate and start
         # a QueryBuilder to cover any spatial overlap joins or constraints.
         # We'll return that QueryBuilder at the end.
@@ -893,6 +925,7 @@ class DirectQueryDriver(QueryDriver):
             tree.dimensions,
             tree.predicate,
             tree.get_joined_dimension_groups(),
+            calibration_dataset_types,
         )
         result = QueryJoinsPlan(predicate=predicate, columns=builder.columns)
         # Add columns required by postprocessing.
@@ -929,32 +962,15 @@ class DirectQueryDriver(QueryDriver):
             )
         # Add data coordinate uploads.
         result.data_coordinate_uploads.update(tree.data_coordinate_uploads)
-        # Retrieve collection information for all collections in a tree.
-        collection_names = set(
-            itertools.chain.from_iterable(
-                dataset_search.collections for dataset_search in tree.datasets.values()
-            )
-        )
-        collection_records = {
-            record.name: record
-            for record in self.managers.collections.resolve_wildcard(
-                CollectionWildcard.from_names(collection_names), flatten_chains=True, include_chains=True
-            )
-        }
-        non_chain_records = [
-            record for record in collection_records.values() if record.type is not CollectionType.CHAINED
-        ]
-        # Fetch summaries for a subset of dataset types.
-        dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
-        summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
         # Add dataset_searches and filter out collections that don't have the
-        # right dataset type or governor dimensions.
+        # right dataset type or governor dimensions.  We re-resolve dataset
+        # searches now that we have a constraint data ID.
         for dataset_type_name, dataset_search in tree.datasets.items():
-            collection_summaries = self._filter_collections(
-                dataset_search.collections, collection_records, summaries
-            )
             resolved_dataset_search = self._resolve_dataset_search(
-                dataset_type_name, dataset_search, result.constraint_data_id, collection_summaries
+                dataset_type_name,
+                dataset_search,
+                result.constraint_data_id,
+                summaries_by_dataset_type[dataset_type_name],
             )
             result.datasets[dataset_type_name] = resolved_dataset_search
             if not resolved_dataset_search.collection_records:
