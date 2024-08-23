@@ -42,6 +42,7 @@ from lsst.utils.classes import immutable
 
 if TYPE_CHECKING:
     from .dimensions import DimensionGroup
+    from .queries.tree import ColumnReference
 
 
 @enum.unique
@@ -128,6 +129,23 @@ class TopologicalFamily(ABC):
         -------
         best : `TopologicalRelationshipEndpoint`
             The best endpoint from this family for these dimensions.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_column_reference(self, endpoint: TopologicalRelationshipEndpoint) -> ColumnReference:
+        """Create a column reference to the generalized region column for the
+        given endpoint.
+
+        Parameters
+        ----------
+        endpoint : `TopologicalRelationshipEndpoint`
+            Endpoint to create a column reference to.
+
+        Returns
+        -------
+        column : `.queries.tree.ColumnReference`
+            Column reference.
         """
         raise NotImplementedError()
 

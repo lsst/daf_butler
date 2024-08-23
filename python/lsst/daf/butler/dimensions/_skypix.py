@@ -27,8 +27,6 @@
 
 from __future__ import annotations
 
-from lsst.daf.butler.column_spec import IntColumnSpec
-
 __all__ = (
     "SkyPixDimension",
     "SkyPixSystem",
@@ -36,15 +34,17 @@ __all__ = (
 
 from collections.abc import Iterator, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from lsst.sphgeom import PixelizationABC
 
 from .._named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalFamily, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
+from ..column_spec import IntColumnSpec
 from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 
 if TYPE_CHECKING:
+    from ..queries.tree import DimensionFieldReference
     from ._group import DimensionGroup
 
 
@@ -101,6 +101,11 @@ class SkyPixSystem(TopologicalFamily):
 
     def __len__(self) -> int:
         return len(self._members)
+
+    def make_column_reference(self, endpoint: TopologicalRelationshipEndpoint) -> DimensionFieldReference:
+        from ..queries.tree import DimensionFieldReference
+
+        return DimensionFieldReference(element=cast(SkyPixDimension, endpoint), field="region")
 
 
 class SkyPixDimension(Dimension):

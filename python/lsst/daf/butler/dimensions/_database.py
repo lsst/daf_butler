@@ -41,11 +41,12 @@ from typing import TYPE_CHECKING
 from lsst.utils.classes import cached_getter
 
 from .._named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalFamily, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 from ._elements import Dimension, DimensionCombination, DimensionElement, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
+    from ..queries.tree import DimensionFieldReference
     from ._governor import GovernorDimension
     from ._group import DimensionGroup
 
@@ -106,6 +107,16 @@ class DatabaseTopologicalFamily(TopologicalFamily):
                 f"in {self.members}."
             ) from None
         return result  # type: ignore
+
+    def make_column_reference(self, endpoint: TopologicalRelationshipEndpoint) -> DimensionFieldReference:
+        # Docstring inherited from TopologicalFamily.
+        from ..queries.tree import DimensionFieldReference
+
+        assert isinstance(endpoint, DimensionElement)
+        return DimensionFieldReference(
+            element=endpoint,
+            field=("region" if self.space is TopologicalSpace.SPATIAL else "timespan"),
+        )
 
     members: NamedValueAbstractSet[DimensionElement]
     """The members of this family, ordered according to the priority used in
