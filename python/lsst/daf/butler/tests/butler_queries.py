@@ -608,7 +608,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 query.join_dataset_search("bias", collections=["empty"]).dimension_records("detector"),
                 [],
                 messages=[
-                    "Search for dataset type 'bias' is doomed to fail.",
+                    "Search for dataset type 'bias' in ['empty'] is doomed to fail.",
                     "No datasets of type 'bias' in collection 'empty'.",
                 ],
                 doomed=True,
@@ -619,7 +619,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 .dimension_records("detector"),
                 [],
                 messages=[
-                    "Search for dataset type 'bias' is doomed to fail.",
+                    "Search for dataset type 'bias' in ['imported_g'] is doomed to fail.",
                     "No datasets with instrument='Cam2' in collection 'imported_g'.",
                 ],
                 doomed=True,

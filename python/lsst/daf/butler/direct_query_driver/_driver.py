@@ -974,7 +974,10 @@ class DirectQueryDriver(QueryDriver):
             )
             result.datasets[dataset_type_name] = resolved_dataset_search
             if not resolved_dataset_search.collection_records:
-                result.messages.append(f"Search for dataset type {dataset_type_name!r} is doomed to fail.")
+                result.messages.append(
+                    f"Search for dataset type {dataset_type_name!r} in "
+                    f"{list(dataset_search.collections)} is doomed to fail."
+                )
                 result.messages.extend(resolved_dataset_search.messages)
         return result, builder
 
