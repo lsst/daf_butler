@@ -134,7 +134,10 @@ class DirectQueryDriver(QueryDriver):
         dimension_record_cache: DimensionRecordCache,
         default_collections: Iterable[str],
         default_data_id: DataCoordinate,
-        raw_page_size: int = 10000,
+        # Increasing raw_page_size increases memory usage for queries on
+        # Butler server, so if you increase this you may need to increase the
+        # memory allocation for the server in Phalanx as well.
+        raw_page_size: int = 2000,
         constant_rows_limit: int = 1000,
         postprocessing_filter_factor: int = 10,
     ):
