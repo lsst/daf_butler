@@ -449,6 +449,31 @@ class DimensionGroup:  # numpydoc ignore=PR02
         order.extend(element for element in self.elements if element not in done)
         return tuple(order)
 
+    def _choose_dimension(self, families: NamedValueAbstractSet[TopologicalFamily]) -> str | None:
+        if len(families) != 1:
+            return None
+        return list(families)[0].choose(self.elements, self.universe).name
+
+    @property
+    def region_dimension(self) -> str | None:
+        """Return the most appropriate spatial dimension to use when looking
+        up a region.
+
+        Returns `None` if there are no appropriate dimensions or more than one
+        spatial family.
+        """
+        return self._choose_dimension(self.spatial)
+
+    @property
+    def timespan_dimension(self) -> str | None:
+        """Return the most appropriate temporal dimension to use when looking
+        up a time span.
+
+        Returns `None` if there are no appropriate dimensions or more than one
+        temporal family.
+        """
+        return self._choose_dimension(self.temporal)
+
     @property
     def spatial(self) -> NamedValueAbstractSet[TopologicalFamily]:
         """Families represented by the spatial elements in this graph."""
