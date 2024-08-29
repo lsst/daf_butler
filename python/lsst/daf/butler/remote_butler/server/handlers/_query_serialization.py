@@ -27,9 +27,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
-
-from ...._exceptions import ButlerUserError
 from ....queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
@@ -38,36 +35,16 @@ from ....queries.driver import (
     ResultPage,
     ResultSpec,
 )
-from ..._errors import serialize_butler_user_error
 from ...server_models import (
     DataCoordinateResultModel,
     DatasetRefResultModel,
     DimensionRecordsResultModel,
     GeneralResultModel,
-    QueryErrorResultModel,
     QueryExecuteResultData,
 )
 
 
-def serialize_query_pages(
-    spec: ResultSpec, pages: Iterable[ResultPage]
-) -> Iterator[str]:  # numpydoc ignore=PR01
-    """Serialize result pages to pages of result data in JSON format. The
-    output contains one page object per line, as newline-delimited JSON records
-    in the "JSON Lines" format (https://jsonlines.org/).
-    """
-    try:
-        for page in pages:
-            yield _convert_query_page(spec, page).model_dump_json()
-            yield "\n"
-    except ButlerUserError as e:
-        # If a user-facing error occurs, serialize it and send it to the
-        # client.
-        yield QueryErrorResultModel(error=serialize_butler_user_error(e)).model_dump_json()
-        yield "\n"
-
-
-def _convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResultData:
+def convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResultData:
     """Convert pages of result data from the query system to a serializable
     format.
 
@@ -75,8 +52,13 @@ def _convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResul
     ----------
     spec : `ResultSpec`
         Definition of the output format for the results.
-    pages : `ResultPage`
+    page : `ResultPage`
         Raw page of data from the query driver.
+
+    Returns
+    -------
+    model : `QueryExecuteResultData`
+        Serializable pydantic model version of the page.
     """
     match spec.result_type:
         case "dimension_record":

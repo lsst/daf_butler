@@ -147,8 +147,9 @@ class RemoteQueryDriver(QueryDriver):
                 # There is one result page JSON object per line of the
                 # response.
                 for line in response.iter_lines():
-                    result_chunk = _QueryResultTypeAdapter.validate_json(line)
-                    yield _convert_query_result_page(result_spec, result_chunk, universe)
+                    result_chunk: QueryExecuteResultData = _QueryResultTypeAdapter.validate_json(line)
+                    if result_chunk.type != "keep-alive":
+                        yield _convert_query_result_page(result_spec, result_chunk, universe)
                     if self._closed:
                         raise RuntimeError(
                             "Cannot continue query result iteration: query context has been closed"
