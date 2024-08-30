@@ -148,7 +148,9 @@ class RemoteQueryDriver(QueryDriver):
                 # response.
                 for line in response.iter_lines():
                     result_chunk: QueryExecuteResultData = _QueryResultTypeAdapter.validate_json(line)
-                    if result_chunk.type != "keep-alive":
+                    if result_chunk.type == "keep-alive":
+                        _received_keep_alive()
+                    else:
                         yield _convert_query_result_page(result_spec, result_chunk, universe)
                     if self._closed:
                         raise RuntimeError(
@@ -280,3 +282,10 @@ def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) 
         for row in model.rows
     ]
     return GeneralResultPage(spec=spec, rows=rows)
+
+
+def _received_keep_alive() -> None:
+    """Do nothing.  Gives a place for unit tests to hook in for testing
+    keepalive behavior.
+    """
+    pass

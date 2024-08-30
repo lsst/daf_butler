@@ -61,6 +61,9 @@ from ._query_serialization import convert_query_page
 
 query_router = APIRouter()
 
+# Alias this function so we can mock it during unit tests.
+_timeout = asyncio.timeout
+
 
 @query_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
 async def query_execute(
@@ -139,7 +142,7 @@ async def _dequeue_query_pages_with_keepalive(
     """
     while True:
         try:
-            async with asyncio.timeout(15):
+            async with _timeout(15):
                 message = await queue.get()
                 if message is None:
                     return
