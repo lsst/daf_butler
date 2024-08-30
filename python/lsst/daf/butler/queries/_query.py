@@ -314,8 +314,8 @@ class Query(QueryBase):
         self,
         dimensions: DimensionGroup,
         *names: str,
-        dimension_fields: Mapping[str, Set[str]] = {},
-        dataset_fields: Mapping[str, Set[DatasetFieldName] | EllipsisType] = {},
+        dimension_fields: Mapping[str, Set[str]] | None = None,
+        dataset_fields: Mapping[str, Set[DatasetFieldName] | EllipsisType] | None = None,
         find_first: bool = False,
     ) -> GeneralQueryResults:
         """Execute query returning general result.
@@ -348,6 +348,10 @@ class Query(QueryBase):
         result : `GeneralQueryResults`
             Query result that can be iterated over.
         """
+        if dimension_fields is None:
+            dimension_fields = {}
+        if dataset_fields is None:
+            dataset_fields = {}
         dimension_fields_dict = {name: set(fields) for name, fields in dimension_fields.items()}
         dataset_fields_dict = {
             name: set(DATASET_FIELD_NAMES) if fields is ... else set(fields)
