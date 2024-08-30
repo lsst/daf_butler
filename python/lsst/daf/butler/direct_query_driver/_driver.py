@@ -934,9 +934,9 @@ class DirectQueryDriver(QueryDriver):
         # without constraining their governor dimensions, since that's a
         # particularly easy mistake to make and it's almost never intentional.
         # We also allow the registry data ID values to provide governor values.
-        where_columns = qt.ColumnSet(self.universe.empty)
-        result.predicate.gather_required_columns(where_columns)
-        for governor in where_columns.dimensions.governors:
+        where_governors: set[str] = set()
+        result.predicate.gather_governors(where_governors)
+        for governor in where_governors:
             if governor not in result.constraint_data_id:
                 if governor in self._default_data_id.dimensions:
                     result.constraint_data_id[governor] = self._default_data_id[governor]

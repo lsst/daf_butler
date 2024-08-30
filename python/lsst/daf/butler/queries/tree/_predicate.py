@@ -84,6 +84,18 @@ class PredicateLeafBase(QueryTreeBase, ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def gather_governors(self, governors: set[str]) -> None:
+        """Add any governor dimensions that need to be fully identified for
+        this column expression to be sound.
+
+        Parameters
+        ----------
+        governors : `set` [ `str` ]
+            Set of governor dimension names to modify in place.
+        """
+        raise NotImplementedError()
+
     def invert(self) -> PredicateLeaf:
         """Return a new leaf that is the logical not of this one."""
         return LogicalNot.model_construct(operand=cast("LogicalNotOperand", self))
@@ -293,6 +305,19 @@ class Predicate(QueryTreeBase):
             for operand in or_group:
                 operand.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        """Add any governor dimensions that need to be fully identified for
+        this column expression to be sound.
+
+        Parameters
+        ----------
+        governors : `set` [ `str` ]
+            Set of governor dimension names to modify in place.
+        """
+        for or_group in self.operands:
+            for operand in or_group:
+                operand.gather_governors(governors)
+
     def logical_and(self, *args: Predicate) -> Predicate:
         """Construct a predicate representing the logical AND of this predicate
         and one or more others.
@@ -421,6 +446,10 @@ class LogicalNot(PredicateLeafBase):
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.operand.gather_governors(governors)
+
     def __str__(self) -> str:
         return f"NOT {self.operand}"
 
@@ -445,6 +474,10 @@ class BooleanWrapper(PredicateLeafBase):
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.operand.gather_governors(governors)
+
     def __str__(self) -> str:
         return f"{self.operand}"
 
@@ -465,6 +498,10 @@ class IsNull(PredicateLeafBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.operand.gather_governors(governors)
 
     def __str__(self) -> str:
         return f"{self.operand} IS NULL"
@@ -495,6 +532,11 @@ class Comparison(PredicateLeafBase):
         # Docstring inherited.
         self.a.gather_required_columns(columns)
         self.b.gather_required_columns(columns)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.a.gather_governors(governors)
+        self.b.gather_governors(governors)
 
     def __str__(self) -> str:
         return f"{self.a} {self.operator.upper()} {self.b}"
@@ -556,6 +598,12 @@ class InContainer(PredicateLeafBase):
         for item in self.container:
             item.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.member.gather_governors(governors)
+        for item in self.container:
+            item.gather_governors(governors)
+
     def __str__(self) -> str:
         return f"{self.member} IN [{', '.join(str(item) for item in self.container)}]"
 
@@ -597,6 +645,10 @@ class InRange(PredicateLeafBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         self.member.gather_required_columns(columns)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.member.gather_governors(governors)
 
     def __str__(self) -> str:
         s = f"{self.start if self.start else ''}:{self.stop if self.stop is not None else ''}"
@@ -643,6 +695,12 @@ class InQuery(PredicateLeafBase):
         # We're only gathering columns from the query_tree this predicate is
         # attached to, not `self.column`, which belongs to `self.query_tree`.
         self.member.gather_required_columns(columns)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        # We're only gathering governors from the query_tree this predicate is
+        # attached to, not `self.column`, which belongs to `self.query_tree`.
+        self.member.gather_governors(governors)
 
     def __str__(self) -> str:
         return f"{self.member} IN (query).{self.column}"

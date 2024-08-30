@@ -61,6 +61,10 @@ class DimensionKeyReference(ColumnExpressionBase):
         # Docstring inherited.
         columns.update_dimensions(self.dimension.minimal_group)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        if self.dimension.governor is not None:
+            governors.add(self.dimension.governor.name)
+
     @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
@@ -94,6 +98,19 @@ class DimensionFieldReference(ColumnExpressionBase):
         # Docstring inherited.
         columns.update_dimensions(self.element.minimal_group)
         columns.dimension_fields[self.element.name].add(self.field)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        # We assume metadata fields (and certainly region and timespan fields)
+        # don't need to be qualified with (e.g.) an instrument or skymap name
+        # to make sense, but keys like visit IDs or detector names do need to
+        # e qualified.
+        if (
+            isinstance(self.element, Dimension)
+            and self.field in self.element.alternate_keys.names
+            and self.element.governor is not None
+        ):
+            governors.add(self.element.governor.name)
 
     @property
     def column_type(self) -> ColumnType:
@@ -133,6 +150,10 @@ class DatasetFieldReference(ColumnExpressionBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         columns.dataset_fields[self.dataset_type].add(self.field)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        pass
 
     @property
     def column_type(self) -> ColumnType:
