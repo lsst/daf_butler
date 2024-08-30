@@ -34,6 +34,8 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
+    import lsst.daf.butler.remote_butler._query_driver
+    import lsst.daf.butler.remote_butler.server.handlers._external_query
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
@@ -47,7 +49,7 @@ except ImportError as e:
     create_test_server = None
     reason_text = str(e)
 
-from unittest.mock import NonCallableMock, patch
+from unittest.mock import DEFAULT, NonCallableMock, patch
 
 from lsst.daf.butler import (
     Butler,
@@ -402,6 +404,28 @@ class ButlerClientServerTestCase(unittest.TestCase):
             self.assertEqual(kwargs["clientRequestId"], "request-id")
             self.assertEqual(kwargs["user"], "user-name")
 
+    def test_query_keepalive(self):
+        """Test that long-running queries stream keep-alive messages to stop
+        the HTTP connection from closing before they are able to return
+        results.
+        """
+        # Normally it takes 15 seconds for a timeout -- mock it to trigger
+        # immediately instead.
+        with patch.object(
+            lsst.daf.butler.remote_butler.server.handlers._external_query, "_timeout"
+        ) as mock_timeout:
+            # Hook into QueryDriver to track the number of keep-alives we have
+            # seen.
+            with patch.object(
+                lsst.daf.butler.remote_butler._query_driver, "_received_keep_alive"
+            ) as mock_keep_alive:
+                mock_timeout.side_effect = _timeout_twice()
+                with self.butler._query() as query:
+                    datasets = list(query.datasets("bias", "imported_g"))
+                self.assertEqual(len(datasets), 3)
+                self.assertGreaterEqual(mock_timeout.call_count, 3)
+                self.assertGreaterEqual(mock_keep_alive.call_count, 2)
+
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
     run = "corrupted-run"
@@ -416,6 +440,22 @@ def _create_simple_dataset(butler: Butler) -> DatasetRef:
     dataset_type = addDatasetType(butler, "test_int", {"instrument", "visit"}, "int")
     ref = butler.put(123, dataset_type, dataId={"instrument": "DummyCamComp", "visit": 423}, run="ingest/run")
     return ref
+
+
+def _timeout_twice():
+    """Return a mock side-effect function that raises a timeout error the first
+    two times it is called.
+    """
+    count = 0
+
+    def timeout(*args):
+        nonlocal count
+        count += 1
+        if count <= 2:
+            raise TimeoutError()
+        return DEFAULT
+
+    return timeout
 
 
 if __name__ == "__main__":

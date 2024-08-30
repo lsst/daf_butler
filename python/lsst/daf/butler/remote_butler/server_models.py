@@ -299,12 +299,24 @@ class QueryErrorResultModel(pydantic.BaseModel):
     error: ErrorResponseModel
 
 
+class QueryKeepAliveModel(pydantic.BaseModel):
+    """Result model for /query/execute used to keep connection alive.
+
+    Some queries require a significant start-up time before they can start
+    returning results, or a long processing time for each chunk of rows.  This
+    message signals that the server is still fetching the data.
+    """
+
+    type: Literal["keep-alive"] = "keep-alive"
+
+
 QueryExecuteResultData: TypeAlias = Annotated[
     DataCoordinateResultModel
     | DimensionRecordsResultModel
     | DatasetRefResultModel
     | GeneralResultModel
-    | QueryErrorResultModel,
+    | QueryErrorResultModel
+    | QueryKeepAliveModel,
     pydantic.Field(discriminator="type"),
 ]
 

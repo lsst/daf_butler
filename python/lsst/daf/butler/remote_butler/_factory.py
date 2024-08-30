@@ -66,7 +66,18 @@ class RemoteButlerFactory:
         if http_client is not None:
             self.http_client = http_client
         else:
-            self.http_client = httpx.Client()
+            self.http_client = httpx.Client(
+                # This timeout is fairly conservative.  This value isn't the
+                # maximum amount of time the request can take -- it's the
+                # maximum amount of time to wait after receiving the last chunk
+                # of data from the server.
+                #
+                # Long-running, streamed queries send a keep-alive every 15
+                # seconds.  However, unstreamed operations like
+                # queryCollections can potentially take a while if the database
+                # is under duress.
+                timeout=120  # seconds
+            )
         self._cache = RemoteButlerCache()
 
     @staticmethod

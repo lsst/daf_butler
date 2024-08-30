@@ -33,7 +33,6 @@ from collections.abc import Awaitable, Callable
 
 import safir.dependencies.logger
 from fastapi import FastAPI, Request, Response
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from safir.logging import configure_logging, configure_uvicorn_logging
 
@@ -54,7 +53,6 @@ def create_app() -> FastAPI:
     config = load_config()
 
     app = FastAPI()
-    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # A single instance of the server can serve data from multiple Butler
     # repositories.  This 'repository' path placeholder is consumed by
