@@ -213,7 +213,8 @@ class GeneralResultSpec(ResultSpecBase):
     """Whether this query requires find-first resolution for a dataset.
 
     This can only be `True` if exactly one dataset type's fields are included
-    in the results.
+    in the results and the ``collection`` and ``timespan`` fields for that
+    dataset are not included.
     """
 
     @property

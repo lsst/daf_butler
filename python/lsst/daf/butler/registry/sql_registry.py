@@ -2431,6 +2431,7 @@ class SqlRegistry:
             result = query.x_general(
                 datasetType.dimensions,
                 dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
+                find_first=False,
             )
             yield from DatasetAssociation.from_query_result(result, datasetType)
 

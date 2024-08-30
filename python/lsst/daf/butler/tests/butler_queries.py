@@ -391,7 +391,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
 
-            result = query.x_general(dimensions, dataset_fields={"flat": ...}).order_by("detector")
+            result = query.x_general(dimensions, dataset_fields={"flat": ...}, find_first=True).order_by(
+                "detector"
+            )
             ids = {row["flat.dataset_id"] for row in result}
             self.assertEqual(
                 ids,
@@ -435,7 +437,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged"])
 
-            result = query.x_general(dimensions, "flat.dataset_id", "flat.run", "flat.collection")
+            result = query.x_general(
+                dimensions, "flat.dataset_id", "flat.run", "flat.collection", find_first=False
+            )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 2)
             self.assertEqual({row_tuple.refs[0] for row_tuple in row_tuples}, {flat1, flat2})
@@ -445,7 +449,12 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["calib"])
             result = query.x_general(
-                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+                dimensions,
+                "flat.dataset_id",
+                "flat.run",
+                "flat.collection",
+                "flat.timespan",
+                find_first=False,
             )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 4)
@@ -460,7 +469,12 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged", "calib"])
             result = query.x_general(
-                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+                dimensions,
+                "flat.dataset_id",
+                "flat.run",
+                "flat.collection",
+                "flat.timespan",
+                find_first=False,
             )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 6)
@@ -482,7 +496,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # for schema versions 1 and 2 of datasets manager.
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
-            rows = list(query.x_general(dimensions, dataset_fields={"flat": ...}))
+            rows = list(
+                query.x_general(dimensions, dataset_fields={"flat": {"ingest_date"}}, find_first=False)
+            )
             self.assertEqual(len(rows), 3)
             for row in rows:
                 self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
@@ -1743,6 +1759,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     .x_general(
                         butler.dimensions.conform(["exposure", "detector"]),
                         dataset_fields={"bias": ...},
+                        find_first=True,
                     )
                     .iter_tuples(bias)
                 ],

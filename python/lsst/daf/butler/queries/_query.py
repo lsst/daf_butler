@@ -56,7 +56,6 @@ from .result_specs import (
     GeneralResultSpec,
 )
 from .tree import (
-    DATASET_FIELD_NAMES,
     DatasetFieldName,
     DatasetFieldReference,
     DatasetSearch,
@@ -312,11 +311,11 @@ class Query(QueryBase):
 
     def x_general(
         self,
-        dimensions: DimensionGroup,
+        dimensions: DimensionGroup | Iterable[str],
         *names: str,
         dimension_fields: Mapping[str, Set[str]] | None = None,
         dataset_fields: Mapping[str, Set[DatasetFieldName] | EllipsisType] | None = None,
-        find_first: bool = False,
+        find_first: bool | None = None,
     ) -> GeneralQueryResults:
         """Execute query returning general result.
 
@@ -324,40 +323,64 @@ class Query(QueryBase):
 
         Parameters
         ----------
-        dimensions : `DimensionGroup`
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
             The dimensions that span all fields returned by this query.
         *names : `str`
             Names of dimensions fields (in  "dimension.field" format), dataset
             fields (in  "dataset_type.field" format) to include in this query.
         dimension_fields : `~collections.abc.Mapping` [`str`, \
-                `~collections.abc.Set`[`str`]], optional
-            Dimension record fields included in this query, the key in the
-            mapping is dimension name.
+                `~collections.abc.Set`[`str` ]], optional
+            Dimension record fields included in this query, keyed by dimension
+            element name.
         dataset_fields : `~collections.abc.Mapping` [`str`, \
-            `~collections.abc.Set`[`DatasetFieldName`] | ...], optional
+            `~collections.abc.Set`[`DatasetFieldName`] | ``...`` ], optional
             Dataset fields included in this query, the key in the mapping is
             dataset type name. Ellipsis (``...``) can be used for value
-            to include all dataset fields.
+            to include all dataset fields needed to extract `DatasetRef`
+            instances later.
         find_first : bool, optional
             Whether this query requires find-first resolution for a dataset.
-            This can only be `True` if exactly one dataset type's fields are
-            included in the results.
+            This is ignored and can be omitted if the query has no dataset
+            fields.  It must be explicitly set to `False` if there are multiple
+            dataset types with fields, or if any dataset type's ``collections``
+            or ``timespan`` fields are included in the results.
 
         Returns
         -------
         result : `GeneralQueryResults`
             Query result that can be iterated over.
+
+        Notes
+        -----
+        The dimensions of the returned query are automatically expanded to
+        include those associated with all dimension and dataset fields; the
+        ``dimensions`` argument is just the minimal dimensions to return.
         """
         if dimension_fields is None:
             dimension_fields = {}
         if dataset_fields is None:
             dataset_fields = {}
-        dimension_fields_dict = {name: set(fields) for name, fields in dimension_fields.items()}
-        dataset_fields_dict = {
-            name: set(DATASET_FIELD_NAMES) if fields is ... else set(fields)
-            for name, fields in dataset_fields.items()
+        # Processing fields from mapping args, processing the special `...`
+        # wildcard and dropping keys with empty values.
+        dataset_fields_dict: dict[str, set[DatasetFieldName]] = {}
+        for dataset_type_name, fields_for_dataset_type in dataset_fields.items():
+            if fields_for_dataset_type is ...:
+                new_fields_for_dataset_type: set[DatasetFieldName] = {
+                    "run",
+                    "dataset_id",
+                }  # all we need for DatasetRefs.
+            else:
+                new_fields_for_dataset_type = set(fields_for_dataset_type)
+            if new_fields_for_dataset_type:
+                dataset_fields_dict[dataset_type_name] = new_fields_for_dataset_type
+        dimension_fields_dict = {
+            element_name: new_fields_for_element
+            for element_name, fields_for_element in dimension_fields.items()
+            if (new_fields_for_element := set(fields_for_element))
         }
-        # Parse all names.
+        # Parse all names passed as positional arguments, and start to
+        # accumulate additional dimension names we'll need in the results.
+        dimensions = self._driver.universe.conform(dimensions)
         context = IdentifierContext(dimensions, set(self._tree.datasets))
         extra_dimension_names: set[str] = set()
         for name in names:
@@ -367,22 +390,54 @@ class Query(QueryBase):
                     # Could be because someone asked for the key field.
                     extra_dimension_names.add(dimension.name)
                 case DimensionFieldReference(element=element, field=field):
-                    extra_dimension_names.add(element.name)
                     dimension_fields_dict.setdefault(element.name, set()).add(field)
                 case DatasetFieldReference(dataset_type=dataset_type, field=dataset_field):
                     dataset_fields_dict.setdefault(dataset_type, set()).add(dataset_field)
                 case _:
                     raise TypeError(f"Unexpected type of identifier ({name}): {identifier}")
-
-        extra_dimensions = dimensions.universe.conform(extra_dimension_names)
-
+        # Add more dimension names from the field mappings (including those
+        # we just populated from args).  Also check that the dataset fields
+        # are consistent with find_first.
+        for element_name, fields in dimension_fields_dict.items():
+            extra_dimension_names.update(self._driver.universe[element_name].minimal_group.names)
+        for dataset_type_name, fields_for_dataset_type in dataset_fields_dict.items():
+            if "collections" in fields_for_dataset_type and find_first is not False:
+                raise InvalidQueryError(
+                    f"find_first=False must be passed explicitly if {dataset_type_name}.collections "
+                    "is included in query results."
+                )
+            if "timespan" in fields_for_dataset_type and find_first is not False:
+                raise InvalidQueryError(
+                    f"find_first=False must be passed explicitly if {dataset_type_name}.timespan "
+                    "is included in query results."
+                )
+            try:
+                dataset_search = self._tree.datasets[dataset_type_name]
+            except KeyError:
+                raise InvalidQueryError(
+                    f"A search for dataset type {dataset_type_name!r} must be explicitly joined into the "
+                    "query before including its fields in query results."
+                ) from None
+            extra_dimension_names.update(dataset_search.dimensions.names)
+        if find_first is None:
+            if dataset_fields_dict:
+                raise InvalidQueryError(
+                    "find_first must be passed if dataset fields are included in query results."
+                )
+            else:
+                find_first = False
+        if find_first and len(dataset_fields_dict) != 1:
+            raise InvalidQueryError(
+                "find_first=True is not valid unless exactly one dataset type's fields are requested."
+            )
+        # Combine extra dimensions with the original ones.
+        dimensions = self._driver.universe.conform(dimensions.names | extra_dimension_names)
         # Merge missing dimensions into the tree.
         tree = self._tree
-        if not extra_dimensions <= tree.dimensions:
-            tree = tree.join_dimensions(extra_dimensions)
-
+        if not dimensions <= tree.dimensions:
+            tree = tree.join_dimensions(dimensions)
         result_spec = GeneralResultSpec(
-            dimensions=dimensions.union(extra_dimensions),
+            dimensions=dimensions,
             dimension_fields=dimension_fields_dict,
             dataset_fields=dataset_fields_dict,
             find_first=find_first,
@@ -524,7 +579,8 @@ class Query(QueryBase):
             raise InvalidQueryError("Cannot upload an empty data coordinate set.")
         key = self._driver.upload_data_coordinates(dimensions, rows)
         return Query(
-            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key), driver=self._driver
+            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
+            driver=self._driver,
         )
 
     def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> Query:
