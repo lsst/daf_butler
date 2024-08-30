@@ -412,6 +412,10 @@ class SqliteDatabase(Database):
         # arbitrary value picked if there is more than one.
         return column
 
+    def _cancel_running_query(self, connection: sqlalchemy.engine.interfaces.DBAPIConnection) -> None:
+        # This is a pysqlite-specific extension method.
+        connection.interrupt()  # type: ignore
+
     filename: str | None
     """Name of the file this database is connected to (`str` or `None`).
 
