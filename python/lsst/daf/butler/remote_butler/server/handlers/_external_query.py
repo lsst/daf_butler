@@ -96,17 +96,18 @@ async def _stream_query_pages(request: QueryExecuteRequestModel, factory: Factor
     """
     # `None` signals that there is no more data to send.
     queue = asyncio.Queue[QueryExecuteResultData | None](1)
-    async with asyncio.TaskGroup() as tg:
-        # Run a background task to read from the DB and insert the result pages
-        # into a queue.
-        tg.create_task(_execute_query(queue, request, factory))
-        # Read the result pages from the queue and send them to the client,
-        # inserting a keep-alive message every 15 seconds if we are waiting a
-        # long time for the database.
-        async for message in _dequeue_query_pages_with_keepalive(queue):
-            yield message.model_dump_json() + "\n"
-
-    print("closed")
+    try:
+        async with asyncio.TaskGroup() as tg:
+            # Run a background task to read from the DB and insert the result
+            # pages into a queue.
+            tg.create_task(_execute_query(queue, request, factory))
+            # Read the result pages from the queue and send them to the client,
+            # inserting a keep-alive message every 15 seconds if we are waiting
+            # a long time for the database.
+            async for message in _dequeue_query_pages_with_keepalive(queue):
+                yield message.model_dump_json() + "\n"
+    finally:
+        print("closed")
 
 
 async def _execute_query(
