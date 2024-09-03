@@ -335,7 +335,7 @@ class HybridButler(Butler):
     def query(self) -> AbstractContextManager[Query]:
         return self._remote_butler.query()
 
-    def _query_data_ids(
+    def query_data_ids(
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
         *,
@@ -349,7 +349,7 @@ class HybridButler(Butler):
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DataCoordinate]:
-        return self._direct_butler._query_data_ids(
+        return self._direct_butler.query_data_ids(
             dimensions,
             data_id=data_id,
             where=where,
@@ -362,7 +362,7 @@ class HybridButler(Butler):
             **kwargs,
         )
 
-    def _query_datasets(
+    def query_datasets(
         self,
         dataset_type: Any,
         collections: str | Iterable[str] | None = None,
@@ -375,7 +375,7 @@ class HybridButler(Butler):
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DatasetRef]:
-        return self._direct_butler._query_datasets(
+        return self._direct_butler.query_datasets(
             dataset_type,
             collections,
             find_first=find_first,
@@ -387,7 +387,7 @@ class HybridButler(Butler):
             **kwargs,
         )
 
-    def _query_dimension_records(
+    def query_dimension_records(
         self,
         element: str,
         *,
@@ -400,7 +400,7 @@ class HybridButler(Butler):
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DimensionRecord]:
-        return self._direct_butler._query_dimension_records(
+        return self._direct_butler.query_dimension_records(
             element,
             data_id=data_id,
             where=where,

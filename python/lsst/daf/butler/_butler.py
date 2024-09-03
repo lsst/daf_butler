@@ -1471,7 +1471,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         raise NotImplementedError()
 
-    def _query_data_ids(
+    def query_data_ids(
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
         *,
@@ -1563,7 +1563,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return data_ids
 
-    def _query_datasets(
+    def query_datasets(
         self,
         dataset_type: str | DatasetType,
         collections: str | Iterable[str] | None = None,
@@ -1667,7 +1667,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return refs
 
-    def _query_dimension_records(
+    def query_dimension_records(
         self,
         element: str,
         *,
