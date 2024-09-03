@@ -421,7 +421,7 @@ class RemoteButlerRegistry(Registry):
 
         query_results = [
             QueryDriverDatasetRefQueryResults(
-                self._butler._query,
+                self._butler.query,
                 args,
                 dataset_type=dt,
                 find_first=findFirst,
@@ -457,7 +457,7 @@ class RemoteButlerRegistry(Registry):
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )
         return QueryDriverDataCoordinateQueryResults(
-            self._butler._query, dimensions=dimensions, expanded=False, args=args
+            self._butler.query, dimensions=dimensions, expanded=False, args=args
         )
 
     def queryDimensionRecords(
@@ -480,7 +480,7 @@ class RemoteButlerRegistry(Registry):
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )
 
-        return QueryDriverDimensionRecordQueryResults(self._butler._query, element, args)
+        return QueryDriverDimensionRecordQueryResults(self._butler.query, element, args)
 
     def _convert_common_query_arguments(
         self,
@@ -519,7 +519,7 @@ class RemoteButlerRegistry(Registry):
         resolved_collections = self.queryCollections(
             collections, datasetType=datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
-        with self._butler._query() as query:
+        with self._butler.query() as query:
             query = query.join_dataset_search(datasetType, resolved_collections)
             result = query.general(
                 datasetType.dimensions,

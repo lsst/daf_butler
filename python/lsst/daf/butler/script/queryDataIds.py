@@ -165,7 +165,7 @@ def queryDataIds(
         dimensions = set(dataset_type_dimensions.names)
         _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
 
-    with butler._query() as query:
+    with butler.query() as query:
         if datasets:
             # Need to constrain results based on dataset type and collection.
             query_collections = collections or "*"

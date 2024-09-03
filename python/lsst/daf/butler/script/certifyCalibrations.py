@@ -79,7 +79,7 @@ def certifyCalibrations(
         if collection_info.type is CollectionType.CHAINED:
             input_collection = collection_info.children[0]
 
-    with butler._query() as query:
+    with butler.query() as query:
         results = query.datasets(dataset_type_name, collections=input_collection)
         refs = set(results)
         if not refs:

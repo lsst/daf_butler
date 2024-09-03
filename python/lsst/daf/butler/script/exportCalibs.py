@@ -74,7 +74,7 @@ def find_calibration_datasets(
 
     exportDatasets = []
     for calibType in datasetTypes:
-        with butler._query() as query:
+        with butler.query() as query:
             results = query.datasets(calibType, collections=collection.name, find_first=False)
 
             try:

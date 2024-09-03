@@ -363,7 +363,7 @@ class RepoExportContext:
                 collection_types=collectionTypes,
                 flatten_chains=False,
             )
-            with self._butler._query() as query:
+            with self._butler.query() as query:
                 query = query.join_dataset_search(datasetType, resolved_collections)
                 result = query.general(
                     datasetType.dimensions,

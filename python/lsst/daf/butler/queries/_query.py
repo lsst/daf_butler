@@ -143,7 +143,7 @@ class Query(QueryBase):
         variable, and then its (dynamic) attributes can be used to obtain
         references to columns that can be included in a query::
 
-            with butler._query() as query:
+            with butler.query() as query:
                 x = query.expression_factory
                 query = query.where(
                     x.instrument == "LSSTCam",
@@ -161,7 +161,7 @@ class Query(QueryBase):
         `~CollectionType.CALIBRATION` collection searches) can be obtained with
         dict-like access instead::
 
-            with butler._query() as query:
+            with butler.query() as query:
                 query = query.order_by(x["raw"].ingest_date)
 
         Expression proxy objects that correspond to scalar columns overload the

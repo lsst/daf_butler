@@ -1465,7 +1465,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
-    def _query(self) -> AbstractContextManager[Query]:
+    def query(self) -> AbstractContextManager[Query]:
         """Context manager returning a `Query` object used for construction
         and execution of complex queries.
         """
@@ -1549,7 +1549,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
+        with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
                 .data_ids(dimensions)
@@ -1654,7 +1654,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
+        with self.query() as query:
             result = query.where(data_id, where, bind=bind, **kwargs).datasets(
                 dataset_type,
                 collections=collections,
@@ -1738,7 +1738,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
+        with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
                 .dimension_records(element)

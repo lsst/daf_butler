@@ -76,7 +76,7 @@ def queryDimensionRecords(
     """
     butler = Butler.from_config(repo, without_datastore=True)
 
-    with butler._query() as query:
+    with butler.query() as query:
 
         if datasets:
             query_collections = collections or "*"

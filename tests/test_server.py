@@ -420,7 +420,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
                 lsst.daf.butler.remote_butler._query_driver, "_received_keep_alive"
             ) as mock_keep_alive:
                 mock_timeout.side_effect = _timeout_twice()
-                with self.butler._query() as query:
+                with self.butler.query() as query:
                     datasets = list(query.datasets("bias", "imported_g"))
                 self.assertEqual(len(datasets), 3)
                 self.assertGreaterEqual(mock_timeout.call_count, 3)

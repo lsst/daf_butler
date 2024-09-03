@@ -169,7 +169,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         or spatial/temporal overlaps.
         """
         butler = self.make_butler("base.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             results = query.dimension_records("detector")
             self.check_detector_records(results)
@@ -182,7 +182,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
     def test_simple_data_coordinate_query(self) -> None:
         butler = self.make_butler("base.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             # Test empty query
             self.assertCountEqual(query.data_ids([]), [DataCoordinate.makeEmpty(butler.dimensions)])
 
@@ -198,7 +198,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
     def test_simple_dataset_query(self) -> None:
         butler = self.make_butler("base.yaml", "datasets.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             refs = list(query.datasets("bias", "imported_g").order_by("detector"))
             self.assertEqual(len(refs), 3)
             self.assertEqual(refs[0].id, UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
@@ -215,7 +215,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         dimensions = butler.dimensions["detector"].minimal_group
 
         # Do simple dimension queries.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dimensions(dimensions)
             rows = list(query.general(dimensions).order_by("detector"))
             self.assertEqual(
@@ -285,7 +285,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
 
         # Do simple dataset queries in RUN collection.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             # This just returns data IDs.
             rows = list(query.general(dimensions).order_by("detector"))
@@ -339,7 +339,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler.registry.certify("calib", [flat2], Timespan.makeEmpty())
 
         # Query tagged collection.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged"])
 
             result = query.general(dimensions, "flat.dataset_id", "flat.run", "flat.collection")
@@ -349,7 +349,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.assertEqual({row_tuple.raw_row["flat.collection"] for row_tuple in row_tuples}, {"tagged"})
 
         # Query calib collection.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", ["calib"])
             result = query.general(
                 dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
@@ -364,7 +364,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
 
         # Query both tagged and calib collection.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged", "calib"])
             result = query.general(
                 dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
@@ -387,7 +387,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         # Check that returned type of ingest_date is astropy Time, must work
         # for schema versions 1 and 2 of datasets manager.
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             rows = list(query.general(dimensions, dataset_fields={"flat": ...}))
             self.assertEqual(len(rows), 3)
@@ -395,7 +395,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
 
         # Check that WHERE accepts astropy time
-        with butler._query() as query:
+        with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             query1 = query.where("flat.ingest_date < before_ingest", bind={"before_ingest": before_ingest})
             rows = list(query1.general(dimensions))
@@ -416,7 +416,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler = self.make_butler("base.yaml")
         band = butler.dimensions["band"]
         self.assertEqual(band.implied_union_target, butler.dimensions["physical_filter"])
-        with butler._query() as query:
+        with butler.query() as query:
             self.assertCountEqual(
                 list(query.dimension_records("band")),
                 [band.RecordClass(name="g"), band.RecordClass(name="r")],
@@ -435,12 +435,12 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler.collections.register("empty", CollectionType.RUN)
         butler.collections.register("chain", CollectionType.CHAINED)
         butler.collections.redefine_chain("chain", ["imported_g", "empty", "imported_r"])
-        with butler._query() as query:
+        with butler.query() as query:
             # No collections here or in defaults is an error.
             with self.assertRaises(NoDefaultCollectionError):
                 query.join_dataset_search("bias").dimension_records("detector").any()
         butler.registry.defaults = RegistryDefaults(collections=["chain"])
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             # Simplest case: this collection only has the first 3 detectors.
             self.check_detector_records(
@@ -519,7 +519,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # to keep us from having to repeat them in every 'where' call below.
         butler.registry.defaults = RegistryDefaults(instrument="Cam1", skymap="SkyMap1")
         htm7 = butler.dimensions.skypix_dimensions["htm7"]
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             # Query for detectors from a particular visit that overlap an
             # explicit region.
@@ -724,7 +724,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler.registry.registerDatasetType(cat1)
         butler.registry.registerCollection("refcats", CollectionType.RUN)
         butler.registry.insertDatasets(cat1, [{"htm7": i} for i in range(253952, 253968)], run="refcats")
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             # Explicit join to patch.
             self.assertCountEqual(
@@ -763,7 +763,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         query result columns.
         """
         butler = self.make_butler("hsc-rc2-subset.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             # This tests the case where the 'patch' region is needed for
             # postprocessing, to compare against the visit region, but is not
             # needed in the resulting data ID.
@@ -793,7 +793,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
     def test_data_coordinate_upload(self) -> None:
         """Test queries for dimension records with a data coordinate upload."""
         butler = self.make_butler("base.yaml", "spatial.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             # Query with a data ID upload that has an irrelevant row (there's
             # no data with "Cam2").
             self.check_detector_records(
@@ -939,7 +939,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         some other driver is found.
         """
         butler = self.make_butler("base.yaml", "spatial.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             if not isinstance(query._driver, DirectQueryDriver):
                 raise unittest.SkipTest("Test requires meddling with DirectQueryDriver internals.")
             query._driver._constant_rows_limit = 2
@@ -959,7 +959,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         query.
         """
         butler = self.make_butler("base.yaml", "datasets.yaml", "spatial.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             # Simple case where the materialization has just the dimensions
             # we need for the rest of the query.
@@ -1004,7 +1004,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
     def test_timespan_results(self) -> None:
         """Test returning dimension records that include timespans."""
         butler = self.make_butler("base.yaml", "spatial.yaml")
-        with butler._query() as query:
+        with butler.query() as query:
             self.assertCountEqual(
                 [
                     (record.id, record.timespan.begin, record.timespan.end)
@@ -1033,7 +1033,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """
         butler = self.make_butler("base.yaml")
         # Basic test where pages should be transparent.
-        with butler._query() as query:
+        with butler.query() as query:
             if isinstance(query._driver, DirectQueryDriver):
                 query._driver._raw_page_size = 2
             self.check_detector_records(
@@ -1042,7 +1042,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
         # Test that it's an error to continue query iteration after closing the
         # context manager.
-        with butler._query() as query:
+        with butler.query() as query:
             if isinstance(query._driver, DirectQueryDriver):
                 query._driver._raw_page_size = 2
             iterator = iter(query.dimension_records("detector"))
@@ -1054,7 +1054,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """Test queries with a wide variant of column expressions."""
         butler = self.make_butler("base.yaml", "spatial.yaml")
         butler.registry.defaults = RegistryDefaults(instrument="Cam1")
-        with butler._query() as query:
+        with butler.query() as query:
             _x = query.expression_factory
             self.check_detector_records(
                 query.where(_x.not_(_x.detector != 2)).dimension_records("detector"),
@@ -1260,7 +1260,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
 
         def _run_query(where: str) -> list[int]:
-            with butler._query() as query:
+            with butler.query() as query:
                 return _get_exposure_ids_from_dimension_records(
                     query.dimension_records("exposure").where(where, instrument="HSC")
                 )
@@ -1314,7 +1314,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         )
 
         # Test boolean columns in ExpressionFactory.
-        with butler._query() as query:
+        with butler.query() as query:
             x = query.expression_factory
 
             def do_query(constraint: Predicate) -> list[int]:
@@ -1358,7 +1358,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler = self.make_butler("base.yaml", "ci_hsc-subset.yaml")
 
         run = "HSC/runs/ci_hsc/20240806T180642Z"
-        with butler._query() as query:
+        with butler.query() as query:
             # Return everything.
             results = query.datasets("calexp", collections=run)
             # Sort by data coordinate.
@@ -1369,7 +1369,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         first_visit_region = refs[0].dataId.visit.region  # type: ignore
 
         # Get a visit detector region from the first ref.
-        with butler._query() as query:
+        with butler.query() as query:
             data_id = refs[0].dataId.mapping
             records = list(query.dimension_records("visit_detector_region").where(**data_id))  # type: ignore
             self.assertEqual(len(records), 1)
@@ -1383,7 +1383,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             (first_visit_region.to_ivoa_pos(), 33),  # Visit region overlaps everything.
             (records[0].region.to_ivoa_pos(), 17),  # Some overlap.
         ):
-            with butler._query() as query:
+            with butler.query() as query:
                 results = query.datasets("calexp", collections=run)
                 results = results.where(
                     "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(POS)",
@@ -1403,7 +1403,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         v_904014_pre = astropy.time.Time("2013-11-01T12:00:00", scale="tai", format="isot")
         v_904014_post = astropy.time.Time("2013-12-21T12:00:00", scale="tai", format="isot")
 
-        with butler._query() as query:
+        with butler.query() as query:
             run = "HSC/runs/ci_hsc/20240806T180642Z"
             results = query.datasets("calexp", collections=run)
 
