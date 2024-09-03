@@ -65,7 +65,7 @@ def queryDatasetTypes(
     datasetTypes = butler.registry.queryDatasetTypes(expression=expression)
 
     if collections:
-        collections_info = butler.collections.x_query_info(collections, include_summary=True)
+        collections_info = butler.collections.query_info(collections, include_summary=True)
         filtered_dataset_types = set(
             butler.collections._filter_dataset_types([d.name for d in datasetTypes], collections_info)
         )

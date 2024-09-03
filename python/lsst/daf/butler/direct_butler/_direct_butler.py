@@ -1398,7 +1398,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
             with self.query() as query:
                 # Work out the dataset types that are relevant.
-                collections_info = self.collections.x_query_info(name, include_summary=True)
+                collections_info = self.collections.query_info(name, include_summary=True)
                 filtered_dataset_types = self.collections._filter_dataset_types(
                     all_dataset_types, collections_info
                 )

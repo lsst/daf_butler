@@ -83,9 +83,7 @@ def transferDatasets(
     dataset_types = [dt.name for dt in source_butler.registry.queryDatasetTypes(dataset_type_expr)]
     source_refs: list[DatasetRef] = []
     with source_butler.query() as query:
-        query_collections_info = source_butler.collections.x_query_info(
-            collections_expr, include_summary=True
-        )
+        query_collections_info = source_butler.collections.query_info(collections_expr, include_summary=True)
         query_collections = [info.name for info in query_collections_info]
         dataset_types = list(
             source_butler.collections._filter_dataset_types(dataset_types, query_collections_info)

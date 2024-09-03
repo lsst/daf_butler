@@ -73,7 +73,7 @@ def _getTable(
     )
     butler = Butler.from_config(repo)
     collections = sorted(
-        butler.collections.x_query_info(
+        butler.collections.query_info(
             glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
         )
     )
@@ -158,7 +158,7 @@ def _getTree(
                     cinfo = butler.collections.get_info(name)
                     addCollection(cinfo, level + 1)
 
-    collections = butler.collections.x_query_info(
+    collections = butler.collections.query_info(
         glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
     )
     for collection in sorted(collections):
@@ -173,7 +173,7 @@ def _getFlatten(
 ) -> Table:
     butler = Butler.from_config(repo)
     collections = list(
-        butler.collections.x_query_info(
+        butler.collections.query_info(
             glob or "*", collection_types=frozenset(collection_type), flatten_chains=True
         )
     )

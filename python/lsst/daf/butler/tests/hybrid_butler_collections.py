@@ -77,7 +77,7 @@ class HybridButlerCollections(ButlerCollections):
             parent_collection_name, child_collection_names
         )
 
-    def x_query_info(
+    def query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
@@ -86,7 +86,7 @@ class HybridButlerCollections(ButlerCollections):
         include_parents: bool = False,
         include_summary: bool = False,
     ) -> Sequence[CollectionInfo]:
-        return self._hybrid._remote_butler.collections.x_query_info(
+        return self._hybrid._remote_butler.collections.query_info(
             expression,
             collection_types=collection_types,
             flatten_chains=flatten_chains,

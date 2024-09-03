@@ -85,7 +85,7 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo, without_datastore=True)
     try:
-        collections_info = sorted(butler.collections.x_query_info(collection, include_chains=True))
+        collections_info = sorted(butler.collections.query_info(collection, include_chains=True))
     except MissingCollectionError:
         # Hide the error and act like no collections should be removed.
         collections_info = []

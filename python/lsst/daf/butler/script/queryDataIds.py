@@ -169,7 +169,7 @@ def queryDataIds(
         if datasets:
             # Need to constrain results based on dataset type and collection.
             query_collections = collections or "*"
-            collections_info = butler.collections.x_query_info(query_collections, include_summary=True)
+            collections_info = butler.collections.query_info(query_collections, include_summary=True)
             expanded_collections = [info.name for info in collections_info]
             filtered_dataset_types = list(
                 butler.collections._filter_dataset_types([dt.name for dt in dataset_types], collections_info)

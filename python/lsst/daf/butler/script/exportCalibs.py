@@ -134,7 +134,7 @@ def exportCalibs(
     collectionsToExport = []
     datasetsToExport = []
 
-    for collection in butler.collections.x_query_info(
+    for collection in butler.collections.query_info(
         collections_query,
         flatten_chains=True,
         include_chains=True,

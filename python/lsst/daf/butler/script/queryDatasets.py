@@ -227,7 +227,7 @@ class QueryDatasets:
         n_dataset_types = len(dataset_types)
         with self.butler.query() as query:
             # Expand the collections query and include summary information.
-            query_collections_info = self.butler.collections.x_query_info(
+            query_collections_info = self.butler.collections.query_info(
                 query_collections, include_summary=True
             )
             query_collections = [c.name for c in query_collections_info]

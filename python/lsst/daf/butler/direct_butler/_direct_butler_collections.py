@@ -81,7 +81,7 @@ class DirectButlerCollections(ButlerCollections):
             parent_collection_name, list(ensure_iterable(child_collection_names))
         )
 
-    def x_query(
+    def query(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
@@ -99,7 +99,7 @@ class DirectButlerCollections(ButlerCollections):
             includeChains=include_chains,
         )
 
-    def x_query_info(
+    def query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
