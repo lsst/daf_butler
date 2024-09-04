@@ -2722,8 +2722,8 @@ class RegistryTests(ABC):
     def testIngestTimeQuery(self):
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "base.yaml", "datasets.yaml")
         dt0 = datetime.datetime.now(datetime.UTC)
+        self.load_data(butler, "base.yaml", "datasets.yaml")
         dt1 = datetime.datetime.now(datetime.UTC)
 
         datasets = list(registry.queryDatasets(..., collections=...))
