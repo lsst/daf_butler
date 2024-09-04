@@ -33,7 +33,7 @@ import click
 
 from ..utils import OptionGroup, unwrap, where_help
 from .arguments import glob_argument, repo_argument
-from .options import collections_option, dataset_type_option, where_option
+from .options import collections_option, dataset_type_option, limit_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801
@@ -47,9 +47,13 @@ class query_datasets_options(OptionGroup):  # noqa: N801
         Whether to include the dataset URI.
     useArguments : `bool`
         Whether this is an argument or an option.
+    default_limit : `int`
+        The default value to use for the limit parameter.
     """
 
-    def __init__(self, repo: bool = True, showUri: bool = True, useArguments: bool = True) -> None:
+    def __init__(
+        self, repo: bool = True, showUri: bool = True, useArguments: bool = True, default_limit: int = -10_000
+    ) -> None:
         self.decorators = []
         if repo:
             if not useArguments:
@@ -87,6 +91,12 @@ class query_datasets_options(OptionGroup):  # noqa: N801
                                      used, 'collections' must specify at least one expression and must not
                                      contain wildcards."""
                     ),
+                ),
+                limit_option(
+                    help="Limit the number of results that are processed. 0 means no limit. A negative "
+                    "value specifies a cap where a warning will be issued if the cap is hit. "
+                    f"Default value is {default_limit}.",
+                    default=default_limit,
                 ),
             ]
         )

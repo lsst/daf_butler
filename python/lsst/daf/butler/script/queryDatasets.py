@@ -30,7 +30,7 @@ import dataclasses
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from astropy.table import Table as AstropyTable
@@ -156,6 +156,10 @@ class QueryDatasets:
         wildcards.
     show_uri : `bool`
         If True, include the dataset URI in the output.
+    limit : `int`, optional
+        Limit the number of results to be returned. A value of 0 means
+        unlimited. A negative value is used to specify a cap where a warning
+        is issued if that cap is hit.
     repo : `str` or `None`
         URI to the location of the repo or URI to a config file describing the
         repo and its location. One of `repo` and `butler` must be `None` and
@@ -172,6 +176,7 @@ class QueryDatasets:
         where: str,
         find_first: bool,
         show_uri: bool,
+        limit: int = 0,
         repo: str | None = None,
         butler: Butler | None = None,
     ):
@@ -185,6 +190,7 @@ class QueryDatasets:
         self._collections_wildcard = collections
         self._where = where
         self._find_first = find_first
+        self._limit = limit
 
     def getTables(self) -> list[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -225,30 +231,58 @@ class QueryDatasets:
         # query each time.
         dataset_types: set[str] = {d.name for d in self.butler.registry.queryDatasetTypes(datasetTypes)}
         n_dataset_types = len(dataset_types)
-        with self.butler.query() as query:
-            # Expand the collections query and include summary information.
-            query_collections_info = self.butler.collections.query_info(
-                query_collections, include_summary=True
+
+        # Expand the collections query and include summary information.
+        query_collections_info = self.butler.collections.query_info(query_collections, include_summary=True)
+        query_collections = [c.name for c in query_collections_info]
+
+        # Only iterate over dataset types that are relevant for the query.
+        dataset_types = set(
+            self.butler.collections._filter_dataset_types(dataset_types, query_collections_info)
+        )
+
+        if (n_filtered := len(dataset_types)) != n_dataset_types:
+            _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
+        elif n_dataset_types == 0:
+            _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
+        else:
+            _LOG.info("Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s")
+
+        # Accumulate over dataset types.
+        limit = self._limit
+        warn_limit = False
+        unlimited = True if limit == 0 else False
+        if limit < 0:
+            warn_limit = True
+            limit = abs(limit) + 1  # +1 to tell us we hit the limit.
+        for dt in sorted(dataset_types):
+            kwargs: dict[str, Any] = {}
+            if self._where:
+                kwargs["where"] = self._where
+            if not unlimited:
+                kwargs["limit"] = limit
+            _LOG.debug("Querying dataset type %s with %s", dt, kwargs)
+            results = self.butler.query_datasets(
+                dt,
+                collections=query_collections,
+                find_first=self._find_first,
+                with_dimension_records=True,
+                **kwargs,
             )
-            query_collections = [c.name for c in query_collections_info]
+            if not unlimited:
+                limit -= len(results)
+                if warn_limit and limit == 0 and results:
+                    # We asked for one too many so must remove that from
+                    # the list.
+                    results.pop(-1)
+            _LOG.debug("Got %d results for dataset type %s", len(results), dt)
+            yield from results
 
-            # Only iterate over dataset types that are relevant for the query.
-            dataset_types = set(
-                self.butler.collections._filter_dataset_types(dataset_types, query_collections_info)
-            )
-
-            if (n_filtered := len(dataset_types)) != n_dataset_types:
-                _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
-            elif n_dataset_types == 0:
-                _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
-            else:
-                _LOG.info(
-                    "Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s"
-                )
-
-            # Accumulate over dataset types.
-            for dt in sorted(dataset_types):
-                results = query.datasets(dt, collections=query_collections, find_first=self._find_first)
-                if self._where:
-                    results = results.where(self._where)
-                yield from results.with_dimension_records()
+            if not unlimited and limit == 0:
+                if warn_limit:
+                    _LOG.warning(
+                        "Requested limit of %d hit for number of datasets returned. "
+                        "Use --limit to increase this limit.",
+                        self._limit,
+                    )
+                break

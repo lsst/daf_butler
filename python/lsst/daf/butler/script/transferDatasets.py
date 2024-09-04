@@ -30,9 +30,8 @@ __all__ = ("transferDatasets",)
 
 import logging
 
-from lsst.daf.butler import DatasetRef
-
 from .._butler import Butler
+from .queryDatasets import QueryDatasets
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +43,7 @@ def transferDatasets(
     collections: tuple[str, ...],
     where: str,
     find_first: bool,
+    limit: int,
     transfer: str,
     register_dataset_types: bool,
     transfer_dimensions: bool = True,
@@ -65,6 +65,10 @@ def transferDatasets(
         Query modification string.
     find_first : `bool`
         Whether only the first match should be used.
+    limit : `int`
+        Limit the number of results to be returned. A value of 0 means
+        unlimited. A negative value is used to specify a cap where a warning
+        is issued if that cap is hit.
     transfer : `str`
         Transfer mode to use when placing artifacts in the destination.
     register_dataset_types : `bool`
@@ -77,28 +81,21 @@ def transferDatasets(
     source_butler = Butler.from_config(source, writeable=False)
     dest_butler = Butler.from_config(dest, writeable=True)
 
-    dataset_type_expr = dataset_type or ...
+    dataset_type_expr = dataset_type or "*"
     collections_expr: tuple[str, ...] = collections or ("*",)
 
-    dataset_types = [dt.name for dt in source_butler.registry.queryDatasetTypes(dataset_type_expr)]
-    source_refs: list[DatasetRef] = []
-    with source_butler.query() as query:
-        query_collections_info = source_butler.collections.query_info(collections_expr, include_summary=True)
-        query_collections = [info.name for info in query_collections_info]
-        dataset_types = list(
-            source_butler.collections._filter_dataset_types(dataset_types, query_collections_info)
-        )
-        # Loop over dataset types and accumulate.
-        for dt in dataset_types:
-            results = query.datasets(dt, collections=query_collections, find_first=find_first)
-            if where:
-                results = results.where(where)
-            # Need dimension records in case new datastore records have to
-            # be derived.
-            source_refs.extend(results.with_dimension_records())
-
-    # Place results in a set to remove duplicates
-    source_refs_set = set(source_refs)
+    query = QueryDatasets(
+        butler=source_butler,
+        glob=dataset_type_expr,
+        collections=collections_expr,
+        where=where,
+        find_first=find_first,
+        limit=limit,
+        show_uri=False,
+    )
+    # Place results in a set to remove duplicates (which should not exist
+    # in new query system)
+    source_refs_set = set(query.getDatasets())
 
     transferred = dest_butler.transfer_from(
         source_butler,
