@@ -1549,6 +1549,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
+        if order_by is None:
+            order_by = []
         with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
@@ -1573,6 +1575,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         where: str = "",
         bind: Mapping[str, Any] | None = None,
         with_dimension_records: bool = False,
+        order_by: Iterable[str] | str | None = None,
+        limit: int = 20_000,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DatasetRef]:
@@ -1584,7 +1588,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Dataset type object or name to search for.
         collections : collection expression, optional
             A collection name or iterable of collection names to search. If not
-            provided, the default collections are used.  See
+            provided, the default collections are used. Can be a wildcard. See
             :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
@@ -1609,6 +1613,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         with_dimension_records : `bool`, optional
             If `True` (default is `False`) then returned data IDs will have
             dimension records.
+        order_by : `~collections.abc.Iterable` [`str`] or `str`, optional
+            Names of the columns/dimensions to use for ordering returned data
+            IDs. Column name can be prefixed with minus (``-``) to use
+            descending ordering.
+        limit : `int`, optional
+            Upper limit on the number of returned records.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1654,11 +1664,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
+        if order_by is None:
+            order_by = []
+        if collections:
+            collections = self.collections.query(collections)
         with self.query() as query:
-            result = query.where(data_id, where, bind=bind, **kwargs).datasets(
-                dataset_type,
-                collections=collections,
-                find_first=find_first,
+            result = (
+                query.where(data_id, where, bind=bind, **kwargs)
+                .datasets(dataset_type, collections=collections, find_first=find_first)
+                .order_by(*ensure_iterable(order_by))
+                .limit(limit)
             )
             if with_dimension_records:
                 result = result.with_dimension_records()
@@ -1738,6 +1753,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
+        if order_by is None:
+            order_by = []
         with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
