@@ -147,9 +147,18 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     storageClassFactory = StorageClassFactory()
 
     @staticmethod
-    def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False, limit=0):
+    def _queryDatasets(
+        repo, glob=(), collections=(), where="", find_first=False, show_uri=False, limit=0, order_by=()
+    ):
         return script.QueryDatasets(
-            glob, collections, where=where, find_first=find_first, show_uri=show_uri, limit=limit, repo=repo
+            glob,
+            collections,
+            where=where,
+            find_first=find_first,
+            show_uri=show_uri,
+            limit=limit,
+            repo=repo,
+            order_by=order_by,
         ).getTables()
 
     def setUp(self):
@@ -267,6 +276,36 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             ),
         )
 
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+    def test_limit_order(self):
+        """Test limit and ordering."""
+        # Create and register an additional DatasetType
+        MetricTestRepo(self.repoDir, configFile=self.configFile)
+
+        with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
+            tables = self._queryDatasets(repo=self.repoDir, limit=-1, order_by=("visit"))
+
+        self.assertIn("increase this limit", cm.output[0])
+
+        expectedTables = [
+            AstropyTable(
+                array((("test_metric_comp", "ingest/run", "DummyCamComp", "423", "R", "d-r"),)),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+            ),
+        ]
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
+            tables = self._queryDatasets(repo=self.repoDir, limit=-1, order_by=("-visit"))
+        self.assertIn("increase this limit", cm.output[0])
+
+        expectedTables = [
+            AstropyTable(
+                array((("test_metric_comp", "ingest/run", "DummyCamComp", "424", "R", "d-r"),)),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+            ),
+        ]
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testFindFirstAndCollections(self):
