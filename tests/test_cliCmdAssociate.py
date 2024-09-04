@@ -58,6 +58,7 @@ class AssociateTestCase(unittest.TestCase):
             collections=(),
             where="",
             find_first=False,
+            limit=0,
         )
 
     @patch("lsst.daf.butler.script.associate")
@@ -76,6 +77,8 @@ class AssociateTestCase(unittest.TestCase):
                 "--where",
                 "'a=b'",
                 "--find-first",
+                "--limit",
+                "-5000",
             ],
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -86,6 +89,7 @@ class AssociateTestCase(unittest.TestCase):
             collections=("myCollection", "otherCollection"),
             where="'a=b'",
             find_first=True,
+            limit=-5000,
         )
 
 

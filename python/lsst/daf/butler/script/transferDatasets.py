@@ -44,6 +44,7 @@ def transferDatasets(
     where: str,
     find_first: bool,
     limit: int,
+    order_by: tuple[str, ...],
     transfer: str,
     register_dataset_types: bool,
     transfer_dimensions: bool = True,
@@ -69,6 +70,11 @@ def transferDatasets(
         Limit the number of results to be returned. A value of 0 means
         unlimited. A negative value is used to specify a cap where a warning
         is issued if that cap is hit.
+    order_by : `tuple` of `str`
+        Dimensions to use for sorting results. If no ordering is given the
+        results of ``limit`` are undefined and default sorting of the resulting
+        datasets will be applied. It is an error if the requested ordering
+        is inconsistent with the dimensions of the dataset type being queried.
     transfer : `str`
         Transfer mode to use when placing artifacts in the destination.
     register_dataset_types : `bool`
@@ -91,6 +97,7 @@ def transferDatasets(
         where=where,
         find_first=find_first,
         limit=limit,
+        order_by=order_by,
         show_uri=False,
     )
     # Place results in a set to remove duplicates (which should not exist

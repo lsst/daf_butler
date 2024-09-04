@@ -74,6 +74,7 @@ def associate(
         where=where,
         find_first=find_first,
         limit=limit,
+        order_by=(),
         show_uri=False,
         repo=None,
     )

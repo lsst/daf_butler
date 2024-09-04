@@ -147,8 +147,10 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     storageClassFactory = StorageClassFactory()
 
     @staticmethod
-    def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False):
-        return script.QueryDatasets(glob, collections, where, find_first, show_uri, repo=repo).getTables()
+    def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False, limit=0):
+        return script.QueryDatasets(
+            glob, collections, where=where, find_first=find_first, show_uri=show_uri, limit=limit, repo=repo
+        ).getTables()
 
     def setUp(self):
         self.testdir = makeTestTempDir(TESTDIR)

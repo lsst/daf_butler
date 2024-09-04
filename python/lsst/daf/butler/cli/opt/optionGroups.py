@@ -33,7 +33,7 @@ import click
 
 from ..utils import OptionGroup, unwrap, where_help
 from .arguments import glob_argument, repo_argument
-from .options import collections_option, dataset_type_option, limit_option, where_option
+from .options import collections_option, dataset_type_option, limit_option, order_by_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801
@@ -49,10 +49,17 @@ class query_datasets_options(OptionGroup):  # noqa: N801
         Whether this is an argument or an option.
     default_limit : `int`
         The default value to use for the limit parameter.
+    use_order_by : `bool`
+        Whether to include an order_by option.
     """
 
     def __init__(
-        self, repo: bool = True, showUri: bool = True, useArguments: bool = True, default_limit: int = -10_000
+        self,
+        repo: bool = True,
+        showUri: bool = True,
+        useArguments: bool = True,
+        default_limit: int = -10_000,
+        use_order_by: bool = True,
     ) -> None:
         self.decorators = []
         if repo:
@@ -100,6 +107,8 @@ class query_datasets_options(OptionGroup):  # noqa: N801
                 ),
             ]
         )
+        if use_order_by:
+            self.decorators.append(order_by_option())
         if showUri:
             self.decorators.append(
                 click.option("--show-uri", is_flag=True, help="Show the dataset URI in results.")

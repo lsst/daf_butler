@@ -78,7 +78,7 @@ existingRepoHelp = "REPO is the URI or path to an existing data repository root 
 @click.command(cls=ButlerCommand, short_help="Add existing datasets to a tagged collection.")
 @repo_argument(required=True)
 @collection_argument(help="COLLECTION is the collection the datasets should be associated with.")
-@query_datasets_options(repo=False, showUri=False, useArguments=False, default_limit=0)
+@query_datasets_options(repo=False, showUri=False, useArguments=False, default_limit=0, use_order_by=False)
 @options_file_option()
 def associate(**kwargs: Any) -> None:
     """Add existing datasets to a tagged collection; searches for datasets with
