@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Iterable
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
@@ -242,7 +243,7 @@ def pruneDatasets(
         show_uri=False,
     )
 
-    result = PruneDatasetsResult(datasets_found.getTables())
+    result = PruneDatasetsResult(list(datasets_found.getTables()))
 
     disassociate = bool(disassociate_tags) or bool(purge_run)
     purge = bool(purge_run)
@@ -256,7 +257,7 @@ def pruneDatasets(
     def doPruneDatasets() -> PruneDatasetsResult:
         butler = Butler.from_config(repo, writeable=True)
         butler.pruneDatasets(
-            refs=datasets_found.getDatasets(),
+            refs=list(itertools.chain(*datasets_found.getDatasets())),
             disassociate=disassociate,
             tags=disassociate_tags or (),
             purge=purge,

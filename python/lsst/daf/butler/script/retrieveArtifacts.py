@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("retrieveArtifacts",)
 
+import itertools
 import logging
 from typing import TYPE_CHECKING
 
@@ -111,7 +112,7 @@ def retrieveArtifacts(
         order_by=order_by,
         show_uri=False,
     )
-    refs = list(query.getDatasets())
+    refs = list(itertools.chain(*query.getDatasets()))
     log.info("Number of datasets matching query: %d", len(refs))
 
     transferred = butler.retrieveArtifacts(

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 __all__ = ("transferDatasets",)
 
+import itertools
 import logging
 
 from .._butler import Butler
@@ -102,7 +103,7 @@ def transferDatasets(
     )
     # Place results in a set to remove duplicates (which should not exist
     # in new query system)
-    source_refs_set = set(query.getDatasets())
+    source_refs_set = set(itertools.chain(*query.getDatasets()))
 
     transferred = dest_butler.transfer_from(
         source_butler,

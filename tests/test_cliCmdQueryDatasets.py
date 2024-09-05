@@ -150,7 +150,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     def _queryDatasets(
         repo, glob=(), collections=(), where="", find_first=False, show_uri=False, limit=0, order_by=()
     ):
-        return script.QueryDatasets(
+        query = script.QueryDatasets(
             glob,
             collections,
             where=where,
@@ -159,7 +159,8 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             limit=limit,
             repo=repo,
             order_by=order_by,
-        ).getTables()
+        )
+        return list(query.getTables())
 
     def setUp(self):
         self.testdir = makeTestTempDir(TESTDIR)

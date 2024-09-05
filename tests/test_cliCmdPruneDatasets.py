@@ -29,6 +29,7 @@
 """
 
 import unittest
+from itertools import chain
 from unittest.mock import patch
 
 # Tests require the SqlRegistry
@@ -63,13 +64,18 @@ doFindTables = True
 def getTables():
     """Return test table."""
     if doFindTables:
-        return (Table(((1, 2, 3),), names=("foo",)),)
+        yield from (Table(((1, 2, 3),), names=("foo",)),)
     return ()
 
 
 def getDatasets():
     """Return the datasets string."""
-    return "datasets"
+    yield ["datasets"]
+
+
+def getRefs():
+    """Return all the datasets as a single list."""
+    return list(chain(*getDatasets()))
 
 
 def makeQueryDatasets(*args, **kwargs):
@@ -223,7 +229,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """
         self.run_test(
             cliArgs=["myCollection", "--unstore"],
-            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(
@@ -313,7 +319,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """
         self.run_test(
             cliArgs=["myCollection", "--no-confirm", "--unstore"],
-            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
@@ -327,7 +333,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """
         self.run_test(
             cliArgs=["myCollection", "--quiet", "--unstore"],
-            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=None,
@@ -417,7 +423,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             cliArgs=["--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True, refs=getDatasets(), disassociate=True, unstore=True
+                purge=True, refs=getRefs(), disassociate=True, unstore=True
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("run",), find_first=True
@@ -442,7 +448,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             cliArgs=["myCollection", "--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True, disassociate=True, unstore=True, refs=getDatasets()
+                purge=True, disassociate=True, unstore=True, refs=getRefs()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("myCollection",), find_first=True
@@ -491,7 +497,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()
+                tags=("tag1", "tag2"), disassociate=True, refs=getRefs()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("tag1", "tag2"), find_first=True
@@ -507,7 +513,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()
+                tags=("tag1", "tag2"), disassociate=True, refs=getRefs()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("myCollection",), find_first=True

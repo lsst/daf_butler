@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import itertools
 from collections.abc import Iterable
 
 from .._butler import Butler
@@ -79,4 +80,4 @@ def associate(
         repo=None,
     )
 
-    butler.registry.associate(collection, results.getDatasets())
+    butler.registry.associate(collection, itertools.chain(*results.getDatasets()))

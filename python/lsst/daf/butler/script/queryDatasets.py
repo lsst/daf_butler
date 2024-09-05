@@ -195,41 +195,50 @@ class QueryDatasets:
         self._limit = limit
         self._order_by = order_by
 
-    def getTables(self) -> list[AstropyTable]:
+    def getTables(self) -> Iterator[AstropyTable]:
         """Get the datasets as a list of astropy tables.
 
-        Returns
-        -------
-        datasetTables : `list` [``astropy.table._Table``]
-            A list of astropy tables, one for each dataset type.
+        Yields
+        ------
+        datasetTables : `collections.abc.Iterator` [``astropy.table._Table``]
+            Astropy tables, one for each dataset type.
         """
-        tables: dict[str, _Table] = defaultdict(_Table)
-        if not self.showUri:
-            for dataset_ref in self.getDatasets():
-                tables[dataset_ref.datasetType.name].add(dataset_ref)
-        else:
-            ref_uris = self.butler.get_many_uris(list(self.getDatasets()), predict=True)
-            for ref, uris in ref_uris.items():
-                if uris.primaryURI:
-                    tables[ref.datasetType.name].add(ref, uris.primaryURI)
-                for name, uri in uris.componentURIs.items():
-                    tables[ref.datasetType.componentTypeName(name)].add(ref, uri)
-
         # Sort if we haven't been told to enforce an order.
         sort_table = not bool(self._order_by)
-        return [
-            table.getAstropyTable(datasetTypeName, sort=sort_table)
-            for datasetTypeName, table in tables.items()
-        ]
 
-    # @profile
-    def getDatasets(self) -> Iterator[DatasetRef]:
-        """Get the datasets as a list.
+        if not self.showUri:
+            for refs in self.getDatasets():
+                table = _Table()
+                for ref in refs:
+                    table.add(ref)
+                if refs:
+                    yield table.getAstropyTable(refs[0].datasetType.name, sort=sort_table)
+        else:
+            for refs in self.getDatasets():
+                if not refs:
+                    continue
+                # For URIs of disassembled composites we create a table per
+                # component.
+                tables: dict[str, _Table] = defaultdict(_Table)
+                dataset_type_name = refs[0].datasetType.name
+                ref_uris = self.butler.get_many_uris(refs, predict=True)
+                for ref, uris in ref_uris.items():
+                    if uris.primaryURI:
+                        tables[dataset_type_name].add(ref, uris.primaryURI)
+                    for name, uri in uris.componentURIs.items():
+                        tables[ref.datasetType.componentTypeName(name)].add(ref, uri)
+                for name in sorted(tables):
+                    yield tables[name].getAstropyTable(name, sort=sort_table)
+        return
 
-        Returns
-        -------
-        refs : `collections.abc.Iterator` [ `DatasetRef` ]
-            Dataset references matching the given query criteria.
+    def getDatasets(self) -> Iterator[list[DatasetRef]]:
+        """Get the datasets as a list of lists.
+
+        Yields
+        ------
+        refs : `collections.abc.Iterator` [ `list [ `DatasetRef` ] ]
+            Dataset references matching the given query criteria grouped
+            by dataset type.
         """
         datasetTypes = self._dataset_type_glob or ...
         query_collections: Iterable[str] = self._collections_wildcard or ["*"]
@@ -265,7 +274,7 @@ class QueryDatasets:
         unlimited = True if limit == 0 else False
         if limit < 0:
             # Must track this limit in the loop rather than relying on
-            # butler.query_datsets() because this loop knows there are more
+            # butler.query_datasets() because this loop knows there are more
             # possible dataset types to query.
             warn_limit = True
             limit = abs(limit) + 1  # +1 to tell us we hit the limit.
@@ -292,7 +301,7 @@ class QueryDatasets:
                     # the list.
                     results.pop(-1)
             _LOG.debug("Got %d results for dataset type %s", len(results), dt)
-            yield from results
+            yield results
 
             if not unlimited and limit == 0:
                 if warn_limit:
