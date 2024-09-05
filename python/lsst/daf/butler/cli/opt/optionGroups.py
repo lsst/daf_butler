@@ -89,8 +89,9 @@ class query_datasets_options(OptionGroup):  # noqa: N801
                 collections_option(),
                 where_option(help=where_help),
                 click.option(
-                    "--find-first",
+                    "--find-first/--no-find-first",
                     is_flag=True,
+                    default=False,
                     help=unwrap(
                         """For each result data ID, only yield one DatasetRef of each
                                      DatasetType, from the first collection in which a dataset of that dataset
