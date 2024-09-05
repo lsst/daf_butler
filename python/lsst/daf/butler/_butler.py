@@ -1588,14 +1588,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Dataset type object or name to search for.
         collections : collection expression, optional
             A collection name or iterable of collection names to search. If not
-            provided, the default collections are used. Can be a wildcard. See
-            :ref:`daf_butler_collection_expressions` for more information.
+            provided, the default collections are used. Can be a wildcard if
+            ``find_first`` is `False` (if find first is requested the order
+            of collections matters and wildcards make the order indeterminate).
+             See :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
             which a dataset of that dataset type appears (according to the
             order of ``collections`` passed in).  If `True`, ``collections``
-            must not contain regular expressions and may not be ``...``.
+            must not contain wildcards.
         data_id : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints in
             the query.
@@ -1667,7 +1669,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         if order_by is None:
             order_by = []
         if collections:
-            collections = self.collections.query(collections)
+            # Wild cards need to be expanded but can only be allowed if
+            # find_first=False because expanding wildcards does not return
+            # a guaranteed ordering.
+            expanded_collections = self.collections.query(collections)
+            if find_first and set(expanded_collections) != set(ensure_iterable(collections)):
+                raise RuntimeError(
+                    "Can not use wildcards in collections when find_first=True "
+                    f" (given {collections} which expanded to {expanded_collections})"
+                )
+            collections = expanded_collections
         with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)

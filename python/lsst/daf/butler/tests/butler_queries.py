@@ -257,9 +257,12 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(refs_q[0].id, UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
         self.assertEqual(refs_q[1].id, UUID("51352db4-a47a-447c-b12d-a50b206b17cd"))
 
-        with self.assertRaises(EmptyQueryResultError) as cm:
-            butler.query_datasets("bias", "*", detector=100, instrument="Unknown")
-        self.assertIn("doomed", str(cm.exception))
+        with self.assertRaises(RuntimeError) as cm:
+            butler.query_datasets("bias", "*", detector=100, instrument="Unknown", find_first=True)
+        self.assertIn("Can not use wildcards", str(cm.exception))
+        with self.assertRaises(EmptyQueryResultError) as cm2:
+            butler.query_datasets("bias", "*", detector=100, instrument="Unknown", find_first=False)
+        self.assertIn("doomed", str(cm2.exception))
 
     def test_general_query(self) -> None:
         """Test Query.general and its result."""

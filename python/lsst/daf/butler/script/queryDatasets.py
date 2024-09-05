@@ -242,7 +242,10 @@ class QueryDatasets:
 
         # Expand the collections query and include summary information.
         query_collections_info = self.butler.collections.query_info(query_collections, include_summary=True)
-        query_collections = [c.name for c in query_collections_info]
+        expanded_query_collections = [c.name for c in query_collections_info]
+        if self._find_first and set(query_collections) != set(expanded_query_collections):
+            raise RuntimeError("Can not use wildcards in collections when find_first=True")
+        query_collections = expanded_query_collections
 
         # Only iterate over dataset types that are relevant for the query.
         dataset_types = set(
