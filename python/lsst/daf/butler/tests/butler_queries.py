@@ -257,6 +257,21 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(refs_q[0].id, UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
         self.assertEqual(refs_q[1].id, UUID("51352db4-a47a-447c-b12d-a50b206b17cd"))
 
+        # limit=0 means test the query but don't return anything and
+        # don't complain.
+        refs_simple = butler.query_datasets("bias", "imported_g", limit=0, explain=True)
+        self.assertEqual(len(refs_simple), 0)
+
+        # Explicitly run with no restrictions.
+        refs_simple = butler.query_datasets("bias", collections="*", find_first=False, limit=None)
+        self.assertEqual(len(refs_simple), 6)
+
+        # Now limit the number of results and look for a warning.
+        with self.assertLogs("lsst.daf.butler", level="WARNING") as lcm:
+            refs_simple = butler.query_datasets("bias", collections="*", find_first=False, limit=-4)
+        self.assertEqual(len(refs_simple), 4)
+        self.assertIn("More datasets are available", lcm.output[0])
+
         with self.assertRaises(RuntimeError) as cm:
             butler.query_datasets("bias", "*", detector=100, instrument="Unknown", find_first=True)
         self.assertIn("Can not use wildcards", str(cm.exception))
