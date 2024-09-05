@@ -58,7 +58,7 @@ class query_datasets_options(OptionGroup):  # noqa: N801
         repo: bool = True,
         showUri: bool = True,
         useArguments: bool = True,
-        default_limit: int = -10_000,
+        default_limit: int = -20_000,
         use_order_by: bool = True,
     ) -> None:
         self.decorators = []

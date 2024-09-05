@@ -264,6 +264,9 @@ class QueryDatasets:
         warn_limit = False
         unlimited = True if limit == 0 else False
         if limit < 0:
+            # Must track this limit in the loop rather than relying on
+            # butler.query_datsets() because this loop knows there are more
+            # possible dataset types to query.
             warn_limit = True
             limit = abs(limit) + 1  # +1 to tell us we hit the limit.
         for dt in sorted(dataset_types):
