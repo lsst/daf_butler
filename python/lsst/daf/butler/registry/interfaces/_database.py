@@ -1995,6 +1995,30 @@ class Database(ABC):
         """
         raise NotImplementedError()
 
+    def cancel_running_query(self) -> None:
+        """Attempt to cancel an in-progress query that is using this database
+        connection.
+
+        Notes
+        -----
+        If no query is active, does nothing. This may be called from a
+        different thread than the one performing the query.  The underlying
+        database driver functions for cancellation are generally not guaranteed
+        to succeed.
+        """
+        connection = self._session_connection
+        if connection is not None:
+            db = connection.connection.dbapi_connection
+            if db is not None:
+                self._cancel_running_query(db)
+
+    @abstractmethod
+    def _cancel_running_query(self, connection: sqlalchemy.engine.interfaces.DBAPIConnection) -> None:
+        """Driver-specific inner implementation for ``cancel_running_query``
+        above.
+        """
+        raise NotImplementedError()
+
     origin: int
     """An integer ID that should be used as the default for any datasets,
     quanta, or other entities that use a (autoincrement, origin) compound

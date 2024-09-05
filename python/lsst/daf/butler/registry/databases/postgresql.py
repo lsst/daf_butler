@@ -396,6 +396,10 @@ class PostgresqlDatabase(Database):
         # would become a String column in the output.
         return sqlalchemy.cast(sqlalchemy.func.any_value(column), column.type)
 
+    def _cancel_running_query(self, connection: sqlalchemy.engine.interfaces.DBAPIConnection) -> None:
+        # This is a psycopg2-specific extension method.
+        connection.cancel()  # type: ignore
+
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
     """A single-column `Timespan` representation usable only with

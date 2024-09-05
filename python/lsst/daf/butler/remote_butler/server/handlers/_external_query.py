@@ -53,7 +53,8 @@ from lsst.daf.butler.remote_butler.server_models import (
 )
 
 from ...._exceptions import ButlerUserError
-from ....queries.driver import QueryDriver, QueryTree, ResultSpec
+from ....direct_query_driver import DirectQueryDriver
+from ....queries.driver import QueryTree, ResultSpec
 from ..._errors import serialize_butler_user_error
 from .._dependencies import factory_dependency
 from .._factory import Factory
@@ -95,28 +96,49 @@ async def _stream_query_pages(request: QueryExecuteRequestModel, factory: Factor
     """
     # `None` signals that there is no more data to send.
     queue = asyncio.Queue[QueryExecuteResultData | None](1)
-    async with asyncio.TaskGroup() as tg:
-        # Run a background task to read from the DB and insert the result pages
-        # into a queue.
-        tg.create_task(_enqueue_query_pages(queue, request, factory))
-        # Read the result pages from the queue and send them to the client,
-        # inserting a keep-alive message every 15 seconds if we are waiting a
-        # long time for the database.
-        async for message in _dequeue_query_pages_with_keepalive(queue):
-            yield message.model_dump_json() + "\n"
+    try:
+        async with asyncio.TaskGroup() as tg:
+            # Run a background task to read from the DB and insert the result
+            # pages into a queue.
+            tg.create_task(_execute_query(queue, request, factory))
+            # Read the result pages from the queue and send them to the client,
+            # inserting a keep-alive message every 15 seconds if we are waiting
+            # a long time for the database.
+            async for message in _dequeue_query_pages_with_keepalive(queue):
+                yield message.model_dump_json() + "\n"
+    finally:
+        print("closed")
 
 
-async def _enqueue_query_pages(
+async def _execute_query(
     queue: asyncio.Queue[QueryExecuteResultData | None], request: QueryExecuteRequestModel, factory: Factory
 ) -> None:
     """Set up a QueryDriver to run the query, and copy the results into a
     queue.  Send `None` to the queue when there is no more data to read.
     """
+    async with contextmanager_in_threadpool(_get_query_context(factory, request.query)) as ctx:
+        # Do the actual work in another task so we can explicitly handle
+        # cancellation.  The database calls in _retrieve_query_pages can
+        # block for a very long time waiting for a response from the DB.
+        # Since that is a synchronous call in another thread, the `await`
+        # can't be cancelled until the sync call finishes.  So we have to
+        # forcibly cancel the database query to get the sync call to abort.
+        async with asyncio.TaskGroup() as tg:
+            task = tg.create_task(_enqueue_query_pages(queue, request, ctx))
+            try:
+                await asyncio.wait_for(task, None)
+            except asyncio.CancelledError:
+                ctx.driver.db.cancel_running_query()
+                raise
+
+
+async def _enqueue_query_pages(
+    queue: asyncio.Queue[QueryExecuteResultData | None], request: QueryExecuteRequestModel, ctx: _QueryContext
+) -> None:
     try:
-        async with contextmanager_in_threadpool(_get_query_context(factory, request.query)) as ctx:
-            spec = request.result_spec.to_result_spec(ctx.driver.universe)
-            async for page in iterate_in_threadpool(_retrieve_query_pages(ctx, spec)):
-                await queue.put(page)
+        spec = request.result_spec.to_result_spec(ctx.driver.universe)
+        async for page in iterate_in_threadpool(_retrieve_query_pages(ctx, spec)):
+            await queue.put(page)
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
         # client.
@@ -219,5 +241,5 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
 
 
 class _QueryContext(NamedTuple):
-    driver: QueryDriver
+    driver: DirectQueryDriver
     tree: QueryTree
