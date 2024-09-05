@@ -273,8 +273,9 @@ class QueryDatasets:
             kwargs: dict[str, Any] = {}
             if self._where:
                 kwargs["where"] = self._where
-            if not unlimited:
-                kwargs["limit"] = limit
+            # API uses 0 to mean "check query but return nothing" and None
+            # to mean "unlimited".
+            kwargs["limit"] = None if unlimited else limit
             _LOG.debug("Querying dataset type %s with %s", dt, kwargs)
             results = self.butler.query_datasets(
                 dt,
