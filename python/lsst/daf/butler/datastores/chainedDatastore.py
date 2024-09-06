@@ -651,6 +651,8 @@ class ChainedDatastore(Datastore):
         # Docstring inherited
 
         uris: dict[DatasetRef, DatasetRefURIs] = {}
+        ephemeral_uris: dict[DatasetRef, DatasetRefURIs] = {}
+
         missing_refs = set(refs)
 
         # If predict is True we don't want to predict a dataset in the first
@@ -666,10 +668,22 @@ class ChainedDatastore(Datastore):
                 except NotImplementedError:
                     # some datastores may not implement generating URIs
                     continue
+                if datastore.isEphemeral:
+                    # Only use these as last resort so do not constrain
+                    # subsequent queries.
+                    ephemeral_uris.update(got_uris)
+                    continue
+
                 missing_refs -= got_uris.keys()
                 uris.update(got_uris)
                 if not missing_refs:
                     break
+
+        if missing_refs and ephemeral_uris:
+            ephemeral_refs = missing_refs.intersection(ephemeral_uris.keys())
+            for ref in ephemeral_refs:
+                uris[ref] = ephemeral_uris[ref]
+                missing_refs.remove(ref)
 
         if missing_refs and not allow_missing:
             raise FileNotFoundError(f"Dataset(s) {missing_refs} not in this datastore.")

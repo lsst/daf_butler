@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from contextlib import AbstractContextManager
 from typing import Any, TextIO, cast
 
@@ -44,14 +44,7 @@ from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
-from ..dimensions import (
-    DataCoordinate,
-    DataId,
-    DimensionElement,
-    DimensionGroup,
-    DimensionRecord,
-    DimensionUniverse,
-)
+from ..dimensions import DataCoordinate, DataId, DimensionElement, DimensionRecord, DimensionUniverse
 from ..direct_butler import DirectButler
 from ..queries import Query
 from ..registry import Registry
@@ -332,85 +325,8 @@ class HybridButler(Butler):
     def registry(self) -> Registry:
         return self._registry
 
-    def _query(self) -> AbstractContextManager[Query]:
-        return self._remote_butler._query()
-
-    def _query_data_ids(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DataCoordinate]:
-        return self._direct_butler._query_data_ids(
-            dimensions,
-            data_id=data_id,
-            where=where,
-            bind=bind,
-            expanded=expanded,
-            order_by=order_by,
-            limit=limit,
-            offset=offset,
-            explain=explain,
-            **kwargs,
-        )
-
-    def _query_datasets(
-        self,
-        dataset_type: Any,
-        collections: str | Iterable[str] | None = None,
-        *,
-        find_first: bool = True,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DatasetRef]:
-        return self._direct_butler._query_datasets(
-            dataset_type,
-            collections,
-            find_first=find_first,
-            data_id=data_id,
-            where=where,
-            bind=bind,
-            expanded=expanded,
-            explain=explain,
-            **kwargs,
-        )
-
-    def _query_dimension_records(
-        self,
-        element: str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DimensionRecord]:
-        return self._direct_butler._query_dimension_records(
-            element,
-            data_id=data_id,
-            where=where,
-            bind=bind,
-            order_by=order_by,
-            limit=limit,
-            offset=offset,
-            explain=explain,
-            **kwargs,
-        )
+    def query(self) -> AbstractContextManager[Query]:
+        return self._remote_butler.query()
 
     def _clone(
         self,

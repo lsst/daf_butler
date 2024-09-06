@@ -218,7 +218,7 @@ class ButlerCollections(ABC, Sequence):
         """
         raise NotImplementedError()
 
-    def x_query(
+    def query(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
@@ -226,8 +226,6 @@ class ButlerCollections(ABC, Sequence):
         include_chains: bool | None = None,
     ) -> Sequence[str]:
         """Query the butler for collections matching an expression.
-
-        **This is an experimental interface that can change at any time.**
 
         Parameters
         ----------
@@ -260,7 +258,7 @@ class ButlerCollections(ABC, Sequence):
 
         The default implementation is a wrapper around `x_query_info`.
         """
-        collections_info = self.x_query_info(
+        collections_info = self.query_info(
             expression,
             collection_types=collection_types,
             flatten_chains=flatten_chains,
@@ -269,7 +267,7 @@ class ButlerCollections(ABC, Sequence):
         return [info.name for info in collections_info]
 
     @abstractmethod
-    def x_query_info(
+    def query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,
@@ -280,8 +278,6 @@ class ButlerCollections(ABC, Sequence):
     ) -> Sequence[CollectionInfo]:
         """Query the butler for collections matching an expression and
         return detailed information about those collections.
-
-        **This is an experimental interface that can change at any time.**
 
         Parameters
         ----------

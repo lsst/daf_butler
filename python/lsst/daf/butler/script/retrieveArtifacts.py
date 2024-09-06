@@ -29,13 +29,14 @@ from __future__ import annotations
 
 __all__ = ("retrieveArtifacts",)
 
+import itertools
 import logging
 from typing import TYPE_CHECKING
 
 from .._butler import Butler
+from .queryDatasets import QueryDatasets
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DatasetRef
     from lsst.resources import ResourcePath
 
 log = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ def retrieveArtifacts(
     collections: tuple[str, ...],
     where: str,
     find_first: bool,
+    limit: int,
+    order_by: tuple[str, ...],
     transfer: str,
     preserve_path: bool,
     clobber: bool,
@@ -70,6 +73,15 @@ def retrieveArtifacts(
         Query modification string.
     find_first : `bool`
         Whether only the first match should be used.
+    limit : `int`
+        Limit the number of results to be returned. A value of 0 means
+        unlimited. A negative value is used to specify a cap where a warning
+        is issued if that cap is hit.
+    order_by : `tuple` of `str`
+        Dimensions to use for sorting results. If no ordering is given the
+        results of ``limit`` are undefined and default sorting of the resulting
+        datasets will be applied. It is an error if the requested ordering
+        is inconsistent with the dimensions of the dataset type being queried.
     transfer : `str`
         Transfer mode to use when placing artifacts in the destination.
     preserve_path : `bool`
@@ -83,25 +95,24 @@ def retrieveArtifacts(
     transferred : `list` of `lsst.resources.ResourcePath`
         The destination URIs of every transferred artifact.
     """
-    query_types = dataset_type or ...
+    query_types = dataset_type or "*"
     query_collections: tuple[str, ...] = collections or ("*",)
 
     butler = Butler.from_config(repo, writeable=False)
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.
-    dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(query_types)]
-    refs: list[DatasetRef] = []
-    with butler._query() as query:
-        collections_info = butler.collections.x_query_info(query_collections, include_summary=True)
-        expanded_collections = [info.name for info in collections_info]
-        dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections_info))
-        for dt in dataset_types:
-            results = query.datasets(dt, collections=expanded_collections, find_first=find_first)
-            if where:
-                results = results.where(where)
-            refs.extend(results)
-
+    query = QueryDatasets(
+        butler=butler,
+        glob=query_types,
+        collections=query_collections,
+        where=where,
+        find_first=find_first,
+        limit=limit,
+        order_by=order_by,
+        show_uri=False,
+    )
+    refs = list(itertools.chain(*query.getDatasets()))
     log.info("Number of datasets matching query: %d", len(refs))
 
     transferred = butler.retrieveArtifacts(

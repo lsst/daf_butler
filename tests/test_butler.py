@@ -225,7 +225,7 @@ class ButlerPutGetTests(TestCaseMixin):
         """
         butler = self.create_empty_butler(run=run)
 
-        collections = set(butler.collections.x_query("*"))
+        collections = set(butler.collections.query("*"))
         self.assertEqual(collections, {run})
         # Create and register a DatasetType
         dimensions = butler.dimensions.conform(["instrument", "visit"])
@@ -502,7 +502,7 @@ class ButlerPutGetTests(TestCaseMixin):
             butler.get(ref, parameters={"unsupported": True})
 
         # Check we have a collection
-        collections = set(butler.collections.x_query("*"))
+        collections = set(butler.collections.query("*"))
         self.assertEqual(collections, expected_collections)
 
         # Clean up to check that we can remove something that may have
@@ -642,7 +642,7 @@ class ButlerTests(ButlerPutGetTests):
             butler = Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
-        collections = set(butler.collections.x_query("*"))
+        collections = set(butler.collections.query("*"))
         self.assertEqual(collections, {self.default_run})
 
         # Check that some special characters can be included in run name.
@@ -2798,7 +2798,7 @@ class NullDatastoreTestCase(unittest.TestCase):
 
         # Check that registry is working.
         butler.collections.register("MYRUN")
-        collections = butler.collections.x_query("*")
+        collections = butler.collections.query("*")
         self.assertIn("MYRUN", set(collections))
 
         # Create a ref.

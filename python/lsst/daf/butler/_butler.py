@@ -1465,13 +1465,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
-    def _query(self) -> AbstractContextManager[Query]:
+    def query(self) -> AbstractContextManager[Query]:
         """Context manager returning a `Query` object used for construction
         and execution of complex queries.
         """
         raise NotImplementedError()
 
-    def _query_data_ids(
+    def query_data_ids(
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
         *,
@@ -1480,7 +1480,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         bind: Mapping[str, Any] | None = None,
         with_dimension_records: bool = False,
         order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
+        limit: int | None = -20_000,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DataCoordinate]:
@@ -1514,8 +1514,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Names of the columns/dimensions to use for ordering returned data
             IDs. Column name can be prefixed with minus (``-``) to use
             descending ordering.
-        limit : `int`, optional
-            Upper limit on the number of returned records.
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records. `None` can be used
+            if no limit is wanted. A limit of ``0`` means that the query will
+            be executed and validated but no results will be returned. In this
+            case there will be no exception even if ``explain`` is `True`.
+            If a negative value is given a warning will be issued if the number
+            of results is capped by that limit.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1549,21 +1554,33 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
+        if order_by is None:
+            order_by = []
+        query_limit = limit
+        warn_limit = False
+        if limit is not None and limit < 0:
+            query_limit = abs(limit) + 1
+            warn_limit = True
+        with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
                 .data_ids(dimensions)
                 .order_by(*ensure_iterable(order_by))
-                .limit(limit)
+                .limit(query_limit)
             )
             if with_dimension_records:
                 result = result.with_dimension_records()
             data_ids = list(result)
-        if explain and not data_ids:
+            if warn_limit and len(data_ids) == query_limit:
+                # We asked for one too many so must remove that from the list.
+                data_ids.pop(-1)
+                assert limit is not None  # For mypy.
+                _LOG.warning("More data IDs are available than the requested limit of %d.", abs(limit))
+        if explain and (limit is None or limit != 0) and not data_ids:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return data_ids
 
-    def _query_datasets(
+    def query_datasets(
         self,
         dataset_type: str | DatasetType,
         collections: str | Iterable[str] | None = None,
@@ -1573,6 +1590,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         where: str = "",
         bind: Mapping[str, Any] | None = None,
         with_dimension_records: bool = False,
+        order_by: Iterable[str] | str | None = None,
+        limit: int | None = -20_000,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DatasetRef]:
@@ -1584,14 +1603,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Dataset type object or name to search for.
         collections : collection expression, optional
             A collection name or iterable of collection names to search. If not
-            provided, the default collections are used.  See
-            :ref:`daf_butler_collection_expressions` for more information.
+            provided, the default collections are used. Can be a wildcard if
+            ``find_first`` is `False` (if find first is requested the order
+            of collections matters and wildcards make the order indeterminate).
+             See :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
             which a dataset of that dataset type appears (according to the
             order of ``collections`` passed in).  If `True`, ``collections``
-            must not contain regular expressions and may not be ``...``.
+            must not contain wildcards.
         data_id : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints in
             the query.
@@ -1609,6 +1630,17 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         with_dimension_records : `bool`, optional
             If `True` (default is `False`) then returned data IDs will have
             dimension records.
+        order_by : `~collections.abc.Iterable` [`str`] or `str`, optional
+            Names of the columns/dimensions to use for ordering returned data
+            IDs. Column name can be prefixed with minus (``-``) to use
+            descending ordering.
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records. `None` can be used
+            if no limit is wanted. A limit of ``0`` means that the query will
+            be executed and validated but no results will be returned. In this
+            case there will be no exception even if ``explain`` is `True`.
+            If a negative value is given a warning will be issued if the number
+            of results is capped by that limit.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1654,20 +1686,44 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
-            result = query.where(data_id, where, bind=bind, **kwargs).datasets(
-                dataset_type,
-                collections=collections,
-                find_first=find_first,
+        if order_by is None:
+            order_by = []
+        if collections:
+            # Wild cards need to be expanded but can only be allowed if
+            # find_first=False because expanding wildcards does not return
+            # a guaranteed ordering.
+            expanded_collections = self.collections.query(collections)
+            if find_first and set(expanded_collections) != set(ensure_iterable(collections)):
+                raise RuntimeError(
+                    "Can not use wildcards in collections when find_first=True "
+                    f" (given {collections} which expanded to {expanded_collections})"
+                )
+            collections = expanded_collections
+        query_limit = limit
+        warn_limit = False
+        if limit is not None and limit < 0:
+            query_limit = abs(limit) + 1
+            warn_limit = True
+        with self.query() as query:
+            result = (
+                query.where(data_id, where, bind=bind, **kwargs)
+                .datasets(dataset_type, collections=collections, find_first=find_first)
+                .order_by(*ensure_iterable(order_by))
+                .limit(query_limit)
             )
             if with_dimension_records:
                 result = result.with_dimension_records()
             refs = list(result)
-        if explain and not refs:
+            if warn_limit and len(refs) == query_limit:
+                # We asked for one too many so must remove that from the list.
+                refs.pop(-1)
+                assert limit is not None  # For mypy.
+                _LOG.warning("More datasets are available than the requested limit of %d.", abs(limit))
+        if explain and (limit is None or limit != 0) and not refs:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return refs
 
-    def _query_dimension_records(
+    def query_dimension_records(
         self,
         element: str,
         *,
@@ -1675,7 +1731,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         where: str = "",
         bind: Mapping[str, Any] | None = None,
         order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
+        limit: int | None = -20_000,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DimensionRecord]:
@@ -1702,8 +1758,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Names of the columns/dimensions to use for ordering returned data
             IDs. Column name can be prefixed with minus (``-``) to use
             descending ordering.
-        limit : `int`, optional
-            Upper limit on the number of returned records.
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records. `None` can be used
+            if no limit is wanted. A limit of ``0`` means that the query will
+            be executed and validated but no results will be returned. In this
+            case there will be no exception even if ``explain`` is `True`.
+            If a negative value is given a warning will be issued if the number
+            of results is capped by that limit.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1738,15 +1799,29 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
-        with self._query() as query:
+        if order_by is None:
+            order_by = []
+        query_limit = limit
+        warn_limit = False
+        if limit is not None and limit < 0:
+            query_limit = abs(limit) + 1
+            warn_limit = True
+        with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
                 .dimension_records(element)
                 .order_by(*ensure_iterable(order_by))
-                .limit(limit)
+                .limit(query_limit)
             )
             dimension_records = list(result)
-        if explain and not dimension_records:
+            if warn_limit and len(dimension_records) == query_limit:
+                # We asked for one too many so must remove that from the list.
+                dimension_records.pop(-1)
+                assert limit is not None  # For mypy.
+                _LOG.warning(
+                    "More dimension records are available than the requested limit of %d.", abs(limit)
+                )
+        if explain and (limit is None or limit != 0) and not dimension_records:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
 

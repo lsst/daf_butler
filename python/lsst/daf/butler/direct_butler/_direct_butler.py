@@ -1396,9 +1396,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             collectionType = self._registry.getCollectionType(name)
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
-            with self._query() as query:
+            with self.query() as query:
                 # Work out the dataset types that are relevant.
-                collections_info = self.collections.x_query_info(name, include_summary=True)
+                collections_info = self.collections.query_info(name, include_summary=True)
                 filtered_dataset_types = self.collections._filter_dataset_types(
                     all_dataset_types, collections_info
                 )
@@ -2201,7 +2201,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         return self._registry.dimensions
 
-    def _query(self) -> contextlib.AbstractContextManager[Query]:
+    def query(self) -> contextlib.AbstractContextManager[Query]:
         # Docstring inherited.
         return self._registry._query()
 

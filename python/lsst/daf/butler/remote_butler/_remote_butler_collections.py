@@ -71,7 +71,7 @@ class RemoteButlerCollections(ButlerCollections):
     ) -> None:
         raise NotImplementedError("Not yet available")
 
-    def x_query_info(
+    def query_info(
         self,
         expression: str | Iterable[str],
         collection_types: Set[CollectionType] | CollectionType | None = None,

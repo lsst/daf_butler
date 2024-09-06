@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import itertools
 from collections.abc import Iterable
 
 from .._butler import Butler
@@ -40,6 +41,7 @@ def associate(
     collections: Iterable[str],
     where: str,
     find_first: bool,
+    limit: int,
 ) -> None:
     """Add existing datasets to a CHAINED collection.
 
@@ -57,6 +59,10 @@ def associate(
         Query string.
     find_first : `bool`
         Whether to find the first match or not.
+    limit : `int`
+        Limit the number of results to be returned. A value of 0 means
+        unlimited. A negative value is used to specify a cap where a warning
+        is issued if that cap is hit.
     """
     butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
@@ -68,8 +74,10 @@ def associate(
         collections=collections,
         where=where,
         find_first=find_first,
+        limit=limit,
+        order_by=(),
         show_uri=False,
         repo=None,
     )
 
-    butler.registry.associate(collection, results.getDatasets())
+    butler.registry.associate(collection, itertools.chain(*results.getDatasets()))

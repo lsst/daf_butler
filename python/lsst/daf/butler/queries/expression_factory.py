@@ -463,7 +463,7 @@ class DatasetTypeProxy:
     # to include Datastore record fields.
 
     def __getattr__(self, field: str) -> ScalarExpressionProxy:
-        if field not in tree.DATASET_FIELD_NAMES:
+        if not tree.is_dataset_field(field):
             raise AttributeError(field)
         expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
         return ResolvedScalarExpressionProxy(expression)
@@ -471,7 +471,7 @@ class DatasetTypeProxy:
     @property
     def timespan(self) -> TimespanProxy:
         try:
-            expression = tree.DimensionFieldReference(element=self._element, field="timespan")
+            expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field="timespan")
         except InvalidQueryError:
             raise AttributeError("timespan")
         return TimespanProxy(expression)

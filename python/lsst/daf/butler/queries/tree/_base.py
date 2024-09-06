@@ -32,10 +32,11 @@ __all__ = (
     "ColumnExpressionBase",
     "DatasetFieldName",
     "DATASET_FIELD_NAMES",
+    "is_dataset_field",
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, cast, get_args
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeGuard, TypeVar, cast, get_args
 
 import pydantic
 
@@ -61,6 +62,22 @@ _T = TypeVar("_T")
 _L = TypeVar("_L")
 _A = TypeVar("_A")
 _O = TypeVar("_O")
+
+
+def is_dataset_field(s: str) -> TypeGuard[DatasetFieldName]:
+    """Validate a field name.
+
+    Parameters
+    ----------
+    s : `str`
+        The field name to test.
+
+    Returns
+    -------
+    is_field : `bool`
+        Whether or not this is a dataset field.
+    """
+    return s in DATASET_FIELD_NAMES
 
 
 class QueryTreeBase(pydantic.BaseModel):

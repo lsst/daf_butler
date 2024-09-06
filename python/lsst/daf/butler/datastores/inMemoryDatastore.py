@@ -472,7 +472,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             fragment = "#predicted"
         else:
             realID, _ = self._get_dataset_info(ref.id)
-            name = f"{id(self.datasets[realID])}?{query}"
+            name = f"{id(self.datasets[realID])}_{ref.id}"
             fragment = ""
 
         return DatasetRefURIs(ResourcePath(f"mem://{name}?{query}{fragment}"), {})

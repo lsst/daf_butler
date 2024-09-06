@@ -147,8 +147,20 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     storageClassFactory = StorageClassFactory()
 
     @staticmethod
-    def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False):
-        return script.QueryDatasets(glob, collections, where, find_first, show_uri, repo=repo).getTables()
+    def _queryDatasets(
+        repo, glob=(), collections=(), where="", find_first=False, show_uri=False, limit=0, order_by=()
+    ):
+        query = script.QueryDatasets(
+            glob,
+            collections,
+            where=where,
+            find_first=find_first,
+            show_uri=show_uri,
+            limit=limit,
+            order_by=order_by,
+            butler=repo,
+        )
+        return list(query.getTables())
 
     def setUp(self):
         self.testdir = makeTestTempDir(TESTDIR)
@@ -162,9 +174,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             self.repoDir, configFile=os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
         )
 
-        tables = self._queryDatasets(repo=self.repoDir, show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
 
-        # Want second datastore root.
+        # Want second datastore root since in-memory is ephemeral and
+        # all the relevant datasets are stored in the second as well as third
+        # datastore.
         roots = testRepo.butler.get_datastore_roots()
         datastore_root = roots[testRepo.butler.get_datastore_names()[1]]
 
@@ -178,7 +192,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test for expected output with show_uri=True."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=self.repoDir, show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
 
         roots = testRepo.butler.get_datastore_roots()
         datastore_root = list(roots.values())[0]
@@ -187,11 +201,58 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             tables, expectedFilesystemDatastoreTables(datastore_root), filterColumns=True
         )
 
+    def testShowUriNoDisassembly(self):
+        """Test for expected output with show_uri=True and no disassembly."""
+        testRepo = MetricTestRepo(
+            self.repoDir,
+            configFile=self.configFile,
+            storageClassName="StructuredCompositeReadCompNoDisassembly",
+        )
+
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
+
+        roots = testRepo.butler.get_datastore_roots()
+        datastore_root = list(roots.values())[0]
+
+        expected = [
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp",
+                            "ingest/run",
+                            "DummyCamComp",
+                            "423",
+                            "R",
+                            "d-r",
+                            datastore_root.join(
+                                "ingest/run/test_metric_comp/test_metric_comp_v00000423_fDummyCamComp.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp",
+                            "ingest/run",
+                            "DummyCamComp",
+                            "424",
+                            "R",
+                            "d-r",
+                            datastore_root.join(
+                                "ingest/run/test_metric_comp/test_metric_comp_v00000424_fDummyCamComp.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter", "URI"),
+            ),
+        ]
+
+        self.assertAstropyTablesEqual(tables, expected, filterColumns=True)
+
     def testNoShowURI(self):
         """Test for expected output without show_uri (default is False)."""
-        _ = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=self.repoDir)
+        tables = self._queryDatasets(repo=testRepo.butler)
 
         expectedTables = (
             AstropyTable(
@@ -211,9 +272,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test using the where clause to reduce the number of rows returned by
         queryDatasets.
         """
-        _ = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=self.repoDir, where="instrument='DummyCamComp' AND visit=423")
+        tables = self._queryDatasets(repo=testRepo.butler, where="instrument='DummyCamComp' AND visit=423")
 
         expectedTables = (
             AstropyTable(
@@ -223,6 +284,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        with self.assertRaises(RuntimeError):
+            self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True)
 
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
@@ -247,7 +311,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, datasetType=datasetType)
 
         # verify the new dataset type increases the number of tables found:
-        tables = self._queryDatasets(repo=self.repoDir)
+        tables = self._queryDatasets(repo=testRepo.butler)
 
         expectedTables = (
             AstropyTable(
@@ -267,6 +331,36 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
+    def test_limit_order(self):
+        """Test limit and ordering."""
+        # Create and register an additional DatasetType
+        testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+
+        with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
+            tables = self._queryDatasets(repo=testRepo.butler, limit=-1, order_by=("visit"))
+
+        self.assertIn("increase this limit", cm.output[0])
+
+        expectedTables = [
+            AstropyTable(
+                array((("test_metric_comp", "ingest/run", "DummyCamComp", "423", "R", "d-r"),)),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+            ),
+        ]
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
+            tables = self._queryDatasets(repo=testRepo.butler, limit=-1, order_by=("-visit"))
+        self.assertIn("increase this limit", cm.output[0])
+
+        expectedTables = [
+            AstropyTable(
+                array((("test_metric_comp", "ingest/run", "DummyCamComp", "424", "R", "d-r"),)),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+            ),
+        ]
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
         is required for find-first.
@@ -277,7 +371,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo.addDataset(run="foo", dataId={"instrument": "DummyCamComp", "visit": 424})
 
         # Verify that without find-first, duplicate datasets are returned
-        tables = self._queryDatasets(repo=self.repoDir, collections=["foo", "ingest/run"], show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, collections=["foo", "ingest/run"], show_uri=True)
 
         # The test should be running with a single FileDatastore.
         roots = testRepo.butler.get_datastore_roots()
@@ -420,7 +514,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
         tables = self._queryDatasets(
-            repo=self.repoDir, collections=["foo", "ingest/run"], show_uri=True, find_first=True
+            repo=testRepo.butler, collections=["foo", "ingest/run"], show_uri=True, find_first=True
         )
 
         expectedTables = (

@@ -2428,7 +2428,7 @@ class SqlRegistry:
         )
         with self._query() as query:
             query = query.join_dataset_search(datasetType, resolved_collections)
-            result = query.general(
+            result = query.x_general(
                 datasetType.dimensions,
                 dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
             )

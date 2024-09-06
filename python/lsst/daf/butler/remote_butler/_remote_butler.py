@@ -570,7 +570,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return self._registry
 
     @contextmanager
-    def _query(self) -> Iterator[Query]:
+    def query(self) -> Iterator[Query]:
         driver = RemoteQueryDriver(self, self._connection)
         with driver:
             query = Query(driver)

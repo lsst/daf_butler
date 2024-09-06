@@ -33,7 +33,7 @@ import click
 
 from ..utils import OptionGroup, unwrap, where_help
 from .arguments import glob_argument, repo_argument
-from .options import collections_option, dataset_type_option, where_option
+from .options import collections_option, dataset_type_option, limit_option, order_by_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801
@@ -47,9 +47,20 @@ class query_datasets_options(OptionGroup):  # noqa: N801
         Whether to include the dataset URI.
     useArguments : `bool`
         Whether this is an argument or an option.
+    default_limit : `int`
+        The default value to use for the limit parameter.
+    use_order_by : `bool`
+        Whether to include an order_by option.
     """
 
-    def __init__(self, repo: bool = True, showUri: bool = True, useArguments: bool = True) -> None:
+    def __init__(
+        self,
+        repo: bool = True,
+        showUri: bool = True,
+        useArguments: bool = True,
+        default_limit: int = -20_000,
+        use_order_by: bool = True,
+    ) -> None:
         self.decorators = []
         if repo:
             if not useArguments:
@@ -78,8 +89,9 @@ class query_datasets_options(OptionGroup):  # noqa: N801
                 collections_option(),
                 where_option(help=where_help),
                 click.option(
-                    "--find-first",
+                    "--find-first/--no-find-first",
                     is_flag=True,
+                    default=False,
                     help=unwrap(
                         """For each result data ID, only yield one DatasetRef of each
                                      DatasetType, from the first collection in which a dataset of that dataset
@@ -88,8 +100,16 @@ class query_datasets_options(OptionGroup):  # noqa: N801
                                      contain wildcards."""
                     ),
                 ),
+                limit_option(
+                    help="Limit the number of results that are processed. 0 means no limit. A negative "
+                    "value specifies a cap where a warning will be issued if the cap is hit. "
+                    f"Default value is {default_limit}.",
+                    default=default_limit,
+                ),
             ]
         )
+        if use_order_by:
+            self.decorators.append(order_by_option())
         if showUri:
             self.decorators.append(
                 click.option("--show-uri", is_flag=True, help="Show the dataset URI in results.")
