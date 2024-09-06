@@ -285,6 +285,8 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(group.implied, ("band",))
         self.assertCountEqual(group.elements, group.names)
         self.assertCountEqual(group.governors, {"instrument"})
+        self.assertIsNone(group.region_dimension)
+        self.assertIsNone(group.timespan_dimension)
 
     def testObservationDimensions(self):
         group = self.universe.conform(["exposure", "detector", "visit"])
@@ -298,6 +300,8 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(group.spatial.names, ("observation_regions",))
         self.assertCountEqual(group.temporal.names, ("observation_timespans",))
         self.assertCountEqual(group.governors, {"instrument"})
+        self.assertEqual(group.region_dimension, "visit_detector_region")
+        self.assertEqual(group.timespan_dimension, "exposure")
         self.assertEqual(group.spatial.names, {"observation_regions"})
         self.assertEqual(group.temporal.names, {"observation_timespans"})
         self.assertEqual(next(iter(group.spatial)).governor, self.universe["instrument"])
@@ -334,6 +338,9 @@ class DimensionTestCase(unittest.TestCase):
         group = self.universe.conform(["visit", "detector", "tract", "patch", "htm7", "exposure"])
         self.assertCountEqual(group.spatial.names, ("observation_regions", "skymap_regions", "htm"))
         self.assertCountEqual(group.temporal.names, ("observation_timespans",))
+        self.assertEqual(group.timespan_dimension, "exposure")
+        # Can not choose between visit_detector_region or htm7 or tract/patch.
+        self.assertIsNone(group.region_dimension)
 
     def testSchemaGeneration(self):
         tableSpecs: NamedKeyDict[DimensionElement, ddl.TableSpec] = NamedKeyDict({})

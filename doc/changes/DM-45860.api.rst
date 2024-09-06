@@ -1,0 +1,1 @@
+Added ``DimensionGroup.region_dimension`` and ``DimensionGroup.timespan_dimension`` properties to make it easy to ask which dimension in the group is the best one to use for region or time calculations.
