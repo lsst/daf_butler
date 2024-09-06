@@ -23,3 +23,4 @@ datastore:
     StructuredDataPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
     ThingOne: lsst.daf.butler.formatters.pickle.PickleFormatter
     MetricsConversion: lsst.daf.butler.formatters.json.JsonFormatter
+    StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
