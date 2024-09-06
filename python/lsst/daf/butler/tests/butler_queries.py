@@ -182,6 +182,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             results = query.dimension_records("detector")
             self.check_detector_records(results)
             self.check_detector_records_returned(butler.query_dimension_records("detector"))
+            self.assertEqual(len(butler.query_dimension_records("detector", limit=0)), 0)
             self.check_detector_records(results.order_by("detector"), ordered=True)
             self.check_detector_records_returned(
                 butler.query_dimension_records("detector", order_by="detector"), ordered=True
@@ -200,6 +201,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ids=[1, 2],
                 ordered=True,
             )
+            with self.assertLogs("lsst.daf.butler", level="WARNING") as wcm:
+                self.check_detector_records_returned(
+                    butler.query_dimension_records("detector", limit=-2, order_by="-detector"),
+                    ids=[4, 3],
+                    ordered=True,
+                )
+            self.assertIn("More dimension records are available", wcm.output[0])
             self.check_detector_records(results.where(_x.detector.raft == "B", instrument="Cam1"), [3, 4])
             self.check_detector_records_returned(
                 butler.query_dimension_records(
