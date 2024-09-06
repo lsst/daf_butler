@@ -236,6 +236,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
+        with self.assertRaises(RuntimeError):
+            self._queryDatasets(repo=self.repoDir, collections="*", find_first=True)
+
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
         # Create and register an additional DatasetType
