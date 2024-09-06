@@ -50,15 +50,15 @@ class _Table:
     with the aggregated data. Eliminates duplicate rows.
     """
 
-    datasetRefs: dict[DatasetRef, list[str]]
+    datasetRefs: dict[DatasetRef, str | None]
 
     def __init__(self) -> None:
-        self.datasetRefs = defaultdict(list)
+        self.datasetRefs = {}
 
     def add(self, datasetRef: DatasetRef, uri: ResourcePath | None = None) -> None:
         """Add a row of information to the table.
 
-        ``uri`` is optional but must be consistent; provided or not, for
+        ``uri`` is optional but must be the consistent; provided or not, for
         every call to a ``_Table`` instance.
 
         Parameters
@@ -68,9 +68,9 @@ class _Table:
         uri : `lsst.resources.ResourcePath`, optional
             The URI to show as a file location in the table, by default `None`.
         """
-        uri_list = self.datasetRefs[datasetRef]  # Force it to be created.
-        if uri is not None:
-            uri_list.append(str(uri))
+        uri_str = str(uri) if uri else None
+        # Use a dict to retain ordering.
+        self.datasetRefs[datasetRef] = uri_str
 
     def getAstropyTable(self, datasetTypeName: str, sort: bool = True) -> AstropyTable:
         """Get the table as an astropy table.
@@ -108,20 +108,19 @@ class _Table:
         ]
         if self.datasetRefs[ref]:
             columnNames.append("URI")
-            columnTypes.append(str)
+            columnTypes.append(None)
 
         rows = []
-        for ref, uris in self.datasetRefs.items():
+        for ref, uri in self.datasetRefs.items():
             row = [
                 datasetTypeName,
                 ref.run,
                 str(ref.id),
                 *ref.dataId.full_values,
             ]
-            if uris:
-                rows.extend([row + [uri] for uri in uris])
-            else:
-                rows.append(row)
+            if uri:
+                row.append(uri)
+            rows.append(row)
 
         dataset_table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
         if sort:
