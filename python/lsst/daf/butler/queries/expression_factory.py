@@ -463,7 +463,7 @@ class DatasetTypeProxy:
     # to include Datastore record fields.
 
     def __getattr__(self, field: str) -> ScalarExpressionProxy:
-        if field not in tree.DATASET_FIELD_NAMES:
+        if not tree.is_dataset_field(field):
             raise AttributeError(field)
         expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
         return ResolvedScalarExpressionProxy(expression)
