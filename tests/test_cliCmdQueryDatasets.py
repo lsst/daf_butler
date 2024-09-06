@@ -201,6 +201,53 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             tables, expectedFilesystemDatastoreTables(datastore_root), filterColumns=True
         )
 
+    def testShowUriNoDisassembly(self):
+        """Test for expected output with show_uri=True and no disassembly."""
+        testRepo = MetricTestRepo(
+            self.repoDir,
+            configFile=self.configFile,
+            storageClassName="StructuredCompositeReadCompNoDisassembly",
+        )
+
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
+
+        roots = testRepo.butler.get_datastore_roots()
+        datastore_root = list(roots.values())[0]
+
+        expected = [
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp",
+                            "ingest/run",
+                            "DummyCamComp",
+                            "423",
+                            "R",
+                            "d-r",
+                            datastore_root.join(
+                                "ingest/run/test_metric_comp/test_metric_comp_v00000423_fDummyCamComp.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp",
+                            "ingest/run",
+                            "DummyCamComp",
+                            "424",
+                            "R",
+                            "d-r",
+                            datastore_root.join(
+                                "ingest/run/test_metric_comp/test_metric_comp_v00000424_fDummyCamComp.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=("type", "run", "instrument", "visit", "band", "physical_filter", "URI"),
+            ),
+        ]
+
+        self.assertAstropyTablesEqual(tables, expected, filterColumns=True)
+
     def testNoShowURI(self):
         """Test for expected output without show_uri (default is False)."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
