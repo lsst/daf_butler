@@ -31,11 +31,14 @@ __all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence, Set
-from typing import Any, overload
+from typing import TYPE_CHECKING, Any, overload
 
 from pydantic import BaseModel
 
 from ._collection_type import CollectionType
+
+if TYPE_CHECKING:
+    from ._dataset_type import DatasetType
 
 
 class CollectionInfo(BaseModel):
@@ -275,6 +278,7 @@ class ButlerCollections(ABC, Sequence):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         """Query the butler for collections matching an expression and
         return detailed information about those collections.
@@ -298,6 +302,11 @@ class ButlerCollections(ABC, Sequence):
         include_summary : `bool`, optional
             Whether the returned information includes dataset type and
             governor information for the collections.
+        summary_datasets : `~collections.abc.Iterable` [ `DatasetType` ], \
+                optional
+            Dataset types to include in returned summaries. Only used if
+            ``include_summary`` is `True`. If not specified then all dataset
+            types will be included.
 
         Returns
         -------
