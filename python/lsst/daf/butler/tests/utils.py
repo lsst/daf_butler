@@ -256,6 +256,9 @@ class MetricTestRepo:
         If `False`, any values present in the supplied ``config`` that
         would normally be reset are not overridden and will appear
         directly in the output config. Passed to ``Butler.makeRepo``.
+    storageClassName : `bool` or `None`, optional
+        Name of storage class to use for datasets added to the test repository.
+        A default will be used if none is specified.
     """
 
     METRICS_EXAMPLE_SUMMARY = {"AM1": 5.2, "AM2": 30.6}
@@ -265,6 +268,7 @@ class MetricTestRepo:
 
     _DEFAULT_RUN = "ingest/run"
     _DEFAULT_TAG = "ingest"
+    _DEFAULT_STORAGE_CLASS = "StructuredCompositeReadComp"
 
     @staticmethod
     def _makeExampleMetrics() -> MetricsExample:
@@ -275,15 +279,24 @@ class MetricTestRepo:
             [563, 234, 456.7, 752, 8, 9, 27],
         )
 
-    def __init__(self, root: str, configFile: str, forceConfigRoot: bool = True) -> None:
+    def __init__(
+        self,
+        root: str,
+        configFile: str,
+        forceConfigRoot: bool = True,
+        storageClassName: str | None = None,
+    ) -> None:
         self.root = root
-        Butler.makeRepo(self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot)
-        butlerConfigFile = os.path.join(self.root, "butler.yaml")
+        butlerConfigFile = Butler.makeRepo(
+            self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot
+        )
         butler = Butler.from_config(butlerConfigFile, run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
-        self._do_init(butler, butlerConfigFile)
+        self._do_init(butler, butlerConfigFile, storageClassName)
 
     @classmethod
-    def create_from_butler(cls, butler: Butler, butler_config_file: str) -> MetricTestRepo:
+    def create_from_butler(
+        cls, butler: Butler, butler_config_file: str, storageClassName: str | None = None
+    ) -> MetricTestRepo:
         """Create a MetricTestRepo from an existing Butler instance.
 
         Parameters
@@ -292,6 +305,9 @@ class MetricTestRepo:
             `Butler` instance used for setting up the repository.
         butler_config_file : `str`
             Path to the config file used to set up that Butler instance.
+        storageClassName : `bool` or `None`, optional
+            Name of storage class to use for datasets added to the test
+            repository. A default will be used if none is specified.
 
         Returns
         -------
@@ -301,10 +317,12 @@ class MetricTestRepo:
         """
         self = cls.__new__(cls)
         butler = butler._clone(run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
-        self._do_init(butler, butler_config_file)
+        self._do_init(butler, butler_config_file, storageClassName)
         return self
 
-    def _do_init(self, butler: Butler, butlerConfigFile: str) -> None:
+    def _do_init(
+        self, butler: Butler, butlerConfigFile: str | Config, storageClassName: str | None = None
+    ) -> None:
         self.butler = butler
         self.storageClassFactory = StorageClassFactory()
         self.storageClassFactory.addFromConfig(butlerConfigFile)
@@ -313,9 +331,12 @@ class MetricTestRepo:
         # tag when looking up datasets.
         self.butler.collections.register(self._DEFAULT_TAG, CollectionType.TAGGED)
 
+        if storageClassName is None:
+            storageClassName = self._DEFAULT_STORAGE_CLASS
+
         # Create and register a DatasetType
         self.datasetType = addDatasetType(
-            self.butler, "test_metric_comp", {"instrument", "visit"}, "StructuredCompositeReadComp"
+            self.butler, "test_metric_comp", {"instrument", "visit"}, storageClassName
         )
 
         # Add needed Dimensions
