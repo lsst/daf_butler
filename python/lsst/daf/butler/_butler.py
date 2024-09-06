@@ -1514,8 +1514,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Names of the columns/dimensions to use for ordering returned data
             IDs. Column name can be prefixed with minus (``-``) to use
             descending ordering.
-        limit : `int`, optional
-            Upper limit on the number of returned records.
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records. `None` can be used
+            if no limit is wanted. A limit of ``0`` means that the query will
+            be executed and validated but no results will be returned. In this
+            case there will be no exception even if ``explain`` is `True`.
+            If a negative value is given a warning will be issued if the number
+            of results is capped by that limit.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1551,17 +1556,27 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             data_id = DataCoordinate.make_empty(self.dimensions)
         if order_by is None:
             order_by = []
+        query_limit = limit
+        warn_limit = False
+        if limit is not None and limit < 0:
+            query_limit = abs(limit) + 1
+            warn_limit = True
         with self.query() as query:
             result = (
                 query.where(data_id, where, bind=bind, **kwargs)
                 .data_ids(dimensions)
                 .order_by(*ensure_iterable(order_by))
-                .limit(limit)
+                .limit(query_limit)
             )
             if with_dimension_records:
                 result = result.with_dimension_records()
             data_ids = list(result)
-        if explain and not data_ids:
+            if warn_limit and len(data_ids) == query_limit:
+                # We asked for one too many so must remove that from the list.
+                data_ids.pop(-1)
+                assert limit is not None  # For mypy.
+                _LOG.warning("More data IDs are available than the requested limit of %d.", abs(limit))
+        if explain and (limit is None or limit != 0) and not data_ids:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return data_ids
 

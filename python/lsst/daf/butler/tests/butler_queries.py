@@ -236,8 +236,23 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             results = query.data_ids(["detector"])
             self.assertCountEqual(list(results), expected_coordinates)
 
+            # Limit.
+            results = query.data_ids(["detector"]).order_by("-detector").limit(2)
+            self.assertCountEqual(list(results), expected_coordinates[2:])
+
         data_ids = butler.query_data_ids("detector")
         self.assertCountEqual(data_ids, expected_coordinates)
+
+        data_ids = butler.query_data_ids("detector", order_by="-detector", limit=2)
+        self.assertCountEqual(data_ids, expected_coordinates[2:])
+
+        with self.assertLogs("lsst.daf.butler", level="WARNING") as wcm:
+            data_ids = butler.query_data_ids("detector", order_by="-detector", limit=-2)
+        self.assertCountEqual(data_ids, expected_coordinates[2:])
+        self.assertIn("More data IDs are available", wcm.output[0])
+
+        data_ids = butler.query_data_ids("detector", limit=0)
+        self.assertEqual(len(data_ids), 0)
 
     def test_simple_dataset_query(self) -> None:
         butler = self.make_butler("base.yaml", "datasets.yaml")
