@@ -310,7 +310,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Do simple dimension queries.
         with butler.query() as query:
             query = query.join_dimensions(dimensions)
-            rows = list(query.x_general(dimensions).order_by("detector"))
+            rows = list(query.general(dimensions).order_by("detector"))
             self.assertEqual(
                 rows,
                 [
@@ -321,7 +321,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
             rows = list(
-                query.x_general(dimensions, "detector.full_name", "purpose").order_by(
+                query.general(dimensions, "detector.full_name", "purpose").order_by(
                     "-detector.purpose", "full_name"
                 )
             )
@@ -355,7 +355,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
             rows = list(
-                query.x_general(dimensions, "detector.full_name", "purpose").where(
+                query.general(dimensions, "detector.full_name", "purpose").where(
                     "instrument = 'Cam1' AND purpose = 'WAVEFRONT'"
                 )
             )
@@ -370,7 +370,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     },
                 ],
             )
-            result = query.x_general(dimensions, dimension_fields={"detector": {"full_name"}})
+            result = query.general(dimensions, dimension_fields={"detector": {"full_name"}})
             self.assertEqual(set(row["detector.full_name"] for row in result), {"Aa", "Ab", "Ba", "Bb"})
 
         # Use "flat" whose dimension group includes implied dimension.
@@ -381,7 +381,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             # This just returns data IDs.
-            rows = list(query.x_general(dimensions).order_by("detector"))
+            rows = list(query.general(dimensions).order_by("detector"))
             self.assertEqual(
                 rows,
                 [
@@ -391,7 +391,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
 
-            result = query.x_general(dimensions, dataset_fields={"flat": ...}, find_first=True).order_by(
+            result = query.general(dimensions, dataset_fields={"flat": ...}, find_first=True).order_by(
                 "detector"
             )
             ids = {row["flat.dataset_id"] for row in result}
@@ -437,7 +437,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged"])
 
-            result = query.x_general(
+            result = query.general(
                 dimensions, "flat.dataset_id", "flat.run", "flat.collection", find_first=False
             )
             row_tuples = list(result.iter_tuples(flat))
@@ -448,7 +448,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Query calib collection.
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["calib"])
-            result = query.x_general(
+            result = query.general(
                 dimensions,
                 "flat.dataset_id",
                 "flat.run",
@@ -468,7 +468,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Query both tagged and calib collection.
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged", "calib"])
-            result = query.x_general(
+            result = query.general(
                 dimensions,
                 "flat.dataset_id",
                 "flat.run",
@@ -496,9 +496,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # for schema versions 1 and 2 of datasets manager.
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
-            rows = list(
-                query.x_general(dimensions, dataset_fields={"flat": {"ingest_date"}}, find_first=False)
-            )
+            rows = list(query.general(dimensions, dataset_fields={"flat": {"ingest_date"}}, find_first=False))
             self.assertEqual(len(rows), 3)
             for row in rows:
                 self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
@@ -507,14 +505,14 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             query1 = query.where("flat.ingest_date < before_ingest", bind={"before_ingest": before_ingest})
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 0)
             query1 = query.where("flat.ingest_date >= before_ingest", bind={"before_ingest": before_ingest})
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 3)
             # Same with a time in string literal.
             query1 = query.where(f"flat.ingest_date < T'mjd/{before_ingest.tai.mjd}'")
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 0)
 
     def test_implied_union_record_query(self) -> None:
@@ -1756,7 +1754,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     for data_id, refs, _ in q.where(
                         x["bias"].timespan.overlaps(x.exposure.timespan), base_data_id
                     )
-                    .x_general(
+                    .general(
                         butler.dimensions.conform(["exposure", "detector"]),
                         dataset_fields={"bias": ...},
                         find_first=True,
@@ -1779,7 +1777,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [
                     (data_id, refs[0])
                     for data_id, refs, _ in q.where(base_data_id)
-                    .x_general(["exposure"], dataset_fields={"bias": ...}, find_first=True)
+                    .general(["exposure"], dataset_fields={"bias": ...}, find_first=True)
                     .iter_tuples(bias)
                 ],
                 [

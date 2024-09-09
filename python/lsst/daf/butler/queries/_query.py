@@ -309,7 +309,7 @@ class Query(QueryBase):
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
         return DimensionRecordQueryResults(self._driver, tree, result_spec)
 
-    def x_general(
+    def general(
         self,
         dimensions: DimensionGroup | Iterable[str],
         *names: str,
