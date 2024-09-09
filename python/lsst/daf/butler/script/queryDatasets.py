@@ -272,6 +272,7 @@ class QueryDatasets:
         for coll_info in query_collections_info:
             # Only care about non-chained collections.
             if coll_info.type != CollectionType.CHAINED:
+                assert coll_info.dataset_types is not None, "collection summary is missing"
                 for dataset_type in coll_info.dataset_types & dataset_type_names:
                     dataset_type_collections[dataset_type].append(coll_info.name)
 

@@ -86,6 +86,7 @@ class HybridButlerCollections(ButlerCollections):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        include_doc: bool = False,
         summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         return self._hybrid._remote_butler.collections.query_info(
@@ -95,6 +96,7 @@ class HybridButlerCollections(ButlerCollections):
             include_chains=include_chains,
             include_parents=include_parents,
             include_summary=include_summary,
+            include_doc=include_doc,
             summary_datasets=summary_datasets,
         )
 

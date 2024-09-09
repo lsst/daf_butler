@@ -113,6 +113,7 @@ class DirectButlerCollections(ButlerCollections):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        include_doc: bool = False,
         summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         info = []
@@ -133,19 +134,20 @@ class DirectButlerCollections(ButlerCollections):
             if include_summary:
                 summaries = self._registry._managers.datasets.fetch_summaries(records, summary_datasets)
 
+            docs: Mapping[Any, str] = {}
+            if include_doc:
+                docs = self._registry._managers.collections.get_docs(record.key for record in records)
+
             for record in records:
-                # TODO: getDocumentation method is not vectorized, we want to
-                # avoid thousands of queries to just fetch documentation that
-                # is not needed in many cases.
-                doc = ""
+                doc = docs.get(record.key, "")
                 children: tuple[str, ...] = tuple()
                 if record.type == CollectionType.CHAINED:
                     assert isinstance(record, ChainedCollectionRecord)
                     children = tuple(record.children)
                 parents: frozenset[str] | None = None
                 if include_parents:
-                    # TODO: This is non-vectorized as well, so expensive to do
-                    # in a loop.
+                    # TODO: This is non-vectorized, so expensive to do in a
+                    # loop.
                     parents = frozenset(self._registry.getCollectionParentChains(record.name))
                 dataset_types: Set[str] | None = None
                 if summary := summaries.get(record.key):
