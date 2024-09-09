@@ -35,6 +35,7 @@ import numpy as np
 from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
+from .._collection_type import CollectionType
 from ..cli.utils import sortAstropyTable
 
 if TYPE_CHECKING:
@@ -248,10 +249,17 @@ class QueryDatasets:
         # query each time.
         dataset_types = set(self.butler.registry.queryDatasetTypes(datasetTypes or ...))
         n_dataset_types = len(dataset_types)
+        if n_dataset_types == 0:
+            _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
+            return
 
         # Expand the collections query and include summary information.
         query_collections_info = self.butler.collections.query_info(
-            query_collections, include_summary=True, summary_datasets=dataset_types
+            query_collections,
+            include_summary=True,
+            flatten_chains=True,
+            include_chains=False,
+            summary_datasets=dataset_types,
         )
         expanded_query_collections = [c.name for c in query_collections_info]
         if self._find_first and set(query_collections) != set(expanded_query_collections):
@@ -259,17 +267,16 @@ class QueryDatasets:
         query_collections = expanded_query_collections
 
         # Only iterate over dataset types that are relevant for the query.
-        dataset_type_names = set(
-            self.butler.collections._filter_dataset_types(
-                (dataset_type.name for dataset_type in dataset_types), query_collections_info
-            )
-        )
+        dataset_type_names = {dataset_type.name for dataset_type in dataset_types}
+        dataset_type_collections: dict[str, list[str]] = defaultdict(list)
+        for coll_info in query_collections_info:
+            # Only care about non-chained collections.
+            if coll_info.type != CollectionType.CHAINED:
+                for dataset_type in coll_info.dataset_types & dataset_type_names:
+                    dataset_type_collections[dataset_type].append(coll_info.name)
 
-        if (n_filtered := len(dataset_type_names)) != n_dataset_types:
+        if (n_filtered := len(dataset_type_collections)) != n_dataset_types:
             _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
-        elif n_dataset_types == 0:
-            _LOG.info("None of the given dataset types is known to this butler: %s", ", ".join(datasetTypes))
-            return
         else:
             _LOG.info("Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s")
 
@@ -283,7 +290,7 @@ class QueryDatasets:
             # possible dataset types to query.
             warn_limit = True
             limit = abs(limit) + 1  # +1 to tell us we hit the limit.
-        for dt in sorted(dataset_type_names):
+        for dt, collections in sorted(dataset_type_collections.items()):
             kwargs: dict[str, Any] = {}
             if self._where:
                 kwargs["where"] = self._where
@@ -293,7 +300,7 @@ class QueryDatasets:
             _LOG.debug("Querying dataset type %s with %s", dt, kwargs)
             results = self.butler.query_datasets(
                 dt,
-                collections=query_collections,
+                collections=collections,
                 find_first=self._find_first,
                 with_dimension_records=True,
                 order_by=self._order_by,

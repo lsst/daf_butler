@@ -36,6 +36,7 @@ from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
 
 if TYPE_CHECKING:
+    from .._dataset_type import DatasetType
     from ._registry import RemoteButlerRegistry
 
 
@@ -79,6 +80,7 @@ class RemoteButlerCollections(ButlerCollections):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         # This should become a single call on the server in the future.
         if collection_types is None:
