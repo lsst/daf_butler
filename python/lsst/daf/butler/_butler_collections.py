@@ -437,7 +437,7 @@ class ButlerCollections(ABC, Sequence):
         dataset_types : `~collections.abc.Set` [`str`]
             Set of dataset type names to extract.
         collection_infos : `~collections.abc.Iterable` [`CollectionInfo`]
-            Colelction infos, must contain dataset type summary.
+            Collection infos, must contain dataset type summary.
 
         Returns
         -------
