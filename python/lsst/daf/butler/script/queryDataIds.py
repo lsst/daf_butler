@@ -57,6 +57,14 @@ class _Table:
         # use dict to store dataIds as keys to preserve ordering
         self.dataIds = dict.fromkeys(dataIds)
 
+    def __len__(self) -> int:
+        return len(self.dataIds)
+
+    def pop_last(self) -> None:
+        if self.dataIds:
+            final_key = list(self.dataIds.keys())[-1]
+            self.dataIds.pop(final_key)
+
     def getAstropyTable(self, order: bool) -> AstropyTable:
         """Get the table as an astropy table.
 
@@ -195,12 +203,21 @@ def queryDataIds(
             results = results.where(where)
         if order_by:
             results = results.order_by(*order_by)
-        if limit > 0:
-            results = results.limit(limit)
+        query_limit = abs(limit)
+        warn_limit = False
+        if limit != 0:
+            if limit < 0:
+                query_limit += 1
+                warn_limit = True
+
+            results = results.limit(query_limit)
 
         if results.any(exact=False):
             if results.dimensions:
                 table = _Table(results)
+                if warn_limit and len(table) == query_limit:
+                    table.pop_last()
+                    _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
                 if not table.dataIds:
                     return None, "Post-query region filtering removed all rows, since nothing overlapped."
                 return table.getAstropyTable(not order_by), None

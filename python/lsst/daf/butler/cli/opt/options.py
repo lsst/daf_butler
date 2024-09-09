@@ -288,11 +288,16 @@ order_by_option = MWOptionDecorator(
 )
 
 
+_default_limit = -20_000
 limit_option = MWOptionDecorator(
     "--limit",
-    help=unwrap("Limit the number of records, by default all records are shown."),
+    help=unwrap(
+        f"""Limit the number of results that are processed. 0 means no limit. A negative
+        value specifies a cap where a warning will be issued if the cap is hit.
+        Default value is {_default_limit}."""
+    ),
     type=int,
-    default=0,
+    default=_default_limit,
 )
 
 offset_option = MWOptionDecorator(

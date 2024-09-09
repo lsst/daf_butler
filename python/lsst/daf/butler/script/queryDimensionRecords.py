@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import logging
 from operator import attrgetter
 from typing import Any
 
@@ -35,6 +36,8 @@ from lsst.sphgeom import Region
 
 from .._butler import Butler
 from .._timespan import Timespan
+
+_LOG = logging.getLogger(__name__)
 
 
 def queryDimensionRecords(
@@ -100,10 +103,19 @@ def queryDimensionRecords(
             query_results = query_results.where(where)
         if order_by:
             query_results = query_results.order_by(*order_by)
-        if limit > 0:
-            query_results = query_results.limit(limit)
+        query_limit = abs(limit)
+        warn_limit = False
+        if limit != 0:
+            if limit < 0:
+                query_limit += 1
+                warn_limit = True
+
+            query_results = query_results.limit(query_limit)
 
         records = list(query_results)
+        if warn_limit and len(records) == query_limit:
+            records.pop(-1)
+            _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
 
         if not records:
             return None
