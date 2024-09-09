@@ -46,6 +46,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
     GetUniverseResponseModel,
+    QueryCollectionInfoRequestModel,
+    QueryCollectionInfoResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
     QueryDatasetTypesRequestModel,
@@ -245,6 +247,24 @@ def query_collections(
         includeChains=request.include_chains,
     )
     return QueryCollectionsResponseModel(collections=collections)
+
+
+@external_router.post(
+    "/v1/query_collection_info", summary="Search for collections with names that match an expression"
+)
+def query_collection_info(
+    request: QueryCollectionInfoRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryCollectionInfoResponseModel:
+    butler = factory.create_butler()
+    collections = butler.collections.query_info(
+        expression=request.expression,
+        collection_types=set(request.collection_types),
+        flatten_chains=request.flatten_chains,
+        include_chains=request.include_chains,
+        include_parents=request.include_parents,
+        include_summary=request.include_summary,
+    )
+    return QueryCollectionInfoResponseModel(collections=list(collections))
 
 
 @external_router.post(

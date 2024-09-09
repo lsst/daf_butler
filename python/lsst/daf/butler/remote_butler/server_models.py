@@ -42,6 +42,7 @@ from uuid import UUID
 
 import pydantic
 from lsst.daf.butler import (
+    CollectionInfo,
     CollectionType,
     DataIdValue,
     SerializedDataCoordinate,
@@ -187,6 +188,23 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
 
     collections: list[str]
     """Collection names that match the search."""
+
+
+class QueryCollectionInfoRequestModel(pydantic.BaseModel):
+    """Request model for query_collection_info."""
+
+    expression: CollectionList
+    collection_types: list[CollectionType]
+    flatten_chains: bool
+    include_chains: bool
+    include_parents: bool
+    include_summary: bool
+
+
+class QueryCollectionInfoResponseModel(pydantic.BaseModel):
+    """Response model for query_collection_info."""
+
+    collections: list[CollectionInfo]
 
 
 class QueryDatasetTypesRequestModel(pydantic.BaseModel):

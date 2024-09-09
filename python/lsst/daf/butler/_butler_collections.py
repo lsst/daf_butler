@@ -45,6 +45,9 @@ if TYPE_CHECKING:
 class CollectionInfo(BaseModel):
     """Information about a single Butler collection."""
 
+    # This class is serialized for the server API -- any new properties you add
+    # must have default values provided to preserve backwards compatibility.
+
     name: str
     """Name of the collection."""
     type: CollectionType

@@ -32,8 +32,13 @@ __all__ = ("RemoteButlerCollections",)
 from collections.abc import Iterable, Sequence, Set
 from typing import TYPE_CHECKING
 
+from lsst.utils.iteration import ensure_iterable
+
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
+from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._http_connection import RemoteButlerHttpConnection, parse_model
+from .server_models import QueryCollectionInfoRequestModel, QueryCollectionInfoResponseModel
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
@@ -47,10 +52,13 @@ class RemoteButlerCollections(ButlerCollections):
     ----------
     registry : `~lsst.daf.butler.registry.sql_registry.SqlRegistry`
         Registry object used to work with the collections database.
+    connection : `RemoteButlerHttpConnection`
+        HTTP connection to Butler server.
     """
 
-    def __init__(self, registry: RemoteButlerRegistry):
+    def __init__(self, registry: RemoteButlerRegistry, connection: RemoteButlerHttpConnection):
         self._registry = registry
+        self._connection = connection
 
     @property
     def defaults(self) -> Sequence[str]:
@@ -83,19 +91,26 @@ class RemoteButlerCollections(ButlerCollections):
         include_doc: bool = False,
         summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
-        # This should become a single call on the server in the future.
         if collection_types is None:
-            collection_types = CollectionType.all()
+            types = list(CollectionType.all())
+        else:
+            types = list(ensure_iterable(collection_types))
 
-        info = []
-        for name in self._registry.queryCollections(
-            expression,
-            collectionTypes=collection_types,
-            flattenChains=flatten_chains,
-            includeChains=include_chains,
-        ):
-            info.append(self.get_info(name, include_parents=include_parents, include_summary=include_summary))
-        return info
+        if include_chains is None:
+            include_chains = not flatten_chains
+
+        request = QueryCollectionInfoRequestModel(
+            expression=convert_collection_arg_to_glob_string_list(expression),
+            collection_types=types,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+            include_parents=include_parents,
+            include_summary=include_summary,
+        )
+        response = self._connection.post("query_collection_info", request)
+        model = parse_model(response, QueryCollectionInfoResponseModel)
+
+        return model.collections
 
     def get_info(
         self, name: str, include_parents: bool = False, include_summary: bool = False
