@@ -199,6 +199,8 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
 
 
+# TODO DM-46204: This can be removed once the RSP recommended image has been
+# upgraded to a version that contains DM-46129.
 @external_router.get(
     "/v1/collection_info", summary="Get information about a collection", response_model_exclude_unset=True
 )
@@ -233,6 +235,8 @@ def get_collection_summary(
     return GetCollectionSummaryResponseModel(summary=butler.registry.getCollectionSummary(name).to_simple())
 
 
+# TODO DM-46204: This can be removed once the RSP recommended image has been
+# upgraded to a version that contains DM-46129.
 @external_router.post(
     "/v1/query_collections", summary="Search for collections with names that match an expression"
 )

@@ -142,6 +142,8 @@ class ErrorResponseModel(pydantic.BaseModel):
     """Detailed explanation of the error that will be sent to the client."""
 
 
+# TODO DM-46204: This can be removed once the RSP recommended image has been
+# upgraded to a version that contains DM-46129.
 class GetCollectionInfoResponseModel(pydantic.BaseModel):
     """Response model for get_collection_info."""
 
@@ -174,6 +176,8 @@ class ExpandDataIdResponseModel(pydantic.BaseModel):
     data_coordinate: SerializedDataCoordinate
 
 
+# TODO DM-46204: This can be removed once the RSP recommended image has been
+# upgraded to a version that contains DM-46129.
 class QueryCollectionsRequestModel(pydantic.BaseModel):
     """Request model for query_collections."""
 
@@ -183,6 +187,8 @@ class QueryCollectionsRequestModel(pydantic.BaseModel):
     include_chains: bool
 
 
+# TODO DM-46204: This can be removed once the RSP recommended image has been
+# upgraded to a version that contains DM-46129.
 class QueryCollectionsResponseModel(pydantic.BaseModel):
     """Response model for query_collections."""
 

@@ -42,6 +42,7 @@ try:
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
+    from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
     reason_text = ""
@@ -425,6 +426,26 @@ class ButlerClientServerTestCase(unittest.TestCase):
                 self.assertEqual(len(datasets), 3)
                 self.assertGreaterEqual(mock_timeout.call_count, 3)
                 self.assertGreaterEqual(mock_keep_alive.call_count, 2)
+
+    # TODO DM-46204: This can be removed once the RSP recommended image has
+    # been upgraded to a version that contains DM-46129.
+    def test_deprecated_collection_endpoints(self):
+        # These REST endpoints are no longer used by Butler client so they need
+        # to be checked separately until they can be removed.
+        json = self.butler._connection.get(
+            "collection_info",
+            params={"name": "imported_g", "include_doc": True, "include_parents": True},
+        ).json()
+        self.assertEqual(json["name"], "imported_g")
+        self.assertEqual(json["type"], 1)
+
+        json = self.butler._connection.post(
+            "query_collections",
+            QueryCollectionsRequestModel(
+                search=["imported_*"], collection_types=[1], flatten_chains=False, include_chains=False
+            ),
+        ).json()
+        self.assertCountEqual(json["collections"], ["imported_g", "imported_r"])
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
