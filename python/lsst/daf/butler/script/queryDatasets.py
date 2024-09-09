@@ -35,7 +35,6 @@ import numpy as np
 from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
-from .._collection_type import CollectionType
 from ..cli.utils import sortAstropyTable
 
 if TYPE_CHECKING:
@@ -268,13 +267,9 @@ class QueryDatasets:
 
         # Only iterate over dataset types that are relevant for the query.
         dataset_type_names = {dataset_type.name for dataset_type in dataset_types}
-        dataset_type_collections: dict[str, list[str]] = defaultdict(list)
-        for coll_info in query_collections_info:
-            # Only care about non-chained collections.
-            if coll_info.type != CollectionType.CHAINED:
-                assert coll_info.dataset_types is not None, "collection summary is missing"
-                for dataset_type in coll_info.dataset_types & dataset_type_names:
-                    dataset_type_collections[dataset_type].append(coll_info.name)
+        dataset_type_collections = self.butler.collections._group_by_dataset_type(
+            dataset_type_names, query_collections_info
+        )
 
         if (n_filtered := len(dataset_type_collections)) != n_dataset_types:
             _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)

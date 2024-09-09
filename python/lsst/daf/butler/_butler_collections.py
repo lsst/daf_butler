@@ -30,7 +30,8 @@ from __future__ import annotations
 __all__ = ("ButlerCollections", "CollectionInfo")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence, Set
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, overload
 
 from pydantic import BaseModel
@@ -424,3 +425,30 @@ class ButlerCollections(ABC, Sequence):
             collection_dataset_types.update(info.dataset_types)
         dataset_types_set = dataset_types_set.intersection(collection_dataset_types)
         return dataset_types_set
+
+    def _group_by_dataset_type(
+        self, dataset_types: Set[str], collection_infos: Iterable[CollectionInfo]
+    ) -> Mapping[str, list[str]]:
+        """Filter dataset types and collections names based on summary in
+        collecion infos.
+
+        Parameters
+        ----------
+        dataset_types : `~collections.abc.Set` [`str`]
+            Set of dataset type names to extract.
+        collection_infos : `~collections.abc.Iterable` [`CollectionInfo`]
+            Colelction infos, must contain dataset type summary.
+
+        Returns
+        -------
+        filtered : `~collections.abc.Mapping` [`str`, `list`[`str`]]
+            Mapping of the dataset type name to its corresponding list of
+            collection names.
+        """
+        dataset_type_collections: dict[str, list[str]] = defaultdict(list)
+        for info in collection_infos:
+            if info.dataset_types is None:
+                raise RuntimeError("Can only filter by collections if include_summary was True")
+            for dataset_type in info.dataset_types & dataset_types:
+                dataset_type_collections[dataset_type].append(info.name)
+        return dataset_type_collections
