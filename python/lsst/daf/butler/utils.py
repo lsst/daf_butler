@@ -35,7 +35,7 @@ import fnmatch
 import functools
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from re import Pattern
 from types import EllipsisType
 from typing import Any, TypeVar
@@ -92,7 +92,7 @@ def stripIfNotNone(s: str | None) -> str | None:
     return s
 
 
-def globToRegex(expressions: str | EllipsisType | None | list[str]) -> list[str | Pattern] | EllipsisType:
+def globToRegex(expressions: str | EllipsisType | None | Iterable[str]) -> list[str | Pattern] | EllipsisType:
     """Translate glob-style search terms to regex.
 
     If a stand-alone '``*``' is found in ``expressions``, or expressions is
@@ -101,7 +101,7 @@ def globToRegex(expressions: str | EllipsisType | None | list[str]) -> list[str 
 
     Parameters
     ----------
-    expressions : `str` or `list` [`str`]
+    expressions : `str` or `~collections.abc.Iterable` [`str`]
         A list of glob-style pattern strings to convert.
 
     Returns
@@ -132,6 +132,29 @@ def globToRegex(expressions: str | EllipsisType | None | list[str]) -> list[str 
             res = e
         results.append(res)
     return results
+
+
+def has_globs(expressions: str | EllipsisType | None | Iterable[str]) -> bool:
+    """Determine if the expressions have any glob wildcard characters.
+
+    Parameters
+    ----------
+    expressions : `str` or `~collections.abc.Iterable` [`str`]
+        A list of glob-style pattern strings to check.
+
+    Returns
+    -------
+    has_globs : `bool`
+        `True` if any of the supplied strings contain glob patterns.
+    """
+    expanded = globToRegex(expressions)
+    if expanded is ...:
+        return True
+
+    for result in expanded:
+        if not isinstance(result, str):
+            return True
+    return False
 
 
 class _Marker:

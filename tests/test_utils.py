@@ -31,7 +31,7 @@ import unittest
 from collections import namedtuple
 
 from lsst.daf.butler import NamedKeyDict, NamedValueSet
-from lsst.daf.butler.utils import globToRegex
+from lsst.daf.butler.utils import globToRegex, has_globs
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -187,7 +187,9 @@ class GlobToRegexTestCase(unittest.TestCase):
         """Test that if a one of the items in the expression list is a star
         (stand-alone) then ``...`` is returned (which implies no restrictions)
         """
-        self.assertIs(globToRegex(["foo", "*", "bar"]), ...)
+        globs = ["foo", "*", "bar"]
+        self.assertIs(globToRegex(globs), ...)
+        self.assertTrue(has_globs(globs))
 
     def testGlobList(self):
         """Test that a list of glob strings converts as expected to a regex and
@@ -196,6 +198,8 @@ class GlobToRegexTestCase(unittest.TestCase):
         # These strings should be returned unchanged.
         strings = ["bar", "😺", "ingésτ", "ex]", "[xe", "[!no", "e[x"]
         self.assertEqual(globToRegex(strings), strings)
+        self.assertFalse(has_globs(strings))
+        self.assertTrue(has_globs("ba*"))
 
         # Globs with strings that match the glob and strings that do not.
         tests = (
@@ -214,6 +218,12 @@ class GlobToRegexTestCase(unittest.TestCase):
                 self.assertTrue(bool(re.fullmatch(patterns[0], match)))
             for no_match in no_matches:
                 self.assertIsNone(re.fullmatch(patterns[0], no_match))
+
+            # All of them are globs except "bar".
+            if glob == "bar":
+                self.assertFalse(has_globs(glob))
+            else:
+                self.assertTrue(has_globs(glob))
 
 
 if __name__ == "__main__":

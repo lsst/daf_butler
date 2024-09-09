@@ -50,6 +50,7 @@ from .datastore import Datastore
 from .dimensions import DataCoordinate, DimensionConfig
 from .registry import RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
+from .utils import has_globs
 
 if TYPE_CHECKING:
     from ._dataset_existence import DatasetExistence
@@ -1688,17 +1689,17 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             data_id = DataCoordinate.make_empty(self.dimensions)
         if order_by is None:
             order_by = []
-        if collections:
+        if collections and has_globs(collections):
             # Wild cards need to be expanded but can only be allowed if
             # find_first=False because expanding wildcards does not return
-            # a guaranteed ordering.
-            expanded_collections = self.collections.query(collections)
-            if find_first and set(expanded_collections) != set(ensure_iterable(collections)):
+            # a guaranteed ordering. Querying collection registry to expand
+            # collections when we do not have wildcards is expensive so only
+            # do it if we need it.
+            if find_first:
                 raise RuntimeError(
-                    "Can not use wildcards in collections when find_first=True "
-                    f" (given {collections} which expanded to {expanded_collections})"
+                    f"Can not use wildcards in collections when find_first=True (given {collections})"
                 )
-            collections = expanded_collections
+            collections = self.collections.query(collections)
         query_limit = limit
         warn_limit = False
         if limit is not None and limit < 0:
