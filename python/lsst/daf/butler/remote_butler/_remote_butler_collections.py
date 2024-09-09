@@ -36,6 +36,7 @@ from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
+from ..utils import has_globs
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import QueryCollectionInfoRequestModel, QueryCollectionInfoResponseModel
@@ -115,21 +116,11 @@ class RemoteButlerCollections(ButlerCollections):
     def get_info(
         self, name: str, include_parents: bool = False, include_summary: bool = False
     ) -> CollectionInfo:
-        info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
-        doc = info.doc or ""
-        children = info.children or ()
-        dataset_types: Set[str] | None = None
-        if include_summary:
-            summary = self._registry.getCollectionSummary(name)
-            dataset_types = frozenset([dt.name for dt in summary.dataset_types])
-        return CollectionInfo(
-            name=name,
-            type=info.type,
-            doc=doc,
-            parents=info.parents,
-            children=children,
-            dataset_types=dataset_types,
-        )
+        if has_globs(name):
+            raise ValueError("Search expressions are not allowed in 'name' parameter to get_info")
+        results = self.query_info(name, include_parents=include_parents, include_summary=include_summary)
+        assert len(results) == 1, "Only one result should be returned for get_info."
+        return results[0]
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         raise NotImplementedError("Not yet available.")
