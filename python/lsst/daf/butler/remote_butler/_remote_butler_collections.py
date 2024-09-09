@@ -30,20 +30,17 @@ from __future__ import annotations
 __all__ = ("RemoteButlerCollections",)
 
 from collections.abc import Iterable, Sequence, Set
-from typing import TYPE_CHECKING
 
 from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
+from .._dataset_type import DatasetType
 from ..utils import has_globs
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._defaults import DefaultsHolder
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import QueryCollectionInfoRequestModel, QueryCollectionInfoResponseModel
-
-if TYPE_CHECKING:
-    from .._dataset_type import DatasetType
-    from ._registry import RemoteButlerRegistry
 
 
 class RemoteButlerCollections(ButlerCollections):
@@ -51,19 +48,19 @@ class RemoteButlerCollections(ButlerCollections):
 
     Parameters
     ----------
-    registry : `~lsst.daf.butler.registry.sql_registry.SqlRegistry`
-        Registry object used to work with the collections database.
+    defaults : `DefaultsHolder`
+        Registry object used to look up default collections.
     connection : `RemoteButlerHttpConnection`
         HTTP connection to Butler server.
     """
 
-    def __init__(self, registry: RemoteButlerRegistry, connection: RemoteButlerHttpConnection):
-        self._registry = registry
+    def __init__(self, defaults: DefaultsHolder, connection: RemoteButlerHttpConnection):
+        self._defaults = defaults
         self._connection = connection
 
     @property
     def defaults(self) -> Sequence[str]:
-        return self._registry.defaults.collections
+        return self._defaults.get().collections
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         raise NotImplementedError("Not yet available")

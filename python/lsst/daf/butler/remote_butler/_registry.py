@@ -31,6 +31,7 @@ import contextlib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
+from lsst.daf.butler import Butler
 from lsst.utils.iteration import ensure_iterable
 
 from .._collection_type import CollectionType
@@ -69,8 +70,8 @@ from ._collection_args import (
     convert_collection_arg_to_glob_string_list,
     convert_dataset_type_arg_to_glob_string_list,
 )
+from ._defaults import DefaultsHolder
 from ._http_connection import RemoteButlerHttpConnection, parse_model
-from ._remote_butler import RemoteButler
 from .registry._query_common import CommonQueryArguments
 from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
 from .registry._query_datasets import QueryDriverDatasetRefQueryResults
@@ -92,15 +93,18 @@ class RemoteButlerRegistry(Registry):
 
     Parameters
     ----------
-    butler : `RemoteButler`
+    butler : `Butler`
         Butler instance to which this registry delegates operations.
+    defaults : `DefaultHolder`
+        Reference to object containing default collections and data ID.
     connection : `RemoteButlerHttpConnection`
         HTTP connection to Butler server for looking up data.
     """
 
-    def __init__(self, butler: RemoteButler, connection: RemoteButlerHttpConnection):
+    def __init__(self, butler: Butler, defaults: DefaultsHolder, connection: RemoteButlerHttpConnection):
         self._butler = butler
         self._connection = connection
+        self._defaults = defaults
 
     def isWriteable(self) -> bool:
         return self._butler.isWriteable()
@@ -111,12 +115,12 @@ class RemoteButlerRegistry(Registry):
 
     @property
     def defaults(self) -> RegistryDefaults:
-        return self._butler._registry_defaults
+        return self._defaults.get()
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
         value.finish(self)
-        self._butler._registry_defaults = value
+        self._defaults.set(value)
 
     def refresh(self) -> None:
         # In theory the server should manage all necessary invalidation of
