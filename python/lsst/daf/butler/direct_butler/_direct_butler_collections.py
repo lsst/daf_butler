@@ -117,52 +117,51 @@ class DirectButlerCollections(ButlerCollections):
         summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Sequence[CollectionInfo]:
         info = []
-        with self._registry.caching_context():
-            if collection_types is None:
-                collection_types = CollectionType.all()
-            elif isinstance(collection_types, CollectionType):
-                collection_types = {collection_types}
+        if collection_types is None:
+            collection_types = CollectionType.all()
+        elif isinstance(collection_types, CollectionType):
+            collection_types = {collection_types}
 
-            records = self._registry._managers.collections.resolve_wildcard(
-                CollectionWildcard.from_expression(expression),
-                collection_types=collection_types,
-                flatten_chains=flatten_chains,
-                include_chains=include_chains,
-            )
+        records = self._registry._managers.collections.resolve_wildcard(
+            CollectionWildcard.from_expression(expression),
+            collection_types=collection_types,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+        )
 
-            summaries: Mapping[Any, CollectionSummary] = {}
-            if include_summary:
-                summaries = self._registry._managers.datasets.fetch_summaries(records, summary_datasets)
+        summaries: Mapping[Any, CollectionSummary] = {}
+        if include_summary:
+            summaries = self._registry._managers.datasets.fetch_summaries(records, summary_datasets)
 
-            docs: Mapping[Any, str] = {}
-            if include_doc:
-                docs = self._registry._managers.collections.get_docs(record.key for record in records)
+        docs: Mapping[Any, str] = {}
+        if include_doc:
+            docs = self._registry._managers.collections.get_docs(record.key for record in records)
 
-            for record in records:
-                doc = docs.get(record.key, "")
-                children: tuple[str, ...] = tuple()
-                if record.type == CollectionType.CHAINED:
-                    assert isinstance(record, ChainedCollectionRecord)
-                    children = tuple(record.children)
-                parents: frozenset[str] | None = None
-                if include_parents:
-                    # TODO: This is non-vectorized, so expensive to do in a
-                    # loop.
-                    parents = frozenset(self._registry.getCollectionParentChains(record.name))
-                dataset_types: Set[str] | None = None
-                if summary := summaries.get(record.key):
-                    dataset_types = frozenset([dt.name for dt in summary.dataset_types])
+        for record in records:
+            doc = docs.get(record.key, "")
+            children: tuple[str, ...] = tuple()
+            if record.type == CollectionType.CHAINED:
+                assert isinstance(record, ChainedCollectionRecord)
+                children = tuple(record.children)
+            parents: frozenset[str] | None = None
+            if include_parents:
+                # TODO: This is non-vectorized, so expensive to do in a
+                # loop.
+                parents = frozenset(self._registry.getCollectionParentChains(record.name))
+            dataset_types: Set[str] | None = None
+            if summary := summaries.get(record.key):
+                dataset_types = frozenset([dt.name for dt in summary.dataset_types])
 
-                info.append(
-                    CollectionInfo(
-                        name=record.name,
-                        type=record.type,
-                        doc=doc,
-                        parents=parents,
-                        children=children,
-                        dataset_types=dataset_types,
-                    )
+            info.append(
+                CollectionInfo(
+                    name=record.name,
+                    type=record.type,
+                    doc=doc,
+                    parents=parents,
+                    children=children,
+                    dataset_types=dataset_types,
                 )
+            )
 
         return info
 
