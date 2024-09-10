@@ -138,6 +138,7 @@ def exportCalibs(
         collections_query,
         flatten_chains=True,
         include_chains=True,
+        include_doc=True,
         collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
     ):
         log.info("Checking collection: %s", collection.name)

@@ -29,7 +29,8 @@ from __future__ import annotations
 
 __all__ = ("DirectButlerCollections",)
 
-from collections.abc import Iterable, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence, Set
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.utils.iteration import ensure_iterable
@@ -39,6 +40,11 @@ from .._collection_type import CollectionType
 from ..registry._exceptions import OrphanedRecordError
 from ..registry.interfaces import ChainedCollectionRecord
 from ..registry.sql_registry import SqlRegistry
+from ..registry.wildcards import CollectionWildcard
+
+if TYPE_CHECKING:
+    from .._dataset_type import DatasetType
+    from ..registry._collection_summary import CollectionSummary
 
 
 class DirectButlerCollections(ButlerCollections):
@@ -107,20 +113,57 @@ class DirectButlerCollections(ButlerCollections):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        include_doc: bool = False,
+        summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         info = []
         with self._registry.caching_context():
             if collection_types is None:
                 collection_types = CollectionType.all()
-            for name in self._registry.queryCollections(
-                expression,
-                collectionTypes=collection_types,
-                flattenChains=flatten_chains,
-                includeChains=include_chains,
-            ):
+            elif isinstance(collection_types, CollectionType):
+                collection_types = {collection_types}
+
+            records = self._registry._managers.collections.resolve_wildcard(
+                CollectionWildcard.from_expression(expression),
+                collection_types=collection_types,
+                flatten_chains=flatten_chains,
+                include_chains=include_chains,
+            )
+
+            summaries: Mapping[Any, CollectionSummary] = {}
+            if include_summary:
+                summaries = self._registry._managers.datasets.fetch_summaries(records, summary_datasets)
+
+            docs: Mapping[Any, str] = {}
+            if include_doc:
+                docs = self._registry._managers.collections.get_docs(record.key for record in records)
+
+            for record in records:
+                doc = docs.get(record.key, "")
+                children: tuple[str, ...] = tuple()
+                if record.type == CollectionType.CHAINED:
+                    assert isinstance(record, ChainedCollectionRecord)
+                    children = tuple(record.children)
+                parents: frozenset[str] | None = None
+                if include_parents:
+                    # TODO: This is non-vectorized, so expensive to do in a
+                    # loop.
+                    parents = frozenset(self._registry.getCollectionParentChains(record.name))
+                dataset_types: Set[str] | None = None
+                if summary := summaries.get(record.key):
+                    dataset_types = frozenset([dt.name for dt in summary.dataset_types])
+
                 info.append(
-                    self.get_info(name, include_parents=include_parents, include_summary=include_summary)
+                    CollectionInfo(
+                        name=record.name,
+                        type=record.type,
+                        doc=doc,
+                        parents=parents,
+                        children=children,
+                        dataset_types=dataset_types,
+                    )
                 )
+
         return info
 
     def get_info(

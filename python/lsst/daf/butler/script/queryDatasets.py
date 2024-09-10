@@ -240,31 +240,39 @@ class QueryDatasets:
             Dataset references matching the given query criteria grouped
             by dataset type.
         """
-        datasetTypes = self._dataset_type_glob or ...
+        datasetTypes = self._dataset_type_glob
         query_collections: Iterable[str] = self._collections_wildcard or ["*"]
 
         # Currently need to use old interface to get all the matching
         # dataset types and loop over the dataset types executing a new
         # query each time.
-        dataset_types: set[str] = {d.name for d in self.butler.registry.queryDatasetTypes(datasetTypes)}
+        dataset_types = set(self.butler.registry.queryDatasetTypes(datasetTypes or ...))
         n_dataset_types = len(dataset_types)
+        if n_dataset_types == 0:
+            _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
+            return
 
         # Expand the collections query and include summary information.
-        query_collections_info = self.butler.collections.query_info(query_collections, include_summary=True)
+        query_collections_info = self.butler.collections.query_info(
+            query_collections,
+            include_summary=True,
+            flatten_chains=True,
+            include_chains=False,
+            summary_datasets=dataset_types,
+        )
         expanded_query_collections = [c.name for c in query_collections_info]
         if self._find_first and set(query_collections) != set(expanded_query_collections):
             raise RuntimeError("Can not use wildcards in collections when find_first=True")
         query_collections = expanded_query_collections
 
         # Only iterate over dataset types that are relevant for the query.
-        dataset_types = set(
-            self.butler.collections._filter_dataset_types(dataset_types, query_collections_info)
+        dataset_type_names = {dataset_type.name for dataset_type in dataset_types}
+        dataset_type_collections = self.butler.collections._group_by_dataset_type(
+            dataset_type_names, query_collections_info
         )
 
-        if (n_filtered := len(dataset_types)) != n_dataset_types:
+        if (n_filtered := len(dataset_type_collections)) != n_dataset_types:
             _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
-        elif n_dataset_types == 0:
-            _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
         else:
             _LOG.info("Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s")
 
@@ -278,7 +286,7 @@ class QueryDatasets:
             # possible dataset types to query.
             warn_limit = True
             limit = abs(limit) + 1  # +1 to tell us we hit the limit.
-        for dt in sorted(dataset_types):
+        for dt, collections in sorted(dataset_type_collections.items()):
             kwargs: dict[str, Any] = {}
             if self._where:
                 kwargs["where"] = self._where
@@ -288,7 +296,7 @@ class QueryDatasets:
             _LOG.debug("Querying dataset type %s with %s", dt, kwargs)
             results = self.butler.query_datasets(
                 dt,
-                collections=query_collections,
+                collections=collections,
                 find_first=self._find_first,
                 with_dimension_records=True,
                 order_by=self._order_by,

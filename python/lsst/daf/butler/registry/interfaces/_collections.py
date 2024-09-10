@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from collections.abc import Iterable, Set
+from collections.abc import Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 import sqlalchemy
@@ -567,6 +567,23 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         -------
         docs : `str` or `None`
             Docstring for the collection with the given key.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_docs(self, key: Iterable[_Key]) -> Mapping[_Key, str]:
+        """Retrieve the documentation string for multiple collections.
+
+        Parameters
+        ----------
+        key : `~collections.abc.Iterable` [ _Key ]
+            Internal primary key value for the collection.
+
+        Returns
+        -------
+        docs : `~collections.abc.Mapping` [ _Key, `str`]
+            Documentation strings indexed by collection key. Only collections
+            with non-empty documentation strings are returned.
         """
         raise NotImplementedError()
 

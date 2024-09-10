@@ -36,6 +36,7 @@ from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
 
 if TYPE_CHECKING:
+    from .._dataset_type import DatasetType
     from .hybrid_butler import HybridButler
 
 
@@ -85,6 +86,8 @@ class HybridButlerCollections(ButlerCollections):
         include_chains: bool | None = None,
         include_parents: bool = False,
         include_summary: bool = False,
+        include_doc: bool = False,
+        summary_datasets: Iterable[DatasetType] | None = None,
     ) -> Sequence[CollectionInfo]:
         return self._hybrid._remote_butler.collections.query_info(
             expression,
@@ -93,6 +96,8 @@ class HybridButlerCollections(ButlerCollections):
             include_chains=include_chains,
             include_parents=include_parents,
             include_summary=include_summary,
+            include_doc=include_doc,
+            summary_datasets=summary_datasets,
         )
 
     def get_info(

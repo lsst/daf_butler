@@ -36,6 +36,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, Literal, NamedTuple, TypeVar, cast
 
 import sqlalchemy
+from lsst.utils.iteration import chunk_iterable
 
 from ..._collection_type import CollectionType
 from ..._exceptions import CollectionCycleError, CollectionTypeError, MissingCollectionError
@@ -450,13 +451,24 @@ class DefaultCollectionManager(CollectionManager[K]):
 
     def getDocumentation(self, key: K) -> str | None:
         # Docstring inherited from CollectionManager.
-        sql = (
-            sqlalchemy.sql.select(self._tables.collection.columns.doc)
-            .select_from(self._tables.collection)
-            .where(self._tables.collection.columns[self._collectionIdName] == key)
-        )
-        with self._db.query(sql) as sql_result:
-            return sql_result.scalar()
+        docs = self.get_docs([key])
+        return docs.get(key)
+
+    def get_docs(self, keys: Iterable[K]) -> Mapping[K, str]:
+        # Docstring inherited from CollectionManager.
+        docs: dict[K, str] = {}
+        id_column = self._tables.collection.columns[self._collectionIdName]
+        doc_column = self._tables.collection.columns.doc
+        for chunk in chunk_iterable(keys):
+            sql = (
+                sqlalchemy.sql.select(id_column, doc_column)
+                .select_from(self._tables.collection)
+                .where(sqlalchemy.sql.and_(id_column.in_(chunk), doc_column != sqlalchemy.literal("")))
+            )
+            with self._db.query(sql) as sql_result:
+                for row in sql_result:
+                    docs[row[0]] = row[1]
+        return docs
 
     def setDocumentation(self, key: K, doc: str | None) -> None:
         # Docstring inherited from CollectionManager.
