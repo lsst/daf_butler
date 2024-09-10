@@ -205,6 +205,8 @@ class QueryCollectionInfoRequestModel(pydantic.BaseModel):
     include_chains: bool
     include_parents: bool
     include_summary: bool
+    include_doc: bool
+    summary_datasets: list[DatasetTypeName] | None
 
 
 class QueryCollectionInfoResponseModel(pydantic.BaseModel):

@@ -40,6 +40,7 @@ from ..utils import has_globs
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._defaults import DefaultsHolder
 from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._ref_utils import normalize_dataset_type_name
 from .server_models import QueryCollectionInfoRequestModel, QueryCollectionInfoResponseModel
 
 
@@ -87,7 +88,7 @@ class RemoteButlerCollections(ButlerCollections):
         include_parents: bool = False,
         include_summary: bool = False,
         include_doc: bool = False,
-        summary_datasets: Iterable[DatasetType] | None = None,
+        summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Sequence[CollectionInfo]:
         if collection_types is None:
             types = list(CollectionType.all())
@@ -97,6 +98,11 @@ class RemoteButlerCollections(ButlerCollections):
         if include_chains is None:
             include_chains = not flatten_chains
 
+        if summary_datasets is None:
+            dataset_types = None
+        else:
+            dataset_types = [normalize_dataset_type_name(t) for t in summary_datasets]
+
         request = QueryCollectionInfoRequestModel(
             expression=convert_collection_arg_to_glob_string_list(expression),
             collection_types=types,
@@ -104,6 +110,8 @@ class RemoteButlerCollections(ButlerCollections):
             include_chains=include_chains,
             include_parents=include_parents,
             include_summary=include_summary,
+            include_doc=include_doc,
+            summary_datasets=dataset_types,
         )
         response = self._connection.post("query_collection_info", request)
         model = parse_model(response, QueryCollectionInfoResponseModel)
@@ -115,7 +123,9 @@ class RemoteButlerCollections(ButlerCollections):
     ) -> CollectionInfo:
         if has_globs(name):
             raise ValueError("Search expressions are not allowed in 'name' parameter to get_info")
-        results = self.query_info(name, include_parents=include_parents, include_summary=include_summary)
+        results = self.query_info(
+            name, include_parents=include_parents, include_summary=include_summary, include_doc=True
+        )
         assert len(results) == 1, "Only one result should be returned for get_info."
         return results[0]
 

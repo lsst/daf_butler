@@ -36,7 +36,7 @@ __all__ = (
 from pydantic import TypeAdapter
 
 from .._dataset_ref import DatasetRef
-from .._dataset_type import DatasetType
+from .._dataset_type import DatasetType, get_dataset_type_name
 from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate, DataId, DataIdValue, SerializedDataId
 from .server_models import DatasetTypeName
@@ -85,12 +85,7 @@ def normalize_dataset_type_name(datasetTypeOrName: DatasetType | str) -> Dataset
         A DatasetType, or the name of a DatasetType. This union is a common
         parameter in many `Butler` methods.
     """
-    if isinstance(datasetTypeOrName, DatasetType):
-        return DatasetTypeName(datasetTypeOrName.name)
-    elif isinstance(datasetTypeOrName, str):
-        return DatasetTypeName(datasetTypeOrName)
-    else:
-        raise TypeError(f"Got unexpected object for DatasetType: {datasetTypeOrName}")
+    return DatasetTypeName(get_dataset_type_name(datasetTypeOrName))
 
 
 def simplify_dataId(dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:

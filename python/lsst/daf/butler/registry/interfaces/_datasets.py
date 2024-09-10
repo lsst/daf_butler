@@ -674,7 +674,9 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @abstractmethod
     def fetch_summaries(
-        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+        self,
+        collections: Iterable[CollectionRecord],
+        dataset_types: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Mapping[Any, CollectionSummary]:
         """Fetch collection summaries given their names and dataset types.
 

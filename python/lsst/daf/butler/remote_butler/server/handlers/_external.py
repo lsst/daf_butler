@@ -267,6 +267,8 @@ def query_collection_info(
         include_chains=request.include_chains,
         include_parents=request.include_parents,
         include_summary=request.include_summary,
+        include_doc=request.include_doc,
+        summary_datasets=request.summary_datasets,
     )
     return QueryCollectionInfoResponseModel(collections=list(collections))
 

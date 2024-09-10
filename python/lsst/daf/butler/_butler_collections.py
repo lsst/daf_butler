@@ -283,7 +283,7 @@ class ButlerCollections(ABC, Sequence):
         include_parents: bool = False,
         include_summary: bool = False,
         include_doc: bool = False,
-        summary_datasets: Iterable[DatasetType] | None = None,
+        summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Sequence[CollectionInfo]:
         """Query the butler for collections matching an expression and
         return detailed information about those collections.
@@ -310,8 +310,8 @@ class ButlerCollections(ABC, Sequence):
         include_doc : `bool`, optional
             Whether the returned information includes collection documentation
             string.
-        summary_datasets : `~collections.abc.Iterable` [ `DatasetType` ], \
-                optional
+        summary_datasets : `~collections.abc.Iterable` [ `DatasetType` ] or \
+            `~collections.abc.Iterable` [ `str` ], optional
             Dataset types to include in returned summaries. Only used if
             ``include_summary`` is `True`. If not specified then all dataset
             types will be included.

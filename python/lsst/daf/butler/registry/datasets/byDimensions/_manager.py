@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 
 from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType
+from ...._dataset_type import get_dataset_type_name
 from ...._exceptions_legacy import DatasetTypeError
 from ....dimensions import DimensionUniverse
 from ..._collection_summary import CollectionSummary
@@ -511,12 +512,14 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return summaries[collection.key]
 
     def fetch_summaries(
-        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+        self,
+        collections: Iterable[CollectionRecord],
+        dataset_types: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Mapping[Any, CollectionSummary]:
         # Docstring inherited from DatasetRecordStorageManager.
         dataset_type_names: Iterable[str] | None = None
         if dataset_types is not None:
-            dataset_type_names = set(dataset_type.name for dataset_type in dataset_types)
+            dataset_type_names = set(get_dataset_type_name(dt) for dt in dataset_types)
         return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
 
     _versions: list[VersionTuple]

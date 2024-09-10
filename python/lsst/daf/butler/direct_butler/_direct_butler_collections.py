@@ -114,7 +114,7 @@ class DirectButlerCollections(ButlerCollections):
         include_parents: bool = False,
         include_summary: bool = False,
         include_doc: bool = False,
-        summary_datasets: Iterable[DatasetType] | None = None,
+        summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Sequence[CollectionInfo]:
         info = []
         with self._registry.caching_context():
