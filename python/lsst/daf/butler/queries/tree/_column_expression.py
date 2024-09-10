@@ -80,6 +80,10 @@ class UnaryExpression(ColumnExpressionBase):
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.operand.gather_governors(governors)
+
     @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
@@ -146,6 +150,11 @@ class BinaryExpression(ColumnExpressionBase):
         self.a.gather_required_columns(columns)
         self.b.gather_required_columns(columns)
 
+    def gather_governors(self, governors: set[str]) -> None:
+        # Docstring inherited.
+        self.a.gather_governors(governors)
+        self.b.gather_governors(governors)
+
     @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
@@ -207,6 +216,9 @@ class Reversed(ColumnExpressionBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
+
+    def gather_governors(self, governors: set[str]) -> None:
+        self.operand.gather_governors(governors)
 
     @property
     def column_type(self) -> ColumnType:

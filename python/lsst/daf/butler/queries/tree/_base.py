@@ -133,6 +133,18 @@ class ColumnExpressionBase(QueryTreeBase, ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def gather_governors(self, governors: set[str]) -> None:
+        """Add any governor dimensions that need to be fully identified for
+        this column expression to be sound.
+
+        Parameters
+        ----------
+        governors : `set` [ `str` ]
+            Set of governor dimension names to modify in place.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
         """Invoke the visitor interface.
 
@@ -174,6 +186,10 @@ class ColumnLiteralBase(ColumnExpressionBase):
         return cast("ColumnLiteral", self).value
 
     def gather_required_columns(self, columns: ColumnSet) -> None:
+        # Docstring inherited.
+        pass
+
+    def gather_governors(self, governors: set[str]) -> None:
         # Docstring inherited.
         pass
 

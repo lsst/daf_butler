@@ -500,7 +500,7 @@ class QuerySummary:
         missing_common_skypix = False
         if region is not None:
             for family in dimensions.spatial:
-                element = family.choose(dimensions.elements, self.universe)
+                element = family.choose(dimensions)
                 tags.add(DimensionRecordColumnTag(element.name, "region"))
                 if (
                     not isinstance(element, SkyPixDimension)

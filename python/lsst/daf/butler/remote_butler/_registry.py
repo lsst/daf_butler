@@ -521,9 +521,10 @@ class RemoteButlerRegistry(Registry):
         )
         with self._butler.query() as query:
             query = query.join_dataset_search(datasetType, resolved_collections)
-            result = query.x_general(
+            result = query.general(
                 datasetType.dimensions,
                 dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
+                find_first=False,
             )
             yield from DatasetAssociation.from_query_result(result, datasetType)
 

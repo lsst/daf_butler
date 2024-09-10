@@ -300,6 +300,8 @@ class QueryBuilder:
                         )
                     )
                 )
+        if not results.fields:
+            results.fields.add(ddl.FieldSpec(name=self.EMPTY_COLUMNS_NAME, dtype=self.EMPTY_COLUMNS_TYPE))
         return results
 
 

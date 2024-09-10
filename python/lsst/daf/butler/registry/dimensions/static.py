@@ -482,8 +482,11 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         dimensions: DimensionGroup,
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
+        calibration_dataset_types: Set[str],
     ) -> tuple[qt.Predicate, QueryBuilder]:
-        overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(self._db, dimensions, self._overlap_tables)
+        overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
+            self._db, dimensions, calibration_dataset_types, self._overlap_tables
+        )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.builder
 
@@ -1016,9 +1019,10 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         self,
         db: Database,
         dimensions: DimensionGroup,
+        calibration_dataset_types: Set[str],
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
     ):
-        super().__init__(dimensions)
+        super().__init__(dimensions, calibration_dataset_types)
         self.builder: QueryBuilder = QueryJoiner(db).to_builder(qt.ColumnSet(dimensions))
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables

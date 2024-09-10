@@ -394,6 +394,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         dimensions: DimensionGroup,
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
+        calibration_dataset_types: Set[str],
     ) -> tuple[Predicate, QueryBuilder]:
         """Process a query's WHERE predicate and dimensions to handle spatial
         and temporal overlaps.
@@ -412,6 +413,9 @@ class DimensionRecordStorageManager(VersionedExtension):
             joined into the query that may establish their own spatial or
             temporal relationships (e.g. a dataset search with both ``visit``
             and ``patch`` dimensions).
+        calibration_dataset_types : `~collections.abc.Set` [ `str` ]
+            The names of dataset types that have been joined into the query via
+            a search that includes at least one calibration collection.
 
         Returns
         -------

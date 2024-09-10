@@ -46,7 +46,7 @@ from .._collection_type import CollectionType
 from .._dataset_type import DatasetType
 from .._exceptions import EmptyQueryResultError, InvalidQueryError
 from .._timespan import Timespan
-from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecord
+from ..dimensions import DataCoordinate, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
 from ..queries import DimensionRecordQueryResults, Query
 from ..queries.tree import Predicate
@@ -310,7 +310,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Do simple dimension queries.
         with butler.query() as query:
             query = query.join_dimensions(dimensions)
-            rows = list(query.x_general(dimensions).order_by("detector"))
+            rows = list(query.general(dimensions).order_by("detector"))
             self.assertEqual(
                 rows,
                 [
@@ -321,7 +321,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
             rows = list(
-                query.x_general(dimensions, "detector.full_name", "purpose").order_by(
+                query.general(dimensions, "detector.full_name", "purpose").order_by(
                     "-detector.purpose", "full_name"
                 )
             )
@@ -355,7 +355,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
             rows = list(
-                query.x_general(dimensions, "detector.full_name", "purpose").where(
+                query.general(dimensions, "detector.full_name", "purpose").where(
                     "instrument = 'Cam1' AND purpose = 'WAVEFRONT'"
                 )
             )
@@ -370,18 +370,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     },
                 ],
             )
-            result = query.x_general(dimensions, dimension_fields={"detector": {"full_name"}})
+            result = query.general(dimensions, dimension_fields={"detector": {"full_name"}})
             self.assertEqual(set(row["detector.full_name"] for row in result), {"Aa", "Ab", "Ba", "Bb"})
 
         # Use "flat" whose dimension group includes implied dimension.
         flat = butler.get_dataset_type("flat")
-        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+        dimensions = butler.dimensions.conform(["detector", "physical_filter"])
 
         # Do simple dataset queries in RUN collection.
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             # This just returns data IDs.
-            rows = list(query.x_general(dimensions).order_by("detector"))
+            rows = list(query.general(dimensions).order_by("detector"))
             self.assertEqual(
                 rows,
                 [
@@ -391,7 +391,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
 
-            result = query.x_general(dimensions, dataset_fields={"flat": ...}).order_by("detector")
+            result = query.general(dimensions, dataset_fields={"flat": ...}, find_first=True).order_by(
+                "detector"
+            )
             ids = {row["flat.dataset_id"] for row in result}
             self.assertEqual(
                 ids,
@@ -435,7 +437,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged"])
 
-            result = query.x_general(dimensions, "flat.dataset_id", "flat.run", "flat.collection")
+            result = query.general(
+                dimensions, "flat.dataset_id", "flat.run", "flat.collection", find_first=False
+            )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 2)
             self.assertEqual({row_tuple.refs[0] for row_tuple in row_tuples}, {flat1, flat2})
@@ -444,8 +448,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Query calib collection.
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["calib"])
-            result = query.x_general(
-                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+            result = query.general(
+                dimensions,
+                "flat.dataset_id",
+                "flat.run",
+                "flat.collection",
+                "flat.timespan",
+                find_first=False,
             )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 4)
@@ -459,8 +468,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Query both tagged and calib collection.
         with butler.query() as query:
             query = query.join_dataset_search("flat", ["tagged", "calib"])
-            result = query.x_general(
-                dimensions, "flat.dataset_id", "flat.run", "flat.collection", "flat.timespan"
+            result = query.general(
+                dimensions,
+                "flat.dataset_id",
+                "flat.run",
+                "flat.collection",
+                "flat.timespan",
+                find_first=False,
             )
             row_tuples = list(result.iter_tuples(flat))
             self.assertEqual(len(row_tuples), 6)
@@ -476,13 +490,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         """Test general query returning ingest_date field."""
         before_ingest = astropy.time.Time.now()
         butler = self.make_butler("base.yaml", "datasets.yaml")
-        dimensions = DimensionGroup(butler.dimensions, ["detector", "physical_filter"])
+        dimensions = butler.dimensions.conform(["detector", "physical_filter"])
 
         # Check that returned type of ingest_date is astropy Time, must work
         # for schema versions 1 and 2 of datasets manager.
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
-            rows = list(query.x_general(dimensions, dataset_fields={"flat": ...}))
+            rows = list(query.general(dimensions, dataset_fields={"flat": {"ingest_date"}}, find_first=False))
             self.assertEqual(len(rows), 3)
             for row in rows:
                 self.assertIsInstance(row["flat.ingest_date"], astropy.time.Time)
@@ -491,14 +505,14 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
             query1 = query.where("flat.ingest_date < before_ingest", bind={"before_ingest": before_ingest})
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 0)
             query1 = query.where("flat.ingest_date >= before_ingest", bind={"before_ingest": before_ingest})
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 3)
             # Same with a time in string literal.
             query1 = query.where(f"flat.ingest_date < T'mjd/{before_ingest.tai.mjd}'")
-            rows = list(query1.x_general(dimensions))
+            rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 0)
 
     def test_implied_union_record_query(self) -> None:
@@ -592,7 +606,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 query.join_dataset_search("bias", collections=["empty"]).dimension_records("detector"),
                 [],
                 messages=[
-                    "Search for dataset type 'bias' is doomed to fail.",
+                    "Search for dataset type 'bias' in ['empty'] is doomed to fail.",
                     "No datasets of type 'bias' in collection 'empty'.",
                 ],
                 doomed=True,
@@ -603,7 +617,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 .dimension_records("detector"),
                 [],
                 messages=[
-                    "Search for dataset type 'bias' is doomed to fail.",
+                    "Search for dataset type 'bias' in ['imported_g'] is doomed to fail.",
                     "No datasets with instrument='Cam2' in collection 'imported_g'.",
                 ],
                 doomed=True,
@@ -850,7 +864,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             with self.assertRaisesRegex(
                 InvalidQueryError, r"Expression 'visit.id' in POINT\(\) is not a literal number."
             ):
-                query.where(f"visit_detector_region.region OVERLAPS POINT(visit.id, {dec})"),
+                query.where(f"visit_detector_region.region OVERLAPS POINT(visit.id, {dec})")
             with self.assertRaisesRegex(
                 InvalidQueryError, r"Expression ''not-a-number'' in POINT\(\) is not a literal number."
             ):
@@ -1608,7 +1622,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 self.assertCountEqual(refs, simple_refs)
 
     def test_dataset_time_queries(self) -> None:
-        """Test region queries for datasets."""
+        """Test temporal queries for datasets."""
         # Import data to play with.
         butler = self.make_butler("base.yaml", "ci_hsc-subset.yaml")
 
@@ -1641,6 +1655,140 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 bind={"ts": Timespan(v_904014_pre, v_904014_post)},
             )
             self.assertEqual(len(list(with_ts)), 16)
+
+    def test_calibration_join_queries(self) -> None:
+        """Test using the 'general' query result type to join observations to
+        calibration datasets temporally.
+
+        We have to use general results because we want calibration DatasetRefs
+        and data IDs that include the observation identifiers (which are not
+        part of the calibration dataset dimensions).
+        """
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        # Set up some timestamps.
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
+        t4 = astropy.time.Time("2020-01-01T04:00:00", format="isot", scale="tai")
+        t5 = astropy.time.Time("2020-01-01T05:00:00", format="isot", scale="tai")
+        # Insert some exposure records with timespans between each sequential
+        # pair of those.
+        butler.registry.insertDimensionData(
+            "day_obs", {"instrument": "Cam1", "id": 20200101, "timespan": Timespan(t1, t5)}
+        )
+        butler.registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "name": "group0"},
+            {"instrument": "Cam1", "name": "group1"},
+            {"instrument": "Cam1", "name": "group2"},
+            {"instrument": "Cam1", "name": "group3"},
+        )
+        butler.registry.insertDimensionData(
+            "exposure",
+            {
+                "instrument": "Cam1",
+                "id": 0,
+                "group": "group0",
+                "obs_id": "zero",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t1, t2),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 1,
+                "group": "group1",
+                "obs_id": "one",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t2, t3),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 2,
+                "group": "group2",
+                "obs_id": "two",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t3, t4),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 3,
+                "group": "group3",
+                "obs_id": "three",
+                "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
+                "timespan": Timespan(t4, t5),
+            },
+        )
+        # Get references to the datasets we imported.
+        bias = butler.get_dataset_type("bias")
+        bias2a = butler.find_dataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        assert bias2a is not None
+        bias3a = butler.find_dataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        assert bias3a is not None
+        bias2b = butler.find_dataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        assert bias2b is not None
+        bias3b = butler.find_dataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        assert bias3b is not None
+        # Register the main calibration collection we'll be working with.
+        collection = "Cam1/calibs"
+        butler.collections.register(collection, type=CollectionType.CALIBRATION)
+        # Certify 2a dataset with [t2, t4) validity.
+        butler.registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # Certify 3a over [t1, t3).
+        butler.registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
+        # Certify 2b and 3b together over [t4, ∞).
+        butler.registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+        # Query for (bias, exposure, detector) combinations.
+        base_data_id = DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)
+        with butler.query() as q:
+            x = q.expression_factory
+            q = q.join_dimensions(["exposure"])
+            q = q.join_dataset_search("bias", [collection])
+            # Query for all calibs with an explicit temporal join.
+            self.assertCountEqual(
+                [
+                    (data_id, refs[0])
+                    for data_id, refs, _ in q.where(
+                        x["bias"].timespan.overlaps(x.exposure.timespan), base_data_id
+                    )
+                    .general(
+                        butler.dimensions.conform(["exposure", "detector"]),
+                        dataset_fields={"bias": ...},
+                        find_first=True,
+                    )
+                    .iter_tuples(bias)
+                ],
+                [
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=1), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=2), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=0), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=1), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=3), bias2b),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
+                ],
+            )
+            # Query for all calibs with the temporal join implicit and the
+            # dimensions given as an incomplete list (detector is added by
+            # the dataset results).
+            self.assertCountEqual(
+                [
+                    (data_id, refs[0])
+                    for data_id, refs, _ in q.where(base_data_id)
+                    .general(["exposure"], dataset_fields={"bias": ...}, find_first=True)
+                    .iter_tuples(bias)
+                ],
+                [
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=1), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=2), bias2a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=0), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=1), bias3a),
+                    (DataCoordinate.standardize(base_data_id, detector=2, exposure=3), bias2b),
+                    (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
+                ],
+            )
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:

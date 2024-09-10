@@ -406,7 +406,7 @@ class DimensionElementProxy(ScalarExpressionProxy):
         try:
             expression = tree.DimensionFieldReference(element=self._element, field=field)
         except InvalidQueryError:
-            raise AttributeError(field)
+            raise AttributeError(field) from None
         if expression.column_type == "bool":
             return BooleanScalarExpressionProxy(expression)
         else:
@@ -425,7 +425,7 @@ class DimensionElementProxy(ScalarExpressionProxy):
         try:
             expression = tree.DimensionFieldReference(element=self._element, field="timespan")
         except InvalidQueryError:
-            raise AttributeError("timespan")
+            raise AttributeError("timespan") from None
         return TimespanProxy(expression)
 
     def __dir__(self) -> list[str]:
@@ -473,7 +473,7 @@ class DatasetTypeProxy:
         try:
             expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field="timespan")
         except InvalidQueryError:
-            raise AttributeError("timespan")
+            raise AttributeError("timespan") from None
         return TimespanProxy(expression)
 
     def __dir__(self) -> list[str]:

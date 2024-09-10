@@ -746,8 +746,8 @@ class Query:
                 # present in each family (e.g. patch beats tract).
                 spatial_joins.append(
                     (
-                        lhs_spatial_family.choose(full_dimensions.elements, self.dimensions.universe).name,
-                        rhs_spatial_family.choose(full_dimensions.elements, self.dimensions.universe).name,
+                        lhs_spatial_family.choose(full_dimensions).name,
+                        rhs_spatial_family.choose(full_dimensions).name,
                     )
                 )
         # Set up any temporal join between the query dimensions and CALIBRATION
@@ -755,7 +755,7 @@ class Query:
         temporal_join_on: set[ColumnTag] = set()
         if any(r.type is CollectionType.CALIBRATION for r in collection_records):
             for family in self._dimensions.temporal:
-                endpoint = family.choose(self._dimensions.elements, self.dimensions.universe)
+                endpoint = family.choose(self._dimensions)
                 temporal_join_on.add(DimensionRecordColumnTag(endpoint.name, "timespan"))
             base_columns_required.update(temporal_join_on)
         # Note which of the many kinds of potentially-missing columns we have

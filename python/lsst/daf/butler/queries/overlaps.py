@@ -30,13 +30,13 @@ from __future__ import annotations
 __all__ = ("OverlapsVisitor",)
 
 import itertools
-from collections.abc import Hashable, Iterable, Sequence, Set
+from collections.abc import Hashable, Iterable, Mapping, Sequence, Set
 from typing import Generic, Literal, TypeVar, cast
 
 from lsst.sphgeom import Region
 
 from .._exceptions import InvalidQueryError
-from .._topology import TopologicalFamily
+from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 from ..dimensions import DimensionElement, DimensionGroup
 from . import tree
 from .visitors import PredicateVisitFlags, SimplePredicateVisitor
@@ -108,6 +108,59 @@ class _NaiveDisjointSet(Generic[_T]):
         return len(self._subsets)
 
 
+class CalibrationTemporalEndpoint(TopologicalRelationshipEndpoint):
+    """An implementation of the "topological relationship endpoint" interface
+    for a calibration dataset search.
+
+    Parameters
+    ----------
+    dataset_type_name : `str`
+        Name of the dataset type.
+
+    Notes
+    -----
+    This lets validity range lookups participate in the logic that checks to
+    see if an explicit spatial/temporal join in the WHERE expression is present
+    and hence an automatic join is unnecessary.  That logic is simple for
+    datasets, since each "family" is a single dataset type that only has one
+    endpoint (whereas different dimensions like tract and patch can belong to
+    the same family).
+    """
+
+    def __init__(self, dataset_type_name: str):
+        self.dataset_type_name = dataset_type_name
+
+    @property
+    def name(self) -> str:
+        return self.dataset_type_name
+
+    @property
+    def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
+        return {TopologicalSpace.TEMPORAL: CalibrationTemporalFamily(self.dataset_type_name)}
+
+
+class CalibrationTemporalFamily(TopologicalFamily):
+    """An implementation of the "topological relationship endpoint" interface
+    for a calibration dataset search.
+
+    See `CalibrationTemporalEndpoint` for rationale.
+
+    Parameters
+    ----------
+    dataset_type_name : `str`
+        Name of the dataset type.
+    """
+
+    def __init__(self, dataset_type_name: str):
+        super().__init__(dataset_type_name, TopologicalSpace.TEMPORAL)
+
+    def choose(self, dimensions: DimensionGroup) -> CalibrationTemporalEndpoint:
+        return CalibrationTemporalEndpoint(self.name)
+
+    def make_column_reference(self, endpoint: TopologicalRelationshipEndpoint) -> tree.DatasetFieldReference:
+        return tree.DatasetFieldReference(dataset_type=endpoint.name, field="timespan")
+
+
 class OverlapsVisitor(SimplePredicateVisitor):
     """A helper class for dealing with spatial and temporal overlaps in a
     query.
@@ -116,6 +169,9 @@ class OverlapsVisitor(SimplePredicateVisitor):
     ----------
     dimensions : `DimensionGroup`
         Dimensions of the query.
+    calibration_dataset_types : `~collections.abc.Set` [ `str` ]
+        The names of dataset types that have been joined into the query via
+        a search that includes at least one calibration collection.
 
     Notes
     -----
@@ -125,10 +181,14 @@ class OverlapsVisitor(SimplePredicateVisitor):
     implementations that want to rewrite the predicate at the same time.
     """
 
-    def __init__(self, dimensions: DimensionGroup):
+    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str]):
         self.dimensions = dimensions
         self._spatial_connections = _NaiveDisjointSet(self.dimensions.spatial)
-        self._temporal_connections = _NaiveDisjointSet(self.dimensions.temporal)
+        temporal_families: list[TopologicalFamily] = [
+            CalibrationTemporalFamily(name) for name in calibration_dataset_types
+        ]
+        temporal_families.extend(self.dimensions.temporal)
+        self._temporal_connections = _NaiveDisjointSet(temporal_families)
 
     def run(self, predicate: tree.Predicate, join_operands: Iterable[DimensionGroup]) -> tree.Predicate:
         """Process the given predicate to extract spatial and temporal
@@ -153,24 +213,8 @@ class OverlapsVisitor(SimplePredicateVisitor):
             result = predicate
         for join_operand_dimensions in join_operands:
             self.add_join_operand_connections(join_operand_dimensions)
-        for a, b in self.compute_automatic_spatial_joins():
-            join_predicate = self.visit_spatial_join(a, b, PredicateVisitFlags.HAS_AND_SIBLINGS)
-            if join_predicate is None:
-                join_predicate = tree.Predicate.compare(
-                    tree.DimensionFieldReference.model_construct(element=a, field="region"),
-                    "overlaps",
-                    tree.DimensionFieldReference.model_construct(element=b, field="region"),
-                )
-            result = result.logical_and(join_predicate)
-        for a, b in self.compute_automatic_temporal_joins():
-            join_predicate = self.visit_temporal_dimension_join(a, b, PredicateVisitFlags.HAS_AND_SIBLINGS)
-            if join_predicate is None:
-                join_predicate = tree.Predicate.compare(
-                    tree.DimensionFieldReference.model_construct(element=a, field="timespan"),
-                    "overlaps",
-                    tree.DimensionFieldReference.model_construct(element=b, field="timespan"),
-                )
-            result = result.logical_and(join_predicate)
+        result = result.logical_and(self._add_automatic_joins("spatial", self._spatial_connections))
+        result = result.logical_and(self._add_automatic_joins("temporal", self._temporal_connections))
         return result
 
     def visit_comparison(
@@ -216,49 +260,14 @@ class OverlapsVisitor(SimplePredicateVisitor):
         for a_family, b_family in itertools.pairwise(operand_dimensions.temporal):
             self._temporal_connections.merge(a_family, b_family)
 
-    def compute_automatic_spatial_joins(self) -> list[tuple[DimensionElement, DimensionElement]]:
-        """Return pairs of dimension elements that should be spatially joined.
-
-        Returns
-        -------
-        joins : `list` [ `tuple` [ `DimensionElement`, `DimensionElement` ] ]
-            Automatic joins.
-
-        Notes
-        -----
-        This takes into account explicit joins extracted by `run` and implicit
-        joins added by `add_join_operand_connections`, and only returns
-        additional joins if there is an unambiguous way to spatially connect
-        any dimensions that are not already spatially connected. Automatic
-        joins are always the most fine-grained join between sets of dimensions
-        (i.e. ``visit_detector_region`` and ``patch`` instead of ``visit`` and
-        ``tract``), but explicitly adding a coarser join between sets of
-        elements will prevent the fine-grained join from being added.
-        """
-        return self._compute_automatic_joins("spatial", self._spatial_connections)
-
-    def compute_automatic_temporal_joins(self) -> list[tuple[DimensionElement, DimensionElement]]:
-        """Return pairs of dimension elements that should be spatially joined.
-
-        Returns
-        -------
-        joins : `list` [ `tuple` [ `DimensionElement`, `DimensionElement` ] ]
-            Automatic joins.
-
-        Notes
-        -----
-        See `compute_automatic_spatial_joins` for information on how automatic
-        joins are determined.  Joins to dataset validity ranges are never
-        automatic.
-        """
-        return self._compute_automatic_joins("temporal", self._temporal_connections)
-
-    def _compute_automatic_joins(
-        self, kind: Literal["spatial", "temporal"], connections: _NaiveDisjointSet[TopologicalFamily]
-    ) -> list[tuple[DimensionElement, DimensionElement]]:
+    def _add_automatic_joins(
+        self,
+        kind: Literal["spatial", "temporal"],
+        connections: _NaiveDisjointSet[TopologicalFamily],
+    ) -> tree.Predicate:
         if connections.n_subsets <= 1:
             # All of the joins we need are already present.
-            return []
+            return tree.Predicate.from_bool(True)
         if connections.n_subsets > 2:
             raise InvalidQueryError(
                 f"Too many disconnected sets of {kind} families for an automatic "
@@ -268,22 +277,25 @@ class OverlapsVisitor(SimplePredicateVisitor):
         if len(a_subset) > 1 or len(b_subset) > 1:
             raise InvalidQueryError(
                 f"A {kind} join is needed between {a_subset} and {b_subset}, but which join to "
-                "add is ambiguous.  Add an explicit spatial join to avoid this error."
+                "add is ambiguous.  Add an explicit spatial or temporal join to avoid this error."
             )
         # We have a pair of families that are not explicitly or implicitly
         # connected to any other families; add an automatic join between their
         # most fine-grained members.
         (a_family,) = a_subset
         (b_family,) = b_subset
-        return [
-            (
-                cast(DimensionElement, a_family.choose(self.dimensions.elements, self.dimensions.universe)),
-                cast(DimensionElement, b_family.choose(self.dimensions.elements, self.dimensions.universe)),
-            )
-        ]
+        a = a_family.make_column_reference(a_family.choose(self.dimensions))
+        b = b_family.make_column_reference(b_family.choose(self.dimensions))
+        join_predicate = self.visit_comparison(a, "overlaps", b, PredicateVisitFlags.HAS_AND_SIBLINGS)
+        if join_predicate is None:
+            join_predicate = tree.Predicate.compare(a, "overlaps", b)
+        return join_predicate
 
     def visit_spatial_overlap(
-        self, a: tree.ColumnExpression, b: tree.ColumnExpression, flags: PredicateVisitFlags
+        self,
+        a: tree.ColumnExpression,
+        b: tree.ColumnExpression,
+        flags: PredicateVisitFlags,
     ) -> tree.Predicate | None:
         """Dispatch a spatial overlap comparison predicate to handlers.
 
@@ -321,7 +333,10 @@ class OverlapsVisitor(SimplePredicateVisitor):
         raise AssertionError(f"Unexpected argument for spatial overlap: {region_expression}.")
 
     def visit_temporal_overlap(
-        self, a: tree.ColumnExpression, b: tree.ColumnExpression, flags: PredicateVisitFlags
+        self,
+        a: tree.ColumnExpression,
+        b: tree.ColumnExpression,
+        flags: PredicateVisitFlags,
     ) -> tree.Predicate | None:
         """Dispatch a temporal overlap comparison predicate to handlers.
 
@@ -344,16 +359,29 @@ class OverlapsVisitor(SimplePredicateVisitor):
             `None` if no substitution is needed.
         """
         match a, b:
-            case tree.DimensionFieldReference(element=a_element), tree.DimensionFieldReference(
-                element=b_element
+            case (
+                tree.DimensionFieldReference(element=a_element),
+                tree.DimensionFieldReference(element=b_element),
             ):
                 return self.visit_temporal_dimension_join(a_element, b_element, flags)
+            case (
+                tree.DatasetFieldReference(dataset_type=a_dataset),
+                tree.DimensionFieldReference(element=b_element),
+            ):
+                return self.visit_validity_range_dimension_join(a_dataset, b_element, flags)
+            case (
+                tree.DimensionFieldReference(element=a_element),
+                tree.DatasetFieldReference(dataset_type=b_dataset),
+            ):
+                return self.visit_validity_range_dimension_join(b_dataset, a_element, flags)
+            case (
+                tree.DatasetFieldReference(dataset_type=a_dataset),
+                tree.DatasetFieldReference(dataset_type=b_dataset),
+            ):
+                return self.visit_validity_range_join(a_dataset, b_dataset, flags)
             case _:
-                # We don't bother differentiating any other kind of temporal
-                # comparison, because in all foreseeable database schemas we
-                # wouldn't have to do anything special with them, since they
-                # don't participate in automatic join calculations and they
-                # should be straightforwardly convertible to SQL.
+                # Other cases do not participate in automatic join logic and
+                # do not require the predicate to be rewritten.
                 return None
 
     def visit_spatial_join(
@@ -446,4 +474,58 @@ class OverlapsVisitor(SimplePredicateVisitor):
         self._temporal_connections.merge(
             cast(TopologicalFamily, a.temporal), cast(TopologicalFamily, b.temporal)
         )
+        return None
+
+    def visit_validity_range_dimension_join(
+        self, a: str, b: DimensionElement, flags: PredicateVisitFlags
+    ) -> tree.Predicate | None:
+        """Handle a temporal overlap comparison between two dimension elements.
+
+        The default implementation updates the set of known temporal
+        connections (for use by `compute_automatic_temporal_joins`) and returns
+        `None`.
+
+        Parameters
+        ----------
+        a : `str`
+            Name of a calibration dataset type.
+        b : `DimensionElement`
+            The dimension element to join the dataset validity range to.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
+
+        Returns
+        -------
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
+        """
+        self._temporal_connections.merge(CalibrationTemporalFamily(a), cast(TopologicalFamily, b.temporal))
+        return None
+
+    def visit_validity_range_join(self, a: str, b: str, flags: PredicateVisitFlags) -> tree.Predicate | None:
+        """Handle a temporal overlap comparison between two dimension elements.
+
+        The default implementation updates the set of known temporal
+        connections (for use by `compute_automatic_temporal_joins`) and returns
+        `None`.
+
+        Parameters
+        ----------
+        a : `str`
+            Name of a calibration dataset type.
+        b : `DimensionElement`
+            Another claibration dataset type to join to.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
+
+        Returns
+        -------
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
+        """
+        self._temporal_connections.merge(CalibrationTemporalFamily(a), CalibrationTemporalFamily(b))
         return None
