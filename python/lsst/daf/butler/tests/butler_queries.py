@@ -814,6 +814,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # conversion of integer to float.
             _check_visit_id(query.where(f"visit_detector_region.region OVERLAPS POINT({ra}, 1)"))
 
+            # Negative values are allowed for dec, since it's defined as -90 to
+            # 90.  Tract 1, patch 4 slightly overlaps some negative dec values.
+            result = list(query.where("patch.region OVERLAPS POINT(0.335, -0.000000001)").data_ids(["patch"]))
+            self.assertEqual(len(result), 1)
+            id = result[0]
+            self.assertEqual(id["patch"], 4)
+            self.assertEqual(id["tract"], 1)
+            # Out of bounds dec values are not allowed.
+            with self.assertRaisesRegex(ValueError, "invalid latitude angle"):
+                list(query.where("patch.region OVERLAPS POINT(0.335, -91)").data_ids(["patch"]))
+
+            # Negative ra values are allowed.
+            _check_visit_id(query.where(f"POINT({ra-360}, {dec}) OVERLAPS visit_detector_region.region"))
+
             # Substitute ra and dec values via bind instead of literals in the
             # string.
             _check_visit_id(

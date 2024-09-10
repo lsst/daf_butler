@@ -365,5 +365,7 @@ def _get_float_literal_value(value: _VisitorResult, node: Node) -> float:
             return expr.value
         elif expr.expression_type == "int":
             return float(expr.value)
+        elif expr.expression_type == "unary" and expr.operator == "-":
+            return -1 * _get_float_literal_value(_ColExpr(expr.operand), node)
 
     raise InvalidQueryError(f"Expression '{node}' in POINT() is not a literal number.")
