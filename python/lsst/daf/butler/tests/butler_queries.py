@@ -1804,6 +1804,21 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
 
+    def test_collection_query_info(self) -> None:
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+
+        info = butler.collections.query_info("imported_g", include_summary=True)
+        self.assertEqual(len(info), 1)
+        dataset_types = info[0].dataset_types
+        assert dataset_types is not None
+        self.assertCountEqual(dataset_types, ["flat", "bias"])
+
+        info = butler.collections.query_info("imported_g", include_summary=True, summary_datasets=["flat"])
+        self.assertEqual(len(info), 1)
+        dataset_types = info[0].dataset_types
+        assert dataset_types is not None
+        self.assertCountEqual(dataset_types, ["flat"])
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

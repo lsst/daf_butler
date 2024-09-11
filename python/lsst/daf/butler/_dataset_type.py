@@ -796,3 +796,25 @@ def _unpickle_via_factory(factory: Callable, args: Any, kwargs: Any) -> DatasetT
     arguments as well as positional arguments.
     """
     return factory(*args, **kwargs)
+
+
+def get_dataset_type_name(datasetTypeOrName: DatasetType | str) -> str:
+    """Given a `DatasetType` object or a dataset type name, return a dataset
+    type name.
+
+    Parameters
+    ----------
+    datasetTypeOrName : `DatasetType` | `str`
+        A DatasetType, or the name of a DatasetType.
+
+    Returns
+    -------
+    name
+        The name associated with the given DatasetType, or the given string.
+    """
+    if isinstance(datasetTypeOrName, DatasetType):
+        return datasetTypeOrName.name
+    elif isinstance(datasetTypeOrName, str):
+        return datasetTypeOrName
+    else:
+        raise TypeError(f"Expected DatasetType or str, got unexpected object: {datasetTypeOrName}")

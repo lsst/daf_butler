@@ -61,8 +61,11 @@ from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, Serial
 from ..queries import Query
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._defaults import DefaultsHolder
+from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
+from ._registry import RemoteButlerRegistry
 from ._remote_butler_collections import RemoteButlerCollections
 from .server_models import (
     CollectionList,
@@ -80,8 +83,6 @@ if TYPE_CHECKING:
     from .._timespan import Timespan
     from ..dimensions import DataId
     from ..transfers import RepoExportContext
-
-from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -109,10 +110,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     `Butler.from_config` or `RemoteButlerFactory`.
     """
 
-    _registry_defaults: RegistryDefaults
+    _registry_defaults: DefaultsHolder
     _connection: RemoteButlerHttpConnection
     _cache: RemoteButlerCache
-    _registry: Registry
+    _registry: RemoteButlerRegistry
     _datastore_cache_manager: AbstractDatastoreCacheManager | None
     _use_disabled_datastore_cache: bool
 
@@ -140,15 +141,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._datastore_cache_manager = None
         self._use_disabled_datastore_cache = use_disabled_datastore_cache
 
-        # Avoid a circular import by deferring this import.
-        from ._registry import RemoteButlerRegistry
-
-        self._registry = RemoteButlerRegistry(self, self._connection)
-
-        self._registry_defaults = RegistryDefaults(
-            options.collections, options.run, options.inferDefaults, **options.kwargs
-        )
-        self._registry_defaults.finish(self._registry)
+        defaults = RegistryDefaults(options.collections, options.run, options.inferDefaults, **options.kwargs)
+        self._registry_defaults = DefaultsHolder(defaults)
+        self._registry = RemoteButlerRegistry(self, self._registry_defaults, self._connection)
+        defaults.finish(self._registry)
 
         return self
 
@@ -164,16 +160,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     )
     def collection_chains(self) -> ButlerCollections:
         """Object with methods for modifying collection chains."""
-        from ._registry import RemoteButlerRegistry
-
-        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
+        return self.collections
 
     @property
     def collections(self) -> ButlerCollections:
         """Object with methods for modifying and querying collections."""
-        from ._registry import RemoteButlerRegistry
-
-        return RemoteButlerCollections(cast(RemoteButlerRegistry, self._registry))
+        return RemoteButlerCollections(self._registry_defaults, self._connection)
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -563,7 +555,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     @property
     def run(self) -> str | None:
         # Docstring inherited.
-        return self._registry_defaults.run
+        return self._registry_defaults.get().run
 
     @property
     def registry(self) -> Registry:
@@ -633,7 +625,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # dimensions, but knowing what things are implied depends on what the
         # required dimensions are.
 
-        return self._registry_defaults.dataId.to_simple(minimal=True).dataId
+        return self._registry_defaults.get().dataId.to_simple(minimal=True).dataId
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:

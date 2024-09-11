@@ -30,14 +30,18 @@ from __future__ import annotations
 __all__ = ("RemoteButlerCollections",)
 
 from collections.abc import Iterable, Sequence, Set
-from typing import TYPE_CHECKING
+
+from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
-
-if TYPE_CHECKING:
-    from .._dataset_type import DatasetType
-    from ._registry import RemoteButlerRegistry
+from .._dataset_type import DatasetType
+from ..utils import has_globs
+from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._defaults import DefaultsHolder
+from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._ref_utils import normalize_dataset_type_name
+from .server_models import QueryCollectionInfoRequestModel, QueryCollectionInfoResponseModel
 
 
 class RemoteButlerCollections(ButlerCollections):
@@ -45,16 +49,19 @@ class RemoteButlerCollections(ButlerCollections):
 
     Parameters
     ----------
-    registry : `~lsst.daf.butler.registry.sql_registry.SqlRegistry`
-        Registry object used to work with the collections database.
+    defaults : `DefaultsHolder`
+        Registry object used to look up default collections.
+    connection : `RemoteButlerHttpConnection`
+        HTTP connection to Butler server.
     """
 
-    def __init__(self, registry: RemoteButlerRegistry):
-        self._registry = registry
+    def __init__(self, defaults: DefaultsHolder, connection: RemoteButlerHttpConnection):
+        self._defaults = defaults
+        self._connection = connection
 
     @property
     def defaults(self) -> Sequence[str]:
-        return self._registry.defaults.collections
+        return self._defaults.get().collections
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         raise NotImplementedError("Not yet available")
@@ -81,40 +88,46 @@ class RemoteButlerCollections(ButlerCollections):
         include_parents: bool = False,
         include_summary: bool = False,
         include_doc: bool = False,
-        summary_datasets: Iterable[DatasetType] | None = None,
+        summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Sequence[CollectionInfo]:
-        # This should become a single call on the server in the future.
         if collection_types is None:
-            collection_types = CollectionType.all()
+            types = list(CollectionType.all())
+        else:
+            types = list(ensure_iterable(collection_types))
 
-        info = []
-        for name in self._registry.queryCollections(
-            expression,
-            collectionTypes=collection_types,
-            flattenChains=flatten_chains,
-            includeChains=include_chains,
-        ):
-            info.append(self.get_info(name, include_parents=include_parents, include_summary=include_summary))
-        return info
+        if include_chains is None:
+            include_chains = not flatten_chains
+
+        if summary_datasets is None:
+            dataset_types = None
+        else:
+            dataset_types = [normalize_dataset_type_name(t) for t in summary_datasets]
+
+        request = QueryCollectionInfoRequestModel(
+            expression=convert_collection_arg_to_glob_string_list(expression),
+            collection_types=types,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+            include_parents=include_parents,
+            include_summary=include_summary,
+            include_doc=include_doc,
+            summary_datasets=dataset_types,
+        )
+        response = self._connection.post("query_collection_info", request)
+        model = parse_model(response, QueryCollectionInfoResponseModel)
+
+        return model.collections
 
     def get_info(
         self, name: str, include_parents: bool = False, include_summary: bool = False
     ) -> CollectionInfo:
-        info = self._registry._get_collection_info(name, include_doc=True, include_parents=include_parents)
-        doc = info.doc or ""
-        children = info.children or ()
-        dataset_types: Set[str] | None = None
-        if include_summary:
-            summary = self._registry.getCollectionSummary(name)
-            dataset_types = frozenset([dt.name for dt in summary.dataset_types])
-        return CollectionInfo(
-            name=name,
-            type=info.type,
-            doc=doc,
-            parents=info.parents,
-            children=children,
-            dataset_types=dataset_types,
+        if has_globs(name):
+            raise ValueError("Search expressions are not allowed in 'name' parameter to get_info")
+        results = self.query_info(
+            name, include_parents=include_parents, include_summary=include_summary, include_doc=True
         )
+        assert len(results) == 1, "Only one result should be returned for get_info."
+        return results[0]
 
     def register(self, name: str, type: CollectionType = CollectionType.RUN, doc: str | None = None) -> bool:
         raise NotImplementedError("Not yet available.")
