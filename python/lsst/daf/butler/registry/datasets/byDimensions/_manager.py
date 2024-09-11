@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType
-from ...._dataset_type import get_dataset_type_name
+from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from ...._dataset_type import DatasetType, get_dataset_type_name
 from ...._exceptions_legacy import DatasetTypeError
 from ....dimensions import DimensionUniverse
 from ..._collection_summary import CollectionSummary

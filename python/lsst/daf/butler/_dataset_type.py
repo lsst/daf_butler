@@ -805,8 +805,12 @@ def get_dataset_type_name(datasetTypeOrName: DatasetType | str) -> str:
     Parameters
     ----------
     datasetTypeOrName : `DatasetType` | `str`
-        A DatasetType, or the name of a DatasetType. This union is a common
-        parameter in many `Butler` methods.
+        A DatasetType, or the name of a DatasetType.
+
+    Returns
+    -------
+    name
+        The name associated with the given DatasetType, or the given string.
     """
     if isinstance(datasetTypeOrName, DatasetType):
         return datasetTypeOrName.name
