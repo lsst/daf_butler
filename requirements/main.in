@@ -7,6 +7,9 @@ deprecated >=1.2
 pyarrow >= 0.16
 psycopg2
 
+# Numpy 2 is not supported by the stack yet.
+numpy < 2
+
 # Butler CLI dependencies
 click >7.0
 
