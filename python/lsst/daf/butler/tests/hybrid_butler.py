@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Sequence
 from contextlib import AbstractContextManager
+from types import EllipsisType
 from typing import Any, TextIO, cast
 
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -47,7 +48,7 @@ from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataId, DimensionElement, DimensionRecord, DimensionUniverse
 from ..direct_butler import DirectButler
 from ..queries import Query
-from ..registry import Registry
+from ..registry import CollectionArgType, Registry
 from ..remote_butler import RemoteButler
 from ..transfers import RepoExportContext
 from .hybrid_butler_collections import HybridButlerCollections
@@ -331,16 +332,16 @@ class HybridButler(Butler):
     def _clone(
         self,
         *,
-        collections: Any = None,
-        run: str | None = None,
-        inferDefaults: bool = True,
-        **kwargs: Any,
+        collections: CollectionArgType | None | EllipsisType = ...,
+        run: str | None | EllipsisType = ...,
+        inferDefaults: bool | EllipsisType = ...,
+        dataId: dict[str, str] | EllipsisType = ...,
     ) -> HybridButler:
         remote_butler = self._remote_butler._clone(
-            collections=collections, run=run, inferDefaults=inferDefaults, **kwargs
+            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
         )
         direct_butler = self._direct_butler._clone(
-            collections=collections, run=run, inferDefaults=inferDefaults, **kwargs
+            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
         )
         return HybridButler(remote_butler, direct_butler)
 

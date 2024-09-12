@@ -44,6 +44,7 @@ import os
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, MutableMapping, Sequence
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
 from deprecated.sphinx import deprecated
@@ -89,7 +90,7 @@ if TYPE_CHECKING:
     from .._file_dataset import FileDataset
     from ..datastore import DatasetRefURIs
     from ..dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
-    from ..registry import Registry
+    from ..registry import CollectionArgType, Registry
     from ..transfers import RepoImportBackend
 
 _LOG = getLogger(__name__)
@@ -182,9 +183,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if "run" in config or "collection" in config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 
-        defaults = RegistryDefaults(
-            collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
-        )
+        defaults = RegistryDefaults.from_butler_instance_options(options)
         try:
             butlerRoot = config.get("root", config.configDir)
             writeable = options.writeable
@@ -218,13 +217,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _clone(
         self,
         *,
-        collections: Any = None,
-        run: str | None = None,
-        inferDefaults: bool = True,
-        **kwargs: Any,
+        collections: CollectionArgType | None | EllipsisType = ...,
+        run: str | None | EllipsisType = ...,
+        inferDefaults: bool | EllipsisType = ...,
+        dataId: dict[str, str] | EllipsisType = ...,
     ) -> DirectButler:
         # Docstring inherited
-        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+        defaults = self._registry.defaults.clone(collections, run, inferDefaults, dataId)
         registry = self._registry.copy(defaults)
 
         return DirectButler(

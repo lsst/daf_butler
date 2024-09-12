@@ -34,6 +34,7 @@ from lsst.daf.butler.repo_relocation import replaceRoot
 
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
+from ..registry import RegistryDefaults
 from ._authentication import get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
 from ._http_connection import RemoteButlerHttpConnection
@@ -110,7 +111,7 @@ class RemoteButlerFactory:
             connection=RemoteButlerHttpConnection(
                 http_client=self.http_client, server_url=self.server_url, access_token=access_token
             ),
-            options=butler_options,
+            defaults=RegistryDefaults.from_butler_instance_options(butler_options),
             cache=self._cache,
             use_disabled_datastore_cache=use_disabled_datastore_cache,
         )

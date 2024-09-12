@@ -762,6 +762,42 @@ class SimpleButlerTests(TestCaseMixin):
         path = file_template.format(ref)
         self.assertEqual(path, "test/warp/HSCA02713600_HSC_12345_12345_12345_12345")
 
+    def test_clone(self):
+        # This just tests that the default-overriding logic works as expected.
+        # The actual internals are tested in test_butler.py, in
+        # ClonedSqliteButlerTestCase and
+        # ClonedPostgresPosixDatastoreButlerTestCase.
+
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+
+        # Original butler was created with the default arguments:
+        # collections = None
+        # run = None
+        # inferDefaults = True
+        # no explicit default data ID
+
+        clone1 = butler._clone(collections="imported_g")
+        self.assertEqual(clone1.registry.defaults.dataId, {"instrument": "Cam1"})
+        self.assertCountEqual(clone1.registry.defaults.collections, ["imported_g"])
+        self.assertIsNone(clone1.run)
+
+        clone2 = clone1._clone(inferDefaults=False)
+        self.assertEqual(clone2.registry.defaults.dataId, {})
+        self.assertCountEqual(clone2.registry.defaults.collections, ["imported_g"])
+        self.assertIsNone(clone2.run)
+
+        clone3 = clone2._clone(run="imported_r")
+        self.assertEqual(clone3.registry.defaults.dataId, {})
+        self.assertCountEqual(clone3.registry.defaults.collections, ["imported_g"])
+        self.assertEqual(clone3.run, "imported_r")
+
+        clone4 = butler._clone(run="imported_r")
+        self.assertEqual(clone4.registry.defaults.dataId, {"instrument": "Cam1"})
+        self.assertCountEqual(clone4.registry.defaults.collections, ["imported_r"])
+        self.assertEqual(clone4.run, "imported_r")
+
 
 class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
     """Run tests against DirectButler implementation."""

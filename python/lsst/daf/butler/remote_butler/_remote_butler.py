@@ -33,6 +33,7 @@ import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from deprecated.sphinx import deprecated
@@ -47,7 +48,6 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler
 from .._butler_collections import ButlerCollections
-from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
@@ -129,7 +129,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         cls,
         *,
         connection: RemoteButlerHttpConnection,
-        options: ButlerInstanceOptions,
+        defaults: RegistryDefaults,
         cache: RemoteButlerCache,
         use_disabled_datastore_cache: bool = True,
     ) -> RemoteButler:
@@ -141,7 +141,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._datastore_cache_manager = None
         self._use_disabled_datastore_cache = use_disabled_datastore_cache
 
-        defaults = RegistryDefaults(options.collections, options.run, options.inferDefaults, **options.kwargs)
         self._registry_defaults = DefaultsHolder(defaults)
         self._registry = RemoteButlerRegistry(self, self._registry_defaults, self._connection)
         defaults.finish(self._registry)
@@ -595,22 +594,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _clone(
         self,
         *,
-        collections: Any = None,
-        run: str | None = None,
-        inferDefaults: bool = True,
-        **kwargs: Any,
+        collections: CollectionArgType | None | EllipsisType = ...,
+        run: str | None | EllipsisType = ...,
+        inferDefaults: bool | EllipsisType = ...,
+        dataId: dict[str, str] | EllipsisType = ...,
     ) -> RemoteButler:
-        return RemoteButler(
-            connection=self._connection,
-            cache=self._cache,
-            options=ButlerInstanceOptions(
-                collections=collections,
-                run=run,
-                writeable=self.isWriteable(),
-                inferDefaults=inferDefaults,
-                kwargs=kwargs,
-            ),
-        )
+        defaults = self._registry_defaults.get().clone(collections, run, inferDefaults, dataId)
+        return RemoteButler(connection=self._connection, cache=self._cache, defaults=defaults)
 
     def __str__(self) -> str:
         return f"RemoteButler({self._connection.server_url})"
