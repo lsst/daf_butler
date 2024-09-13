@@ -1819,6 +1819,28 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         assert dataset_types is not None
         self.assertCountEqual(dataset_types, ["flat"])
 
+    def test_dataset_queries(self) -> None:
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+
+        # Need a dataset with some spatial information to trigger aggregate
+        # value logic in queries.
+        butler.registry.registerDatasetType(
+            DatasetType("dt", ["visit", "detector"], "int", universe=butler.dimensions)
+        )
+        butler.collections.register("run")
+        butler.registry.insertDatasets("dt", [{"instrument": "Cam1", "visit": 1, "detector": 1}], "run")
+
+        # Tests for a regression of DM-46340, where invalid SQL would be
+        # generated when the list of collections is a single run collection and
+        # there is region-postprocessing logic involved.
+        result = butler.query_datasets(
+            "dt",
+            "run",
+            where="instrument='Cam1' and skymap='SkyMap1' and visit=1 and tract=0",
+            with_dimension_records=True,
+        )
+        self.assertEqual(result[0].dataId, {"instrument": "Cam1", "visit": 1, "detector": 1})
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []
