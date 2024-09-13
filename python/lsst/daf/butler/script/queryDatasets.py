@@ -36,6 +36,7 @@ from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
 from ..cli.utils import sortAstropyTable
+from ..utils import has_globs
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -261,7 +262,7 @@ class QueryDatasets:
             summary_datasets=dataset_types,
         )
         expanded_query_collections = [c.name for c in query_collections_info]
-        if self._find_first and set(query_collections) != set(expanded_query_collections):
+        if self._find_first and has_globs(query_collections):
             raise RuntimeError("Can not use wildcards in collections when find_first=True")
         query_collections = expanded_query_collections
 
