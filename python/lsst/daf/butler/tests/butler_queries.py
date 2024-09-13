@@ -1827,8 +1827,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler.registry.registerDatasetType(
             DatasetType("dt", ["visit", "detector"], "int", universe=butler.dimensions)
         )
-        butler.collections.register("run")
-        butler.registry.insertDatasets("dt", [{"instrument": "Cam1", "visit": 1, "detector": 1}], "run")
+        butler.collections.register("run1")
+        butler.registry.insertDatasets("dt", [{"instrument": "Cam1", "visit": 1, "detector": 1}], "run1")
 
         # Tests for a regression of DM-46340, where invalid SQL would be
         # generated when the list of collections is a single run collection and
@@ -1836,17 +1836,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # missing type information associated with the "run" dataset field.
         result = butler.query_datasets(
             "dt",
-            "run",
+            "run1",
             where="instrument='Cam1' and skymap='SkyMap1' and visit=1 and tract=0",
             with_dimension_records=True,
         )
         self.assertEqual(result[0].dataId, {"instrument": "Cam1", "visit": 1, "detector": 1})
+        self.assertEqual(result[0].run, "run1")
 
         # A similar issue to the "run" issue above was occuring with the
         # 'collection' dataset field.
         with butler.query() as query:
             rows = list(
-                query.join_dataset_search("dt", "run")
+                query.join_dataset_search("dt", "run1")
                 .where("instrument='Cam1' and skymap='SkyMap1' and visit=1 and tract=0")
                 .general(
                     dimensions=["visit", "detector"],
@@ -1856,7 +1857,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["visit"], 1)
-            self.assertEqual(rows[0]["dt.collection"], "run")
+            self.assertEqual(rows[0]["dt.collection"], "run1")
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
