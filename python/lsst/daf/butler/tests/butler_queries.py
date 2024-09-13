@@ -1832,7 +1832,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         # Tests for a regression of DM-46340, where invalid SQL would be
         # generated when the list of collections is a single run collection and
-        # there is region-postprocessing logic involved.
+        # there is region-postprocessing logic involved.  This was due to
+        # missing type information associated with the "run" dataset field.
         result = butler.query_datasets(
             "dt",
             "run",
@@ -1840,6 +1841,22 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             with_dimension_records=True,
         )
         self.assertEqual(result[0].dataId, {"instrument": "Cam1", "visit": 1, "detector": 1})
+
+        # A similar issue to the "run" issue above was occuring with the
+        # 'collection' dataset field.
+        with butler.query() as query:
+            rows = list(
+                query.join_dataset_search("dt", "run")
+                .where("instrument='Cam1' and skymap='SkyMap1' and visit=1 and tract=0")
+                .general(
+                    dimensions=["visit", "detector"],
+                    dataset_fields={"dt": set(["collection"])},
+                    find_first=True,
+                )
+            )
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["visit"], 1)
+            self.assertEqual(rows[0]["dt.collection"], "run")
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
