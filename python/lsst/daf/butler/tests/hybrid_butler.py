@@ -329,7 +329,7 @@ class HybridButler(Butler):
     def query(self) -> AbstractContextManager[Query]:
         return self._remote_butler.query()
 
-    def _clone(
+    def clone(
         self,
         *,
         collections: CollectionArgType | None | EllipsisType = ...,
@@ -337,10 +337,10 @@ class HybridButler(Butler):
         inferDefaults: bool | EllipsisType = ...,
         dataId: dict[str, str] | EllipsisType = ...,
     ) -> HybridButler:
-        remote_butler = self._remote_butler._clone(
+        remote_butler = self._remote_butler.clone(
             collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
         )
-        direct_butler = self._direct_butler._clone(
+        direct_butler = self._direct_butler.clone(
             collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
         )
         return HybridButler(remote_butler, direct_butler)

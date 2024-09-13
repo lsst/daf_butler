@@ -232,7 +232,7 @@ class ClonedSqliteFileRegistryNameKeyCollMgrUUIDTestCase(
 
     def make_butler(self) -> Butler:
         original = super().make_butler()
-        return original._clone()
+        return original.clone()
 
 
 class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):

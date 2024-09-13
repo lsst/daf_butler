@@ -591,7 +591,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             collections = self.collections
         return convert_collection_arg_to_glob_string_list(collections)
 
-    def _clone(
+    def clone(
         self,
         *,
         collections: CollectionArgType | None | EllipsisType = ...,

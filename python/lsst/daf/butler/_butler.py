@@ -276,9 +276,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         collection arguments.
         """
         # DirectButler used to have a way to specify a "copy constructor" by
-        # passing the "butler" parameter to its constructor.  This
-        # functionality has been moved out of the constructor into
-        # Butler._clone(), but the new interface is not public yet.
+        # passing the "butler" parameter to its constructor.  This has
+        # been moved out of the constructor into Butler.clone().
         butler = kwargs.pop("butler", None)
         if butler is not None:
             if not isinstance(butler, Butler):
@@ -287,7 +286,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 raise TypeError(
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
-            return butler._clone(collections=collections, run=run, inferDefaults=inferDefaults, dataId=kwargs)
+            return butler.clone(collections=collections, run=run, inferDefaults=inferDefaults, dataId=kwargs)
 
         options = ButlerInstanceOptions(
             collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
@@ -1827,7 +1826,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
 
-    def _clone(
+    def clone(
         self,
         *,
         collections: CollectionArgType | None | EllipsisType = ...,

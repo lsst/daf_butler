@@ -214,7 +214,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             _LOG.error(f"Failed to instantiate Butler from config {config.configFile}.")
             raise
 
-    def _clone(
+    def clone(
         self,
         *,
         collections: CollectionArgType | None | EllipsisType = ...,

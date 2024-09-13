@@ -268,7 +268,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
             )
 
         # Test get() by DataId with default collections.
-        butler_with_default_collection = self.butler._clone(collections="ingest/run")
+        butler_with_default_collection = self.butler.clone(collections="ingest/run")
         default_collection_metric = butler_with_default_collection.get(dataset_type, dataId=data_id)
         self.assertEqual(metric, default_collection_metric)
 

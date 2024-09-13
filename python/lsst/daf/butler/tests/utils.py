@@ -316,7 +316,7 @@ class MetricTestRepo:
             instance.
         """
         self = cls.__new__(cls)
-        butler = butler._clone(run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
+        butler = butler.clone(run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
         self._do_init(butler, butler_config_file, storageClassName)
         return self
 
