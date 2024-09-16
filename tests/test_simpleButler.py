@@ -762,6 +762,64 @@ class SimpleButlerTests(TestCaseMixin):
         path = file_template.format(ref)
         self.assertEqual(path, "test/warp/HSCA02713600_HSC_12345_12345_12345_12345")
 
+    def test_clone(self):
+        # This just tests that the default-overriding logic works as expected.
+        # The actual internals are tested in test_butler.py, in
+        # ClonedSqliteButlerTestCase and
+        # ClonedPostgresPosixDatastoreButlerTestCase.
+
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "spatial.yaml"))
+
+        # Original butler was created with the default arguments:
+        # collections = None
+        # run = None
+        # inferDefaults = True
+        # no explicit default data ID
+
+        # Collections can be overridden, and default data ID will be inferred
+        # from it.
+        clone1 = butler.clone(collections="imported_g")
+        self.assertEqual(clone1.registry.defaults.dataId, {"instrument": "Cam1"})
+        self.assertCountEqual(clone1.registry.defaults.collections, ["imported_g"])
+        self.assertIsNone(clone1.run)
+
+        # Disabling inferDefaults stops default data ID from being inferred
+        # from collections.
+        clone2 = clone1.clone(inferDefaults=False)
+        self.assertEqual(clone2.registry.defaults.dataId, {})
+        self.assertCountEqual(clone2.registry.defaults.collections, ["imported_g"])
+        self.assertIsNone(clone2.run)
+
+        # Setting a new run doesn't override explicitly-set collections.
+        clone3 = clone2.clone(run="imported_r")
+        self.assertEqual(clone3.registry.defaults.dataId, {})
+        self.assertCountEqual(clone3.registry.defaults.collections, ["imported_g"])
+        self.assertEqual(clone3.run, "imported_r")
+
+        # Following the behavior of the Butler() constructor, run will populate
+        # collections if collections was None.  Default data ID is inferred
+        # from the run collection.
+        clone4 = butler.clone(run="imported_r")
+        self.assertEqual(clone4.registry.defaults.dataId, {"instrument": "Cam1"})
+        self.assertCountEqual(clone4.registry.defaults.collections, ["imported_r"])
+        self.assertEqual(clone4.run, "imported_r")
+
+        # Explicitly set data ID is combined with inferred defaults from
+        # collections.
+        clone5 = clone4.clone(dataId={"skymap": "SkyMap1"})
+        self.assertEqual(clone5.registry.defaults.dataId, {"instrument": "Cam1", "skymap": "SkyMap1"})
+        self.assertCountEqual(clone5.registry.defaults.collections, ["imported_r"])
+        self.assertEqual(clone5.run, "imported_r")
+
+        # Disabling inferred defaults preserves explicitly set data ID
+        clone6 = clone5.clone(inferDefaults=False)
+        self.assertEqual(clone6.registry.defaults.dataId, {"skymap": "SkyMap1"})
+        self.assertCountEqual(clone5.registry.defaults.collections, ["imported_r"])
+        self.assertEqual(clone5.run, "imported_r")
+
 
 class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
     """Run tests against DirectButler implementation."""

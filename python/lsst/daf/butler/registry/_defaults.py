@@ -31,17 +31,19 @@ __all__ = ("RegistryDefaults",)
 
 import contextlib
 from collections.abc import Sequence, Set
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
+from .._butler_instance_options import ButlerInstanceOptions
 from .._exceptions import MissingCollectionError
 from ..dimensions import DataCoordinate
 from ._collection_summary import CollectionSummary
 from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
-    from ..registry import Registry
+    from ..registry import CollectionArgType, Registry
     from .sql_registry import SqlRegistry
 
 
@@ -84,6 +86,8 @@ class RegistryDefaults:
     """
 
     def __init__(self, collections: Any = None, run: str | None = None, infer: bool = True, **kwargs: str):
+        self._original_collection_was_none = collections is None
+        self._original_kwargs = dict(kwargs)
         if collections is None:
             if run is not None:
                 collections = (run,)
@@ -108,6 +112,77 @@ class RegistryDefaults:
         defaults.dataId = data_id
         defaults._finished = True
         return defaults
+
+    @staticmethod
+    def from_butler_instance_options(options: ButlerInstanceOptions) -> RegistryDefaults:
+        """Create a `RegistryDefaults` object from the values specified by a
+        `ButlerInstanceOptions` object.
+
+        Parameters
+        ----------
+        options : `ButlerInstanceOptions`
+            Butler options object.
+        """
+        return RegistryDefaults(
+            collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
+        )
+
+    def clone(
+        self,
+        collections: CollectionArgType | None | EllipsisType = ...,
+        run: str | None | EllipsisType = ...,
+        inferDefaults: bool | EllipsisType = ...,
+        dataId: dict[str, str] | EllipsisType = ...,
+    ) -> RegistryDefaults:
+        """Make a copy of this RegistryDefaults object, optionally modifying
+        values.
+
+        Parameters
+        ----------
+        collections : `~lsst.daf.butler.registry.CollectionArgType` or `None`,\
+            optional
+            Same as constructor.  If omitted, uses value from original object.
+        run : `str` or `None`, optional
+            Same as constructor.  If `None`, no default run is used.  If
+            omitted, copies value from original object.
+        inferDefaults : `bool`, optional
+            Same as constructor.  If omitted, copies value from original
+            object.
+        dataId : `dict` [ `str` , `str` ]
+            Same as ``kwargs`` arguments to constructor.  If omitted, copies
+            values from original object.
+
+        Returns
+        -------
+        defaults : `RegistryDefaults`
+            New instance if any changes were made, otherwise the original
+            instance.
+
+        Notes
+        -----
+        ``finish()`` must be called on the returned object to complete
+        initialization.
+        """
+        if collections is ... and run is ... and inferDefaults is ... and dataId is ...:
+            # Unmodified copy -- this object is immutable so we can just return
+            # it and avoid the need for database queries in finish().
+            return self
+
+        if collections is ...:
+            if self._original_collection_was_none:
+                # Ensure that defaulting collections to the run collection
+                # works the same as the constructor.
+                collections = None
+            else:
+                collections = self.collections
+        if run is ...:
+            run = self.run
+        if inferDefaults is ...:
+            inferDefaults = self._infer
+        if dataId is ...:
+            dataId = self._original_kwargs
+
+        return RegistryDefaults(collections, run, inferDefaults, **dataId)
 
     def __repr__(self) -> str:
         collections = f"collections={self.collections!r}" if self.collections else ""

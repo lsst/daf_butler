@@ -2113,7 +2113,7 @@ class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTes
         self, run: str, storageClass: StorageClass | str, datasetTypeName: str
     ) -> tuple[DirectButler, DatasetType]:
         butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
-        return butler._clone(run=run), datasetType
+        return butler.clone(run=run), datasetType
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -2138,7 +2138,7 @@ class ClonedSqliteButlerTestCase(InMemoryDatastoreButlerTestCase, unittest.TestC
         self, run: str, storageClass: StorageClass | str, datasetTypeName: str
     ) -> tuple[DirectButler, DatasetType]:
         butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
-        return butler._clone(run=run), datasetType
+        return butler.clone(run=run), datasetType
 
 
 class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -2838,7 +2838,7 @@ class ButlerServerTests(FileDatastoreButlerTests):
         return uri1.scheme == uri2.scheme and uri1.netloc == uri2.netloc and uri1.path == uri2.path
 
     def create_empty_butler(self, run: str | None = None, writeable: bool | None = None) -> Butler:
-        return self.server_instance.hybrid_butler._clone(run=run)
+        return self.server_instance.hybrid_butler.clone(run=run)
 
     def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
         # Can't delete a file via S3 signed URLs, so we need to reach in

@@ -723,7 +723,7 @@ class RegistryTests(ABC):
         """Tests for registry methods that manage collections."""
         butler = self.make_butler()
         registry = butler.registry
-        other_registry = butler._clone().registry
+        other_registry = butler.clone().registry
         self.load_data(butler, "base.yaml", "datasets.yaml")
         run1 = "imported_g"
         run2 = "imported_r"
@@ -975,7 +975,7 @@ class RegistryTests(ABC):
 
         # Set up two registries pointing to the same DB
         butler1 = self.make_butler()
-        butler2 = butler1._clone()
+        butler2 = butler1.clone()
         registry1 = butler1._registry
         assert isinstance(registry1, SqlRegistry)
         registry2 = butler2._registry

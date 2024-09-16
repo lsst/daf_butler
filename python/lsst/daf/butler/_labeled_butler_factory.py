@@ -165,7 +165,7 @@ def _create_direct_butler_factory(config: ButlerConfig, preload_cache: bool) -> 
     def create_butler(access_token: str | None) -> Butler:
         # Access token is ignored because DirectButler does not use Gafaelfawr
         # authentication.
-        return butler._clone()
+        return butler.clone()
 
     return create_butler
 

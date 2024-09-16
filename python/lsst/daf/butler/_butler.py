@@ -32,6 +32,7 @@ __all__ = ["Butler"]
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO
 
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -63,7 +64,7 @@ if TYPE_CHECKING:
     from .datastore import DatasetRefURIs
     from .dimensions import DataId, DimensionGroup, DimensionRecord
     from .queries import Query
-    from .registry import Registry
+    from .registry import CollectionArgType, Registry
     from .transfers import RepoExportContext
 
 _LOG = getLogger(__name__)
@@ -275,9 +276,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         collection arguments.
         """
         # DirectButler used to have a way to specify a "copy constructor" by
-        # passing the "butler" parameter to its constructor.  This
-        # functionality has been moved out of the constructor into
-        # Butler._clone(), but the new interface is not public yet.
+        # passing the "butler" parameter to its constructor.  This has
+        # been moved out of the constructor into Butler.clone().
         butler = kwargs.pop("butler", None)
         if butler is not None:
             if not isinstance(butler, Butler):
@@ -286,7 +286,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 raise TypeError(
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
-            return butler._clone(collections=collections, run=run, inferDefaults=inferDefaults, **kwargs)
+            return butler.clone(collections=collections, run=run, inferDefaults=inferDefaults, dataId=kwargs)
 
         options = ButlerInstanceOptions(
             collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
@@ -1826,17 +1826,31 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
 
-    @abstractmethod
-    def _clone(
+    def clone(
         self,
         *,
-        collections: Any = None,
-        run: str | None = None,
-        inferDefaults: bool = True,
-        **kwargs: Any,
+        collections: CollectionArgType | None | EllipsisType = ...,
+        run: str | None | EllipsisType = ...,
+        inferDefaults: bool | EllipsisType = ...,
+        dataId: dict[str, str] | EllipsisType = ...,
     ) -> Butler:
         """Return a new Butler instance connected to the same repository
-        as this one, but overriding ``collections``, ``run``,
+        as this one, optionally overriding ``collections``, ``run``,
         ``inferDefaults``, and default data ID.
+
+        Parameters
+        ----------
+        collections : `~lsst.daf.butler.registry.CollectionArgType` or `None`,\
+            optional
+            Same as constructor.  If omitted, uses value from original object.
+        run : `str` or `None`, optional
+            Same as constructor.  If `None`, no default run is used.  If
+            omitted, copies value from original object.
+        inferDefaults : `bool`, optional
+            Same as constructor.  If omitted, copies value from original
+            object.
+        dataId : `str`
+            Same as ``kwargs`` passed to the constructor.  If omitted, copies
+            values from original object.
         """
         raise NotImplementedError()
