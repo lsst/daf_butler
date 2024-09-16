@@ -32,7 +32,7 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
-from lsst.daf.butler import StorageClassFactory, script
+from lsst.daf.butler import CollectionType, StorageClassFactory, script
 from lsst.daf.butler.tests import addDatasetType
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from lsst.resources import ResourcePath
@@ -370,8 +370,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Add a new run, and add a dataset to shadow an existing dataset.
         testRepo.addDataset(run="foo", dataId={"instrument": "DummyCamComp", "visit": 424})
 
+        # Add a CHAINED collection to include the two runs, to check that
+        # flattening works as well.
+        testRepo.butler.collections.register("chain", CollectionType.CHAINED)
+        testRepo.butler.collections.redefine_chain("chain", ["foo", "ingest/run"])
+
         # Verify that without find-first, duplicate datasets are returned
-        tables = self._queryDatasets(repo=testRepo.butler, collections=["foo", "ingest/run"], show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, collections=["chain"], show_uri=True)
 
         # The test should be running with a single FileDatastore.
         roots = testRepo.butler.get_datastore_roots()
@@ -514,7 +519,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
         tables = self._queryDatasets(
-            repo=testRepo.butler, collections=["foo", "ingest/run"], show_uri=True, find_first=True
+            repo=testRepo.butler, collections=["chain"], show_uri=True, find_first=True
         )
 
         expectedTables = (
@@ -613,6 +618,10 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        # Verify that globs are not supported with find_first=True.
+        with self.assertRaises(RuntimeError):
+            self._queryDatasets(repo=testRepo.butler, collections=["*"], show_uri=True, find_first=True)
 
 
 if __name__ == "__main__":
