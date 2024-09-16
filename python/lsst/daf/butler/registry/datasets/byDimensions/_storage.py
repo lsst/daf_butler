@@ -674,7 +674,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             only_collection_record = collections[0]
             sql_projection.joiner.where(collection_col == only_collection_record.key)
             if "collection" in fields:
-                fields_provided["collection"] = sqlalchemy.literal(only_collection_record.name)
+                fields_provided["collection"] = sqlalchemy.literal(only_collection_record.name).cast(
+                    # This cast is necessary to ensure that Postgres knows the
+                    # type of this column if it is used in an aggregate
+                    # function.
+                    sqlalchemy.String
+                )
+
         elif not collections:
             sql_projection.joiner.where(sqlalchemy.literal(False))
             if "collection" in fields:
@@ -710,7 +716,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 # know that if we find the dataset in that collection,
                 # then that's the datasets's run; we don't need to
                 # query for it.
-                fields_provided["run"] = sqlalchemy.literal(only_collection_record.name)
+                #
+                fields_provided["run"] = sqlalchemy.literal(only_collection_record.name).cast(
+                    # This cast is necessary to ensure that Postgres knows the
+                    # type of this column if it is used in an aggregate
+                    # function.
+                    sqlalchemy.String
+                )
             elif run_collections_only:
                 # Once again we can avoid joining to the collection table by
                 # adding a CASE statement.
