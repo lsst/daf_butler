@@ -1078,8 +1078,7 @@ class SqlRegistry:
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
             if self._managers.obscore:
-                context = queries.SqlQueryContext(self._db, self._managers.column_types)
-                self._managers.obscore.add_datasets(refs, context)
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 "A database constraint failure was triggered by inserting "
@@ -1193,8 +1192,7 @@ class SqlRegistry:
         try:
             refs = list(storage.import_(runRecord, expandedDatasets))
             if self._managers.obscore:
-                context = queries.SqlQueryContext(self._db, self._managers.column_types)
-                self._managers.obscore.add_datasets(refs, context)
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 "A database constraint failure was triggered by inserting "
@@ -1307,8 +1305,7 @@ class SqlRegistry:
                 if self._managers.obscore:
                     # If a TAGGED collection is being monitored by ObsCore
                     # manager then we may need to save the dataset.
-                    context = queries.SqlQueryContext(self._db, self._managers.column_types)
-                    self._managers.obscore.associate(refsForType, collectionRecord, context)
+                    self._managers.obscore.associate(refsForType, collectionRecord)
             except sqlalchemy.exc.IntegrityError as err:
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "

@@ -444,18 +444,6 @@ class RegistryManagerInstances(
             universe=universe,
             registry_schema_version=schema_versions.get("datastores"),
         )
-        if types.obscore is not None and "obscore" in types.manager_configs:
-            kwargs["obscore"] = types.obscore.initialize(
-                database,
-                context,
-                universe=universe,
-                config=types.manager_configs["obscore"],
-                datasets=types.datasets,
-                dimensions=kwargs["dimensions"],
-                registry_schema_version=schema_versions.get("obscore"),
-            )
-        else:
-            kwargs["obscore"] = None
         kwargs["column_types"] = ColumnTypeInfo(
             database.getTimespanRepresentation(),
             universe,
@@ -467,6 +455,19 @@ class RegistryManagerInstances(
             run_key_spec=types.collections.addRunForeignKey(dummy_table, primaryKey=False, nullable=False),
             ingest_date_dtype=datasets.ingest_date_dtype(),
         )
+        if types.obscore is not None and "obscore" in types.manager_configs:
+            kwargs["obscore"] = types.obscore.initialize(
+                database,
+                context,
+                universe=universe,
+                config=types.manager_configs["obscore"],
+                datasets=types.datasets,
+                dimensions=kwargs["dimensions"],
+                registry_schema_version=schema_versions.get("obscore"),
+                column_type_info=kwargs["column_types"],
+            )
+        else:
+            kwargs["obscore"] = None
         kwargs["caching_context"] = caching_context
         return cls(**kwargs)
 
