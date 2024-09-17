@@ -43,7 +43,9 @@ from lsst.sphgeom import Region
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import chunk_iterable
 
+from ..._column_type_info import ColumnTypeInfo
 from ..interfaces import ObsCoreTableManager, VersionTuple
+from ..queries import SqlQueryContext
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
 from ._records import ExposureRegionFactory, Record, RecordFactory
 from ._schema import ObsCoreSchema
@@ -57,7 +59,6 @@ if TYPE_CHECKING:
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
-    from ..queries import SqlQueryContext
 
 _VERSION = VersionTuple(0, 0, 1)
 
@@ -71,14 +72,16 @@ class _ExposureRegionFactory(ExposureRegionFactory):
         The dimension records storage manager.
     """
 
-    def __init__(self, dimensions: DimensionRecordStorageManager):
+    def __init__(self, dimensions: DimensionRecordStorageManager, context: SqlQueryContext):
         self.dimensions = dimensions
         self.universe = dimensions.universe
         self.exposure_dimensions = self.universe["exposure"].minimal_group
         self.exposure_detector_dimensions = self.universe.conform(["exposure", "detector"])
+        self._context = context
 
-    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Region | None:
+    def exposure_region(self, dataId: DataCoordinate) -> Region | None:
         # Docstring is inherited from a base class.
+        context = self._context
         # Make a relation that starts with visit_definition (mapping between
         # exposure and visit).
         relation = context.make_initial_relation()
@@ -134,6 +137,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         Spatial plugins.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
+    column_type_info : `ColumnTypeInfo`
+        Information about column types that can differ between data
+        repositories and registry instances.
     """
 
     def __init__(
@@ -147,6 +153,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         dimensions: DimensionRecordStorageManager,
         spatial_plugins: Collection[SpatialObsCorePlugin],
         registry_schema_version: VersionTuple | None = None,
+        column_type_info: ColumnTypeInfo,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self.db = db
@@ -155,7 +162,11 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.universe = universe
         self.config = config
         self.spatial_plugins = spatial_plugins
-        exposure_region_factory = _ExposureRegionFactory(dimensions)
+        self._column_type_info = column_type_info
+        exposure_region_factory = _ExposureRegionFactory(
+            dimensions,
+            SqlQueryContext(self.db, column_type_info),
+        )
         self.record_factory = RecordFactory(
             config, schema, universe, spatial_plugins, exposure_region_factory
         )
@@ -189,6 +200,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # 'initialize'.
             spatial_plugins=self.spatial_plugins,
             registry_schema_version=self._registry_schema_version,
+            column_type_info=self._column_type_info,
         )
 
     @classmethod
@@ -202,6 +214,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
+        column_type_info: ColumnTypeInfo,
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
@@ -227,6 +240,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             dimensions=dimensions,
             spatial_plugins=spatial_plugins,
             registry_schema_version=registry_schema_version,
+            column_type_info=column_type_info,
         )
 
     def config_json(self) -> str:
@@ -244,7 +258,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return [_VERSION]
 
-    def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
         # Docstring inherited from base class.
 
         # Only makes sense for RUN collection types
@@ -279,11 +293,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Take all refs, no collection check.
             obscore_refs = refs
 
-        return self._populate(obscore_refs, context)
+        return self._populate(obscore_refs)
 
-    def associate(
-        self, refs: Iterable[DatasetRef], collection: CollectionRecord, context: SqlQueryContext
-    ) -> int:
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         # Docstring inherited from base class.
 
         # Only works when collection type is TAGGED
@@ -291,7 +303,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             return 0
 
         if collection.name == self.tagged_collection:
-            return self._populate(refs, context)
+            return self._populate(refs)
         else:
             return 0
 
@@ -315,11 +327,11 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                     count += self.db.deleteWhere(self.table, where)
         return count
 
-    def _populate(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
+    def _populate(self, refs: Iterable[DatasetRef]) -> int:
         """Populate obscore table with the data from given datasets."""
         records: list[Record] = []
         for ref in refs:
-            record = self.record_factory(ref, context)
+            record = self.record_factory(ref)
             if record is not None:
                 records.append(record)
 

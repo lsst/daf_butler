@@ -44,9 +44,9 @@ from ._versioning import VersionedExtension, VersionTuple
 if TYPE_CHECKING:
     from lsst.sphgeom import Region
 
+    from ..._column_type_info import ColumnTypeInfo
     from ..._dataset_ref import DatasetRef
     from ...dimensions import DimensionUniverse
-    from ..queries import SqlQueryContext
     from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
@@ -103,6 +103,7 @@ class ObsCoreTableManager(VersionedExtension):
         datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
+        column_type_info: ColumnTypeInfo,
     ) -> ObsCoreTableManager:
         """Construct an instance of the manager.
 
@@ -124,6 +125,9 @@ class ObsCoreTableManager(VersionedExtension):
             Manager for Registry dimensions.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.
+        column_type_info : `ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances.
 
         Returns
         -------
@@ -144,7 +148,7 @@ class ObsCoreTableManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when new datasets are added to a RUN
@@ -156,8 +160,6 @@ class ObsCoreTableManager(VersionedExtension):
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
-        context : `SqlQueryContext`
-            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
@@ -180,9 +182,7 @@ class ObsCoreTableManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def associate(
-        self, refs: Iterable[DatasetRef], collection: CollectionRecord, context: SqlQueryContext
-    ) -> int:
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when existing datasets are associated with
@@ -196,8 +196,6 @@ class ObsCoreTableManager(VersionedExtension):
             the dataset is ignored.
         collection : `CollectionRecord`
             Collection record for a TAGGED collection.
-        context : `SqlQueryContext`
-            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
