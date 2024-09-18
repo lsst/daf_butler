@@ -1511,7 +1511,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @property
     def dataset_types(self) -> ButlerDatasetTypes:
         """Object with methods for modifying and querying dataset types
-        (`~lsst.daf.butler.ButlerDatasettypes`).
+        (`~lsst.daf.butler.ButlerDatasetTypes`).
 
         Use of this object is preferred over `registry` wherever possible.
         """
@@ -1718,7 +1718,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        refs : `.queries.DatasetRefQueryResults`
+        refs : `list` [`DatasetRef`]
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
             (i.e. `DataCoordinate.hasFull` will return `True`).
@@ -1913,10 +1913,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
                 optional
             Dimensions that returned dataset types must have as a subset.
-        at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
-                optional
+        exact_dimensions : `Iterable` [ `str` ] or `DimensionGroup`, optional
             Dimensions that returned dataset types must have exactly.
-        with_storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
+        storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
                 or `StorageClass` or \
                 `~collections.abc.Iterable` [ `StorageClass` ], optional
             Storage classes or storage class names that returned dataset types

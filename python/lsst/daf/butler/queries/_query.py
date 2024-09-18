@@ -478,10 +478,9 @@ class Query(QueryBase):
         at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
                 optional
             Dimensions that returned dataset types must have as a subset.
-        at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
-                optional
+        exact_dimensions : `Iterable` [ `str` ] or `DimensionGroup`, optional
             Dimensions that returned dataset types must have exactly.
-        with_storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
+        storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
                 or `StorageClass` or \
                 `~collections.abc.Iterable` [ `StorageClass` ], optional
             Storage classes or storage class names that returned dataset types
@@ -506,7 +505,7 @@ class Query(QueryBase):
         """
         raise NotImplementedError()
 
-    def dataset_types(
+    def dataset_types(  # numpydoc ignore=PR01
         self,
         collections: str | Iterable[str] | None = None,
         *,
