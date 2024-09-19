@@ -62,7 +62,7 @@ class DimensionKeyReference(ColumnExpressionBase):
         columns.update_dimensions(self.dimension.minimal_group)
 
     def gather_governors(self, governors: set[str]) -> None:
-        if self.dimension.governor is not None:
+        if self.dimension.governor is not None and self.dimension.governor is not self.dimension:
             governors.add(self.dimension.governor.name)
 
     @property
