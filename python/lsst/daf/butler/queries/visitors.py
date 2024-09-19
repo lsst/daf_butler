@@ -192,7 +192,7 @@ class PredicateVisitor(Generic[_A, _O, _L]):
     -----
     The concrete `PredicateLeaf` types are only semi-public (they appear in
     the serialized form of a `Predicate`, but their types should not generally
-    be referenced directly outside of the module in which they are defined.
+    be referenced directly outside of the module in which they are defined).
     As a result, visiting these objects unpacks their attributes into the
     visit method arguments.
     """

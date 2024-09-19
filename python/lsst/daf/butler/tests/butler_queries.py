@@ -1883,6 +1883,14 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # the test is just that the query can be constructed at all.
             [],
         )
+        self.assertCountEqual(
+            butler.query_data_ids(
+                ["instrument"],
+                where="(instrument='Cam1' AND detector=2) OR (instrument='Cam2' AND detector=500)",
+                explain=False,
+            ),
+            [DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)],
+        )
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
