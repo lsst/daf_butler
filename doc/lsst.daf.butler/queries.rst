@@ -7,31 +7,39 @@
 Querying datasets
 =================
 
+Methods for querying information about the datasets in a Butler repository can be found in three places:
+
+- The main `Butler` object.  Key methods include `Butler.query_datasets`, `Butler.query_data_ids`, and `Butler.query_dimension_records`.
+- The `ButlerCollections` object, accessed via `Butler.collections`.
+- The `Registry` object, accessed via `Butler.registry`.  This interface is being phased out, so prefer to use the other methods when possible. `Registry.queryDatasetTypes` is one key method not yet available elsewhere.
+
 Datasets in a butler-managed data repository are identified by the combination of their *dataset type* and *data ID* within a *collection*.
-The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDataIds`, `~Registry.queryDatasets`, and `~Registry.queryDimensionRecords`) allow these to be specified either fully or partially in various ways.
+Query methods allow these to be specified either fully or partially in various ways.
 
 .. note::
-    Registry queries utilize locally-cached information and heuristics to generate simpler queries and provide diagnostics when queries yield no results.
-    Concurrent writes by other butler clients may not be reflected in these caches, if they happened since this `Registry` was initialized, and new datasets may not be found by queries as a result.
+    Queries cache information about `DatasetType` definitions and "governor" metadata values associated with datasets.
+    Concurrent writes by other butler clients may not be reflected in these caches, if they happened since this `Butler` was initialized.
     Users can call `Registry.refresh` before querying to update the caches.
-    Other `Registry` and `Butler` methods (`Registry.findDataset` and `Butler.get` variants in particular) do not suffer from this limitation; if caching is used in these contexts, we always fall back to database searches when cached information indicates that a dataset does not exist.
 
 .. _daf_butler_dataset_type_expressions:
 
 DatasetType expressions
 -----------------------
 
-Arguments that specify one or more dataset types can generally take any of the following:
+Arguments that specify dataset types can generally take either of:
 
  - `DatasetType` instances;
  - `str` values (corresponding to `DatasetType.name`);
- - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
+
+Some methods (like `Registry.queryDatasetTypes`) also accept:
+
+ - `str` values using glob wildcard syntax (like ``deepCoadd*`` to search for dataset types starting with the string "deepCoadd".)
  - iterables of any of the above;
  - the special value "``...``", which matches all dataset types.
 
-Wildcards (globs and ``...``) are not allowed in certain contexts, such as `Registry.queryDataIds` and `Registry.queryDimensionRecords`, particularly when datasets are used only as a constraint on what is returned.
-`Registry.queryDatasetTypes` can be used to resolve patterns before calling these methods when desired.
-In these contexts, passing a dataset type or name that is not registered with the repository will result in `MissingDatasetTypeError` being raised, while contexts that do accept wildcards will typically ignore unregistered dataset types (for example, `Registry.queryDatasets` will return no datasets for these).
+`Registry.queryDatasetTypes` can be used to resolve patterns before calling other methods.
+
+For most query methods, passing a dataset type or name that is not registered with the repository will result in `MissingDatasetTypeError` being raised.
 
 .. _daf_butler_collection_expressions:
 
@@ -41,10 +49,8 @@ Collection expressions
 Arguments that specify one or more collections are similar to those for dataset types; they can take:
 
  - `str` values (the full collection name);
- - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
- - `re.Pattern` values (matched to the collection name, via `~re.Pattern.fullmatch`);
+ - `str` values using glob wildcard syntax (like ``u/someone/*`` to find all collections starting with "u/someone/".)
  - iterables of any of the above, empty collection cannot match anything, methods always return an empty result set in this case;
- - the special value "``...``", which matches all collections;
 
 Collection expressions are processed by the `~registry.wildcards.CollectionWildcard` class.
 User code will rarely need to interact with these directly, but they can be passed to `Registry` instead of the expression objects themselves, and hence may be useful as a way to transform an expression that may include single-pass iterators into an equivalent form that can be reused.
@@ -55,7 +61,13 @@ Ordered collection searches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 An *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found.
-These include all direct `Butler` operations, the definitions of `~CollectionType.CHAINED` collections, `Registry.findDataset`, and the ``findFirst=True`` mode of `Registry.queryDatasets`.
+These include:
+
+- The definitions of `~CollectionType.CHAINED` collections
+- `Butler.get`
+- `Butler.find_dataset`
+- The ``find_first=True`` (default) mode of `Butler.query_datasets`
+
 In these contexts, regular expressions and "``...``" are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
 
 The `CollectionWildcard.require_ordered` method can be used to verify that a collection expression resolves to an ordered sequence.
@@ -74,15 +86,12 @@ Constraints on the data IDs returned by a query can take two forms:
 In most cases, the two can be provided together, requiring that returned data IDs match both constraints.
 The rest of this section describes the latter in detail.
 
-The language grammar is defined in the ``exprParser.parserYacc`` module, which is responsible for transforming a string with the user expression into a syntax tree with nodes represented by various classes defined in the ``exprParser.exprTree`` module.
-Modules in the ``exprParser`` package are considered butler/registry implementation details and are not exposed at the butler package level.
-
 The grammar is based on standard SQL; it is a subset of SQL expression language that can appear in WHERE clause of standard SELECT statement with some extensions, such as range support for the ``IN`` operator and time literals.
 
 Expression structure
 ^^^^^^^^^^^^^^^^^^^^
 
-The expression is passed as a string via the ``where`` arguments of `~Registry.queryDataIds` and `~Registry.queryDatasets`.
+The expression is passed as a string via the ``where`` arguments of `~Butler.query_datasets`, `~Butler.query_data_ids`, and `~Butler.query_dimension_records`.
 The string contains a single boolean expression which evaluates to true or
 false (if it is a valid expression). Expression can contain a bunch of
 standard logical operators, comparisons, literals, and identifiers which are
@@ -96,10 +105,6 @@ Language operator precedence rules are the same as for the other languages
 like C++ or Python. When in doubt use grouping operators (parentheses) for
 sub-expressions.
 
-General note --- the parser itself does not evaluate any expressions even if
-they consist of literals only, all evaluation happens in the SQL engine when
-registry runs the resulting SQL query.
-
 Following sections describe each of the parts in detail.
 
 Literals
@@ -109,16 +114,20 @@ The language supports these types of literals:
 
 Strings
     This is just a sequence of characters enclosed in single quotation marks.
-    The parser itself fully supports Unicode, but some tools such as database
-    drivers may have limited support for it, depending on environment or
-    encoding chosen.
+
+    Example: ``'some string'``
 
 Numbers
     Integer numbers are series of decimal numbers optionally preceded by
     minus sign. Parser does not support octal/hexadecimal numbers. Floating
     point numbers use standard notation with decimal point and/or exponent.
-    For numbers parser passes a string representation of a number to
-    downstream registry code to avoid possible rounding issues.
+
+    Examples:
+
+    - ``1234``
+    - ``-1``
+    - ``1.2``
+    - ``1.2e-5``
 
 Time literals
     Timestamps in a query are defined using special syntax which consists of
@@ -146,18 +155,9 @@ Examples of range literals:
 Identifiers
 ^^^^^^^^^^^
 
-Identifiers represent values external to a parser, such as values stored in a
-database. The parser itself cannot define identifiers or their values; it is
-the responsibility of translation layer (registry) to map identifiers into
-something sensible. Like in most programming languages, an identifier starts
-with a letter or underscore followed by zero or more letters, underscores, or
-digits. Parser also supports dotted identifiers consisting of two simple
-identifiers separated by a dot. Identifiers are case-sensitive on parser side
-but individual database back-ends may have special rules about case
-sensitivity.
+Identifiers represent the names of dimensions and metadata values associated with them.
 
-In current implementation simple identifiers are used by registry to represent
-dimensions, e.g. ``visit`` identifier is used to represent a value of
+For example, ``visit`` identifier is used to represent a value of
 ``visit`` dimension in registry database. Dotted identifiers are mapped to
 tables and columns in registry database, e.g. ``detector.raft`` can be used
 for accessing raft name (obviously dotted names need knowledge of database
@@ -172,18 +172,20 @@ A partial example of comparing two approaches, without and with ``bind``:
 
 .. code-block:: Python
 
-    instrument_name = "LSST"
+    dataset_type = "calexp"
+
+    instrument_name = "LSSTCam"
     visit_id = 12345
 
     # Direct rendering of query not using bind
-    result = registry.queryDatasets(
-        ...,
+    result = butler.query_datasets(
+        dataset_type,
         where=f"instrument = '{instrument_name}' AND visit = {visit_id}",
     )
 
     # Same functionality using bind parameter
-    result = registry.queryDatasets(
-        ...,
+    result = butler.query_datasets(
+        dataset_type,
         where="instrument = instrument_name AND visit = visit_id",
         bind={"instrument_name": instrument_name, "visit_id": visit_id},
     )
@@ -197,8 +199,8 @@ An example of this feature:
 
     instrument_name = "LSST"
     visit_ids = (12345, 12346, 12350)
-    result = registry.queryDatasets(
-        ...,
+    result = butler.query_datasets(
+        dataset_type,
         where="instrument = instrument_name AND visit IN (visit_ids)",
         bind={"instrument_name": instrument_name, "visit_ids": visit_ids},
     )
@@ -225,8 +227,7 @@ Comparison operators
 
 Language supports set of regular comparison operators: ``=``, ``!=``, ``<``,
 ``<=``, ``>``, ``>=``. This can be used on operands that evaluate to a numeric
-values or timestamps, for (in)equality operators operands can also be boolean
-expressions.
+values or timestamps.
 
 .. note :: The equality comparison operator is a single ``=`` like in SQL, not
     double ``==`` like in Python or C++.
@@ -247,9 +248,7 @@ IN operator. Its general syntax looks like:
 where each item in the right hand side list is one of the supported literals
 or identifiers. Unlike regular SQL IN operator the list cannot contain
 expressions, only literals or identifiers. The extension to regular SQL IN is
-that literals can be range literals as defined above. The query language
-allows mixing of different types of literals and ranges but it may not make
-sense to mix them when expressions is translated to SQL.
+that literals can be range literals as defined above.
 
 Regular use of ``IN`` operator is for checking whether an integer number is in
 set of numbers. For that case the list on right side can be a mixture of
@@ -317,7 +316,7 @@ where ``ra`` and ``dec`` are specified as an ICRS sky position in degrees.
     visit.region OVERLAPS POINT(53.6, -32.7)
 
 You can check overlaps with arbitrary sky regions by binding values (see
-:ref:`_daf_butler_dimension_expressions_identifiers`).  Bound region values may
+:ref:`daf_butler_dimension_expressions_identifiers`).  Bound region values may
 be specified as the following object types:
 
 -  ``lsst.sphgeom.Region``
@@ -441,23 +440,24 @@ Few examples of valid expressions using some of the constructs:
 Query result ordering
 ---------------------
 
-Few query methods (`~Registry.queryDataIds` and `~Registry.queryDimensionRecords`) support special constructs for ordering and limiting the number of the returned records. These methods return iterable objects which have ``order_by()`` and ``limit()`` methods. Methods modify the iterable object and should be used before iterating over resulting records, for convenience the methods can be chained, see example below.
+Butler query methods (`Butler.query_datasets`, `Butler.query_data_ids`, and `Butler.query_dimension_records`) support ordering and limiting the number of the returned records.
+These methods have ``order_by`` and ``limit`` parameters controlling this behavior.
 
-The ``order_by()`` method accepts a variable number of positional arguments specifying columns/fields used for ordering, each argument can have one of the supported formats:
+The ``order_by`` parameter accepts a list of strings specifying columns/fields used for ordering. Each string can have one of the supported formats:
 
 - A dimension name, corresponding to the value of the dimension primary key, e.g. ``"visit"``
 - A dimension name and a field name separated bey a dot. Field name can refer to any of the dimension's metadata or key, e.g. ``"visit.name"``, ``"detector.raft"``. Special field names ``"timespan.begin"`` and ``"timespan.end"`` can be used for temporal dimensions (visit and exposure).
 - A field name without dimension name, in that case field is searched in all dimensions used by the query, and it has to be unique. E.g. ``"cell_x"`` means the same as ``"patch.cell_x"``.
 - To reverse ordering for the field it is prefixed with a minus sign, e.g. ``"-visit.timespan.begin"``.
 
-The ``limit()`` method accepts two positional integer arguments - limit for the number of returned records and offset (number of records to skip). The offset argument is optional, if not provided it is equivalent to offset 0.
+The ``limit`` parameter accepts an integer specifying the maximum number of results to return.
 
-Example of use of these two methods:
+Example of use of these two parameters:
 
 .. code-block:: Python
 
     # Print ten latest visit records in reverse time order
-    for record in registry.queryDimensionRecords("visit").order_by("-timespan.begin").limit(10):
+    for record in butler.query_dimension_records("visit", order_by=["-timespan.begin"], limit=10):
         print(record)
 
 .. _daf_butler_query_error_handling:
