@@ -115,12 +115,19 @@ class QueryJoinsPlan:
     rows.
     """
 
+    governors_referenced: set[str] = dataclasses.field(default_factory=set)
+    """Governor dimensions referenced directly in the predicate, but not
+    necessarily constrained to the same value in all logic branches.
+    """
+
     def __post_init__(self) -> None:
         self.predicate.gather_required_columns(self.columns)
         # Extract the data ID implied by the predicate; we can use the governor
         # dimensions in that to constrain the collections we search for
         # datasets later.
-        self.predicate.visit(_DataIdExtractionVisitor(self.constraint_data_id, self.messages))
+        self.predicate.visit(
+            _DataIdExtractionVisitor(self.constraint_data_id, self.messages, self.governors_referenced)
+        )
 
     def iter_mandatory(self) -> Iterator[DimensionElement]:
         """Return an iterator over the dimension elements that must be joined
@@ -304,11 +311,17 @@ class _DataIdExtractionVisitor(
         Dictionary to populate in place.
     messages : `list` [ `str` ]
         List of diagnostic messages to populate in place.
+    governor_references : `set` [ `str` ]
+        Set of the names of governor dimension names that were referenced
+        directly.  This includes dimensions that were constrained to different
+        values in different logic branches, and hence not included in
+        ``data_id``.
     """
 
-    def __init__(self, data_id: dict[str, DataIdValue], messages: list[str]):
+    def __init__(self, data_id: dict[str, DataIdValue], messages: list[str], governor_references: set[str]):
         self.data_id = data_id
         self.messages = messages
+        self.governor_references = governor_references
 
     def visit_comparison(
         self,
@@ -317,6 +330,8 @@ class _DataIdExtractionVisitor(
         b: qt.ColumnExpression,
         flags: PredicateVisitFlags,
     ) -> None:
+        k_a, v_a = a.visit(self)
+        k_b, v_b = b.visit(self)
         if flags & PredicateVisitFlags.HAS_OR_SIBLINGS:
             return None
         if flags & PredicateVisitFlags.INVERTED:
@@ -326,8 +341,6 @@ class _DataIdExtractionVisitor(
                 return None
         if operator != "==":
             return None
-        k_a, v_a = a.visit(self)
-        k_b, v_b = b.visit(self)
         if k_a is not None and v_b is not None:
             key = k_a
             value = v_b
@@ -341,18 +354,28 @@ class _DataIdExtractionVisitor(
         return None
 
     def visit_binary_expression(self, expression: qt.BinaryExpression) -> tuple[None, None]:
+        expression.a.visit(self)
+        expression.b.visit(self)
         return None, None
 
     def visit_unary_expression(self, expression: qt.UnaryExpression) -> tuple[None, None]:
+        expression.operand.visit(self)
         return None, None
 
     def visit_literal(self, expression: qt.ColumnLiteral) -> tuple[None, Any]:
         return None, expression.get_literal_value()
 
     def visit_dimension_key_reference(self, expression: qt.DimensionKeyReference) -> tuple[str, None]:
+        if expression.dimension.governor is expression.dimension:
+            self.governor_references.add(expression.dimension.name)
         return expression.dimension.name, None
 
     def visit_dimension_field_reference(self, expression: qt.DimensionFieldReference) -> tuple[None, None]:
+        if (
+            expression.element.governor is expression.element
+            and expression.field in expression.element.alternate_keys.names
+        ):
+            self.governor_references.add(expression.element.name)
         return None, None
 
     def visit_dataset_field_reference(self, expression: qt.DatasetFieldReference) -> tuple[None, None]:

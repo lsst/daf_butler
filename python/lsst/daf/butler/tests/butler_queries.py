@@ -1859,6 +1859,39 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.assertEqual(rows[0]["visit"], 1)
             self.assertEqual(rows[0]["dt.collection"], "run1")
 
+    def test_multiple_instrument_queries(self) -> None:
+        """Test that multiple-instrument queries are not rejected as having
+        governor dimension ambiguities.
+        """
+        butler = self.make_butler("base.yaml")
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        self.assertCountEqual(
+            butler.query_data_ids(["detector"], where="instrument='Cam1' OR instrument='Cam2'"),
+            [
+                DataCoordinate.standardize(instrument="Cam1", detector=n, universe=butler.dimensions)
+                for n in range(1, 5)
+            ],
+        )
+        self.assertCountEqual(
+            butler.query_data_ids(
+                ["detector"],
+                where="(instrument='Cam1' OR instrument='Cam2') AND visit.region OVERLAPS region",
+                bind={"region": Region.from_ivoa_pos("CIRCLE 320. -0.25 10.")},
+                explain=False,
+            ),
+            # No visits in this test dataset means no result, but the point of
+            # the test is just that the query can be constructed at all.
+            [],
+        )
+        self.assertCountEqual(
+            butler.query_data_ids(
+                ["instrument"],
+                where="(instrument='Cam1' AND detector=2) OR (instrument='Cam2' AND detector=500)",
+                explain=False,
+            ),
+            [DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)],
+        )
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

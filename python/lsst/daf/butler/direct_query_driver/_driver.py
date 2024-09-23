@@ -937,7 +937,7 @@ class DirectQueryDriver(QueryDriver):
         where_governors: set[str] = set()
         result.predicate.gather_governors(where_governors)
         for governor in where_governors:
-            if governor not in result.constraint_data_id:
+            if governor not in result.constraint_data_id and governor not in result.governors_referenced:
                 if governor in self._default_data_id.dimensions:
                     result.constraint_data_id[governor] = self._default_data_id[governor]
                 else:
