@@ -27,8 +27,15 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredValidation", "get_universe_from_context", "SerializableRegion", "SerializableTime")
+__all__ = (
+    "DeferredValidation",
+    "get_universe_from_context",
+    "SerializableRegion",
+    "SerializableTime",
+    "SerializableEllipsis",
+)
 
+from types import EllipsisType
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeAlias, TypeVar, get_args
 
 import pydantic
@@ -315,4 +322,31 @@ An object annotated with this type is always an `astropy.time.Time` instance
 in Python, but unlike `astropy.time.Time` itself it can be used as a type
 in Pydantic models and type adapters, resulting in the field being saved as
 integer nanoseconds since 1970-01-01 00:00:00.
+"""
+
+
+def _serialize_ellipsis(value: Any, handler: pydantic.SerializerFunctionWrapHandler) -> str:
+    if value is ...:
+        return "..."
+    return handler(value)
+
+
+def _deserialize_ellipsis(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> EllipsisType:
+    s = handler(value)
+    if s == "...":
+        return ...
+    raise ValueError(f"String {s!r} is not '...'.")
+
+
+SerializableEllipsis: TypeAlias = Annotated[
+    EllipsisType,
+    pydantic.GetPydanticSchema(lambda _, h: h(str)),
+    pydantic.WrapValidator(_deserialize_ellipsis),
+    pydantic.WrapSerializer(_serialize_ellipsis),
+    pydantic.WithJsonSchema({"const": "..."}),
+]
+"""A Pydantic-annotated version of the special ellipsis object (``...``).
+
+The serialized form is just the string "...", and hence to participate in a
+union with `str` correctly, this type must come first.
 """
