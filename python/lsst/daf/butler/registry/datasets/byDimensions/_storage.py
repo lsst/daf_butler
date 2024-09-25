@@ -28,18 +28,17 @@
 
 from __future__ import annotations
 
-from .... import ddl
-
-__all__ = ("ByDimensionsDatasetRecordStorage",)
+__all__ = ("ByDimensionsDatasetRecordStorageUUID",)
 
 import datetime
 from collections.abc import Callable, Iterable, Iterator, Sequence, Set
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import astropy.time
 import sqlalchemy
 from lsst.daf.relation import Relation, sql
 
+from .... import ddl
 from ...._collection_type import CollectionType
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ...._column_type_info import LogicalColumn
@@ -62,7 +61,7 @@ if TYPE_CHECKING:
     from .tables import StaticDatasetTablesTuple
 
 
-class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
+class ByDimensionsDatasetRecordStorageUUID(DatasetRecordStorage):
     """Dataset record storage implementation paired with
     `ByDimensionsDatasetRecordStorageManagerUUID`; see that class for more
     information.
@@ -117,6 +116,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._use_astropy = use_astropy_ingest_date
         self._tags_table: sqlalchemy.schema.Table | None = None
         self._calibs_table: sqlalchemy.schema.Table | None = None
+
+    idMaker: ClassVar[DatasetIdFactory] = DatasetIdFactory()
+    """Factory for dataset IDs. In the future this factory may be shared with
+    other classes (e.g. Registry).
+    """
 
     @property
     def _tags(self) -> sqlalchemy.schema.Table:
@@ -844,21 +848,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             collections_to_delete = summary_collection_ids - collection_ids
             self._summaries.delete_collections(self._dataset_type_id, collections_to_delete)
 
-
-class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
-    """Implementation of ByDimensionsDatasetRecordStorage which uses UUID for
-    dataset IDs.
-    """
-
-    idMaker = DatasetIdFactory()
-    """Factory for dataset IDs. In the future this factory may be shared with
-    other classes (e.g. Registry)."""
-
     def insert(
         self,
         run: RunRecord,
         dataIds: Iterable[DataCoordinate],
-        idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
@@ -882,7 +876,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             dataIdList.append(dataId)
             rows.append(
                 {
-                    "id": self.idMaker.makeDatasetId(run.name, self.datasetType, dataId, idMode),
+                    "id": self.idMaker.makeDatasetId(run.name, self.datasetType, dataId, idGenerationMode),
                     "dataset_type_id": self._dataset_type_id,
                     self._runKeyColumn: run.key,
                     "ingest_date": timestamp,
@@ -949,7 +943,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             return
 
         # We'll insert all new rows into a temporary table
-        tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), ddl.GUID, constraints=False)
+        tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), constraints=False)
         collFkName = self._collections.getCollectionForeignKeyName()
         protoTagsRow = {
             "dataset_type_id": self._dataset_type_id,

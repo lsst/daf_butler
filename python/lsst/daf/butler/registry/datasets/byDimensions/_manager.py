@@ -7,11 +7,11 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 import dataclasses
 import logging
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
-from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from ...._dataset_ref import DatasetId, DatasetRef
 from ...._dataset_type import DatasetType, get_dataset_type_name
 from ...._exceptions_legacy import DatasetTypeError
 from ....dimensions import DimensionUniverse
@@ -19,7 +19,7 @@ from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ...wildcards import DatasetTypeWildcard
-from ._storage import ByDimensionsDatasetRecordStorage, ByDimensionsDatasetRecordStorageUUID
+from ._storage import ByDimensionsDatasetRecordStorageUUID
 from .summaries import CollectionSummaryManager
 from .tables import (
     addDatasetForeignKey,
@@ -85,7 +85,7 @@ class _SpecTableFactory:
         return table
 
 
-class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
+class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
 
@@ -103,10 +103,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     Alternative implementations that make different choices for these while
     keeping the same general table organization might be reasonable as well.
-
-    This class provides complete implementation of manager logic but it is
-    parametrized by few class attributes that have to be defined by
-    sub-classes.
 
     Parameters
     ----------
@@ -145,6 +141,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._static = static
         self._summaries = summaries
         self._caching_context = caching_context
+
+    _versions: ClassVar[list[VersionTuple]] = [_VERSION_UUID, _VERSION_UUID_NS]
 
     @classmethod
     def initialize(
@@ -217,15 +215,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return makeStaticTableSpecs(
             collections,
             universe=universe,
-            dtype=cls.getIdColumnType(),
-            autoincrement=cls._autoincrement,
             schema_version=schema_version,
         )
-
-    @classmethod
-    def getIdColumnType(cls) -> type:
-        # Docstring inherited from base class.
-        return cls._idColumnType
 
     @classmethod
     def addDatasetForeignKey(
@@ -238,8 +229,29 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
-        return addDatasetForeignKey(
-            tableSpec, cls.getIdColumnType(), name=name, onDelete=onDelete, constraint=constraint, **kwargs
+        return addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, constraint=constraint, **kwargs)
+
+    @classmethod
+    def _newDefaultSchemaVersion(cls) -> VersionTuple:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION_UUID_NS
+
+    def clone(
+        self,
+        *,
+        db: Database,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
+    ) -> ByDimensionsDatasetRecordStorageManagerUUID:
+        return ByDimensionsDatasetRecordStorageManagerUUID(
+            db=db,
+            collections=collections,
+            dimensions=dimensions,
+            static=self._static,
+            summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
+            caching_context=caching_context,
+            registry_schema_version=self._registry_schema_version,
         )
 
     def refresh(self) -> None:
@@ -247,9 +259,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         if self._caching_context.dataset_types is not None:
             self._caching_context.dataset_types.clear()
 
-    def _make_storage(self, record: _DatasetTypeRecord) -> ByDimensionsDatasetRecordStorage:
+    def _make_storage(self, record: _DatasetTypeRecord) -> ByDimensionsDatasetRecordStorageUUID:
         """Create storage instance for a dataset type record."""
-        tags_spec = makeTagTableSpec(record.dataset_type, type(self._collections), self.getIdColumnType())
+        tags_spec = makeTagTableSpec(record.dataset_type, type(self._collections))
         tags_table_factory = _SpecTableFactory(self._db, record.tag_table_name, tags_spec)
         calibs_table_factory = None
         if record.calib_table_name is not None:
@@ -257,10 +269,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 record.dataset_type,
                 type(self._collections),
                 self._db.getTimespanRepresentation(),
-                self.getIdColumnType(),
             )
             calibs_table_factory = _SpecTableFactory(self._db, record.calib_table_name, calibs_spec)
-        storage = self._recordStorageType(
+        storage = ByDimensionsDatasetRecordStorageUUID(
             db=self._db,
             datasetType=record.dataset_type,
             static=self._static,
@@ -328,7 +339,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
             self._db.ensureTableExists(
                 tagTableName,
-                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
+                makeTagTableSpec(datasetType, type(self._collections)),
             )
             calibTableName = (
                 makeCalibTableName(datasetType, dimensionsKey) if datasetType.isCalibration() else None
@@ -340,7 +351,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         datasetType,
                         type(self._collections),
                         self._db.getTimespanRepresentation(),
-                        self.getIdColumnType(),
                     ),
                 )
             row, inserted = self._db.sync(
@@ -451,7 +461,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             storage = self._make_storage(record)
             if self._caching_context.dataset_types is not None:
                 self._caching_context.dataset_types.add(storage.datasetType, storage)
-        assert isinstance(storage, ByDimensionsDatasetRecordStorage), "Not expected storage class"
+        assert isinstance(storage, ByDimensionsDatasetRecordStorageUUID), "Not expected storage class"
         return DatasetRef(
             storage.datasetType,
             dataId=storage.getDataId(id=id),
@@ -522,60 +532,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         if dataset_types is not None:
             dataset_type_names = set(get_dataset_type_name(dt) for dt in dataset_types)
         return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
-
-    _versions: list[VersionTuple]
-    """Schema version for this class."""
-
-    _recordStorageType: type[ByDimensionsDatasetRecordStorage]
-    """Type of the storage class returned by this manager."""
-
-    _autoincrement: bool
-    """If True then PK column of the dataset table is auto-increment."""
-
-    _idColumnType: type
-    """Type of dataset column used to store dataset ID."""
-
-
-class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStorageManagerBase):
-    """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
-    UUID for dataset primary key.
-    """
-
-    _versions: list[VersionTuple] = [_VERSION_UUID, _VERSION_UUID_NS]
-    _recordStorageType: type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
-    _autoincrement: bool = False
-    _idColumnType: type = ddl.GUID
-
-    def clone(
-        self,
-        *,
-        db: Database,
-        collections: CollectionManager,
-        dimensions: DimensionRecordStorageManager,
-        caching_context: CachingContext,
-    ) -> ByDimensionsDatasetRecordStorageManagerUUID:
-        return ByDimensionsDatasetRecordStorageManagerUUID(
-            db=db,
-            collections=collections,
-            dimensions=dimensions,
-            static=self._static,
-            summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
-            caching_context=caching_context,
-            registry_schema_version=self._registry_schema_version,
-        )
-
-    @classmethod
-    def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
-        # Docstring inherited from DatasetRecordStorageManager.
-        return True
-
-    @classmethod
-    def _newDefaultSchemaVersion(cls) -> VersionTuple:
-        # Docstring inherited from VersionedExtension.
-
-        # By default return latest version so that new repos are created with
-        # nanoseconds ingest_date.
-        return _VERSION_UUID_NS
 
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""

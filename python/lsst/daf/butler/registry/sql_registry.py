@@ -828,7 +828,7 @@ class SqlRegistry:
         supported : `bool`
             Whether the given mode is supported.
         """
-        return self._managers.datasets.supportsIdGenerationMode(mode)
+        return True
 
     def findDataset(
         self,
