@@ -83,6 +83,9 @@ class DatasetRefQueryResults(QueryResultsBase):
     @property
     def dataset_type(self) -> DatasetType:
         # Docstring inherited.
+        assert (
+            self._spec.dataset_type_name is not ...
+        ), "DatasetRefQueryResults is intended for single-dataset type queries only."
         return DatasetType(self._spec.dataset_type_name, self._spec.dimensions, self._spec.storage_class_name)
 
     @property

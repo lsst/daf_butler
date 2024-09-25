@@ -392,6 +392,8 @@ class Query(QueryBase):
                 case DimensionFieldReference(element=element, field=field):
                     dimension_fields_dict.setdefault(element.name, set()).add(field)
                 case DatasetFieldReference(dataset_type=dataset_type, field=dataset_field):
+                    if dataset_type is ...:
+                        raise InvalidQueryError("Dataset wildcard fields are not supported by Query.general.")
                     dataset_fields_dict.setdefault(dataset_type, set()).add(dataset_field)
                 case _:
                     raise TypeError(f"Unexpected type of identifier ({name}): {identifier}")

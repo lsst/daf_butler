@@ -37,6 +37,7 @@ __all__ = (
 
 import dataclasses
 from collections.abc import Iterator
+from types import EllipsisType
 from typing import Any
 
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup
@@ -51,8 +52,10 @@ class ResolvedDatasetSearch:
     resolving its collection search path.
     """
 
-    name: str
-    """Name of the dataset type."""
+    name: str | EllipsisType
+    """Name of the dataset type, or ``...`` to match any dataset type with
+    these dimensions.
+    """
 
     dimensions: DimensionGroup
     """Dimensions of the dataset type."""
@@ -73,7 +76,9 @@ class ResolvedDatasetSearch:
     `~CollectionType.CALIBRATION` collection, `False` otherwise.
 
     Since only calibration datasets can be present in
-    `~CollectionType.CALIBRATION` collections, this also
+    `~CollectionType.CALIBRATION` collections, this also indicates that the
+    dataset type is a calibration (or, if it is a wildcard, that there is at
+    least one calibration dataset type).
     """
 
 
@@ -97,7 +102,7 @@ class QueryJoinsPlan:
     materializations: dict[qt.MaterializationKey, DimensionGroup] = dataclasses.field(default_factory=dict)
     """Materializations to join into the query."""
 
-    datasets: dict[str, ResolvedDatasetSearch] = dataclasses.field(default_factory=dict)
+    datasets: dict[str | EllipsisType, ResolvedDatasetSearch] = dataclasses.field(default_factory=dict)
     """Dataset searches to join into the query."""
 
     data_coordinate_uploads: dict[qt.DataCoordinateUploadKey, DimensionGroup] = dataclasses.field(
@@ -188,7 +193,7 @@ class QueryProjectionPlan:
     This is always a subset of `QueryJoinsPlan.columns`.
     """
 
-    datasets: dict[str, ResolvedDatasetSearch]
+    datasets: dict[str | EllipsisType, ResolvedDatasetSearch]
     """Dataset searches to join into the query."""
 
     needs_dimension_distinct: bool = False
@@ -207,7 +212,7 @@ class QueryProjectionPlan:
     def __bool__(self) -> bool:
         return self.needs_dimension_distinct or self.needs_dataset_distinct
 
-    find_first_dataset: str | None = None
+    find_first_dataset: str | EllipsisType | None = None
     """If not `None`, this is a find-first query for this dataset.
 
     This is set even if the find-first search is trivial because there is only
@@ -226,7 +231,7 @@ class QueryFindFirstPlan:
     """Information about the dataset being searched for."""
 
     @property
-    def dataset_type(self) -> str:
+    def dataset_type(self) -> str | EllipsisType:
         """Name of the dataset type."""
         return self.search.name
 

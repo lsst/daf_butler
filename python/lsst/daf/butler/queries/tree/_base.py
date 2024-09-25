@@ -53,7 +53,14 @@ if TYPE_CHECKING:
 # names.  Internal interfaces may define other dataset field strings (e.g.
 # collection primary key values) and hence should use `str` rather than this
 # type.
-DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "timespan"]
+DatasetFieldName: TypeAlias = Literal[
+    "dataset_id",
+    "ingest_date",
+    "run",
+    "collection",
+    "timespan",
+    "dataset_type_id",  # TODO[DM-46479]: dataset_type_id or dataset_type_name?
+]
 
 # Tuple of the strings that can be use as dataset fields in public APIs.
 DATASET_FIELD_NAMES: tuple[DatasetFieldName, ...] = tuple(get_args(DatasetFieldName))

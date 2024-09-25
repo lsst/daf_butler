@@ -32,6 +32,7 @@ __all__ = ("QueryJoiner", "QueryBuilder")
 import dataclasses
 import itertools
 from collections.abc import Iterable, Sequence
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
@@ -140,6 +141,7 @@ class QueryBuilder:
         for logical_table, field in self.columns:
             name = self.columns.get_qualified_name(logical_table, field)
             if field is None:
+                assert logical_table is not ...
                 sql_columns.append(self.joiner.dimension_keys[logical_table][0].label(name))
             else:
                 name = self.joiner.db.name_shrinker.shrink(name)
@@ -339,7 +341,7 @@ class QueryJoiner:
     key (which should all have equal values for all result rows).
     """
 
-    fields: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
+    fields: NonemptyMapping[str | EllipsisType, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
         default_factory=lambda: NonemptyMapping(dict)
     )
     """Mapping of columns that are neither dimension keys nor timespans.
@@ -349,7 +351,9 @@ class QueryJoiner:
     either a dimension element name or dataset type name.
     """
 
-    timespans: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(default_factory=dict)
+    timespans: dict[str | EllipsisType, TimespanDatabaseRepresentation] = dataclasses.field(
+        default_factory=dict
+    )
     """Mapping of timespan columns.
 
     Keys are "logical tables" - dimension element names or dataset type names.
@@ -419,6 +423,7 @@ class QueryJoiner:
         for logical_table, field in columns:
             name = columns.get_qualified_name(logical_table, field)
             if field is None:
+                assert logical_table is not ...
                 self.dimension_keys[logical_table].append(self.from_clause.columns[name])
             else:
                 name = self.db.name_shrinker.shrink(name)

@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import uuid
+from types import EllipsisType
 
 __all__ = ("DirectQueryDriver",)
 
@@ -37,7 +38,7 @@ import logging
 import sys
 from collections.abc import Iterable, Iterator, Mapping, Set
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 import sqlalchemy
 
@@ -91,6 +92,8 @@ if TYPE_CHECKING:
 
 
 _LOG = logging.getLogger(__name__)
+
+_T = TypeVar("_T", bound=str | EllipsisType)
 
 
 class DirectQueryDriver(QueryDriver):
@@ -273,9 +276,12 @@ class DirectQueryDriver(QueryDriver):
             case DataCoordinateResultSpec():
                 return DataCoordinateResultPageConverter(spec, context)
             case DatasetRefResultSpec():
-                return DatasetRefResultPageConverter(
-                    spec, self.get_dataset_type(spec.dataset_type_name), context
-                )
+                if spec.dataset_type_name is ...:
+                    raise NotImplementedError("TODO[DM-46479]")
+                else:
+                    return DatasetRefResultPageConverter(
+                        spec, self.get_dataset_type(spec.dataset_type_name), context
+                    )
             case GeneralResultSpec():
                 return GeneralResultPageConverter(spec, context)
             case _:
@@ -434,7 +440,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | None = None,
+        find_first_dataset: str | EllipsisType | None = None,
     ) -> tuple[QueryPlan, QueryBuilder]:
         """Convert a query description into a mostly-completed `QueryBuilder`.
 
@@ -447,9 +453,11 @@ class DirectQueryDriver(QueryDriver):
         order_by : `~collections.abc.Iterable` [ \
                 `.queries.tree.OrderExpression` ], optional
             Column expressions to sort by.
-        find_first_dataset : `str` or `None`, optional
+        find_first_dataset : `str`, ``...``, or `None`, optional
             Name of a dataset type for which only one result row for each data
             ID should be returned, with the colletions searched in order.
+            ``...`` is used to represent the search for all dataset types with
+            a particular set of dimensions in ``tree.any_dataset``.
 
         Returns
         -------
@@ -478,7 +486,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | None = None,
+        find_first_dataset: str | EllipsisType | None = None,
     ) -> tuple[QueryPlan, QueryBuilder]:
         """Construct a plan for building a query and initialize a builder.
 
@@ -491,9 +499,11 @@ class DirectQueryDriver(QueryDriver):
         order_by : `~collections.abc.Iterable` [ \
                 `.queries.tree.OrderExpression` ], optional
             Column expressions to sort by.
-        find_first_dataset : `str` or `None`, optional
+        find_first_dataset : `str`, ``...``, or `None`, optional
             Name of a dataset type for which only one result row for each data
             ID should be returned, with the collections searched in order.
+            ``...`` is used to represent the search for all dataset types with
+            a particular set of dimensions in ``tree.any_dataset``.
 
         Returns
         -------
@@ -520,7 +530,9 @@ class DirectQueryDriver(QueryDriver):
         # only by order_by terms, and including the collection key if we need
         # it for GROUP BY or DISTINCT.
         projection_plan = QueryProjectionPlan(
-            final_columns.copy(), joins_plan.datasets, find_first_dataset=find_first_dataset
+            final_columns.copy(),
+            joins_plan.datasets,
+            find_first_dataset=find_first_dataset,
         )
         projection_plan.columns.restore_dimension_keys()
         for term in order_by:
@@ -672,7 +684,7 @@ class DirectQueryDriver(QueryDriver):
         # fields: if rows are uniqe over the 'unique_key' fields, then they're
         # automatically unique over these 'derived_fields'.  We just remember
         # these as pairs of (logical_table, field) for now.
-        derived_fields: list[tuple[str, str]] = []
+        derived_fields: list[tuple[str | EllipsisType, str]] = []
 
         # There are two reasons we might need an aggregate function:
         # - to make sure temporal constraints and joins have resulted in at
@@ -747,6 +759,9 @@ class DirectQueryDriver(QueryDriver):
                         ].apply_any_aggregate(self.db.apply_any_aggregate)
                     else:
                         unique_keys.extend(builder.joiner.timespans[dataset_type].flatten())
+                elif dataset_field == "dataset_type_id":
+                    # The dataset type is always a unique key.
+                    unique_keys.append(builder.joiner.fields[dataset_type]["dataset_type_id"])
                 else:
                     # Other dataset fields derive their uniqueness from key
                     # fields.
@@ -843,6 +858,14 @@ class DirectQueryDriver(QueryDriver):
         builder = builder.nested(cte=True, force=True)
         # We start by filling out the "window" SELECT statement...
         partition_by = [builder.joiner.dimension_keys[d][0] for d in builder.columns.dimensions.required]
+        if plan.search.name is ...:
+            # TODO[DM-46479]: dataset_type_id or dataset_type_name?
+            assert (
+                "dataset_type_id" in builder.joiner.fields[...]
+            ), "dataset type should always be included in any result spec with a dataset type wildcard"
+            # Put dataset type first in partition_by in case matching the index
+            # order is important.
+            partition_by = [builder.joiner.fields[...]["dataset_type_id"]] + partition_by
         rank_sql_column = sqlalchemy.case(
             {record.key: n for n, record in enumerate(plan.search.collection_records)},
             value=builder.joiner.fields[plan.dataset_type]["collection_key"],
@@ -889,6 +912,8 @@ class DirectQueryDriver(QueryDriver):
                 dataset_search.collections for dataset_search in tree.datasets.values()
             )
         )
+        if tree.any_dataset is not None:
+            collection_names.update(tree.any_dataset.collections)
         collection_records = {
             record.name: record
             for record in self.managers.collections.resolve_wildcard(
@@ -899,13 +924,18 @@ class DirectQueryDriver(QueryDriver):
             record for record in collection_records.values() if record.type is not CollectionType.CHAINED
         ]
         # Fetch summaries for a subset of dataset types.
-        dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
-        summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
+        if tree.any_dataset is not None:
+            summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types=None)
+        else:
+            dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
+            summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
         # Do a preliminary resolution for dataset searches to identify any
         # calibration lookups that might participate in temporal joins.
-        calibration_dataset_types: set[str] = set()
-        summaries_by_dataset_type: dict[str, list[tuple[CollectionRecord, CollectionSummary]]] = {}
-        for dataset_type_name, dataset_search in tree.datasets.items():
+        calibration_dataset_types: set[str | EllipsisType] = set()
+        summaries_by_dataset_type: dict[
+            str | EllipsisType, list[tuple[CollectionRecord, CollectionSummary]]
+        ] = {}
+        for dataset_type_name, dataset_search in tree.iter_all_dataset_searches():
             collection_summaries = self._filter_collections(
                 dataset_search.collections, collection_records, summaries
             )
@@ -974,10 +1004,16 @@ class DirectQueryDriver(QueryDriver):
             )
             result.datasets[dataset_type_name] = resolved_dataset_search
             if not resolved_dataset_search.collection_records:
-                result.messages.append(
-                    f"Search for dataset type {dataset_type_name!r} in "
-                    f"{list(dataset_search.collections)} is doomed to fail."
-                )
+                if resolved_dataset_search.name is ...:
+                    result.messages.append(
+                        f"Search for datasets with dimensions {resolved_dataset_search.dimensions} in "
+                        f"{list(dataset_search.collections)} is doomed to fail."
+                    )
+                else:
+                    result.messages.append(
+                        f"Search for dataset type {resolved_dataset_search.name!r} in "
+                        f"{list(dataset_search.collections)} is doomed to fail."
+                    )
                 result.messages.extend(resolved_dataset_search.messages)
         return result, builder
 
@@ -1025,7 +1061,7 @@ class DirectQueryDriver(QueryDriver):
 
     def _resolve_dataset_search(
         self,
-        dataset_type_name: str,
+        dataset_type_name: str | EllipsisType,
         dataset_search: qt.DatasetSearch,
         constraint_data_id: Mapping[str, DataIdValue],
         collections: list[tuple[CollectionRecord, CollectionSummary]],
@@ -1035,7 +1071,7 @@ class DirectQueryDriver(QueryDriver):
 
         Parameters
         ----------
-        dataset_type_name : `str`
+        dataset_type_name : `str` or ``...``
             Name of the dataset being searched for.
         dataset_search : `.queries.tree.DatasetSearch`
             Struct holding the dimensions and original collection search path.
@@ -1058,7 +1094,7 @@ class DirectQueryDriver(QueryDriver):
             result.messages.append("No datasets can be found because collection list is empty.")
         for collection_record, collection_summary in collections:
             rejected: bool = False
-            if result.name not in collection_summary.dataset_types.names:
+            if result.name is not ... and result.name not in collection_summary.dataset_types.names:
                 result.messages.append(
                     f"No datasets of type {result.name!r} in collection {collection_record.name!r}."
                 )
@@ -1074,13 +1110,13 @@ class DirectQueryDriver(QueryDriver):
                 if collection_record.type is CollectionType.CALIBRATION:
                     result.is_calibration_search = True
                 result.collection_records.append(collection_record)
-        if result.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
+        if result.name is not ... and result.dimensions != self.get_dataset_type(result.name).dimensions:
             # This is really for server-side defensiveness; it's hard to
             # imagine the query getting different dimensions for a dataset
             # type in two calls to the same query driver.
             raise InvalidQueryError(
                 f"Incorrect dimensions {result.dimensions} for dataset {dataset_type_name} "
-                f"in query (vs. {self.get_dataset_type(dataset_type_name).dimensions})."
+                f"in query (vs. {self.get_dataset_type(result.name).dimensions})."
             )
         return result
 
@@ -1132,6 +1168,8 @@ class DirectQueryDriver(QueryDriver):
         fields : `~collections.abc.Set` [ `str` ]
             Dataset fields to include.
         """
+        if resolved_search.name is ...:
+            raise NotImplementedError("TODO[DM-46479]")
         # The next two asserts will need to be dropped (and the implications
         # dealt with instead) if materializations start having dataset fields.
         assert (

@@ -37,7 +37,8 @@ __all__ = (
 )
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from types import EllipsisType
 from typing import TypeAlias, final
 
 import pydantic
@@ -127,6 +128,11 @@ class QueryTree(QueryTreeBase):
     datasets: Mapping[str, DatasetSearch] = pydantic.Field(default_factory=dict)
     """Dataset searches that have been joined into the query."""
 
+    any_dataset: DatasetSearch | None = pydantic.Field(default=None)
+    """A special optional dataset search for all dataset types with a
+    particular set of dimensions.
+    """
+
     data_coordinate_uploads: Mapping[DataCoordinateUploadKey, DimensionGroup] = pydantic.Field(
         default_factory=dict
     )
@@ -141,6 +147,11 @@ class QueryTree(QueryTreeBase):
     predicate: Predicate = Predicate.from_bool(True)
     """Boolean expression trees whose logical AND defines a row filter."""
 
+    def iter_all_dataset_searches(self) -> Iterator[tuple[str | EllipsisType, DatasetSearch]]:
+        yield from self.datasets.items()
+        if self.any_dataset is not None:
+            yield (..., self.any_dataset)
+
     def get_joined_dimension_groups(self) -> frozenset[DimensionGroup]:
         """Return a set of the dimension groups of all data coordinate uploads,
         dataset searches, and materializations.
@@ -149,6 +160,8 @@ class QueryTree(QueryTreeBase):
         result.update(self.materializations.values())
         for dataset_spec in self.datasets.values():
             result.add(dataset_spec.dimensions)
+        if self.any_dataset is not None:
+            result.add(self.any_dataset.dimensions)
         return frozenset(result)
 
     def join_dimensions(self, dimensions: DimensionGroup) -> QueryTree:
@@ -242,6 +255,28 @@ class QueryTree(QueryTreeBase):
                 update=dict(dimensions=self.dimensions | search.dimensions, datasets=datasets)
             )
 
+    def join_any_dataset(self, search: DatasetSearch) -> QueryTree:
+        """Return a new tree that joins in a search for any dataset type with
+        the given diensions.
+
+        Parameters
+        ----------
+        search : `DatasetSearch`
+            Struct containing the collection search path and dimensions.
+
+        Returns
+        -------
+        result : `QueryTree`
+            A new tree that joins in the dataset search.
+        """
+        if self.any_dataset is not None:
+            assert self.any_dataset == search, "Dataset search should be new or the same."
+            return self
+        else:
+            return self.model_copy(
+                update=dict(dimensions=self.dimensions | search.dimensions, any_dataset=search)
+            )
+
     def where(self, *terms: Predicate) -> QueryTree:
         """Return a new tree that adds row filtering via a boolean column
         expression.
@@ -275,6 +310,7 @@ class QueryTree(QueryTreeBase):
         for where_term in terms:
             where_term.gather_required_columns(columns)
             predicate = predicate.logical_and(where_term)
+        # TODO[DM-46479]: check dataset fields against self.any_dataset
         if not (columns.dataset_fields.keys() <= self.datasets.keys()):
             raise InvalidQueryError(
                 f"Cannot reference dataset type(s) {columns.dataset_fields.keys() - self.datasets.keys()} "

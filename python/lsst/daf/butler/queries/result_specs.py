@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from types import EllipsisType
+
 __all__ = (
     "ResultSpecBase",
     "DataCoordinateResultSpec",
@@ -42,7 +44,7 @@ import pydantic
 
 from .._exceptions import InvalidQueryError
 from ..dimensions import DimensionElement, DimensionGroup, DimensionUniverse
-from ..pydantic_utils import DeferredValidation
+from ..pydantic_utils import DeferredValidation, SerializableEllipsis
 from .tree import ColumnSet, DatasetFieldName, OrderExpression, QueryTree
 
 
@@ -96,7 +98,7 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
                 )
 
     @property
-    def find_first_dataset(self) -> str | None:
+    def find_first_dataset(self) -> str | EllipsisType | None:
         """The dataset type for which find-first resolution is required, if
         any.
         """
@@ -161,8 +163,12 @@ class DatasetRefResultSpec(ResultSpecBase):
 
     result_type: Literal["dataset_ref"] = "dataset_ref"
 
-    dataset_type_name: str
-    """The dataset type name of the datasets returned by this query."""
+    dataset_type_name: SerializableEllipsis | str
+    """The dataset type name of the datasets returned by this query.
+
+    ``...`` may be used to represent a query for all dataset types with a
+    certain set of dimensions.
+    """
 
     dimensions: DimensionGroup
     """The dimensions of the datasets returned by this query."""
@@ -180,14 +186,18 @@ class DatasetRefResultSpec(ResultSpecBase):
     """
 
     @property
-    def find_first_dataset(self) -> str | None:
+    def find_first_dataset(self) -> str | EllipsisType | None:
         # Docstring inherited.
         return self.dataset_type_name if self.find_first else None
 
     def get_result_columns(self) -> ColumnSet:
         # Docstring inherited.
         result = ColumnSet(self.dimensions)
-        result.dataset_fields[self.dataset_type_name].update({"dataset_id", "run"})
+        if self.dataset_type_name is ...:
+            # TODO[DM-46479]: dataset_type_id or dataset_type_name?
+            result.dataset_fields[...].update({"dataset_id", "run", "dataset_type_id"})
+        else:
+            result.dataset_fields[self.dataset_type_name].update({"dataset_id", "run"})
         if self.include_dimension_records:
             _add_dimension_records_to_column_set(self.dimensions, result)
         return result
@@ -221,6 +231,11 @@ class GeneralResultSpec(ResultSpecBase):
     def find_first_dataset(self) -> str | None:
         # Docstring inherited.
         if self.find_first:
+            if len(self.dataset_fields) != 1:
+                raise InvalidQueryError(
+                    "General query with find_first=True cannot have results from multiple "
+                    "dataset searches."
+                )
             (dataset_type,) = self.dataset_fields.keys()
             return dataset_type
         return None
