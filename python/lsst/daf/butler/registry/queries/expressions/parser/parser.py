@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 from .exprTree import Node
-from .parserYacc import ParserYacc  # type: ignore
+from .parserYacc import ParserYacc
 
 
 def parse_expression(expression: str) -> Node | None:
