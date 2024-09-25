@@ -443,39 +443,6 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def getIdColumnType(cls) -> type:
-        """Return type used for columns storing dataset IDs.
-
-        This type is used for columns storing `DatasetRef.id` values, usually
-        a `type` subclass provided by SQLAlchemy.
-
-        Returns
-        -------
-        dtype : `type`
-            Type used for dataset identification in database.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
-        """Test whether the given dataset ID generation mode is supported by
-        `insert`.
-
-        Parameters
-        ----------
-        mode : `DatasetIdGenEnum`
-            Enum value for the mode to test.
-
-        Returns
-        -------
-        supported : `bool`
-            Whether the given mode is supported.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
     def addDatasetForeignKey(
         cls,
         tableSpec: ddl.TableSpec,

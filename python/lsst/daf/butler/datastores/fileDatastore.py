@@ -226,10 +226,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         )
 
     @classmethod
-    def makeTableSpec(cls, datasetIdColumnType: type) -> ddl.TableSpec:
+    def makeTableSpec(cls) -> ddl.TableSpec:
         return ddl.TableSpec(
             fields=[
-                ddl.FieldSpec(name="dataset_id", dtype=datasetIdColumnType, primaryKey=True),
+                ddl.FieldSpec(name="dataset_id", dtype=ddl.GUID, primaryKey=True),
                 ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
                 ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
@@ -274,9 +274,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         self._opaque_table_name = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
-            self._table = bridgeManager.opaque.register(
-                self._opaque_table_name, self.makeTableSpec(bridgeManager.datasetIdColumnType)
-            )
+            self._table = bridgeManager.opaque.register(self._opaque_table_name, self.makeTableSpec())
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
         except ReadOnlyDatabaseError:
@@ -2855,7 +2853,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
-        return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(ddl.GUID), StoredFileInfo)}
+        return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(), StoredFileInfo)}
 
 
 def _to_file_info_payload(
