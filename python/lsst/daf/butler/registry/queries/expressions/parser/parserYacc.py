@@ -27,11 +27,13 @@
 
 """Syntax definition for user expression parser."""
 
+from __future__ import annotations
+
 __all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
 
+import functools
 import re
 import warnings
-from collections.abc import Mapping
 from typing import Any, Protocol
 
 import astropy.time
@@ -250,22 +252,20 @@ class ParserYacc:
 
     Parameters
     ----------
-    idMap : `collections.abc.Mapping` [ `str`, `Node` ], optional
-        Mapping that provides substitutions for identifiers in the expression.
-        The key in the map is the identifier name, the value is the
-        `exprTree.Node` instance that will replace identifier in the full
-        expression. If identifier does not exist in the mapping then
-        `Identifier` is inserted into parse tree.
     **kwargs
         Optional keyword arguments that are passed to `yacc.yacc` constructor.
     """
 
-    def __init__(self, idMap: Mapping[str, Node] | None = None, **kwargs: Any):
+    def __init__(self, **kwargs: Any):
         kw = dict(write_tables=0, debug=False)
         kw.update(kwargs)
+        self.parser = self._parser_factory(**kw)
 
-        self.parser = yacc.yacc(module=self, **kw)
-        self._idMap = idMap or {}
+    @staticmethod
+    @functools.cache
+    def _parser_factory(**kwarg: Any) -> Any:
+        """Make parser instance."""
+        return yacc.yacc(module=ParserYacc, **kwarg)
 
     def parse(self, input: str, lexer: Any = None, debug: bool = False, tracking: bool = False) -> Node:
         """Parse input expression ad return parsed tree object.
@@ -305,17 +305,20 @@ class ParserYacc:
     )
 
     # this is the starting rule
-    def p_input(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_input(cls, p: YaccProduction) -> None:
         """input : expr
         | empty
         """
         p[0] = p[1]
 
-    def p_empty(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_empty(cls, p: YaccProduction) -> None:
         """empty :"""
         p[0] = None
 
-    def p_expr(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_expr(cls, p: YaccProduction) -> None:
         """expr : expr OR expr
         | expr AND expr
         | NOT expr
@@ -328,7 +331,8 @@ class ParserYacc:
         else:
             p[0] = p[1]
 
-    def p_bool_primary(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_bool_primary(cls, p: YaccProduction) -> None:
         """bool_primary : bool_primary EQ predicate
         | bool_primary NE predicate
         | bool_primary LT predicate
@@ -343,7 +347,8 @@ class ParserYacc:
         else:
             p[0] = BinaryOp(lhs=p[1], op=p[2], rhs=p[3])
 
-    def p_predicate(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_predicate(cls, p: YaccProduction) -> None:
         """predicate : bit_expr IN LPAREN literal_or_id_list RPAREN
         | bit_expr NOT IN LPAREN literal_or_id_list RPAREN
         | bit_expr
@@ -355,16 +360,15 @@ class ParserYacc:
         else:
             p[0] = p[1]
 
-    def p_identifier(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_identifier(cls, p: YaccProduction) -> None:
         """identifier : SIMPLE_IDENTIFIER
         | QUALIFIED_IDENTIFIER
         """
-        node = self._idMap.get(p[1])
-        if node is None:
-            node = Identifier(p[1])
-        p[0] = node
+        p[0] = Identifier(p[1])
 
-    def p_literal_or_id_list(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_or_id_list(cls, p: YaccProduction) -> None:
         """literal_or_id_list : literal_or_id_list COMMA literal
         | literal_or_id_list COMMA identifier
         | literal
@@ -375,7 +379,8 @@ class ParserYacc:
         else:
             p[0] = p[1] + [p[3]]
 
-    def p_bit_expr(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_bit_expr(cls, p: YaccProduction) -> None:
         """bit_expr : bit_expr ADD bit_expr
         | bit_expr SUB bit_expr
         | bit_expr MUL bit_expr
@@ -388,49 +393,59 @@ class ParserYacc:
         else:
             p[0] = BinaryOp(lhs=p[1], op=p[2], rhs=p[3])
 
-    def p_simple_expr_lit(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_lit(cls, p: YaccProduction) -> None:
         """simple_expr : literal"""
         p[0] = p[1]
 
-    def p_simple_expr_id(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_id(cls, p: YaccProduction) -> None:
         """simple_expr : identifier"""
         p[0] = p[1]
 
-    def p_simple_expr_function_call(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_function_call(cls, p: YaccProduction) -> None:
         """simple_expr : function_call"""
         p[0] = p[1]
 
-    def p_simple_expr_unary(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_unary(cls, p: YaccProduction) -> None:
         """simple_expr : ADD simple_expr %prec UPLUS
         | SUB simple_expr %prec UMINUS
         """
         p[0] = UnaryOp(op=p[1], operand=p[2])
 
-    def p_simple_expr_paren(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_paren(cls, p: YaccProduction) -> None:
         """simple_expr : LPAREN expr RPAREN"""
         p[0] = Parens(p[2])
 
-    def p_simple_expr_tuple(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_simple_expr_tuple(cls, p: YaccProduction) -> None:
         """simple_expr : LPAREN expr COMMA expr RPAREN"""
         # For now we only support tuples with two items,
         # these are used for time ranges.
         p[0] = TupleNode((p[2], p[4]))
 
-    def p_literal_num(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_num(cls, p: YaccProduction) -> None:
         """literal : NUMERIC_LITERAL"""
         p[0] = NumericLiteral(p[1])
 
-    def p_literal_num_signed(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_num_signed(cls, p: YaccProduction) -> None:
         """literal : ADD NUMERIC_LITERAL %prec UPLUS
         | SUB NUMERIC_LITERAL %prec UMINUS
         """
         p[0] = NumericLiteral(p[1] + p[2])
 
-    def p_literal_str(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_str(cls, p: YaccProduction) -> None:
         """literal : STRING_LITERAL"""
         p[0] = StringLiteral(p[1])
 
-    def p_literal_time(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_time(cls, p: YaccProduction) -> None:
         """literal : TIME_LITERAL"""
         try:
             value = _parseTimeString(p[1])
@@ -438,17 +453,20 @@ class ParserYacc:
             raise ParseError(p.lexer.lexdata, p[1], p.lexpos(1), p.lineno(1)) from e
         p[0] = TimeLiteral(value)
 
-    def p_literal_range(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_literal_range(cls, p: YaccProduction) -> None:
         """literal : RANGE_LITERAL"""
         # RANGE_LITERAL value is tuple of three numbers
         start, stop, stride = p[1]
         p[0] = RangeLiteral(start, stop, stride)
 
-    def p_function_call(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_function_call(cls, p: YaccProduction) -> None:
         """function_call : SIMPLE_IDENTIFIER LPAREN expr_list RPAREN"""
         p[0] = function_call(p[1], p[3])
 
-    def p_expr_list(self, p: YaccProduction) -> None:
+    @classmethod
+    def p_expr_list(cls, p: YaccProduction) -> None:
         """expr_list : expr_list COMMA expr
         | expr
         | empty
@@ -464,7 +482,8 @@ class ParserYacc:
     # ---------- end of all grammar rules ----------
 
     # Error rule for syntax errors
-    def p_error(self, p: LexToken | None) -> None:
+    @classmethod
+    def p_error(cls, p: LexToken | None) -> None:
         if p is None:
             raise ParserEOFError()
         else:
