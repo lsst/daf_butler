@@ -344,8 +344,7 @@ class SqlRegistry:
         governor summaries later.
         """
         for dataset_type in self.queryDatasetTypes():
-            if storage := self._managers.datasets.find(dataset_type.name):
-                storage.refresh_collection_summaries()
+            self._managers.datasets.refresh_collection_summaries(dataset_type)
 
     def caching_context(self) -> contextlib.AbstractContextManager[None]:
         """Return context manager that enables caching.
@@ -1045,14 +1044,8 @@ class SqlRegistry:
         lsst.daf.butler.registry.MissingCollectionError
             Raised if ``run`` does not exist in the registry.
         """
-        if isinstance(datasetType, DatasetType):
-            storage = self._managers.datasets.find(datasetType.name)
-            if storage is None:
-                raise DatasetTypeError(f"DatasetType '{datasetType}' has not been registered.")
-        else:
-            storage = self._managers.datasets.find(datasetType)
-            if storage is None:
-                raise DatasetTypeError(f"DatasetType with name '{datasetType}' has not been registered.")
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
         if run is None:
             if self.defaults.run is None:
                 raise NoDefaultCollectionError(
@@ -1068,21 +1061,23 @@ class SqlRegistry:
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
             expandedDataIds = [
-                self.expandDataId(dataId, dimensions=storage.datasetType.dimensions)
-                for dataId in progress.wrap(dataIds, f"Expanding {storage.datasetType.name} data IDs")
+                self.expandDataId(dataId, dimensions=datasetType.dimensions)
+                for dataId in progress.wrap(dataIds, f"Expanding {datasetType.name} data IDs")
             ]
         else:
             expandedDataIds = [
-                DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions) for dataId in dataIds
+                DataCoordinate.standardize(dataId, dimensions=datasetType.dimensions) for dataId in dataIds
             ]
         try:
-            refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
+            refs = list(
+                self._managers.datasets.insert(datasetType, runRecord, expandedDataIds, idGenerationMode)
+            )
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 "A database constraint failure was triggered by inserting "
-                f"one or more datasets of type {storage.datasetType} into "
+                f"one or more datasets of type {datasetType} into "
                 f"collection '{run}'. "
                 "This probably means a dataset with the same data ID "
                 "and dataset type already exists, but it may also mean a "
@@ -1158,11 +1153,6 @@ class SqlRegistry:
             raise DatasetTypeError(f"Multiple dataset types in input datasets: {datasetTypes}")
         datasetType = datasetTypes.pop()
 
-        # get storage handler for this dataset type
-        storage = self._managers.datasets.find(datasetType.name)
-        if storage is None:
-            raise DatasetTypeError(f"DatasetType '{datasetType}' has not been registered.")
-
         # find run name
         runs = {dataset.run for dataset in datasets}
         if len(runs) != 1:
@@ -1180,8 +1170,8 @@ class SqlRegistry:
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
             expandedDatasets = [
-                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=storage.datasetType.dimensions))
-                for dataset in progress.wrap(datasets, f"Expanding {storage.datasetType.name} data IDs")
+                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=datasetType.dimensions))
+                for dataset in progress.wrap(datasets, f"Expanding {datasetType.name} data IDs")
             ]
         else:
             expandedDatasets = [
@@ -1190,13 +1180,13 @@ class SqlRegistry:
             ]
 
         try:
-            refs = list(storage.import_(runRecord, expandedDatasets))
+            refs = list(self._managers.datasets.import_(datasetType, runRecord, expandedDatasets))
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 "A database constraint failure was triggered by inserting "
-                f"one or more datasets of type {storage.datasetType} into "
+                f"one or more datasets of type {datasetType} into "
                 f"collection '{run}'. "
                 "This probably means a dataset with the same data ID "
                 "and dataset type already exists, but it may also mean a "
@@ -1231,36 +1221,28 @@ class SqlRegistry:
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         """Remove datasets from the Registry.
 
-        The datasets will be removed unconditionally from all collections, and
-        any `Quantum` that consumed this dataset will instead be marked with
-        having a NULL input.  `Datastore` records will *not* be deleted; the
-        caller is responsible for ensuring that the dataset has already been
-        removed from all Datastores.
+        The datasets will be removed unconditionally from all collections.
+        `Datastore` records will *not* be deleted; the caller is responsible
+        for ensuring that the dataset has already been removed from all
+        Datastores.
 
         Parameters
         ----------
         refs : `~collections.abc.Iterable` [`DatasetRef`]
-            References to the datasets to be removed.  Must include a valid
-            ``id`` attribute, and should be considered invalidated upon return.
+            References to the datasets to be removed.  Should be considered
+            invalidated upon return.
 
         Raises
         ------
-        lsst.daf.butler.AmbiguousDatasetError
-            Raised if any ``ref.id`` is `None`.
         lsst.daf.butler.registry.OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
-        for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.iter_by_type(refs), desc="Removing datasets by type"
-        ):
-            storage = self._managers.datasets[datasetType.name]
-            try:
-                storage.delete(refsForType)
-            except sqlalchemy.exc.IntegrityError as err:
-                raise OrphanedRecordError(
-                    "One or more datasets is still present in one or more Datastores."
-                ) from err
+        try:
+            self._managers.datasets.delete(refs)
+        except sqlalchemy.exc.IntegrityError as err:
+            raise OrphanedRecordError(
+                "One or more datasets is still present in one or more Datastores."
+            ) from err
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
@@ -1292,16 +1274,11 @@ class SqlRegistry:
         """
         progress = Progress("lsst.daf.butler.Registry.associate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
-        if collectionRecord.type is not CollectionType.TAGGED:
-            raise CollectionTypeError(
-                f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED."
-            )
         for datasetType, refsForType in progress.iter_item_chunks(
             DatasetRef.iter_by_type(refs), desc="Associating datasets by type"
         ):
-            storage = self._managers.datasets[datasetType.name]
             try:
-                storage.associate(collectionRecord, refsForType)
+                self._managers.datasets.associate(datasetType, collectionRecord, refsForType)
                 if self._managers.obscore:
                     # If a TAGGED collection is being monitored by ObsCore
                     # manager then we may need to save the dataset.
@@ -1341,15 +1318,10 @@ class SqlRegistry:
         """
         progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
-        if collectionRecord.type is not CollectionType.TAGGED:
-            raise CollectionTypeError(
-                f"Collection '{collection}' has type {collectionRecord.type.name}; expected TAGGED."
-            )
         for datasetType, refsForType in progress.iter_item_chunks(
             DatasetRef.iter_by_type(refs), desc="Disassociating datasets by type"
         ):
-            storage = self._managers.datasets[datasetType.name]
-            storage.disassociate(collectionRecord, refsForType)
+            self._managers.datasets.disassociate(datasetType, collectionRecord, refsForType)
             if self._managers.obscore:
                 self._managers.obscore.disassociate(refsForType, collectionRecord)
 
@@ -1386,8 +1358,8 @@ class SqlRegistry:
         for datasetType, refsForType in progress.iter_item_chunks(
             DatasetRef.iter_by_type(refs), desc="Certifying datasets by type"
         ):
-            storage = self._managers.datasets[datasetType.name]
-            storage.certify(
+            self._managers.datasets.certify(
+                datasetType,
                 collectionRecord,
                 refsForType,
                 timespan,
@@ -1431,18 +1403,17 @@ class SqlRegistry:
         """
         collectionRecord = self._managers.collections.find(collection)
         if isinstance(datasetType, str):
-            storage = self._managers.datasets[datasetType]
-        else:
-            storage = self._managers.datasets[datasetType.name]
+            datasetType = self.getDatasetType(datasetType)
         standardizedDataIds = None
         if dataIds is not None:
             standardizedDataIds = [
-                DataCoordinate.standardize(d, dimensions=storage.datasetType.dimensions) for d in dataIds
+                DataCoordinate.standardize(d, dimensions=datasetType.dimensions) for d in dataIds
             ]
-        storage.decertify(
+        self._managers.datasets.decertify(
+            datasetType,
             collectionRecord,
             timespan,
-            dataIds=standardizedDataIds,
+            data_ids=standardizedDataIds,
             context=queries.SqlQueryContext(self._db, self._managers.column_types),
         )
 
