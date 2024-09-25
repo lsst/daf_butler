@@ -25,35 +25,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# type: ignore
-
-"""Module which defines PLY lexer for user expressions parsed by pre-flight.
-"""
+"""Module which defines PLY lexer for user expressions parsed by pre-flight."""
 
 __all__ = ["ParserLex", "ParserLexError"]
 
-# -------------------------------
-#  Imports of standard modules --
-# -------------------------------
 import re
+from typing import Any, Protocol
 
-# -----------------------------
-#  Imports for other modules --
-# -----------------------------
 from .ply import lex
-
-# ----------------------------------
-#  Local non-exported definitions --
-# ----------------------------------
 
 _RE_RANGE = r"(?P<start>-?\d+)\s*\.\.\s*(?P<stop>-?\d+)(\s*:\s*(?P<stride>[1-9]\d*))?"
 """Regular expression to match range literal in the form NUM..NUM[:NUM],
 this must match t_RANGE_LITERAL docstring.
 """
 
-# ------------------------
-#  Exported definitions --
-# ------------------------
+
+class LexToken(Protocol):
+    """Protocol for LexToken defined in ``ply.lex``."""
+
+    value: Any
+    type: str
+    lexer: Any
+    lexdata: str
+    lexpos: int
+    lineno: int
 
 
 class ParserLexError(Exception):
@@ -72,7 +67,7 @@ class ParserLexError(Exception):
         Current line number in the expression.
     """
 
-    def __init__(self, expression, remain, pos, lineno):
+    def __init__(self, expression: str, remain: str, pos: int, lineno: int):
         Exception.__init__(self, f"Unexpected character at position {pos}")
         self.expression = expression
         self.remain = remain
@@ -84,7 +79,7 @@ class ParserLex:
     """Class which defines PLY lexer."""
 
     @classmethod
-    def make_lexer(cls, reflags=0, **kwargs):
+    def make_lexer(cls, reflags: int = 0, **kwargs: Any) -> Any:
         """Return lexer.
 
         Parameters
@@ -169,19 +164,19 @@ class ParserLex:
     t_ignore = " \t"
 
     # Define a rule so we can track line numbers
-    def t_newline(self, t):
+    def t_newline(self, t: LexToken) -> None:
         r"""\n+"""
         t.lexer.lineno += len(t.value)
 
     # quoted string prefixed with 'T'
-    def t_TIME_LITERAL(self, t):
+    def t_TIME_LITERAL(self, t: LexToken) -> LexToken:
         """T'.*?'"""
         # strip quotes
         t.value = t.value[2:-1]
         return t
 
     # quoted string
-    def t_STRING_LITERAL(self, t):
+    def t_STRING_LITERAL(self, t: LexToken) -> LexToken:
         """'.*?'"""
         # strip quotes
         t.value = t.value[1:-1]
@@ -189,8 +184,9 @@ class ParserLex:
 
     # range literal in format N..M[:S], spaces allowed, see _RE_RANGE
     @lex.TOKEN(_RE_RANGE)
-    def t_RANGE_LITERAL(self, t):
+    def t_RANGE_LITERAL(self, t: LexToken) -> LexToken:
         match = re.match(_RE_RANGE, t.value)
+        assert match is not None, "Guaranteed by tokenization"
         start = int(match.group("start"))
         stop = int(match.group("stop"))
         stride = match.group("stride")
@@ -200,7 +196,7 @@ class ParserLex:
         return t
 
     # numbers are used as strings by parser, do not convert
-    def t_NUMERIC_LITERAL(self, t):
+    def t_NUMERIC_LITERAL(self, t: LexToken) -> LexToken:
         r"""\d+(\.\d*)?(e[-+]?\d+)?   #  1, 1., 1.1, 1e10, 1.1e-10, etc.
         |
         \.\d+(e[-+]?\d+)?         #  .1, .1e10, .1e+10
@@ -208,13 +204,13 @@ class ParserLex:
         return t
 
     # qualified identifiers have one or two dots
-    def t_QUALIFIED_IDENTIFIER(self, t):
+    def t_QUALIFIED_IDENTIFIER(self, t: LexToken) -> LexToken:
         r"""[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){1,2}"""
         t.type = "QUALIFIED_IDENTIFIER"
         return t
 
     # we only support ASCII in identifier names
-    def t_SIMPLE_IDENTIFIER(self, t):
+    def t_SIMPLE_IDENTIFIER(self, t: LexToken) -> LexToken:
         """[a-zA-Z_][a-zA-Z0-9_]*"""
         # Check for reserved words and make sure they are upper case
         reserved = self.reserved.get(t.value.upper())
@@ -225,7 +221,7 @@ class ParserLex:
             t.type = "SIMPLE_IDENTIFIER"
         return t
 
-    def t_error(self, t):
+    def t_error(self, t: LexToken) -> None:
         """Error handling rule"""
         lexer = t.lexer
         raise ParserLexError(lexer.lexdata, t.value, lexer.lexpos, lexer.lineno)
