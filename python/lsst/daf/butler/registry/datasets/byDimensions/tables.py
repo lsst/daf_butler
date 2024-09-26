@@ -44,8 +44,7 @@ from typing import Any
 
 import sqlalchemy
 
-from ...._dataset_type import DatasetType
-from ....dimensions import DimensionUniverse, GovernorDimension, addDimensionForeignKey
+from ....dimensions import DimensionGroup, DimensionUniverse, GovernorDimension, addDimensionForeignKey
 from ....timespan_database_representation import TimespanDatabaseRepresentation
 from ...interfaces import CollectionManager, VersionTuple
 
@@ -241,15 +240,12 @@ def makeStaticTableSpecs(
     return specs
 
 
-def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
+def makeTagTableName(dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag table used
     by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a name for.  Multiple dataset types may
-        share the same table.
     dimensionsKey : `int`
         Integer key used to save ``datasetType.dimensions`` to the database.
 
@@ -261,15 +257,12 @@ def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     return f"dataset_tags_{dimensionsKey:08d}"
 
 
-def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
+def makeCalibTableName(dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag + validity
     range table used by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a name for.  Multiple dataset types may
-        share the same table.
     dimensionsKey : `int`
         Integer key used to save ``datasetType.dimensions`` to the database.
 
@@ -278,21 +271,19 @@ def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     name : `str`
         Name for the table.
     """
-    assert datasetType.isCalibration()
     return f"dataset_calibs_{dimensionsKey:08d}"
 
 
 def makeTagTableSpec(
-    datasetType: DatasetType, collections: type[CollectionManager], *, constraints: bool = True
+    dimensions: DimensionGroup, collections: type[CollectionManager], *, constraints: bool = True
 ) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a spec for.  Multiple dataset types may
-        share the same table.
+    dimensions : `DimensionGroup`
+        Dimensions of the dataset type.
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
@@ -339,8 +330,8 @@ def makeTagTableSpec(
                 target=(collectionFieldSpec.name, "dataset_type_id"),
             )
         )
-    for dimension_name in datasetType.dimensions.required:
-        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
+    for dimension_name in dimensions.required:
+        dimension = dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(
             tableSpec, dimension=dimension, nullable=False, primaryKey=False, constraint=constraints
         )
@@ -361,7 +352,7 @@ def makeTagTableSpec(
 
 
 def makeCalibTableSpec(
-    datasetType: DatasetType,
+    dimensions: DimensionGroup,
     collections: type[CollectionManager],
     TimespanReprClass: type[TimespanDatabaseRepresentation],
 ) -> ddl.TableSpec:
@@ -370,9 +361,8 @@ def makeCalibTableSpec(
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a spec for.  Multiple dataset types may
-        share the same table.
+    dimensions : `DimensionGroup`
+        Dimensions of the dataset type.
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
@@ -421,8 +411,8 @@ def makeCalibTableSpec(
         )
     )
     # Add dimension fields (part of the temporal lookup index.constraint).
-    for dimension_name in datasetType.dimensions.required:
-        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
+    for dimension_name in dimensions.required:
+        dimension = dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         index.append(fieldSpec.name)
         # If this is a governor dimension, add a foreign key constraint to the
