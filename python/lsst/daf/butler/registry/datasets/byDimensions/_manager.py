@@ -278,12 +278,12 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def _make_storage(self, record: _DatasetTypeRecord) -> ByDimensionsDatasetRecordStorageUUID:
         """Create storage instance for a dataset type record."""
-        tags_spec = makeTagTableSpec(record.dataset_type, type(self._collections))
+        tags_spec = makeTagTableSpec(record.dataset_type.dimensions, type(self._collections))
         tags_table_factory = _SpecTableFactory(self._db, record.tag_table_name, tags_spec)
         calibs_table_factory = None
         if record.calib_table_name is not None:
             calibs_spec = makeCalibTableSpec(
-                record.dataset_type,
+                record.dataset_type.dimensions,
                 type(self._collections),
                 self._db.getTimespanRepresentation(),
             )
@@ -353,19 +353,17 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         record = self._fetch_dataset_type_record(datasetType.name)
         if record is None:
             dimensionsKey = self._dimensions.save_dimension_group(datasetType.dimensions)
-            tagTableName = makeTagTableName(datasetType, dimensionsKey)
+            tagTableName = makeTagTableName(dimensionsKey)
             self._db.ensureTableExists(
                 tagTableName,
-                makeTagTableSpec(datasetType, type(self._collections)),
+                makeTagTableSpec(datasetType.dimensions, type(self._collections)),
             )
-            calibTableName = (
-                makeCalibTableName(datasetType, dimensionsKey) if datasetType.isCalibration() else None
-            )
+            calibTableName = makeCalibTableName(dimensionsKey) if datasetType.isCalibration() else None
             if calibTableName is not None:
                 self._db.ensureTableExists(
                     calibTableName,
                     makeCalibTableSpec(
-                        datasetType,
+                        datasetType.dimensions,
                         type(self._collections),
                         self._db.getTimespanRepresentation(),
                     ),
@@ -683,7 +681,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             return []
 
         # We'll insert all new rows into a temporary table
-        table_spec = makeTagTableSpec(dataset_type, type(self._collections), constraints=False)
+        table_spec = makeTagTableSpec(dataset_type.dimensions, type(self._collections), constraints=False)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
         proto_ags_row = {
             "dataset_type_id": storage.dataset_type_id,
