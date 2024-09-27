@@ -29,9 +29,9 @@ from __future__ import annotations
 
 from ... import ddl
 
-__all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
+__all__ = ("DatasetRecordStorageManager",)
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
@@ -39,7 +39,7 @@ from lsst.daf.relation import Relation
 
 from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
-from ..._exceptions import MissingDatasetTypeError
+from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
 from ._versioning import VersionedExtension, VersionTuple
@@ -52,24 +52,6 @@ if TYPE_CHECKING:
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
-
-
-class DatasetRecordStorage(ABC):
-    """An interface that manages the records associated with a particular
-    `DatasetType`.
-
-    Parameters
-    ----------
-    datasetType : `DatasetType`
-        Dataset type whose records this object manages.
-    """
-
-    def __init__(self, datasetType: DatasetType):
-        self.datasetType = datasetType
-
-    datasetType: DatasetType
-    """Dataset type whose records this object manages (`DatasetType`).
-    """
 
 
 class DatasetRecordStorageManager(VersionedExtension):
@@ -207,64 +189,78 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def __getitem__(self, name: str) -> DatasetRecordStorage:
-        """Return the object that provides access to the records associated
-        with the given `DatasetType` name.
-
-        This is simply a convenience wrapper for `find` that raises `KeyError`
-        when the dataset type is not found.
-
-        Returns
-        -------
-        records : `DatasetRecordStorage`
-            The object representing the records for the given dataset type.
-
-        Raises
-        ------
-        KeyError
-            Raised if there is no dataset type with the given name.
-
-        Notes
-        -----
-        Dataset types registered by another client of the same repository since
-        the last call to `initialize` or `refresh` may not be found.
-        """
-        result = self.find(name)
-        if result is None:
-            raise MissingDatasetTypeError(f"Dataset type with name '{name}' not found.")
-        return result
-
     @abstractmethod
-    def find(self, name: str) -> DatasetRecordStorage | None:
-        """Return an object that provides access to the records associated with
-        the given `DatasetType` name, if one exists.
+    def get_dataset_type(self, name: str) -> DatasetType:
+        """Look up a dataset type by name.
 
         Parameters
         ----------
         name : `str`
-            Name of the dataset type.
+            Name of a parent dataset type.
 
         Returns
         -------
-        records : `DatasetRecordStorage` or `None`
-            The object representing the records for the given dataset type, or
-            `None` if there are no records for that dataset type.
+        dataset_type : `DatasetType`
+            The object representing the records for the given dataset type.
 
-        Notes
-        -----
-        Dataset types registered by another client of the same repository since
-        the last call to `initialize` or `refresh` may not be found.
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if there is no dataset type with the given name.
         """
         raise NotImplementedError()
 
+    def conform_exact_dataset_type(self, dataset_type: DatasetType | str) -> DatasetType:
+        """Conform a value that may be a dataset type or dataset type name to
+        just the dataset type name, while checking that the dataset type is not
+        a component and (if a `DatasetType` instance is given) has the exact
+        same definition in the registry.
+
+        Parameters
+        ----------
+        dataset_type : `str` or `DatasetType`
+            Dataset type object or name.
+
+        Returns
+        -------
+        dataset_type : `DatasetType`
+            The corresponding registered dataset type.
+
+        Raises
+        ------
+        DatasetTypeError
+            Raised if ``dataset_type`` is a component, or if its definition
+            does not exactly match the registered dataset type.
+        MissingDatasetTypeError
+            Raised if this dataset type is not registered at all.
+        """
+        if isinstance(dataset_type, DatasetType):
+            dataset_type_name = dataset_type.name
+            given_dataset_type = dataset_type
+        else:
+            dataset_type_name = dataset_type
+            given_dataset_type = None
+        parent_name, component = DatasetType.splitDatasetTypeName(dataset_type_name)
+        if component is not None:
+            raise DatasetTypeNotSupportedError(
+                f"Component dataset {dataset_type_name!r} is not supported in this context."
+            )
+        registered_dataset_type = self.get_dataset_type(dataset_type_name)
+        if given_dataset_type is not None and registered_dataset_type != given_dataset_type:
+            raise DatasetTypeError(
+                f"Given dataset type {given_dataset_type} is not identical to the "
+                f"registered one {registered_dataset_type}."
+            )
+        return registered_dataset_type
+
     @abstractmethod
-    def register(self, datasetType: DatasetType) -> bool:
+    def register_dataset_type(self, dataset_type: DatasetType) -> bool:
         """Ensure that this `Registry` can hold records for the given
         `DatasetType`, creating new tables as necessary.
 
         Parameters
         ----------
-        datasetType : `DatasetType`
+        dataset_type : `DatasetType`
             Dataset type for which a table should created (as necessary) and
             an associated `DatasetRecordStorage` returned.
 
@@ -281,7 +277,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def remove(self, name: str) -> None:
+    def remove_dataset_type(self, name: str) -> None:
         """Remove the dataset type.
 
         Parameters
@@ -389,7 +385,7 @@ class DatasetRecordStorageManager(VersionedExtension):
     @abstractmethod
     def insert(
         self,
-        dataset_type: DatasetType,
+        dataset_type_name: str,
         run: RunRecord,
         data_ids: Iterable[DataCoordinate],
         id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
@@ -398,8 +394,8 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Parameters
         ----------
-        dataset_type : `DatasetType`
-            Type of the datasets to insert.  Storage class is ignored.
+        dataset_type_name : `str`
+            Name of the dataset type.
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             these datasets will be associated with.
@@ -423,38 +419,26 @@ class DatasetRecordStorageManager(VersionedExtension):
     @abstractmethod
     def import_(
         self,
-        dataset_type: DatasetType,
+        dataset_type_name: str,
         run: RunRecord,
-        datasets: Iterable[DatasetRef],
+        data_ids: Mapping[DatasetId, DataCoordinate],
     ) -> list[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
         ----------
-        dataset_type : `DatasetType`
-            Type of all datasets.  Storage class is ignored.
+        dataset_type_name : `str`
+            Name of the dataset type.
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             these datasets will be associated with.
-        datasets : `~collections.abc.Iterable` of `DatasetRef`
-            Datasets to be inserted.  Datasets can specify ``id`` attribute
-            which will be used for inserted datasets. All dataset IDs must
-            have the same type (`int` or `uuid.UUID`), if type of dataset IDs
-            does not match type supported by this class then IDs will be
-            ignored and new IDs will be generated by backend.
+        data_ids : `~collections.abc.Mapping`
+            Mapping from dataset ID to data ID.
 
         Returns
         -------
         datasets : `list` [ `DatasetRef` ]
             References to the inserted or existing datasets.
-
-        Notes
-        -----
-        The ``datasetType`` and ``run`` attributes of datasets are supposed to
-        be identical across all datasets but this is not checked and it should
-        be enforced by higher level registry code. This method does not need
-        to use those attributes from datasets, only ``dataId`` and ``id`` are
-        relevant.
         """
         raise NotImplementedError()
 
@@ -484,8 +468,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.TAGGED`.
         datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
-            Datasets to be associated.  All datasets must be resolved and have
-            the same `DatasetType` as ``dataset_type``.
+            Datasets to be associated.  All datasets must have the same
+            `DatasetType` as ``dataset_type``, but this is not checked.
 
         Notes
         -----
@@ -512,8 +496,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.TAGGED`.
         datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
-            Datasets to be disassociated.  All datasets must be resolved and
-            have the same `DatasetType` as ``self``.
+            Datasets to be disassociated.  All datasets must have the same
+            `DatasetType` as ``dataset_type``, but this is not checked.
         """
         raise NotImplementedError()
 
@@ -537,8 +521,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.CALIBRATION`.
         datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
-            Datasets to be associated.  All datasets must be resolved and have
-            the same `DatasetType` as ``self``.
+            Datasets to be associated.  All datasets must have the same
+            `DatasetType` as ``dataset_type``, but this is not checked.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
         context : `SqlQueryContext`
@@ -551,10 +535,11 @@ class DatasetRecordStorageManager(VersionedExtension):
             Raised if the collection already contains a different dataset with
             the same `DatasetType` and data ID and an overlapping validity
             range.
+        DatasetTypeError
+            Raised if ``self.datasetType.isCalibration() is False``.
         CollectionTypeError
             Raised if
-            ``collection.type is not CollectionType.CALIBRATION`` or if
-            ``self.datasetType.isCalibration() is False``.
+            ``collection.type is not CollectionType.CALIBRATION``.
         """
         raise NotImplementedError()
 
@@ -593,8 +578,11 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Raises
         ------
+        DatasetTypeError
+            Raised if ``self.datasetType.isCalibration() is False``.
         CollectionTypeError
-            Raised if ``collection.type is not CollectionType.CALIBRATION``.
+            Raised if
+            ``collection.type is not CollectionType.CALIBRATION``.
         """
         raise NotImplementedError()
 

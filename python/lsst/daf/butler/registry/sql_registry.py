@@ -739,7 +739,7 @@ class SqlRegistry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        return self._managers.datasets.register(datasetType)
+        return self._managers.datasets.register_dataset_type(datasetType)
 
     def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         """Remove the named `DatasetType` from the registry.
@@ -780,7 +780,7 @@ class SqlRegistry:
                 _LOG.info("Dataset type %r not defined", datasetTypeExpression)
             else:
                 for datasetType in datasetTypes:
-                    self._managers.datasets.remove(datasetType.name)
+                    self._managers.datasets.remove_dataset_type(datasetType.name)
                     _LOG.info("Removed dataset type %r", datasetType.name)
 
     def getDatasetType(self, name: str) -> DatasetType:
@@ -807,11 +807,11 @@ class SqlRegistry:
         other registry operations do not.
         """
         parent_name, component = DatasetType.splitDatasetTypeName(name)
-        storage = self._managers.datasets[parent_name]
+        parent_dataset_type = self._managers.datasets.get_dataset_type(parent_name)
         if component is None:
-            return storage.datasetType
+            return parent_dataset_type
         else:
-            return storage.datasetType.makeComponentDatasetType(component)
+            return parent_dataset_type.makeComponentDatasetType(component)
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
         """Test whether the given dataset ID generation mode is supported by
@@ -1044,8 +1044,7 @@ class SqlRegistry:
         lsst.daf.butler.registry.MissingCollectionError
             Raised if ``run`` does not exist in the registry.
         """
-        if not isinstance(datasetType, DatasetType):
-            datasetType = self.getDatasetType(datasetType)
+        datasetType = self._managers.datasets.conform_exact_dataset_type(datasetType)
         if run is None:
             if self.defaults.run is None:
                 raise NoDefaultCollectionError(
@@ -1070,7 +1069,7 @@ class SqlRegistry:
             ]
         try:
             refs = list(
-                self._managers.datasets.insert(datasetType, runRecord, expandedDataIds, idGenerationMode)
+                self._managers.datasets.insert(datasetType.name, runRecord, expandedDataIds, idGenerationMode)
             )
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(refs)
@@ -1167,20 +1166,17 @@ class SqlRegistry:
             )
         assert isinstance(runRecord, RunRecord)
 
-        progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
+        progress = Progress("daf.butler.Registry.importDatasets", level=logging.DEBUG)
         if expand:
-            expandedDatasets = [
-                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=datasetType.dimensions))
+            data_ids = {
+                dataset.id: self.expandDataId(dataset.dataId, dimensions=datasetType.dimensions)
                 for dataset in progress.wrap(datasets, f"Expanding {datasetType.name} data IDs")
-            ]
+            }
         else:
-            expandedDatasets = [
-                DatasetRef(datasetType, dataset.dataId, id=dataset.id, run=dataset.run, conform=True)
-                for dataset in datasets
-            ]
+            data_ids = {dataset.id: dataset.dataId for dataset in datasets}
 
         try:
-            refs = list(self._managers.datasets.import_(datasetType, runRecord, expandedDatasets))
+            refs = list(self._managers.datasets.import_(datasetType.name, runRecord, data_ids))
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
@@ -1348,10 +1344,11 @@ class SqlRegistry:
             Raised if the collection already contains a different dataset with
             the same `DatasetType` and data ID and an overlapping validity
             range.
-        lsst.daf.butler.registry.CollectionTypeError
-            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
-            collection or if one or more datasets are of a dataset type for
-            which `DatasetType.isCalibration` returns `False`.
+        DatasetTypeError
+            Raised if ``self.datasetType.isCalibration() is False``.
+        CollectionTypeError
+            Raised if
+            ``collection.type is not CollectionType.CALIBRATION``.
         """
         progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
@@ -1397,9 +1394,11 @@ class SqlRegistry:
 
         Raises
         ------
-        lsst.daf.butler.registry.CollectionTypeError
-            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
-            collection or if ``datasetType.isCalibration() is False``.
+        DatasetTypeError
+            Raised if ``self.datasetType.isCalibration() is False``.
+        CollectionTypeError
+            Raised if
+            ``collection.type is not CollectionType.CALIBRATION``.
         """
         collectionRecord = self._managers.collections.find(collection)
         if isinstance(datasetType, str):

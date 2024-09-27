@@ -421,7 +421,7 @@ class DirectQueryDriver(QueryDriver):
 
     def get_dataset_type(self, name: str) -> DatasetType:
         # Docstring inherited
-        return self.managers.datasets[name].datasetType
+        return self.managers.datasets.get_dataset_type(name)
 
     def get_default_collections(self) -> tuple[str, ...]:
         # Docstring inherited.
