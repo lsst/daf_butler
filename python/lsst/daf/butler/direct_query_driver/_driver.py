@@ -209,12 +209,13 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before queries can be executed.")
-        _, builder, postprocessing = self.build_query(
+        plan, postprocessing = self.build_query(
             tree,
             final_columns=result_spec.get_result_columns(),
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
         )
+        builder = plan.builder
         sql_select = builder.select(postprocessing)
         if result_spec.order_by:
             visitor = SqlColumnVisitor(builder.joiner, self)
@@ -292,7 +293,8 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
-        _, builder, postprocessing = self.build_query(tree, qt.ColumnSet(dimensions))
+        plan, postprocessing = self.build_query(tree, qt.ColumnSet(dimensions))
+        builder = plan.builder
         # Current implementation ignores 'datasets' aside from remembering
         # them, because figuring out what to put in the temporary table for
         # them is tricky, especially if calibration collections are involved.
@@ -362,9 +364,10 @@ class DirectQueryDriver(QueryDriver):
     ) -> int:
         # Docstring inherited.
         columns = result_spec.get_result_columns()
-        plan, builder, postprocessing = self.build_query(
+        plan, postprocessing = self.build_query(
             tree, columns, find_first_dataset=result_spec.find_first_dataset
         )
+        builder = plan.builder
         if not all(d.collection_records for d in plan.joins.datasets.values()):
             return 0
         if not exact:
@@ -396,7 +399,8 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        plan, builder, postprocessing = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        plan, postprocessing = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        builder = plan.builder
         if not all(d.collection_records for d in plan.joins.datasets.values()):
             return False
         if not execute:
@@ -417,7 +421,7 @@ class DirectQueryDriver(QueryDriver):
 
     def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
-        plan, _, _ = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
+        plan, _ = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
         if plan.joins.messages or not execute:
             return plan.joins.messages
         # TODO: guess at ways to split up query that might fail or succeed if
@@ -440,7 +444,7 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder, Postprocessing]:
+    ) -> tuple[QueryPlan, Postprocessing]:
         """Convert a query description into a mostly-completed `QueryBuilder`.
 
         Parameters
@@ -459,26 +463,20 @@ class DirectQueryDriver(QueryDriver):
         Returns
         -------
         plan : `QueryPlan`
-            Plan used to transform the query into SQL, including some
-            information (e.g. diagnostics about doomed-to-fail dataset
-            searches) that isn't transferred into the builder itself.
-        builder : `QueryBuilder`
-            Builder object that can be used to create a SQL SELECT via its
-            `~QueryBuilder.select` method.  We return this instead of a
-            `sqlalchemy.Select` object itself to allow different methods to
-            customize the SELECT clause itself (e.g. `count` can replace the
-            columns selected with ``COUNT(*)``).
+            Plan used to transform the query into SQL, including a builder
+            object that can be used to create a SQL SELECT via its
+            `~QueryBuilder.select` method.
         postprocessing : `Postprocessing`
             Struct representing post-query processing to be done in Python.
         """
         # See the QueryPlan docs for an overview of what these stages of query
         # construction do.
-        plan, builder, postprocessing = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
-        self.apply_query_joins(plan.joins, builder.joiner)
-        self.apply_query_projection(plan.projection, builder, postprocessing, order_by)
-        builder = self.apply_query_find_first(plan.find_first, builder, postprocessing)
-        builder.columns = plan.final_columns
-        return plan, builder, postprocessing
+        plan, postprocessing = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
+        self.apply_query_joins(plan.joins, plan.builder.joiner)
+        self.apply_query_projection(plan.projection, plan.builder, postprocessing, order_by)
+        plan.builder = self.apply_query_find_first(plan.find_first, plan.builder, postprocessing)
+        plan.builder.columns = plan.final_columns
+        return plan, postprocessing
 
     def analyze_query(
         self,
@@ -486,7 +484,7 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder, Postprocessing]:
+    ) -> tuple[QueryPlan, Postprocessing]:
         """Construct a plan for building a query and initialize a builder.
 
         Parameters
@@ -505,13 +503,9 @@ class DirectQueryDriver(QueryDriver):
         Returns
         -------
         plan : `QueryPlan`
-            Plan used to transform the query into SQL, including some
-            information (e.g. diagnostics about doomed-to-fail dataset
-            searches) that isn't transferred into the builder itself.
-        builder : `QueryBuilder`
-            Builder object initialized with overlap joins and constraints
-            potentially included, with the remainder still present in
-            `QueryJoinPlans.predicate`.
+            Plan used to transform the query into SQL, including a builder
+            object that can be used to create a SQL SELECT via its
+            `~QueryBuilder.select` method.
         postprocessing : `Postprocessing`
             Struct representing post-query processing to be done in Python.
         """
@@ -582,8 +576,9 @@ class DirectQueryDriver(QueryDriver):
             projection=projection_plan,
             find_first=find_first_plan,
             final_columns=final_columns,
+            builder=builder,
         )
-        return plan, builder, postprocessing
+        return plan, postprocessing
 
     def apply_query_joins(self, plan: QueryJoinsPlan, joiner: QueryJoiner) -> None:
         """Modify a `QueryJoiner` to include all tables and other FROM and
