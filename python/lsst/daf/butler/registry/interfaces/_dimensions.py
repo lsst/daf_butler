@@ -46,7 +46,11 @@ from ...dimensions.record_cache import DimensionRecordCache
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...direct_query_driver import QueryBuilder, QueryJoiner  # Future query system (direct,server).
+    from ...direct_query_driver import (  # Future query system (direct,server).
+        Postprocessing,
+        QueryBuilder,
+        QueryJoiner,
+    )
     from ...queries.tree import Predicate  # Future query system (direct,client,server).
     from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
@@ -398,7 +402,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str],
-    ) -> tuple[Predicate, QueryBuilder]:
+    ) -> tuple[Predicate, QueryBuilder, Postprocessing]:
         """Process a query's WHERE predicate and dimensions to handle spatial
         and temporal overlaps.
 
@@ -431,6 +435,8 @@ class DimensionRecordStorageManager(VersionedExtension):
             A query-construction helper object that includes any initial joins
             and postprocessing needed to handle overlap expression extracted
             from the original predicate.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
 
         Notes
         -----
