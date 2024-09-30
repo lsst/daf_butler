@@ -56,7 +56,11 @@ from ...dimensions import (
     addDimensionForeignKey,
 )
 from ...dimensions.record_cache import DimensionRecordCache
-from ...direct_query_driver import QueryBuilder, QueryJoiner  # Future query system (direct,server).
+from ...direct_query_driver import (  # Future query system (direct,server).
+    Postprocessing,
+    QueryBuilder,
+    QueryJoiner,
+)
 from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
 from ...queries.visitors import PredicateVisitFlags
@@ -460,7 +464,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 self.make_query_joiner(element.implied_union_target, fields),
                 columns=qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(),
                 distinct=True,
-            ).to_joiner()
+            ).to_joiner(postprocessing=None)
         if not element.has_own_table:
             raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
@@ -483,12 +487,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str],
-    ) -> tuple[qt.Predicate, QueryBuilder]:
+    ) -> tuple[qt.Predicate, QueryBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
             self._db, dimensions, calibration_dataset_types, self._overlap_tables
         )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
-        return new_predicate, overlaps_visitor.builder
+        return new_predicate, overlaps_visitor.builder, overlaps_visitor.postprocessing
 
     def _make_relation(
         self,
@@ -1024,6 +1028,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
     ):
         super().__init__(dimensions, calibration_dataset_types)
         self.builder: QueryBuilder = QueryJoiner(db).to_builder(qt.ColumnSet(dimensions))
+        self.postprocessing = Postprocessing()
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
         self.common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
@@ -1053,7 +1058,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 # - add postprocessing to reject rows where the database
                 #   dimension element's region doesn't actually overlap the
                 #   region.
-                self.builder.postprocessing.spatial_where_filtering.append((element, region))
+                self.postprocessing.spatial_where_filtering.append((element, region))
                 if self.common_skypix.name in self.dimensions:
                     # The common skypix dimension should be part of the query
                     # as a first-class dimension, so we can join in the overlap
@@ -1077,7 +1082,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     self.builder.join(
                         joiner.to_builder(
                             qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
-                        ).to_joiner()
+                        ).to_joiner(postprocessing=self.postprocessing)
                     )
                     # Short circuit here since the SQL WHERE clause has already
                     # been embedded in the subquery.
@@ -1142,12 +1147,12 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                             qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
                             distinct=True,
                         )
-                        .to_joiner()
+                        .to_joiner(postprocessing=self.postprocessing)
                     )
                 # In both cases we add postprocessing to check that the regions
                 # really do overlap, since overlapping the same common skypix
                 # tile is necessary but not sufficient for that.
-                self.builder.postprocessing.spatial_join_filtering.append((a, b))
+                self.postprocessing.spatial_join_filtering.append((a, b))
             case _:
                 raise UnimplementedQueryError(f"Unsupported combination for spatial join: {a, b}.")
         return qt.Predicate.from_bool(True)
