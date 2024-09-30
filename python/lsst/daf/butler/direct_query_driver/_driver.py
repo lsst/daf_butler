@@ -68,9 +68,9 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.wildcards import CollectionWildcard
 from ._postprocessing import Postprocessing
+from ._predicate_constraints_summary import PredicateConstraintsSummary
 from ._query_builder import QueryBuilder, QueryJoiner
 from ._query_plan import (
-    PredicateConstraintsSummary,
     QueryFindFirstPlan,
     QueryJoinsPlan,
     QueryPlan,
