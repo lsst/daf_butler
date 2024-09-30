@@ -39,7 +39,8 @@ import dataclasses
 from collections.abc import Iterator
 from typing import Any
 
-from ..dimensions import DataIdValue, DimensionElement, DimensionGroup
+from .._exceptions import InvalidQueryError
+from ..dimensions import DataCoordinate, DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
 from ..queries import tree as qt
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, SimplePredicateVisitor
 from ..registry.interfaces import CollectionRecord
@@ -105,29 +106,13 @@ class QueryJoinsPlan:
     )
     """Data coordinate uploads to join into the query."""
 
-    constraint_data_id: dict[str, DataIdValue] = dataclasses.field(default_factory=dict)
-    """A data ID that must be consistent with all result rows, extracted from
-    `predicate` at construction.
-    """
-
     messages: list[str] = dataclasses.field(default_factory=list)
     """Diagnostic messages that report reasons the query may not return any
     rows.
     """
 
-    governors_referenced: set[str] = dataclasses.field(default_factory=set)
-    """Governor dimensions referenced directly in the predicate, but not
-    necessarily constrained to the same value in all logic branches.
-    """
-
     def __post_init__(self) -> None:
         self.predicate.gather_required_columns(self.columns)
-        # Extract the data ID implied by the predicate; we can use the governor
-        # dimensions in that to constrain the collections we search for
-        # datasets later.
-        self.predicate.visit(
-            _DataIdExtractionVisitor(self.constraint_data_id, self.messages, self.governors_referenced)
-        )
 
     def iter_mandatory(self) -> Iterator[DimensionElement]:
         """Return an iterator over the dimension elements that must be joined
@@ -296,6 +281,105 @@ class QueryPlan:
     fields added directly to `QueryBuilder.special`, which may also be added
     to the SELECT clause.
     """
+
+
+class PredicateConstraintsSummary:
+    """Summarizes information about the constraints on data ID values implied
+    by a Predicate.
+
+    Parameters
+    ----------
+    predicate : `Predicate`
+        Predicate to summarize.
+    """
+
+    predicate: qt.Predicate
+    """The predicate examined by this summary."""
+
+    constraint_data_id: dict[str, DataIdValue]
+    """Data ID values that will be identical in all result rows due to query
+    constraints.
+    """
+
+    messages: list[str]
+    """Diagnostic messages that report reasons the query may not return any
+    rows.
+    """
+
+    _governors_referenced: set[str]
+    """Governor dimensions referenced directly in the predicate, but not
+    necessarily constrained to the same value in all logic branches.
+    """
+
+    def __init__(self, predicate: qt.Predicate) -> None:
+        self.predicate = predicate
+        self.constraint_data_id = {}
+        self._governors_referenced = set()
+        self.messages = []
+
+        self.predicate.visit(
+            _DataIdExtractionVisitor(self.constraint_data_id, self.messages, self._governors_referenced)
+        )
+
+    def apply_default_data_id(
+        self, default_data_id: DataCoordinate, query_dimensions: DimensionGroup
+    ) -> None:
+        """Augment the predicate and summary by adding missing constraints for
+        governor dimensions using a default data ID.
+
+        Parameters
+        ----------
+        default_data_id : `DataCoordinate`
+            Data ID values that will be used to constrain the query if governor
+            dimensions have not already been constrained by the predicate.
+
+        query_dimensions : `DimensionGroup`
+            The set of dimensions returned in result rows from the query.
+        """
+        # Find governor dimensions required by the predicate.
+        # If these are not constrained by the predicate or the default data ID,
+        # we will raise an exception.
+        where_governors: set[str] = set()
+        self.predicate.gather_governors(where_governors)
+
+        # Add in governor dimensions that are returned in result rows.
+        # We constrain these using a default data ID if one is available,
+        # but it's not an error to omit the constraint.
+        governors_used_by_query = where_governors | query_dimensions.governors
+
+        # For each governor dimension needed by the query, add a constraint
+        # from the default data ID if the existing predicate does not
+        # constrain it.
+        for governor in governors_used_by_query:
+            if governor not in self.constraint_data_id and governor not in self._governors_referenced:
+                if governor in default_data_id.dimensions:
+                    data_id_value = default_data_id[governor]
+                    self.constraint_data_id[governor] = data_id_value
+                    self._governors_referenced.add(governor)
+                    self.predicate = self.predicate.logical_and(
+                        _create_data_id_predicate(governor, data_id_value, query_dimensions.universe)
+                    )
+                elif governor in where_governors:
+                    # Check that the predicate doesn't reference any dimensions
+                    # without constraining their governor dimensions, since
+                    # that's a particularly easy mistake to make and it's
+                    # almost never intentional.
+                    raise InvalidQueryError(
+                        f"Query 'where' expression references a dimension dependent on {governor} without "
+                        "constraining it directly."
+                    )
+
+
+def _create_data_id_predicate(
+    dimension_name: str, value: DataIdValue, universe: DimensionUniverse
+) -> qt.Predicate:
+    """Create a Predicate that tests whether the given dimension primary key is
+    equal to the given literal value.
+    """
+    dimension = universe.dimensions[dimension_name]
+    return qt.Predicate.compare(
+        qt.DimensionKeyReference(dimension=dimension), "==", qt.make_column_literal(value)
+    )
 
 
 class _DataIdExtractionVisitor(

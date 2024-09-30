@@ -70,6 +70,7 @@ from ..registry.wildcards import CollectionWildcard
 from ._postprocessing import Postprocessing
 from ._query_builder import QueryBuilder, QueryJoiner
 from ._query_plan import (
+    PredicateConstraintsSummary,
     QueryFindFirstPlan,
     QueryJoinsPlan,
     QueryPlan,
@@ -927,39 +928,23 @@ class DirectQueryDriver(QueryDriver):
             tree.get_joined_dimension_groups(),
             calibration_dataset_types,
         )
-        result = QueryJoinsPlan(predicate=predicate, columns=builder.columns)
+
+        # Extract the data ID implied by the predicate; we can use the governor
+        # dimensions in that to constrain the collections we search for
+        # datasets later.
+        predicate_constraints = PredicateConstraintsSummary(predicate)
+        # Use the default data ID to apply additional constraints where needed.
+        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
+        predicate = predicate_constraints.predicate
+
+        result = QueryJoinsPlan(
+            predicate=predicate,
+            columns=builder.columns,
+            messages=predicate_constraints.messages,
+        )
+
         # Add columns required by postprocessing.
         builder.postprocessing.gather_columns_required(result.columns)
-        # We also check that the predicate doesn't reference any dimensions
-        # without constraining their governor dimensions, since that's a
-        # particularly easy mistake to make and it's almost never intentional.
-        # We also allow the registry data ID values to provide governor values.
-        where_governors: set[str] = set()
-        result.predicate.gather_governors(where_governors)
-        for governor in where_governors:
-            if governor not in result.constraint_data_id and governor not in result.governors_referenced:
-                if governor in self._default_data_id.dimensions:
-                    result.constraint_data_id[governor] = self._default_data_id[governor]
-                    result.predicate = result.predicate.logical_and(
-                        _create_data_id_predicate(
-                            governor, self._default_data_id[governor], tree.dimensions.universe
-                        )
-                    )
-                else:
-                    raise InvalidQueryError(
-                        f"Query 'where' expression references a dimension dependent on {governor} without "
-                        "constraining it directly."
-                    )
-        # Pull in default data ID for any dimensions not referenced above
-        for governor in tree.dimensions.governors:
-            if governor not in result.constraint_data_id and governor not in result.governors_referenced:
-                if governor in self._default_data_id.dimensions:
-                    result.constraint_data_id[governor] = self._default_data_id[governor]
-                    result.predicate = result.predicate.logical_and(
-                        _create_data_id_predicate(
-                            governor, self._default_data_id[governor], tree.dimensions.universe
-                        )
-                    )
 
         # Add materializations, which can also bring in more postprocessing.
         for m_key, m_dimensions in tree.materializations.items():
@@ -985,7 +970,7 @@ class DirectQueryDriver(QueryDriver):
             resolved_dataset_search = self._resolve_dataset_search(
                 dataset_type_name,
                 dataset_search,
-                result.constraint_data_id,
+                predicate_constraints.constraint_data_id,
                 summaries_by_dataset_type[dataset_type_name],
             )
             result.datasets[dataset_type_name] = resolved_dataset_search
@@ -1250,15 +1235,3 @@ class _Cursor:
         except:  # noqa: E722
             self.close(*sys.exc_info())
             raise
-
-
-def _create_data_id_predicate(
-    dimension_name: str, value: DataIdValue, universe: DimensionUniverse
-) -> qt.Predicate:
-    """Create a Predicate that tests whether the given dimension primary key is
-    equal to the given literal value.
-    """
-    dimension = universe.dimensions[dimension_name]
-    return qt.Predicate.compare(
-        qt.DimensionKeyReference(dimension=dimension), "==", qt.make_column_literal(value)
-    )
