@@ -1892,6 +1892,50 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             [DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)],
         )
 
+    def test_default_data_id(self) -> None:
+        butler = self.make_butler("base.yaml")
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "Cam2", "name": "Cam2-G", "band": "g"}
+        )
+
+        # With no default data ID, queries should return results for all
+        # instruments.
+        result = butler.query_dimension_records("physical_filter")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam1-R1", "Cam1-R2", "Cam2-G"])
+
+        result = butler.query_dimension_records("physical_filter", where="band='g'")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam2-G"])
+
+        # Override the default data ID to specify a default instrument for
+        # subsequent tests.
+        butler.registry.defaults = RegistryDefaults(instrument="Cam1")
+
+        # Query for a dimension that depends on instrument should pull in the
+        # default data ID instrument="Cam1" to constrain results.
+        result = butler.query_dimension_records("physical_filter")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam1-R1", "Cam1-R2"])
+
+        # Query for a dimension that depends on instrument should pull in the
+        # default data ID instrument="Cam1" to constrain results, if the where
+        # clause does not explicitly specify instrument.
+        result = butler.query_dimension_records("physical_filter", where="band='g'")
+        names = [x.name for x in result]
+        self.assertEqual(names, ["Cam1-G"])
+
+        # Queries that specify instrument explicitly in the where clause
+        # should ignore the default data ID.
+        result = butler.query_dimension_records("physical_filter", where="instrument='Cam2'")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam2-G"])
+
+        result = butler.query_dimension_records("physical_filter", where="instrument IN ('Cam2')")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam2-G"])
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

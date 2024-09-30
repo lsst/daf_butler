@@ -945,6 +945,17 @@ class DirectQueryDriver(QueryDriver):
                         f"Query 'where' expression references a dimension dependent on {governor} without "
                         "constraining it directly."
                     )
+        # Pull in default data ID for any dimensions not referenced above
+        for governor in tree.dimensions.governors:
+            if governor not in result.constraint_data_id and governor not in result.governors_referenced:
+                if governor in self._default_data_id.dimensions:
+                    result.constraint_data_id[governor] = self._default_data_id[governor]
+                    result.predicate = result.predicate.logical_and(
+                        _create_data_id_predicate(
+                            governor, self._default_data_id[governor], tree.dimensions.universe
+                        )
+                    )
+
         # Add materializations, which can also bring in more postprocessing.
         for m_key, m_dimensions in tree.materializations.items():
             m_state = self._materializations[m_key]
@@ -1234,3 +1245,15 @@ class _Cursor:
         except:  # noqa: E722
             self.close(*sys.exc_info())
             raise
+
+
+def _create_data_id_predicate(
+    dimension_name: str, value: DataIdValue, universe: DimensionUniverse
+) -> qt.Predicate:
+    """Create a Predicate that tests whether the given dimension primary key is
+    equal to the given literal value.
+    """
+    dimension = universe.dimensions[dimension_name]
+    return qt.Predicate.compare(
+        qt.DimensionKeyReference(dimension=dimension), "==", qt.make_column_literal(value)
+    )
