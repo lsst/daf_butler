@@ -209,26 +209,26 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before queries can be executed.")
-        _, builder = self.build_query(
+        _, builder, postprocessing = self.build_query(
             tree,
             final_columns=result_spec.get_result_columns(),
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
         )
-        sql_select = builder.select()
+        sql_select = builder.select(postprocessing)
         if result_spec.order_by:
             visitor = SqlColumnVisitor(builder.joiner, self)
             sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
         if result_spec.limit is not None:
-            if builder.postprocessing:
-                builder.postprocessing.limit = result_spec.limit
+            if postprocessing:
+                postprocessing.limit = result_spec.limit
             else:
                 sql_select = sql_select.limit(result_spec.limit)
-        if builder.postprocessing.limit is not None:
+        if postprocessing.limit is not None:
             # We might want to fetch many fewer rows than the default page
             # size if we have to implement limit in postprocessing.
             raw_page_size = min(
-                self._postprocessing_filter_factor * builder.postprocessing.limit,
+                self._postprocessing_filter_factor * postprocessing.limit,
                 self._raw_page_size,
             )
         else:
@@ -238,7 +238,7 @@ class DirectQueryDriver(QueryDriver):
         cursor = _Cursor(
             self.db,
             sql_select,
-            postprocessing=builder.postprocessing,
+            postprocessing=postprocessing,
             raw_page_size=raw_page_size,
             page_converter=self._create_result_page_converter(result_spec, builder),
         )
@@ -292,7 +292,7 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
-        _, builder = self.build_query(tree, qt.ColumnSet(dimensions))
+        _, builder, postprocessing = self.build_query(tree, qt.ColumnSet(dimensions))
         # Current implementation ignores 'datasets' aside from remembering
         # them, because figuring out what to put in the temporary table for
         # them is tricky, especially if calibration collections are involved.
@@ -306,12 +306,14 @@ class DirectQueryDriver(QueryDriver):
         #   search is straightforward and definitely well-indexed, and not much
         #   (if at all) worse than joining back in on a materialized UUID.
         #
-        sql_select = builder.select()
-        table = self._exit_stack.enter_context(self.db.temporary_table(builder.make_table_spec()))
+        sql_select = builder.select(postprocessing)
+        table = self._exit_stack.enter_context(
+            self.db.temporary_table(builder.make_table_spec(postprocessing))
+        )
         self.db.insert(table, select=sql_select)
         if key is None:
             key = uuid.uuid4()
-        self._materializations[key] = _MaterializationState(table, datasets, builder.postprocessing)
+        self._materializations[key] = _MaterializationState(table, datasets, postprocessing)
         return key
 
     def upload_data_coordinates(
@@ -360,30 +362,32 @@ class DirectQueryDriver(QueryDriver):
     ) -> int:
         # Docstring inherited.
         columns = result_spec.get_result_columns()
-        plan, builder = self.build_query(tree, columns, find_first_dataset=result_spec.find_first_dataset)
+        plan, builder, postprocessing = self.build_query(
+            tree, columns, find_first_dataset=result_spec.find_first_dataset
+        )
         if not all(d.collection_records for d in plan.joins.datasets.values()):
             return 0
         if not exact:
-            builder.postprocessing = Postprocessing()
-        if builder.postprocessing:
+            postprocessing = Postprocessing()
+        if postprocessing:
             if not discard:
                 raise InvalidQueryError("Cannot count query rows exactly without discarding them.")
-            sql_select = builder.select()
-            builder.postprocessing.limit = result_spec.limit
+            sql_select = builder.select(postprocessing)
+            postprocessing.limit = result_spec.limit
             n = 0
             with self.db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
-                for _ in builder.postprocessing.apply(results):
+                for _ in postprocessing.apply(results):
                     n += 1
             return n
         # If the query has DISTINCT or GROUP BY, nest it in a subquery so we
         # count deduplicated rows.
-        builder = builder.nested()
+        builder = builder.nested(postprocessing=postprocessing)
         # Replace the columns of the query with just COUNT(*).
         builder.columns = qt.ColumnSet(self._universe.empty)
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
         builder.joiner.special["_ROWCOUNT"] = count_func
         # Render and run the query.
-        sql_select = builder.select()
+        sql_select = builder.select(postprocessing)
         with self.db.query(sql_select) as result:
             count = cast(int, result.scalar())
         if result_spec.limit is not None:
@@ -392,28 +396,28 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        plan, builder = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        plan, builder, postprocessing = self.build_query(tree, qt.ColumnSet(tree.dimensions))
         if not all(d.collection_records for d in plan.joins.datasets.values()):
             return False
         if not execute:
             if exact:
                 raise InvalidQueryError("Cannot obtain exact result for 'any' without executing.")
             return True
-        if builder.postprocessing and exact:
-            sql_select = builder.select()
+        if postprocessing and exact:
+            sql_select = builder.select(postprocessing)
             with self.db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
-                for _ in builder.postprocessing.apply(result):
+                for _ in postprocessing.apply(result):
                     return True
                 return False
-        sql_select = builder.select().limit(1)
+        sql_select = builder.select(postprocessing).limit(1)
         with self.db.query(sql_select) as result:
             return result.first() is not None
 
     def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
-        plan, _ = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
+        plan, _, _ = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
         if plan.joins.messages or not execute:
             return plan.joins.messages
         # TODO: guess at ways to split up query that might fail or succeed if
@@ -436,7 +440,7 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder]:
+    ) -> tuple[QueryPlan, QueryBuilder, Postprocessing]:
         """Convert a query description into a mostly-completed `QueryBuilder`.
 
         Parameters
@@ -464,15 +468,17 @@ class DirectQueryDriver(QueryDriver):
             `sqlalchemy.Select` object itself to allow different methods to
             customize the SELECT clause itself (e.g. `count` can replace the
             columns selected with ``COUNT(*)``).
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
         """
         # See the QueryPlan docs for an overview of what these stages of query
         # construction do.
-        plan, builder = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
+        plan, builder, postprocessing = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
         self.apply_query_joins(plan.joins, builder.joiner)
-        self.apply_query_projection(plan.projection, builder, order_by)
-        builder = self.apply_query_find_first(plan.find_first, builder)
+        self.apply_query_projection(plan.projection, builder, postprocessing, order_by)
+        builder = self.apply_query_find_first(plan.find_first, builder, postprocessing)
         builder.columns = plan.final_columns
-        return plan, builder
+        return plan, builder, postprocessing
 
     def analyze_query(
         self,
@@ -480,7 +486,7 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder]:
+    ) -> tuple[QueryPlan, QueryBuilder, Postprocessing]:
         """Construct a plan for building a query and initialize a builder.
 
         Parameters
@@ -506,6 +512,8 @@ class DirectQueryDriver(QueryDriver):
             Builder object initialized with overlap joins and constraints
             potentially included, with the remainder still present in
             `QueryJoinPlans.predicate`.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
         """
         # The fact that this method returns both a QueryPlan and an initial
         # QueryBuilder (rather than just a QueryPlan) is a tradeoff that lets
@@ -513,7 +521,7 @@ class DirectQueryDriver(QueryDriver):
         # by the `_analyze_query_tree` call below) pull out overlap expressions
         # from the predicate at the same time it turns them into SQL table
         # joins (in the builder).
-        joins_plan, builder = self._analyze_query_tree(tree)
+        joins_plan, builder, postprocessing = self._analyze_query_tree(tree)
 
         # The "projection" columns differ from the final columns by not
         # omitting any dimension keys (this keeps queries for different result
@@ -568,14 +576,14 @@ class DirectQueryDriver(QueryDriver):
             # collection, and we can only do that with a GROUP BY and COUNT
             # that we inspect in postprocessing.
             if find_first_plan.search.is_calibration_search:
-                builder.postprocessing.check_validity_match_count = True
+                postprocessing.check_validity_match_count = True
         plan = QueryPlan(
             joins=joins_plan,
             projection=projection_plan,
             find_first=find_first_plan,
             final_columns=final_columns,
         )
-        return plan, builder
+        return plan, builder, postprocessing
 
     def apply_query_joins(self, plan: QueryJoinsPlan, joiner: QueryJoiner) -> None:
         """Modify a `QueryJoiner` to include all tables and other FROM and
@@ -638,7 +646,11 @@ class DirectQueryDriver(QueryDriver):
         joiner.where(plan.predicate.visit(SqlColumnVisitor(joiner, self)))
 
     def apply_query_projection(
-        self, plan: QueryProjectionPlan, builder: QueryBuilder, order_by: Iterable[qt.OrderExpression]
+        self,
+        plan: QueryProjectionPlan,
+        builder: QueryBuilder,
+        postprocessing: Postprocessing,
+        order_by: Iterable[qt.OrderExpression],
     ) -> None:
         """Modify `QueryBuilder` to reflect the "projection" stage of query
         construction, which can involve a GROUP BY or DISTINCT [ON] clause
@@ -652,12 +664,14 @@ class DirectQueryDriver(QueryDriver):
             Builder object that will be modified in place.  Expected to be
             initialized by `analyze_query` and further modified by
             `apply_query_joins`.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
         order_by : `~collections.abc.Iterable` [ \
               `.queries.tree.OrderExpression` ]
             Order by clause associated with the query.
         """
         builder.columns = plan.columns
-        if not plan and not builder.postprocessing.check_validity_match_count:
+        if not plan and not postprocessing.check_validity_match_count:
             # Rows are already unique; nothing else to do in this method.
             return
         # This method generates  either a SELECT DISTINCT [ON] or a SELECT with
@@ -685,13 +699,13 @@ class DirectQueryDriver(QueryDriver):
         #   visit_detector_region.region, but the output rows don't have
         #   detector, just visit - so we compute the union of the
         #   visit_detector region over all matched detectors).
-        if builder.postprocessing.check_validity_match_count:
-            builder.joiner.special[builder.postprocessing.VALIDITY_MATCH_COUNT] = (
-                sqlalchemy.func.count().label(builder.postprocessing.VALIDITY_MATCH_COUNT)
+        if postprocessing.check_validity_match_count:
+            builder.joiner.special[postprocessing.VALIDITY_MATCH_COUNT] = sqlalchemy.func.count().label(
+                postprocessing.VALIDITY_MATCH_COUNT
             )
             have_aggregates = True
 
-        for element in builder.postprocessing.iter_missing(plan.columns):
+        for element in postprocessing.iter_missing(plan.columns):
             if element.name in plan.columns.dimensions.elements:
                 # The region associated with dimension keys returned by the
                 # query are derived fields, since there is only one region
@@ -762,7 +776,7 @@ class DirectQueryDriver(QueryDriver):
         # restriction.
         elif not have_aggregates and self.db.has_distinct_on and len(list(order_by)) == 0:
             # SELECT DISTINCT ON is sufficient and supported by this database.
-            builder.distinct = unique_keys
+            builder.distinct = tuple(unique_keys)
         else:
             # GROUP BY is the only option.
             if derived_fields:
@@ -788,9 +802,11 @@ class DirectQueryDriver(QueryDriver):
                             unique_keys.extend(builder.joiner.timespans[logical_table].flatten())
                         else:
                             unique_keys.append(builder.joiner.fields[logical_table][field])
-            builder.group_by = unique_keys
+            builder.group_by = tuple(unique_keys)
 
-    def apply_query_find_first(self, plan: QueryFindFirstPlan | None, builder: QueryBuilder) -> QueryBuilder:
+    def apply_query_find_first(
+        self, plan: QueryFindFirstPlan | None, builder: QueryBuilder, postprocessing: Postprocessing
+    ) -> QueryBuilder:
         """Modify an under-construction SQL query to return only one row for
         each data ID, searching collections in order.
 
@@ -803,6 +819,8 @@ class DirectQueryDriver(QueryDriver):
             object should be considered to be consumed by this method - the
             same instance may or may not be returned, and if it is not
             returned, its state is not defined.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
 
         Returns
         -------
@@ -841,7 +859,7 @@ class DirectQueryDriver(QueryDriver):
         # (https://www.sqlite.org/quirks.html).  But since that doesn't work
         # with PostgreSQL it doesn't help us.
         #
-        builder = builder.nested(cte=True, force=True)
+        builder = builder.nested(cte=True, force=True, postprocessing=postprocessing)
         # We start by filling out the "window" SELECT statement...
         partition_by = [builder.joiner.dimension_keys[d][0] for d in builder.columns.dimensions.required]
         rank_sql_column = sqlalchemy.case(
@@ -857,14 +875,14 @@ class DirectQueryDriver(QueryDriver):
                 order_by=rank_sql_column
             )
         # ... and then turn that into a subquery with a constraint on rownum.
-        builder = builder.nested(force=True)
+        builder = builder.nested(force=True, postprocessing=postprocessing)
         # We can now add the WHERE constraint on rownum into the outer query.
         builder.joiner.where(builder.joiner.special["_ROWNUM"] == 1)
         # Don't propagate _ROWNUM into downstream queries.
         del builder.joiner.special["_ROWNUM"]
         return builder
 
-    def _analyze_query_tree(self, tree: qt.QueryTree) -> tuple[QueryJoinsPlan, QueryBuilder]:
+    def _analyze_query_tree(self, tree: qt.QueryTree) -> tuple[QueryJoinsPlan, QueryBuilder, Postprocessing]:
         """Start constructing a plan for building a query from a
         `.queries.tree.QueryTree`.
 
@@ -883,6 +901,8 @@ class DirectQueryDriver(QueryDriver):
             Builder object initialized with overlap joins and constraints
             potentially included, with the remainder still present in
             `QueryJoinPlans.predicate`.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
         """
         # Retrieve collection information for all collections in a tree.
         collection_names = set(
@@ -922,6 +942,7 @@ class DirectQueryDriver(QueryDriver):
         (
             predicate,
             builder,
+            postprocessing,
         ) = self.managers.dimensions.process_query_overlaps(
             tree.dimensions,
             tree.predicate,
@@ -944,7 +965,7 @@ class DirectQueryDriver(QueryDriver):
         )
 
         # Add columns required by postprocessing.
-        builder.postprocessing.gather_columns_required(result.columns)
+        postprocessing.gather_columns_required(result.columns)
 
         # Add materializations, which can also bring in more postprocessing.
         for m_key, m_dimensions in tree.materializations.items():
@@ -955,12 +976,8 @@ class DirectQueryDriver(QueryDriver):
             # the materialized rows.  But the original postprocessing isn't
             # executed when the materialization happens, so we have to include
             # it here.
-            builder.postprocessing.spatial_join_filtering.extend(
-                m_state.postprocessing.spatial_join_filtering
-            )
-            builder.postprocessing.spatial_where_filtering.extend(
-                m_state.postprocessing.spatial_where_filtering
-            )
+            postprocessing.spatial_join_filtering.extend(m_state.postprocessing.spatial_join_filtering)
+            postprocessing.spatial_where_filtering.extend(m_state.postprocessing.spatial_where_filtering)
         # Add data coordinate uploads.
         result.data_coordinate_uploads.update(tree.data_coordinate_uploads)
         # Add dataset_searches and filter out collections that don't have the
@@ -980,7 +997,7 @@ class DirectQueryDriver(QueryDriver):
                     f"{list(dataset_search.collections)} is doomed to fail."
                 )
                 result.messages.extend(resolved_dataset_search.messages)
-        return result, builder
+        return result, builder, postprocessing
 
     def _filter_collections(
         self,

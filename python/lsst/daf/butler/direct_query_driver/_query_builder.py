@@ -71,11 +71,6 @@ class QueryBuilder:
     clause.
     """
 
-    postprocessing: Postprocessing = dataclasses.field(default_factory=Postprocessing)
-    """Postprocessing that will be needed in Python after the SQL query has
-    been executed.
-    """
-
     distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = ()
     """A representation of a DISTINCT or DISTINCT ON clause.
 
@@ -126,9 +121,15 @@ class QueryBuilder:
             columns.append(sqlalchemy.sql.literal(True).label(cls.EMPTY_COLUMNS_NAME))
         return columns
 
-    def select(self) -> sqlalchemy.Select:
+    def select(self, postprocessing: Postprocessing | None) -> sqlalchemy.Select:
         """Transform this builder into a SQLAlchemy representation of a SELECT
         query.
+
+        Parameters
+        ----------
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing in Python, which may
+            require additional columns in the query results.
 
         Returns
         -------
@@ -147,8 +148,8 @@ class QueryBuilder:
                     sql_columns.extend(self.joiner.timespans[logical_table].flatten(name))
                 else:
                     sql_columns.append(self.joiner.fields[logical_table][field].label(name))
-        if self.postprocessing is not None:
-            for element in self.postprocessing.iter_missing(self.columns):
+        if postprocessing is not None:
+            for element in postprocessing.iter_missing(self.columns):
                 sql_columns.append(
                     self.joiner.fields[element.name]["region"].label(
                         self.joiner.db.name_shrinker.shrink(
@@ -191,7 +192,9 @@ class QueryBuilder:
         self.joiner.join(other)
         return self
 
-    def to_joiner(self, cte: bool = False, force: bool = False) -> QueryJoiner:
+    def to_joiner(
+        self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
+    ) -> QueryJoiner:
         """Convert this builder into a `QueryJoiner`, nesting it in a subquery
         or common table expression only if needed to apply DISTINCT or GROUP BY
         clauses.
@@ -206,6 +209,9 @@ class QueryBuilder:
         force : `bool`, optional
             If `True`, nest via a subquery or common table expression even if
             there is no DISTINCT or GROUP BY.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing in Python, which may
+            require additional columns in the query results.
 
         Returns
         -------
@@ -214,13 +220,17 @@ class QueryBuilder:
             This may or may not be the `joiner` attribute of this object.
         """
         if force or self.distinct or self.group_by:
-            sql_from_clause = self.select().cte() if cte else self.select().subquery()
+            sql_from_clause = (
+                self.select(postprocessing).cte() if cte else self.select(postprocessing).subquery()
+            )
             return QueryJoiner(self.joiner.db, sql_from_clause).extract_columns(
-                self.columns, self.postprocessing, special=self.joiner.special.keys()
+                self.columns, special=self.joiner.special.keys()
             )
         return self.joiner
 
-    def nested(self, cte: bool = False, force: bool = False) -> QueryBuilder:
+    def nested(
+        self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
+    ) -> QueryBuilder:
         """Convert this builder into a `QueryBuiler` that is guaranteed to have
         no DISTINCT or GROUP BY, nesting it in a subquery or common table
         expression only if needed to apply any current DISTINCT or GROUP BY
@@ -236,6 +246,9 @@ class QueryBuilder:
         force : `bool`, optional
             If `True`, nest via a subquery or common table expression even if
             there is no DISTINCT or GROUP BY.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing in Python, which may
+            require additional columns in the query results.
 
         Returns
         -------
@@ -244,12 +257,11 @@ class QueryBuilder:
             This may or may not be the `builder` attribute of this object.
         """
         return QueryBuilder(
-            self.to_joiner(cte=cte, force=force), columns=self.columns, postprocessing=self.postprocessing
+            self.to_joiner(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
         )
 
     def union_subquery(
-        self,
-        others: Iterable[QueryBuilder],
+        self, others: Iterable[QueryBuilder], postprocessing: Postprocessing | None = None
     ) -> QueryJoiner:
         """Combine this builder with others to make a SELECT UNION subquery.
 
@@ -258,6 +270,9 @@ class QueryBuilder:
         others : `~collections.abc.Iterable` [ `QueryBuilder` ]
             Other query builders to union with.  Their `columns` attributes
             must be the same as those of ``self``.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing in Python, which may
+            require additional columns in the query results.
 
         Returns
         -------
@@ -265,16 +280,22 @@ class QueryBuilder:
             `QueryJoiner` with at least all columns in `columns` available.
             This may or may not be the `joiner` attribute of this object.
         """
-        select0 = self.select()
-        other_selects = [other.select() for other in others]
+        select0 = self.select(postprocessing)
+        other_selects = [other.select(postprocessing) for other in others]
         return QueryJoiner(
             self.joiner.db,
             from_clause=select0.union(*other_selects).subquery(),
-        ).extract_columns(self.columns, self.postprocessing)
+        ).extract_columns(self.columns, postprocessing)
 
-    def make_table_spec(self) -> ddl.TableSpec:
+    def make_table_spec(self, postprocessing: Postprocessing | None) -> ddl.TableSpec:
         """Make a specification that can be used to create a table to store
         this query's outputs.
+
+        Parameters
+        ----------
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing in Python, which may
+            require additional columns in the query results.
 
         Returns
         -------
@@ -291,8 +312,8 @@ class QueryBuilder:
                 for logical_table, field in self.columns
             ]
         )
-        if self.postprocessing:
-            for element in self.postprocessing.iter_missing(self.columns):
+        if postprocessing:
+            for element in postprocessing.iter_missing(self.columns):
                 results.fields.add(
                     ddl.FieldSpec.for_region(
                         self.joiner.db.name_shrinker.shrink(
@@ -509,7 +530,6 @@ class QueryJoiner:
     def to_builder(
         self,
         columns: qt.ColumnSet,
-        postprocessing: Postprocessing | None = None,
         distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = (),
         group_by: Sequence[sqlalchemy.ColumnElement[Any]] = (),
     ) -> QueryBuilder:
@@ -522,9 +542,6 @@ class QueryJoiner:
         ----------
         columns : `~.queries.tree.ColumnSet`
             Regular columns to include in the SELECT clause.
-        postprocessing : `Postprocessing`, optional
-            Addition processing to be performed on result rows after executing
-            the SQL query.
         distinct : `bool` or `~collections.abc.Sequence` [ \
                 `sqlalchemy.ColumnElement` ], optional
             Specification of the DISTINCT clause (see `QueryBuilder.distinct`).
@@ -540,7 +557,6 @@ class QueryJoiner:
         return QueryBuilder(
             self,
             columns,
-            postprocessing=postprocessing if postprocessing is not None else Postprocessing(),
-            distinct=distinct,
-            group_by=group_by,
+            distinct=distinct if type(distinct) is bool else tuple(distinct),
+            group_by=tuple(group_by),
         )
