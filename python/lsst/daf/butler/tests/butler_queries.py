@@ -1909,9 +1909,37 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         names = [x.name for x in result]
         self.assertCountEqual(names, ["Cam1-G", "Cam2-G"])
 
+        # When there is no default data ID and a where clause references
+        # something depending on instrument, it throws an error as a
+        # sanity check.
+        # In this case, 'instrument' is not part of the dimensions returned by
+        # the query, so there is extra logic needed to detect the need for the
+        # default data ID.
+        with self.assertRaisesRegex(
+            InvalidQueryError,
+            "Query 'where' expression references a dimension dependent on instrument"
+            " without constraining it directly.",
+        ):
+            butler.query_data_ids(["band"], where="physical_filter='Cam1-G'")
+
         # Override the default data ID to specify a default instrument for
         # subsequent tests.
         butler.registry.defaults = RegistryDefaults(instrument="Cam1")
+
+        # When a where clause references something depending on instrument, use
+        # the default data ID to constrain the instrument.
+        # In this case, 'instrument' is not part of the dimensions returned by
+        # the query, so there is extra logic needed to detect the need for the
+        # default data ID.
+        data_ids = butler.query_data_ids(["band"], where="physical_filter='Cam1-G'")
+        self.assertEqual([x["band"] for x in data_ids], ["g"])
+        # Default data ID instrument=Cam1 does not match Cam2, so there are no
+        # results.
+        data_ids = butler.query_data_ids(["band"], where="physical_filter='Cam2-G'", explain=False)
+        self.assertEqual(data_ids, [])
+        # Overriding the default lets us get the results.
+        data_ids = butler.query_data_ids(["band"], where="instrument='Cam2' and physical_filter='Cam2-G'")
+        self.assertEqual([x["band"] for x in data_ids], ["g"])
 
         # Query for a dimension that depends on instrument should pull in the
         # default data ID instrument="Cam1" to constrain results.

@@ -940,6 +940,11 @@ class DirectQueryDriver(QueryDriver):
             if governor not in result.constraint_data_id and governor not in result.governors_referenced:
                 if governor in self._default_data_id.dimensions:
                     result.constraint_data_id[governor] = self._default_data_id[governor]
+                    result.predicate = result.predicate.logical_and(
+                        _create_data_id_predicate(
+                            governor, self._default_data_id[governor], tree.dimensions.universe
+                        )
+                    )
                 else:
                     raise InvalidQueryError(
                         f"Query 'where' expression references a dimension dependent on {governor} without "
