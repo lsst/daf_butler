@@ -37,12 +37,15 @@ __all__ = (
 
 import dataclasses
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup
 from ..queries import tree as qt
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, SimplePredicateVisitor
 from ..registry.interfaces import CollectionRecord
+
+if TYPE_CHECKING:
+    from ._query_builder import QueryBuilder
 
 
 @dataclasses.dataclass
@@ -296,6 +299,9 @@ class QueryPlan:
     fields added directly to `QueryBuilder.special`, which may also be added
     to the SELECT clause.
     """
+
+    builder: QueryBuilder
+    """Under-construction SQL query associated with this plan."""
 
 
 class _DataIdExtractionVisitor(
