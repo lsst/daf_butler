@@ -759,6 +759,20 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         _checkNumpyTableEquality(tab1, tab2)
 
     @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
+    def testMaskedNumpy(self):
+        tab1 = _makeSimpleArrowTable(include_multidim=False, include_masked=True)
+        tab1_np = arrow_to_numpy(tab1)
+        self.assertIsInstance(tab1_np, np.ma.MaskedArray)
+        # Stats on a masked column should ignore the nan in row 1.
+        col = tab1_np["m_f8"]
+        self.assertEqual(np.mean(col), 2.25, f"Column: {col}")
+
+        # Now without a mask.
+        tab1 = _makeSimpleArrowTable(include_multidim=False, include_masked=False)
+        tab1_np = arrow_to_numpy(tab1)
+        self.assertNotIsInstance(tab1_np, np.ma.MaskedArray)
+
+    @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
     def testWriteReadArrowTableLossless(self):
         tab1 = _makeSimpleArrowTable(include_multidim=False, include_masked=True)
 
