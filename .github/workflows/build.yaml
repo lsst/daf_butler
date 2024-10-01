@@ -27,18 +27,16 @@ jobs:
           channels: conda-forge,defaults
           channel-priority: strict
           show-channel-urls: true
-          miniforge-variant: Mambaforge
-          use-mamba: true
 
       - name: Update pip/wheel infrastructure
         shell: bash -l {0}
         run: |
-          mamba install -y -q pip wheel
+          conda install -y -q pip wheel
 
       - name: Install sqlite
         shell: bash -l {0}
         run: |
-          mamba install -y -q sqlite
+          conda install -y -q sqlite
 
       # Postgres-14 is already installed from official postgres repo, but we
       # also need pgsphere which is not installed. The repo is not in the list,
@@ -54,12 +52,12 @@ jobs:
       - name: Install postgresql Python packages
         shell: bash -l {0}
         run: |
-          mamba install -y -q psycopg2
+          conda install -y -q psycopg2
 
       - name: Install cryptography package for moto
         shell: bash -l {0}
         run: |
-          mamba install -y -q cryptography
+          conda install -y -q cryptography
 
       - name: Install dependencies
         shell: bash -l {0}
@@ -71,13 +69,13 @@ jobs:
       - name: Install pytest packages
         shell: bash -l {0}
         run: |
-          mamba install -y -q \
+          conda install -y -q \
             pytest pytest-xdist pytest-cov
 
       - name: List installed packages
         shell: bash -l {0}
         run: |
-          mamba list
+          conda list
           pip list -v
 
       - name: Build and install
