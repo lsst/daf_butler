@@ -1892,6 +1892,78 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             [DataCoordinate.standardize(instrument="Cam1", universe=butler.dimensions)],
         )
 
+    def test_default_data_id(self) -> None:
+        butler = self.make_butler("base.yaml")
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "Cam2", "name": "Cam2-G", "band": "g"}
+        )
+
+        # With no default data ID, queries should return results for all
+        # instruments.
+        result = butler.query_dimension_records("physical_filter")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam1-R1", "Cam1-R2", "Cam2-G"])
+
+        result = butler.query_dimension_records("physical_filter", where="band='g'")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam2-G"])
+
+        # When there is no default data ID and a where clause references
+        # something depending on instrument, it throws an error as a
+        # sanity check.
+        # In this case, 'instrument' is not part of the dimensions returned by
+        # the query, so there is extra logic needed to detect the need for the
+        # default data ID.
+        with self.assertRaisesRegex(
+            InvalidQueryError,
+            "Query 'where' expression references a dimension dependent on instrument"
+            " without constraining it directly.",
+        ):
+            butler.query_data_ids(["band"], where="physical_filter='Cam1-G'")
+
+        # Override the default data ID to specify a default instrument for
+        # subsequent tests.
+        butler.registry.defaults = RegistryDefaults(instrument="Cam1")
+
+        # When a where clause references something depending on instrument, use
+        # the default data ID to constrain the instrument.
+        # In this case, 'instrument' is not part of the dimensions returned by
+        # the query, so there is extra logic needed to detect the need for the
+        # default data ID.
+        data_ids = butler.query_data_ids(["band"], where="physical_filter='Cam1-G'")
+        self.assertEqual([x["band"] for x in data_ids], ["g"])
+        # Default data ID instrument=Cam1 does not match Cam2, so there are no
+        # results.
+        data_ids = butler.query_data_ids(["band"], where="physical_filter='Cam2-G'", explain=False)
+        self.assertEqual(data_ids, [])
+        # Overriding the default lets us get the results.
+        data_ids = butler.query_data_ids(["band"], where="instrument='Cam2' and physical_filter='Cam2-G'")
+        self.assertEqual([x["band"] for x in data_ids], ["g"])
+
+        # Query for a dimension that depends on instrument should pull in the
+        # default data ID instrument="Cam1" to constrain results.
+        result = butler.query_dimension_records("physical_filter")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam1-G", "Cam1-R1", "Cam1-R2"])
+
+        # Query for a dimension that depends on instrument should pull in the
+        # default data ID instrument="Cam1" to constrain results, if the where
+        # clause does not explicitly specify instrument.
+        result = butler.query_dimension_records("physical_filter", where="band='g'")
+        names = [x.name for x in result]
+        self.assertEqual(names, ["Cam1-G"])
+
+        # Queries that specify instrument explicitly in the where clause
+        # should ignore the default data ID.
+        result = butler.query_dimension_records("physical_filter", where="instrument='Cam2'")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam2-G"])
+
+        result = butler.query_dimension_records("physical_filter", where="instrument IN ('Cam2')")
+        names = [x.name for x in result]
+        self.assertCountEqual(names, ["Cam2-G"])
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []
