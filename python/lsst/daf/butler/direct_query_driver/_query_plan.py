@@ -44,6 +44,7 @@ from ..queries import tree as qt
 from ..registry.interfaces import CollectionRecord
 
 if TYPE_CHECKING:
+    from ._postprocessing import Postprocessing
     from ._query_builder import QueryBuilder
 
 
@@ -174,9 +175,6 @@ class QueryProjectionPlan:
     This is always a subset of `QueryJoinsPlan.columns`.
     """
 
-    datasets: dict[str, ResolvedDatasetSearch]
-    """Dataset searches to join into the query."""
-
     needs_dimension_distinct: bool = False
     """If `True`, the projection's dimensions do not include all dimensions in
     the "joins" stage, and hence a SELECT DISTINCT [ON] or GROUP BY must be
@@ -285,3 +283,8 @@ class QueryPlan:
 
     builder: QueryBuilder
     """Under-construction SQL query associated with this plan."""
+
+    postprocessing: Postprocessing
+    """Struct representing post-query processing in Python, which may require
+    additional columns in the query results.
+    """
