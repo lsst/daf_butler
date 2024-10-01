@@ -1,0 +1,2 @@
+Fixed the return type of ``arrow_to_numpy`` so that a masked record array is returned if any of the columns in the arrow table includes nulls.
+Previously the masks were ignored and fill values were visible and used in calculations.

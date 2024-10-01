@@ -219,7 +219,7 @@ def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
     return astropy_table
 
 
-def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
+def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray | np.ma.MaskedArray:
     """Convert a pyarrow table to a structured numpy array.
 
     Parameters
@@ -229,14 +229,16 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
 
     Returns
     -------
-    array : `numpy.ndarray` (N,)
+    array : `numpy.ndarray` or `numpy.ma.MaskedArray` (N,)
         Numpy array table with N rows and the same column names
-        as the input arrow table.
+        as the input arrow table. Will be masked records if any values
+        in the table are null.
     """
     import numpy as np
 
     numpy_dict = arrow_to_numpy_dict(arrow_table)
 
+    has_mask = False
     dtype = []
     for name, col in numpy_dict.items():
         if len(shape := numpy_dict[name].shape) <= 1:
@@ -244,8 +246,13 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
         else:
             dtype.append((name, (col.dtype, shape[1:])))
 
-    array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
+        if not has_mask and isinstance(col, np.ma.MaskedArray):
+            has_mask = True
 
+    if has_mask:
+        array = np.ma.mrecords.fromarrays(numpy_dict.values(), dtype=dtype)
+    else:
+        array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
     return array
 
 
@@ -1098,7 +1105,8 @@ def _arrow_string_to_numpy_dtype(
         # String/bytes length from header.
         strlen = int(schema.metadata[encoded])
     elif numpy_column is not None and len(numpy_column) > 0:
-        strlen = max([len(row) for row in numpy_column if row])
+        lengths = [len(row) for row in numpy_column if row]
+        strlen = max(lengths) if lengths else 0
 
     dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
 
