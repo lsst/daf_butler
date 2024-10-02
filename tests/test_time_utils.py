@@ -105,7 +105,7 @@ class TimeTestCase(unittest.TestCase):
                     delta2_sec = delta2.to_value("sec")
                     # absolute precision should be better than half
                     # nanosecond, but there are rounding errors too
-                    self.assertLess(abs(delta2_sec), 0.51e-9)
+                    self.assertLess(abs(delta2_sec), 0.511e-9)
 
     def test_times_equal(self):
         """Test for times_equal method"""

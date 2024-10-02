@@ -33,7 +33,9 @@ import warnings
 from typing import Any, ClassVar
 
 import astropy.time
+import astropy.time.formats
 import astropy.utils.exceptions
+import numpy
 import yaml
 
 # As of astropy 4.2, the erfa interface is shipped independently and
@@ -46,6 +48,43 @@ except ImportError:
 from lsst.utils.classes import Singleton
 
 _LOG = logging.getLogger(__name__)
+
+
+class _FastTimeUnixTai(astropy.time.formats.TimeUnixTai):
+    """Special astropy time format that skips some checks of the parameters.
+    This format is only used internally by TimeConverter so we can trust that
+    it passes correct values to astropy Time class.
+    """
+
+    # number of seconds in a day
+    _SEC_PER_DAY: ClassVar[int] = 24 * 3600
+
+    # Name of this format, it is registered in astropy formats registry.
+    name = "unix_tai_fast"
+
+    def _check_val_type(self, val1: Any, val2: Any) -> tuple:
+        # We trust everything that is passed to us.
+        return val1, val2
+
+    def set_jds(self, val1: numpy.ndarray, val2: numpy.ndarray | None) -> None:
+        # Epoch time format is TimeISO with scalar jd1/jd2 arrays, convert them
+        # to floats to speed things up.
+        epoch = self._epoch._time
+        jd1, jd2 = float(epoch._jd1), float(epoch._jd2)
+
+        assert val1.ndim == 0, "Expect scalar"
+        whole_days, seconds = divmod(float(val1), self._SEC_PER_DAY)
+        if val2 is not None:
+            assert val2.ndim == 0, "Expect scalar"
+            seconds += float(val2)
+
+        jd1 += whole_days
+        jd2 += seconds / self._SEC_PER_DAY
+        while jd2 > 0.5:
+            jd2 -= 1.0
+            jd1 += 1.0
+
+        self._jd1, self._jd2 = numpy.array(jd1), numpy.array(jd2)
 
 
 class TimeConverter(metaclass=Singleton):
@@ -136,10 +175,8 @@ class TimeConverter(metaclass=Singleton):
         that the number falls in the supported range and can produce output
         time that is outside of that range.
         """
-        jd1, jd2 = divmod(time_nsec, self._NSEC_PER_DAY)
-        delta = astropy.time.TimeDelta(float(jd1), float(jd2) / self._NSEC_PER_DAY, format="jd", scale="tai")
-        value = self.epoch + delta
-        return value
+        jd1, jd2 = divmod(time_nsec, 1_000_000_000)
+        return astropy.time.Time(float(jd1), jd2 / 1_000_000_000, format="unix_tai_fast", scale="tai")
 
     def times_equal(
         self, time1: astropy.time.Time, time2: astropy.time.Time, precision_nsec: float = 1.0
