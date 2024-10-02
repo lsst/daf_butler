@@ -129,7 +129,17 @@ class TimespanTestCase(unittest.TestCase):
         """Test __str__ against expected values and __repr__ with eval
         round-tripping.
         """
-        for ts in self.timespans:
+        timespans = self.timespans
+
+        # Add timespan that includes Julian day high precision version.
+        timespans.append(
+            Timespan(
+                begin=astropy.time.Time(2458850.0, -0.49930555555555556, format="jd", scale="tai"),
+                end=astropy.time.Time(2458850.0, -0.4986111111111111, format="jd", scale="tai"),
+            )
+        )
+
+        for ts in timespans:
             # Uncomment the next line and run this test directly for the most
             # important test: human inspection.
             #    print(str(ts), repr(ts))
