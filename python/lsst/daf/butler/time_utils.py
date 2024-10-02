@@ -136,10 +136,14 @@ class TimeConverter(metaclass=Singleton):
         that the number falls in the supported range and can produce output
         time that is outside of that range.
         """
-        jd1, jd2 = divmod(time_nsec, self._NSEC_PER_DAY)
-        delta = astropy.time.TimeDelta(float(jd1), float(jd2) / self._NSEC_PER_DAY, format="jd", scale="tai")
-        value = self.epoch + delta
-        return value
+        njd1, njd2 = divmod(time_nsec, self._NSEC_PER_DAY)
+        # We can use ._time.jd1 if we know that the reference epoch is also
+        # JD/TAI. Tom Aldcroft on Astropy Slack noted that this private
+        # attribute is effectively public and is much faster than
+        # using `time.jd1`.
+        jd1 = float(njd1) + self.epoch._time.jd1
+        jd2 = (float(njd2) / self._NSEC_PER_DAY) + self.epoch._time.jd2
+        return astropy.time.Time(jd1, jd2, format="jd", scale="tai", precision=6)
 
     def times_equal(
         self, time1: astropy.time.Time, time2: astropy.time.Time, precision_nsec: float = 1.0
