@@ -112,8 +112,10 @@ class TimeConverter(metaclass=Singleton):
         delta = value - self.epoch
         # Special care needed to preserve nanosecond precision.
         # Usually jd1 has no fractional part but just in case.
-        jd1, extra_jd2 = divmod(delta.jd1, 1)
-        value = int(jd1) * self._NSEC_PER_DAY + int(round((delta.jd2 + extra_jd2) * self._NSEC_PER_DAY))
+        # Can use "internal" ._time.jd1 interface because we know that both
+        # are TAI. This is a few percent faster than using .jd1.
+        jd1, extra_jd2 = divmod(delta._time.jd1, 1)
+        value = int(jd1) * self._NSEC_PER_DAY + int(round((delta._time.jd2 + extra_jd2) * self._NSEC_PER_DAY))
         return value
 
     def nsec_to_astropy(self, time_nsec: int) -> astropy.time.Time:
