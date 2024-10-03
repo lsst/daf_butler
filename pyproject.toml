@@ -33,6 +33,7 @@ dependencies = [
     "deprecated >= 1.2",
     "pydantic >=2,<3.0",
     "pyarrow >= 0.16",
+    "numpy",
 ]
 
 dynamic = ["version"]
