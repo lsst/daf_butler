@@ -178,9 +178,13 @@ class TimeConverter(metaclass=Singleton):
         time that is outside of that range.
         """
         jd1, jd2 = divmod(time_nsec, 1_000_000_000)
-        return astropy.time.Time(
+        time = astropy.time.Time(
             float(jd1), jd2 / 1_000_000_000, format="unix_tai_fast", scale="tai", precision=6
         )
+        # Force the format to be something more obvious to external users.
+        # There is a small overhead doing this but it does avoid confusion.
+        time.format = "jd"
+        return time
 
     def times_equal(
         self, time1: astropy.time.Time, time2: astropy.time.Time, precision_nsec: float = 1.0
