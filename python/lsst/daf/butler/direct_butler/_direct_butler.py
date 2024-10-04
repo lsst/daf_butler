@@ -61,7 +61,7 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._exceptions import DatasetNotFoundError, DimensionValueError, ValidationError
+from .._exceptions import DatasetNotFoundError, DimensionValueError, EmptyQueryResultError, ValidationError
 from .._limited_butler import LimitedButler
 from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
@@ -661,29 +661,37 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 if dimensionName in newDataId:
                     _LOG.debug(
                         "DataId specified explicit %s dimension value of %s in addition to"
-                        " general record specifiers for it of %s.  Ignoring record information.",
+                        " general record specifiers for it of %s. Checking for self-consistency.",
                         dimensionName,
                         newDataId[dimensionName],
                         str(values),
                     )
                     # Get the actual record and compare with these values.
+                    # Only query with relevant data ID values.
+                    filtered_data_id = {
+                        k: v for k, v in newDataId.items() if k in self.dimensions[dimensionName].required
+                    }
                     try:
-                        recs = self.query_dimension_records(dimensionName, data_id=newDataId, explain=False)
-                    except DataIdError:
+                        recs = self.query_dimension_records(
+                            dimensionName,
+                            data_id=filtered_data_id,
+                        )
+                    except (DataIdError, EmptyQueryResultError):
                         raise DimensionValueError(
                             f"Could not find dimension '{dimensionName}'"
-                            f" with dataId {newDataId} as part of comparing with"
+                            f" with dataId {filtered_data_id} as part of comparing with"
                             f" record values {byRecord[dimensionName]}"
                         ) from None
                     if len(recs) == 1:
                         errmsg: list[str] = []
                         for k, v in values.items():
                             if (recval := getattr(recs[0], k)) != v:
-                                errmsg.append(f"{k}({recval} != {v})")
+                                errmsg.append(f"{k} ({recval} != {v})")
                         if errmsg:
                             raise DimensionValueError(
                                 f"Dimension {dimensionName} in dataId has explicit value"
-                                " inconsistent with records: " + ", ".join(errmsg)
+                                f" {newDataId[dimensionName]} inconsistent with"
+                                f" {dimensionName} dimension record: " + ", ".join(errmsg)
                             )
                     else:
                         # Multiple matches for an explicit dimension
@@ -691,6 +699,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         pass
                     continue
 
+                # Do not use data ID keys in query that aren't relevant.
+                # Otherwise we can have detector queries being constrained
+                # by an exposure ID that doesn't exist and return no matches
+                # for a detector even though it's a good detector name.
+                filtered_data_id = {
+                    k: v for k, v in newDataId.items() if k in self.dimensions[dimensionName].required
+                }
                 # Build up a WHERE expression
                 bind = dict(values.items())
                 where = " AND ".join(f"{dimensionName}.{k} = {k}" for k in bind)
@@ -698,7 +713,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # Hopefully we get a single record that matches
                 records = set(
                     self.query_dimension_records(
-                        dimensionName, data_id=newDataId, where=where, bind=bind, explain=False, **kwargs
+                        dimensionName,
+                        data_id=filtered_data_id,
+                        where=where,
+                        bind=bind,
+                        explain=False,
+                        **kwargs,
                     )
                 )
 
