@@ -668,7 +668,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     )
                     # Get the actual record and compare with these values.
                     try:
-                        recs = list(self._registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                        recs = self.query_dimension_records(dimensionName, data_id=newDataId, explain=False)
                     except DataIdError:
                         raise DimensionValueError(
                             f"Could not find dimension '{dimensionName}'"
@@ -697,8 +697,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
                 # Hopefully we get a single record that matches
                 records = set(
-                    self._registry.queryDimensionRecords(
-                        dimensionName, dataId=newDataId, where=where, bind=bind, **kwargs
+                    self.query_dimension_records(
+                        dimensionName, data_id=newDataId, where=where, bind=bind, explain=False, **kwargs
                     )
                 )
 
@@ -712,12 +712,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                             and "visit_system_membership" in self.dimensions
                             and "visit_system" in self.dimensions["instrument"].metadata
                         ):
-                            instrument_records = list(
-                                self._registry.queryDimensionRecords(
-                                    "instrument",
-                                    dataId=newDataId,
-                                    **kwargs,
-                                )
+                            instrument_records = self.query_dimension_records(
+                                "instrument",
+                                data_id=newDataId,
+                                explain=False,
+                                **kwargs,
                             )
                             if len(instrument_records) == 1:
                                 visit_system = instrument_records[0].visit_system
@@ -728,16 +727,15 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                                 # Look up each visit in the
                                 # visit_system_membership records.
                                 for rec in records:
-                                    membership = list(
-                                        self._registry.queryDimensionRecords(
-                                            # Use bind to allow zero results.
-                                            # This is a fully-specified query.
-                                            "visit_system_membership",
-                                            where="instrument = inst AND visit_system = system AND visit = v",
-                                            bind=dict(
-                                                inst=instrument_records[0].name, system=visit_system, v=rec.id
-                                            ),
-                                        )
+                                    membership = self.query_dimension_records(
+                                        # Use bind to allow zero results.
+                                        # This is a fully-specified query.
+                                        "visit_system_membership",
+                                        where="instrument = inst AND visit_system = system AND visit = v",
+                                        bind=dict(
+                                            inst=instrument_records[0].name, system=visit_system, v=rec.id
+                                        ),
+                                        explain=False,
                                     )
                                     if membership:
                                         # This record is the right answer.
@@ -1761,8 +1759,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                             f"Transferring populated_by records like {element.name} requires a full Butler."
                         )
 
-                    records = source_butler.registry.queryDimensionRecords(  # type: ignore
+                    records = source_butler.query_dimension_records(  # type: ignore
                         element.name,
+                        explain=False,
                         **data_id.mapping,  # type: ignore
                     )
                     for record in records:
@@ -2066,7 +2065,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Find all the registered instruments (if "instrument" is in the
         # universe).
         if "instrument" in self.dimensions:
-            instruments = {record.name for record in self._registry.queryDimensionRecords("instrument")}
+            instruments = {rec.name for rec in self.query_dimension_records("instrument", explain=False)}
 
             for datasetType in datasetTypes:
                 if "instrument" in datasetType.dimensions:
