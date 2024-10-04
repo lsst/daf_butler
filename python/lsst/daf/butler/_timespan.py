@@ -335,14 +335,23 @@ class Timespan(pydantic.BaseModel):
                 tail = f"{self.end.tai.strftime(fmt)})"
         return head + tail
 
+    def __repr_astropy__(self, t: astropy.time.Time | None) -> str:
+        # Provide our own repr for astropy time.
+        # For JD times we want to use jd1 and jd2 to maintain precision.
+        if isinstance(t, astropy.time.Time):
+            if t.format == "jd":
+                return f"astropy.time.Time({t.jd1}, {t.jd2}, scale='{t.scale}', format='{t.format}')"
+            else:
+                return f"astropy.time.Time('{t}', scale='{t.scale}', format='{t.format}')"
+        return str(t)
+
     def __repr__(self) -> str:
         # astropy.time.Time doesn't have an eval-friendly __repr__, so we
         # simulate our own here to make Timespan's __repr__ eval-friendly.
         # Interestingly, enum.Enum has an eval-friendly __str__, but not an
         # eval-friendly __repr__.
-        tmpl = "astropy.time.Time('{t}', scale='{t.scale}', format='{t.format}')"
-        begin = tmpl.format(t=self.begin) if isinstance(self.begin, astropy.time.Time) else str(self.begin)
-        end = tmpl.format(t=self.end) if isinstance(self.end, astropy.time.Time) else str(self.end)
+        begin = self.__repr_astropy__(self.begin)
+        end = self.__repr_astropy__(self.end)
         return f"Timespan(begin={begin}, end={end})"
 
     def __eq__(self, other: Any) -> bool:
