@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
 
 # This has to be updated on every schema change
+# TODO: 1.0.0 can be removed once all repos were migrated to 2.0.0.
 _VERSION_UUID = VersionTuple(1, 0, 0)
 # Starting with 2.0.0 the `ingest_date` column type uses nanoseconds instead
 # of TIMESTAMP. The code supports both 1.0.0 and 2.0.0 for the duration of
@@ -572,9 +573,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     def _newDefaultSchemaVersion(cls) -> VersionTuple:
         # Docstring inherited from VersionedExtension.
 
-        # By default return 1.0.0 so that older clients can still access new
-        # registries created with a default config.
-        return _VERSION_UUID
+        # By default return latest version so that new repos are created with
+        # nanoseconds ingest_date.
+        return _VERSION_UUID_NS
 
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""
