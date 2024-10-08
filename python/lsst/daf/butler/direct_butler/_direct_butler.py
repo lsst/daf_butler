@@ -751,10 +751,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                                         # Use bind to allow zero results.
                                         # This is a fully-specified query.
                                         "visit_system_membership",
-                                        where="instrument = inst AND visit_system = system AND visit = v",
-                                        bind=dict(
-                                            inst=instrument_records[0].name, system=visit_system, v=rec.id
-                                        ),
+                                        instrument=instrument_records[0].name,
+                                        visit_system=visit_system,
+                                        visit=rec.id,
                                         explain=False,
                                     )
                                     if membership:
