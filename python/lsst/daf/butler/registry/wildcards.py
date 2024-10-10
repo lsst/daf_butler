@@ -35,6 +35,7 @@ __all__ = (
 import contextlib
 import dataclasses
 import re
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from types import EllipsisType
 from typing import Any
@@ -197,6 +198,11 @@ class CategorizedWildcard:
                         self.strings.append(element)
                         return None
             if allowPatterns and isinstance(element, re.Pattern):
+                warnings.warn(
+                    "Using regular expressions in collection or dataset type searches is deprecated"
+                    " and will be removed after v28. Use globs ('*' wildcards) instead.",
+                    FutureWarning,
+                )
                 self.patterns.append(element)
                 return None
             if alreadyCoerced:
