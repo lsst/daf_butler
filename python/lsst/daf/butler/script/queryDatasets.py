@@ -301,6 +301,7 @@ class QueryDatasets:
                 find_first=self._find_first,
                 with_dimension_records=True,
                 order_by=self._order_by,
+                explain=False,
                 **kwargs,
             )
             if not unlimited:
