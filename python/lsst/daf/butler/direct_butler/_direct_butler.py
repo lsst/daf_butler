@@ -704,7 +704,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # by an exposure ID that doesn't exist and return no matches
                 # for a detector even though it's a good detector name.
                 filtered_data_id = {
-                    k: v for k, v in newDataId.items() if k in self.dimensions[dimensionName].required
+                    k: v
+                    for k, v in newDataId.items()
+                    if k in self.dimensions[dimensionName].minimal_group.names
                 }
                 # Build up a WHERE expression
                 bind = dict(values.items())

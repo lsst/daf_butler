@@ -1324,22 +1324,29 @@ class ButlerTests(ButlerPutGetTests):
         n_exposures = 5
         dayobs = 20210530
 
-        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": dayobs})
+        # Create records for multiple day_obs but same seq_num to test that
+        # we are constraining gets properly when day_obs/seq_num is used
+        # for an exposure. Second day is year in future but is not used.
+        for day_obs in (dayobs, dayobs + 1_00_00):
+            butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": day_obs})
 
-        for i in range(n_exposures):
-            butler.registry.insertDimensionData("group", {"instrument": "DummyCamComp", "name": f"group{i}"})
-            butler.registry.insertDimensionData(
-                "exposure",
-                {
-                    "instrument": "DummyCamComp",
-                    "id": i,
-                    "obs_id": f"exp{i}",
-                    "seq_num": i,
-                    "day_obs": dayobs,
-                    "physical_filter": "d-r",
-                    "group": f"group{i}",
-                },
-            )
+            for i in range(n_exposures):
+                group_name = f"group_{day_obs}_{i}"
+                butler.registry.insertDimensionData(
+                    "group", {"instrument": "DummyCamComp", "name": group_name}
+                )
+                butler.registry.insertDimensionData(
+                    "exposure",
+                    {
+                        "instrument": "DummyCamComp",
+                        "id": day_obs + i,
+                        "obs_id": f"exp_{day_obs}_{i}",
+                        "seq_num": i,
+                        "day_obs": day_obs,
+                        "physical_filter": "d-r",
+                        "group": group_name,
+                    },
+                )
 
         # Write some data.
         for i in range(n_exposures):
@@ -1350,7 +1357,7 @@ class ButlerTests(ButlerPutGetTests):
             ref = butler.put(metric, datasetTypeName, dataId=dataId)
 
             # Check that the exposure is correct in the dataId
-            self.assertEqual(ref.dataId["exposure"], i)
+            self.assertEqual(ref.dataId["exposure"], dayobs + i)
 
             # and check that we can get the dataset back with the same dataId
             new_metric = butler.get(datasetTypeName, dataId=dataId)
