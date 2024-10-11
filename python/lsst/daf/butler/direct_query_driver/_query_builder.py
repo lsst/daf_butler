@@ -27,536 +27,684 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryJoiner", "QueryBuilder")
+__all__ = (
+    "QueryBuilder",
+    "SingleSelectQueryBuilder",
+    "UnionQueryBuilder",
+    "UnionQueryBuilderTerm",
+)
 
 import dataclasses
-import itertools
-from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar
+from abc import ABC, abstractmethod
+from collections.abc import Iterable, Set
+from types import EllipsisType
+from typing import TYPE_CHECKING, Literal, TypeVar, overload
 
 import sqlalchemy
 
-from .. import ddl
-from ..nonempty_mapping import NonemptyMapping
+from ..dimensions import DimensionGroup
 from ..queries import tree as qt
-from ._postprocessing import Postprocessing
+from ..registry.interfaces import Database
+from ._query_analysis import (
+    QueryFindFirstAnalysis,
+    QueryJoinsAnalysis,
+    QueryTreeAnalysis,
+    ResolvedDatasetSearch,
+)
+from ._sql_builders import SqlColumns, SqlJoinsBuilder, SqlSelectBuilder
 
 if TYPE_CHECKING:
-    from ..registry.interfaces import Database
-    from ..timespan_database_representation import TimespanDatabaseRepresentation
+    from ._driver import DirectQueryDriver
+    from ._postprocessing import Postprocessing
+
+_T = TypeVar("_T")
+
+
+class QueryBuilder(ABC):
+    """An abstract base class for objects that transform query descriptions
+    into SQL and `Postprocessing`.
+
+    See `DirectQueryDriver.build_query` for an overview of query construction,
+    including the role this class plays in it.
+
+    Parameters
+    ----------
+    tree_analysis : `QueryTreeAnalysis`
+        Result of initial analysis of the most of the query description.
+        considered consumed because nested attributes will be referenced and
+        may be modified in-place in the future.
+    projection_columns : `.queries.tree.ColumnSet`
+        Columns to include in the query's "projection" stage, where a GROUP BY
+        or DISTINCT may be performed.
+    final_columns : `.queries.tree.ColumnSet`
+        Columns to include in the final query.
+    """
+
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+    ):
+        self.joins_analysis = tree_analysis.joins
+        self.postprocessing = tree_analysis.postprocessing
+        self.projection_columns = projection_columns
+        self.final_columns = final_columns
+        self.needs_dimension_distinct = False
+        self.find_first_dataset = None
+
+    joins_analysis: QueryJoinsAnalysis
+    """Description of the "joins" stage of query construction."""
+
+    projection_columns: qt.ColumnSet
+    """The columns present in the query after the projection is applied.
+
+    This is always a subset of `QueryJoinsAnalysis.columns`.
+    """
+
+    needs_dimension_distinct: bool = False
+    """If `True`, the projection's dimensions do not include all dimensions in
+    the "joins" stage, and hence a SELECT DISTINCT [ON] or GROUP BY must be
+    used to make post-projection rows unique.
+    """
+
+    find_first_dataset: str | EllipsisType | None = None
+    """If not `None`, this is a find-first query for this dataset.
+
+    This is set even if the find-first search is trivial because there is only
+    one resolved collection.
+    """
+
+    final_columns: qt.ColumnSet
+    """The columns included in the SELECT clause of the complete SQL query
+    that is actually executed.
+
+    This is a subset of `QueryProjectionPlan.columns` that differs only in
+    columns used by the `find_first` stage or an ORDER BY expression.
+
+    Like all other `.queries.tree.ColumnSet` attributes, it does not include
+    fields added directly to `SqlSelectBuilder.special`, which may also be
+    added to the SELECT clause.
+    """
+
+    postprocessing: Postprocessing
+    """Struct representing post-query processing in Python, which may require
+    additional columns in the query results.
+    """
+
+    @abstractmethod
+    def analyze_projection(self) -> None:
+        """Analyze the "projection" stage of query construction, in which the
+        query may be nested in a GROUP BY or DISTINCT subquery in order to
+        ensure rows do not have duplicates.
+
+        This modifies the builder in place, and should be called immediately
+        after construction.
+
+        Notes
+        -----
+        Implementations should delegate to `super` to set
+        `needs_dimension_distinct`, but generally need to provide additional
+        logic to determine whether a GROUP BY or DISTINCT will be needed for
+        other reasons (e.g. duplication due to dataset searches over multiple
+        collections).
+        """
+        # The projection gets interesting if it does not have all of the
+        # dimension keys or dataset fields of the "joins" stage, because that
+        # means it needs to do a GROUP BY or DISTINCT ON to get unique rows.
+        # Subclass implementations handle the check for dataset fields.
+        if self.projection_columns.dimensions != self.joins_analysis.columns.dimensions:
+            assert self.projection_columns.dimensions.issubset(self.joins_analysis.columns.dimensions)
+            # We're going from a larger set of dimensions to a smaller set;
+            # that means we'll be doing a SELECT DISTINCT [ON] or GROUP BY.
+            self.needs_dimension_distinct = True
+
+    @abstractmethod
+    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+        """Analyze the "find first" stage of query construction, in  which a
+        Common Table Expression with PARTITION ON may be used to find the first
+        dataset for each data ID and dataset type in an ordered collection
+        sequence.
+
+        This modifies the builder in place, and should be called immediately
+        after `analyze_projection`.
+
+        Parameters
+        ----------
+        find_first_dataset : `str` or ``...``
+            Name of the dataset type that needs a find-first search.  ``...``
+            is used to indicate the dataset types in a union dataset query.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
+        """Translate the "joins" stage of the query to SQL.
+
+        This modifies the builder in place.  It is the first step in the
+        "apply" phase, and should be called after `analyze_find_first` finishes
+        the "analysis" phase (if more than analysis is needed).
+
+        Parameters
+        ----------
+        driver : `DirectQueryDriver`
+            Driver that invoked this builder and may be called back into for
+            lower-level SQL generation operations.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
+        """Translate the "projection" stage of the query to SQL.
+
+        This modifies the builder in place.  It is the second step in the
+        "apply" phase, after `apply_joins`.
+
+        Parameters
+        ----------
+        driver : `DirectQueryDriver`
+            Driver that invoked this builder and may be called back into for
+            lower-level SQL generation operations.
+        order_by : `~collections.abc.Iterable` [ \
+                `.queries.tree.OrderExpression` ]
+            Column expression used to order the query rows.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def apply_find_first(self, driver: DirectQueryDriver) -> None:
+        """Transform the "find first" stage of the query to SQL.
+
+        This modifies the builder in place.  It is the third and final step in
+        the "apply" phase, after "apply_projection".
+
+        Parameters
+        ----------
+        driver : `DirectQueryDriver`
+            Driver that invoked this builder and may be called back into for
+            lower-level SQL generation operations.
+        """
+        raise NotImplementedError()
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[True] = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns]: ...
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[False]
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, None]: ...
+
+    @abstractmethod
+    def finish_select(
+        self, return_columns: bool = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
+        """Finish translating the query into executable SQL.
+
+        Parameters
+        ----------
+        return_columns : `bool`
+            If `True`, return a structure that organizes the SQLAlchemy
+            column objects available to the query.
+
+        Returns
+        -------
+        sql_select : `sqlalchemy.Select` or `sqlalchemy.CompoundSelect`.
+            A SELECT [UNION ALL] SQL query.
+        sql_columns : `SqlColumns` or `None`
+            The columns available to the query (including any available to
+            an ORDER BY clause, not just those in the SELECT clause, in
+            contexts where those are not the same.  May be `None` (but is not
+            guaranteed to be) if ``return_columns=False``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
+        """Finish translating the query into SQL that can be used as a
+        subquery.
+
+        Parameters
+        ----------
+        cte : `bool`, optional
+            If `True`, nest the query in a common table expression (i.e. SQL
+            WITH statement) instead of a subquery.
+
+        Returns
+        -------
+        select_builder : `SqlSelectBuilder`
+            A builder object that maps to a single SELECT statement.  This may
+            directly hold the original query with no subquery or CTE if that
+            query was a single SELECT with no GROUP BY or DISTINCT; in either
+            case it is guaranteed that modifying this builder's result columns
+            and transforming it into a SELECT will not change the number of
+            rows.
+        """
+        raise NotImplementedError()
+
+
+class SingleSelectQueryBuilder(QueryBuilder):
+    """An implementation of `QueryBuilder` for queries that are structured as
+    a single SELECT (i.e. not a union).
+
+    See `DirectQueryDriver.build_query` for an overview of query construction,
+    including the role this class plays in it.  This builder is used for most
+    butler queries, for which `.queries.tree.QueryTree.any_dataset` is `None`.
+
+    Parameters
+    ----------
+    tree_analysis : `QueryTreeAnalysis`
+        Result of initial analysis of the most of the query description.
+        considered consumed because nested attributes will be referenced and
+        may be modified in-place in the future.
+    projection_columns : `.queries.tree.ColumnSet`
+        Columns to include in the query's "projection" stage, where a GROUP BY
+        or DISTINCT may be performed.
+    final_columns : `.queries.tree.ColumnSet`
+        Columns to include in the final query.
+    """
+
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+    ) -> None:
+        super().__init__(
+            tree_analysis=tree_analysis,
+            projection_columns=projection_columns,
+            final_columns=final_columns,
+        )
+        assert not tree_analysis.union_datasets, "UnionQueryPlan should be used instead."
+        self._select_builder = tree_analysis.initial_select_builder
+        self.find_first = None
+        self.needs_dataset_distinct = False
+
+    needs_dataset_distinct: bool = False
+    """If `True`, the projection columns do not include collection-specific
+    dataset fields that were present in the "joins" stage, and hence a SELECT
+    DISTINCT [ON] or GROUP BY must be added to make post-projection rows
+    unique.
+    """
+
+    find_first: QueryFindFirstAnalysis[str] | None = None
+    """Description of the "find_first" stage of query construction.
+
+    This attribute is `None` if there is no find-first search at all, and
+    `False` in boolean contexts if the search is trivial because there is only
+    one collection after the collections have been resolved.
+    """
+
+    def analyze_projection(self) -> None:
+        # Docstring inherited.
+        super().analyze_projection()
+        # See if we need to do a DISTINCT [ON] or GROUP BY to get unique rows
+        # because we have rows for datasets in multiple collections with the
+        # same data ID and dataset type.
+        for dataset_type in self.joins_analysis.columns.dataset_fields:
+            assert dataset_type is not ..., "Union dataset in non-dataset-union query."
+            if not self.projection_columns.dataset_fields[dataset_type]:
+                # The "joins"-stage query has one row for each collection for
+                # each data ID, but the projection-stage query just wants
+                # one row for each data ID.
+                if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+                    self.needs_dataset_distinct = True
+                    break
+        # If there are any dataset fields being propagated through the
+        # projection and there is more than one collection, we need to include
+        # the collection_key column so we can use that as one of the DISTINCT
+        # or GROUP BY columns.
+        for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
+            assert dataset_type is not ..., "Union dataset in non-dataset-union query."
+            if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+                fields_for_dataset.add("collection_key")
+
+    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+        # Docstring inherited.
+        assert find_first_dataset is not ..., "No dataset union in this query"
+        self.find_first = QueryFindFirstAnalysis(self.joins_analysis.datasets[find_first_dataset])
+        # If we're doing a find-first search and there's a calibration
+        # collection in play, we need to make sure the rows coming out of
+        # the base query have only one timespan for each data ID +
+        # collection, and we can only do that with a GROUP BY and COUNT
+        # that we inspect in postprocessing.
+        if self.find_first.search.is_calibration_search:
+            self.postprocessing.check_validity_match_count = True
+
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
+        # Docstring inherited.
+        driver.apply_initial_query_joins(
+            self._select_builder, self.joins_analysis, union_dataset_dimensions=None
+        )
+        driver.apply_missing_dimension_joins(self._select_builder, self.joins_analysis)
+
+    def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
+        # Docstring inherited.
+        driver.apply_query_projection(
+            self._select_builder,
+            self.postprocessing,
+            join_datasets=self.joins_analysis.datasets,
+            union_datasets=None,
+            projection_columns=self.projection_columns,
+            needs_dimension_distinct=self.needs_dimension_distinct,
+            needs_dataset_distinct=self.needs_dataset_distinct,
+            needs_validity_match_count=self.postprocessing.check_validity_match_count,
+            find_first_dataset=None if self.find_first is None else self.find_first.search.name,
+            order_by=order_by,
+        )
+
+    def apply_find_first(self, driver: DirectQueryDriver) -> None:
+        # Docstring inherited.
+        if not self.find_first:
+            return
+        self._select_builder = driver.apply_query_find_first(
+            self._select_builder, self.postprocessing, self.find_first
+        )
+
+    # The overloads in the base class seem to keep MyPy from recognizing the
+    # return type as covariant.
+    def finish_select(  # type: ignore
+        self,
+        return_columns: bool = True,
+    ) -> tuple[sqlalchemy.Select, SqlColumns]:
+        # Docstring inherited.
+        self._select_builder.columns = self.final_columns
+        return self._select_builder.select(self.postprocessing), self._select_builder.joins
+
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
+        # Docstring inherited.
+        self._select_builder.columns = self.final_columns
+        return self._select_builder.nested(cte=cte, postprocessing=self.postprocessing)
 
 
 @dataclasses.dataclass
-class QueryBuilder:
-    """A struct used to represent an under-construction SQL SELECT query.
-
-    This object's methods frequently "consume" ``self``, by either returning
-    it after modification or returning related copy that may share state with
-    the original.  Users should be careful never to use consumed instances, and
-    are recommended to reuse the same variable name to make that hard to do
-    accidentally.
+class UnionQueryBuilderTerm:
+    """A helper struct that holds state for `UnionQueryBuilder` that
+    corresponds to a set of dataset types with the same post-filtering
+    collection sequence.
     """
 
-    joiner: QueryJoiner
-    """Struct representing the SQL FROM and WHERE clauses, as well as the
-    columns *available* to the query (but not necessarily in the SELECT
-    clause).
+    select_builders: list[SqlSelectBuilder]
+    """Under-construction SQL queries associated with this plan, to be unioned
+    together when complete.
+
+    Each term corresponds to a different dataset type and a single SELECT; note
+    that this means a `UnionQueryBuilderTerm` does not map 1-1 with a SELECT in
+    the final UNION - it maps to a set of extremely similar SELECTs that differ
+    only in the dataset type name injected into each SELECT at the end.
     """
 
-    columns: qt.ColumnSet
-    """Columns to include the SELECT clause.
+    datasets: ResolvedDatasetSearch[list[str]]
+    """Searches for datasets of different types to be joined into the rest of
+    the query, with the results (after projection and find-first) unioned
+    together.
 
-    This does not include columns required only by `postprocessing` and columns
-    in `QueryJoiner.special`, which are also always included in the SELECT
-    clause.
+    The dataset types in a single `QueryUnionTermPlan` have the exact same
+    post-filtering collection search path, and hence the exact same query
+    plan, aside from the dataset type used to generate their dataset subquery.
+    Dataset types that have the same dimensions but do not have the same
+    post-filtering collection search path go in different `QueryUnionTermPlan`
+    instances, which still contribute to the same UNION [ALL] query.
+    Dataset types with different dimensions cannot go in the same SQL query
+    at all.
     """
 
-    distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = ()
-    """A representation of a DISTINCT or DISTINCT ON clause.
-
-    If `True`, this represents a SELECT DISTINCT.  If a non-empty sequence,
-    this represents a SELECT DISTINCT ON.  If `False` or an empty sequence,
-    there is no DISTINCT clause.
+    needs_dataset_distinct: bool = False
+    """If `True`, the projection columns do not include collection-specific
+    dataset fields that were present in the "joins" stage, and hence a SELECT
+    DISTINCT [ON] or GROUP BY must be added to make post-projection rows
+    unique.
     """
 
-    group_by: Sequence[sqlalchemy.ColumnElement[Any]] = ()
-    """A representation of a GROUP BY clause.
+    needs_validity_match_count: bool = False
+    """Whether this query needs a validity match column for postprocessing
+    to check.
 
-    If not-empty, a GROUP BY clause with these columns is added.  This
-    generally requires that every `sqlalchemy.ColumnElement` held in the nested
-    `joiner` that is part of `columns` must either be part of `group_by` or
-    hold an aggregate function.
+    This can be `False` even if `Postprocessing.check_validity_match_count` is
+    `True`, indicating that some other term in the union needs the column and
+    hence this term just needs a dummy column (with "1" as the value).
     """
 
-    EMPTY_COLUMNS_NAME: ClassVar[str] = "IGNORED"
-    """Name of the column added to a SQL SELECT clause in order to construct
-    queries that have no real columns.
+    find_first: QueryFindFirstAnalysis[list[str]] | None = None
+    """Description of the "find_first" stage of query construction.
+
+    This attribute is `None` if there is no find-first search at all, and
+    `False` in boolean contexts if the search is trivial because there is only
+    one collection after the collections have been resolved.
     """
 
-    EMPTY_COLUMNS_TYPE: ClassVar[type] = sqlalchemy.Boolean
-    """Type of the column added to a SQL SELECT clause in order to construct
-    queries that have no real columns.
+
+class UnionQueryBuilder(QueryBuilder):
+    """An implementation of `QueryBuilder` for queries that are structured as
+    a UNION ALL with one SELECT for each dataset type.
+
+    See `DirectQueryDriver.build_query` for an overview of query construction,
+    including the role this class plays in it.  This builder is used
+    special butler queries where `.queries.tree.QueryTree.any_dataset` is not
+    `None`.
+
+    Parameters
+    ----------
+    tree_analysis : `QueryTreeAnalysis`
+        Result of initial analysis of the most of the query description.
+        considered consumed because nested attributes will be referenced and
+        may be modified in-place in the future.
+    projection_columns : `.queries.tree.ColumnSet`
+        Columns to include in the query's "projection" stage, where a GROUP BY
+        or DISTINCT may be performed.
+    final_columns : `.queries.tree.ColumnSet`
+        Columns to include in the final query.
+    union_dataset_dimensions : `DimensionGroup`
+        Dimensions of the dataset types that comprise the union.
+
+    Notes
+    -----
+    `UnionQueryBuilder` can be in one of two states:
+
+    - During the "analysis" phase and at the beginning of the "apply" phase,
+      it has a single initial `SqlSelectBuilder`, because all union terms are
+      identical at this stage.  The `UnionQueryTerm.builder` lists are empty.
+    - Within `apply_joins`, this single `SqlSelectBuilder` is copied to
+      populate the per-dataset type `SqlSelectBuilder` instances in the
+      `UnionQueryTerm.builders` lists.
     """
 
-    @classmethod
-    def handle_empty_columns(
-        cls, columns: list[sqlalchemy.sql.ColumnElement]
-    ) -> list[sqlalchemy.ColumnElement]:
-        """Handle the edge case where a SELECT statement has no columns, by
-        adding a literal column that should be ignored.
-
-        Parameters
-        ----------
-        columns : `list` [ `sqlalchemy.ColumnElement` ]
-            List of SQLAlchemy column objects.  This may have no elements when
-            this method is called, and will always have at least one element
-            when it returns.
-
-        Returns
-        -------
-        columns : `list` [ `sqlalchemy.ColumnElement` ]
-            The same list that was passed in, after any modification.
-        """
-        if not columns:
-            columns.append(sqlalchemy.sql.literal(True).label(cls.EMPTY_COLUMNS_NAME))
-        return columns
-
-    def select(self, postprocessing: Postprocessing | None) -> sqlalchemy.Select:
-        """Transform this builder into a SQLAlchemy representation of a SELECT
-        query.
-
-        Parameters
-        ----------
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
-
-        Returns
-        -------
-        select : `sqlalchemy.Select`
-            SQLAlchemy SELECT statement.
-        """
-        assert not (self.distinct and self.group_by), "At most one of distinct and group_by can be set."
-        sql_columns: list[sqlalchemy.ColumnElement[Any]] = []
-        for logical_table, field in self.columns:
-            name = self.columns.get_qualified_name(logical_table, field)
-            if field is None:
-                sql_columns.append(self.joiner.dimension_keys[logical_table][0].label(name))
-            else:
-                name = self.joiner.db.name_shrinker.shrink(name)
-                if self.columns.is_timespan(logical_table, field):
-                    sql_columns.extend(self.joiner.timespans[logical_table].flatten(name))
-                else:
-                    sql_columns.append(self.joiner.fields[logical_table][field].label(name))
-        if postprocessing is not None:
-            for element in postprocessing.iter_missing(self.columns):
-                sql_columns.append(
-                    self.joiner.fields[element.name]["region"].label(
-                        self.joiner.db.name_shrinker.shrink(
-                            self.columns.get_qualified_name(element.name, "region")
-                        )
-                    )
-                )
-        for label, sql_column in self.joiner.special.items():
-            sql_columns.append(sql_column.label(label))
-        self.handle_empty_columns(sql_columns)
-        result = sqlalchemy.select(*sql_columns)
-        if self.joiner.from_clause is not None:
-            result = result.select_from(self.joiner.from_clause)
-        if self.distinct is True:
-            result = result.distinct()
-        elif self.distinct:
-            result = result.distinct(*self.distinct)
-        if self.group_by:
-            result = result.group_by(*self.group_by)
-        if self.joiner.where_terms:
-            result = result.where(*self.joiner.where_terms)
-        return result
-
-    def join(self, other: QueryJoiner) -> QueryBuilder:
-        """Join tables, subqueries, and WHERE clauses from another query into
-        this one, in place.
-
-        Parameters
-        ----------
-        other : `QueryJoiner`
-            Object holding the FROM and WHERE clauses to add to this one.
-            JOIN ON clauses are generated via the dimension keys in common.
-
-        Returns
-        -------
-        self : `QueryBuilder`
-            This `QueryBuilder` instance (never a copy); returned to enable
-            method-chaining.
-        """
-        self.joiner.join(other)
-        return self
-
-    def to_joiner(
-        self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
-    ) -> QueryJoiner:
-        """Convert this builder into a `QueryJoiner`, nesting it in a subquery
-        or common table expression only if needed to apply DISTINCT or GROUP BY
-        clauses.
-
-        This method consumes ``self``.
-
-        Parameters
-        ----------
-        cte : `bool`, optional
-            If `True`, nest via a common table expression instead of a
-            subquery.
-        force : `bool`, optional
-            If `True`, nest via a subquery or common table expression even if
-            there is no DISTINCT or GROUP BY.
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
-
-        Returns
-        -------
-        joiner : `QueryJoiner`
-            QueryJoiner` with at least all columns in `columns` available.
-            This may or may not be the `joiner` attribute of this object.
-        """
-        if force or self.distinct or self.group_by:
-            sql_from_clause = (
-                self.select(postprocessing).cte() if cte else self.select(postprocessing).subquery()
-            )
-            return QueryJoiner(self.joiner.db, sql_from_clause).extract_columns(
-                self.columns, special=self.joiner.special.keys()
-            )
-        return self.joiner
-
-    def nested(
-        self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
-    ) -> QueryBuilder:
-        """Convert this builder into a `QueryBuiler` that is guaranteed to have
-        no DISTINCT or GROUP BY, nesting it in a subquery or common table
-        expression only if needed to apply any current DISTINCT or GROUP BY
-        clauses.
-
-        This method consumes ``self``.
-
-        Parameters
-        ----------
-        cte : `bool`, optional
-            If `True`, nest via a common table expression instead of a
-            subquery.
-        force : `bool`, optional
-            If `True`, nest via a subquery or common table expression even if
-            there is no DISTINCT or GROUP BY.
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
-
-        Returns
-        -------
-        builder : `QueryBuilder`
-            `QueryBuilder` with at least all columns in `columns` available.
-            This may or may not be the `builder` attribute of this object.
-        """
-        return QueryBuilder(
-            self.to_joiner(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+        union_dataset_dimensions: DimensionGroup,
+    ):
+        super().__init__(
+            tree_analysis=tree_analysis,
+            projection_columns=projection_columns,
+            final_columns=final_columns,
         )
+        self._initial_select_builder: SqlSelectBuilder | None = tree_analysis.initial_select_builder
+        self.union_dataset_dimensions = union_dataset_dimensions
+        self.union_terms = [
+            UnionQueryBuilderTerm(select_builders=[], datasets=datasets)
+            for datasets in tree_analysis.union_datasets
+        ]
 
-    def union_subquery(
-        self, others: Iterable[QueryBuilder], postprocessing: Postprocessing | None = None
-    ) -> QueryJoiner:
-        """Combine this builder with others to make a SELECT UNION subquery.
+    @property
+    def db(self) -> Database:
+        """The database object associated with the nested select builders."""
+        if self._initial_select_builder is not None:
+            return self._initial_select_builder.joins.db
+        else:
+            return self.union_terms[0].select_builders[0].joins.db
 
-        Parameters
-        ----------
-        others : `~collections.abc.Iterable` [ `QueryBuilder` ]
-            Other query builders to union with.  Their `columns` attributes
-            must be the same as those of ``self``.
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
+    @property
+    def special(self) -> Set[str]:
+        """The special columns associated with the nested select builders."""
+        if self._initial_select_builder is not None:
+            return self._initial_select_builder.joins.special.keys()
+        else:
+            return self.union_terms[0].select_builders[0].joins.special.keys()
 
-        Returns
-        -------
-        joiner : `QueryJoiner`
-            `QueryJoiner` with at least all columns in `columns` available.
-            This may or may not be the `joiner` attribute of this object.
-        """
-        select0 = self.select(postprocessing)
-        other_selects = [other.select(postprocessing) for other in others]
-        return QueryJoiner(
-            self.joiner.db,
-            from_clause=select0.union(*other_selects).subquery(),
-        ).extract_columns(self.columns, postprocessing)
+    def analyze_projection(self) -> None:
+        # Docstring inherited.
+        super().analyze_projection()
+        # See if we need to do a DISTINCT [ON] or GROUP BY to get unique rows
+        # because we have rows for datasets in multiple collections with the
+        # same data ID and dataset type.
+        for dataset_type in self.joins_analysis.columns.dataset_fields:
+            if not self.projection_columns.dataset_fields[dataset_type]:
+                if dataset_type is ...:
+                    for union_term in self.union_terms:
+                        if len(union_term.datasets.collection_records) > 1:
+                            union_term.needs_dataset_distinct = True
+                elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+                    # If a dataset being joined into all union terms has
+                    # multiple collections, need_dataset_distinct is true
+                    # for all union terms and we can exit the loop early.
+                    for union_term in self.union_terms:
+                        union_term.needs_dataset_distinct = True
+                    break
+        # If there are any dataset fields being propagated through the
+        # projection and there is more than one collection, we need to include
+        # the collection_key column so we can use that as one of the DISTINCT
+        # or GROUP BY columns.
+        for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
+            if dataset_type is ...:
+                for union_term in self.union_terms:
+                    # If there is more than one collection for one union term,
+                    # we need to add collection_key to all of them to keep the
+                    # SELECT columns uniform.
+                    if len(union_term.datasets.collection_records) > 1:
+                        fields_for_dataset.add("collection_key")
+                        break
+            elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+                fields_for_dataset.add("collection_key")
 
-    def make_table_spec(self, postprocessing: Postprocessing | None) -> ddl.TableSpec:
-        """Make a specification that can be used to create a table to store
-        this query's outputs.
+    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+        # Docstring inherited.
+        if find_first_dataset is ...:
+            for union_term in self.union_terms:
+                union_term.find_first = QueryFindFirstAnalysis(union_term.datasets)
+                # If we're doing a find-first search and there's a calibration
+                # collection in play, we need to make sure the rows coming out
+                # of the base query have only one timespan for each data ID +
+                # collection, and we can only do that with a GROUP BY and COUNT
+                # that we inspect in postprocessing.
+                # Because the postprocessing is applied to the full query, all
+                # union terms will need this column, even if only one populates
+                # it with a nontrivial value.
+                if union_term.find_first.search.is_calibration_search:
+                    self.postprocessing.check_validity_match_count = True
+                    union_term.needs_validity_match_count = True
+        else:
+            # The query system machinery should actually be able to handle this
+            # case without too much difficulty (we just put the same
+            # find_first plan in each union term), but the result doesn't seem
+            # like it'd be useful, so it's better not to have to maintain that
+            # logic branch.
+            raise NotImplementedError(
+                f"Additional dataset search {find_first_dataset!r} can only be joined into a "
+                "union dataset query as a constraint in data IDs, not as a find-first result."
+            )
 
-        Parameters
-        ----------
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
-
-        Returns
-        -------
-        spec : `.ddl.TableSpec`
-            Table specification for this query's result columns (including
-            those from `postprocessing` and `QueryJoiner.special`).
-        """
-        assert not self.joiner.special, "special columns not supported in make_table_spec"
-        results = ddl.TableSpec(
-            [
-                self.columns.get_column_spec(logical_table, field).to_sql_spec(
-                    name_shrinker=self.joiner.db.name_shrinker
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
+        # Docstring inherited.
+        assert self._initial_select_builder is not None
+        driver.apply_initial_query_joins(
+            self._initial_select_builder, self.joins_analysis, self.union_dataset_dimensions
+        )
+        # Join in the union datasets. This makes one copy of the initial
+        # select builder for each dataset type, and hence from here on we have
+        # to repeat whatever we do to all select builders.
+        for union_term in self.union_terms:
+            for dataset_type_name in union_term.datasets.name:
+                select_builder = self._initial_select_builder.copy()
+                driver.join_dataset_search(
+                    select_builder.joins,
+                    union_term.datasets,
+                    self.joins_analysis.columns.dataset_fields[...],
+                    union_dataset_type_name=dataset_type_name,
                 )
-                for logical_table, field in self.columns
+                union_term.select_builders.append(select_builder)
+        self._initial_select_builder = None
+        for union_term in self.union_terms:
+            for select_builder in union_term.select_builders:
+                driver.apply_missing_dimension_joins(select_builder, self.joins_analysis)
+
+    def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
+        # Docstring inherited.
+        for union_term in self.union_terms:
+            for builder in union_term.select_builders:
+                driver.apply_query_projection(
+                    builder,
+                    self.postprocessing,
+                    join_datasets=self.joins_analysis.datasets,
+                    union_datasets=union_term.datasets,
+                    projection_columns=self.projection_columns,
+                    needs_dimension_distinct=self.needs_dimension_distinct,
+                    needs_dataset_distinct=union_term.needs_dataset_distinct,
+                    needs_validity_match_count=union_term.needs_validity_match_count,
+                    find_first_dataset=None if union_term.find_first is None else ...,
+                    order_by=order_by,
+                )
+
+    def apply_find_first(self, driver: DirectQueryDriver) -> None:
+        # Docstring inherited.
+        for union_term in self.union_terms:
+            if not union_term.find_first:
+                continue
+            union_term.select_builders = [
+                driver.apply_query_find_first(builder, self.postprocessing, union_term.find_first)
+                for builder in union_term.select_builders
             ]
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[True] = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns]: ...
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[False]
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, None]: ...
+
+    def finish_select(
+        self, return_columns: bool = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
+        # Docstring inherited.
+        terms: list[sqlalchemy.Select] = []
+        for union_term in self.union_terms:
+            for dataset_type_name, select_builder in zip(
+                union_term.datasets.name, union_term.select_builders
+            ):
+                select_builder.columns = self.final_columns
+                select_builder.joins.special["_DATASET_TYPE_NAME"] = sqlalchemy.literal(dataset_type_name)
+                terms.append(select_builder.select(self.postprocessing))
+        sql: sqlalchemy.Select | sqlalchemy.CompoundSelect = (
+            sqlalchemy.union_all(*terms) if len(terms) > 1 else terms[0]
         )
-        if postprocessing:
-            for element in postprocessing.iter_missing(self.columns):
-                results.fields.add(
-                    ddl.FieldSpec.for_region(
-                        self.joiner.db.name_shrinker.shrink(
-                            self.columns.get_qualified_name(element.name, "region")
-                        )
-                    )
-                )
-        if not results.fields:
-            results.fields.add(ddl.FieldSpec(name=self.EMPTY_COLUMNS_NAME, dtype=self.EMPTY_COLUMNS_TYPE))
-        return results
+        columns: SqlColumns | None = None
+        if return_columns:
+            columns = SqlColumns(
+                db=self.db,
+            )
+            columns.extract_columns(
+                self.final_columns,
+                self.postprocessing,
+                self.special,
+                column_collection=sql.selected_columns,
+            )
+        return sql, columns
 
-
-@dataclasses.dataclass
-class QueryJoiner:
-    """A struct used to represent the FROM and WHERE clauses of an
-    under-construction SQL SELECT query.
-
-    This object's methods frequently "consume" ``self``, by either returning
-    it after modification or returning related copy that may share state with
-    the original.  Users should be careful never to use consumed instances, and
-    are recommended to reuse the same variable name to make that hard to do
-    accidentally.
-    """
-
-    db: Database
-    """Object that abstracts over the database engine."""
-
-    from_clause: sqlalchemy.FromClause | None = None
-    """SQLAlchemy representation of the FROM clause.
-
-    This is initialized to `None` but in almost all cases is immediately
-    replaced.
-    """
-
-    where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
-    """Sequence of WHERE clause terms to be combined with AND."""
-
-    dimension_keys: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
-        default_factory=lambda: NonemptyMapping(list)
-    )
-    """Mapping of dimension keys included in the FROM clause.
-
-    Nested lists correspond to different tables that have the same dimension
-    key (which should all have equal values for all result rows).
-    """
-
-    fields: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
-        default_factory=lambda: NonemptyMapping(dict)
-    )
-    """Mapping of columns that are neither dimension keys nor timespans.
-
-    Inner and outer keys correspond to the "logical table" and "field" pairs
-    that result from iterating over `~.queries.tree.ColumnSet`, with the former
-    either a dimension element name or dataset type name.
-    """
-
-    timespans: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(default_factory=dict)
-    """Mapping of timespan columns.
-
-    Keys are "logical tables" - dimension element names or dataset type names.
-    """
-
-    special: dict[str, sqlalchemy.ColumnElement[Any]] = dataclasses.field(default_factory=dict)
-    """Special columns that are available from the FROM clause and
-    automatically included in the SELECT clause when this joiner is nested
-    within a `QueryBuilder`.
-
-    These columns are not part of the dimension universe and are not associated
-    with a dataset.  They are never returned to users, even if they may be
-    included in raw SQL results.
-    """
-
-    def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> QueryJoiner:
-        """Add dimension key columns from `from_clause` into `dimension_keys`.
-
-        Parameters
-        ----------
-        dimensions : `~collections.abc.Iterable` [ `str` ]
-            Names of dimensions to include, assuming that their names in
-            `sql_columns` are just the dimension names.
-        **kwargs : `str`
-            Additional dimensions to include, with the names in `sql_columns`
-            as keys and the actual dimension names as values.
-
-        Returns
-        -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
-            method chaining.
-        """
-        assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
-        for dimension_name in dimensions:
-            self.dimension_keys[dimension_name].append(self.from_clause.columns[dimension_name])
-        for k, v in kwargs.items():
-            self.dimension_keys[v].append(self.from_clause.columns[k])
-        return self
-
-    def extract_columns(
-        self,
-        columns: qt.ColumnSet,
-        postprocessing: Postprocessing | None = None,
-        special: Iterable[str] = (),
-    ) -> QueryJoiner:
-        """Add columns from `from_clause` into `dimension_keys`.
-
-        Parameters
-        ----------
-        columns : `.queries.tree.ColumnSet`
-            Columns to include, assuming that
-            `.queries.tree.ColumnSet.get_qualified_name` corresponds to the
-            name used in `sql_columns` (after name shrinking).
-        postprocessing : `Postprocessing`, optional
-            Postprocessing object whose needed columns should also be included.
-        special : `~collections.abc.Iterable` [ `str` ], optional
-            Additional special columns to extract.
-
-        Returns
-        -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
-            method chaining.
-        """
-        assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
-        for logical_table, field in columns:
-            name = columns.get_qualified_name(logical_table, field)
-            if field is None:
-                self.dimension_keys[logical_table].append(self.from_clause.columns[name])
-            else:
-                name = self.db.name_shrinker.shrink(name)
-                if columns.is_timespan(logical_table, field):
-                    self.timespans[logical_table] = self.db.getTimespanRepresentation().from_columns(
-                        self.from_clause.columns, name
-                    )
-                else:
-                    self.fields[logical_table][field] = self.from_clause.columns[name]
-        if postprocessing is not None:
-            for element in postprocessing.iter_missing(columns):
-                self.fields[element.name]["region"] = self.from_clause.columns[
-                    self.db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
-                ]
-            if postprocessing.check_validity_match_count:
-                self.special[postprocessing.VALIDITY_MATCH_COUNT] = self.from_clause.columns[
-                    postprocessing.VALIDITY_MATCH_COUNT
-                ]
-        for name in special:
-            self.special[name] = self.from_clause.columns[name]
-        return self
-
-    def join(self, other: QueryJoiner) -> QueryJoiner:
-        """Combine this `QueryJoiner` with another via an INNER JOIN on
-        dimension keys.
-
-        This method consumes ``self``.
-
-        Parameters
-        ----------
-        other : `QueryJoiner`
-            Other joiner to combine with this one.
-
-        Returns
-        -------
-        joined : `QueryJoiner`
-            A `QueryJoiner` with all columns present in either operand, with
-            its `from_clause` representing a SQL INNER JOIN where the dimension
-            key columns common to both operands are constrained to be equal.
-            If either operand does not have `from_clause`, the other's is used.
-            The `where_terms` of the two operands are concatenated,
-            representing a logical AND (with no attempt at deduplication).
-        """
-        join_on: list[sqlalchemy.ColumnElement] = []
-        for dimension_name in other.dimension_keys.keys():
-            if dimension_name in self.dimension_keys:
-                for column1, column2 in itertools.product(
-                    self.dimension_keys[dimension_name], other.dimension_keys[dimension_name]
-                ):
-                    join_on.append(column1 == column2)
-            self.dimension_keys[dimension_name].extend(other.dimension_keys[dimension_name])
-        if self.from_clause is None:
-            self.from_clause = other.from_clause
-        elif other.from_clause is not None:
-            join_on_sql: sqlalchemy.ColumnElement[bool]
-            match len(join_on):
-                case 0:
-                    join_on_sql = sqlalchemy.true()
-                case 1:
-                    (join_on_sql,) = join_on
-                case _:
-                    join_on_sql = sqlalchemy.and_(*join_on)
-            self.from_clause = self.from_clause.join(other.from_clause, onclause=join_on_sql)
-        for logical_table, fields in other.fields.items():
-            self.fields[logical_table].update(fields)
-        self.timespans.update(other.timespans)
-        self.special.update(other.special)
-        self.where_terms += other.where_terms
-        return self
-
-    def where(self, *args: sqlalchemy.ColumnElement[bool]) -> QueryJoiner:
-        """Add a WHERE clause term.
-
-        Parameters
-        ----------
-        *args : `sqlalchemy.ColumnElement`
-            SQL boolean column expressions to be combined with AND.
-
-        Returns
-        -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
-            method chaining.
-        """
-        self.where_terms.extend(args)
-        return self
-
-    def to_builder(
-        self,
-        columns: qt.ColumnSet,
-        distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = (),
-        group_by: Sequence[sqlalchemy.ColumnElement[Any]] = (),
-    ) -> QueryBuilder:
-        """Convert this joiner into a `QueryBuilder` by providing SELECT clause
-        columns and optional DISTINCT or GROUP BY clauses.
-
-        This method consumes ``self``.
-
-        Parameters
-        ----------
-        columns : `~.queries.tree.ColumnSet`
-            Regular columns to include in the SELECT clause.
-        distinct : `bool` or `~collections.abc.Sequence` [ \
-                `sqlalchemy.ColumnElement` ], optional
-            Specification of the DISTINCT clause (see `QueryBuilder.distinct`).
-        group_by : `~collections.abc.Sequence` [ \
-                `sqlalchemy.ColumnElement` ], optional
-            Specification of the GROUP BY clause (see `QueryBuilder.group_by`).
-
-        Returns
-        -------
-        builder : `QueryBuilder`
-            New query builder.
-        """
-        return QueryBuilder(
-            self,
-            columns,
-            distinct=distinct if type(distinct) is bool else tuple(distinct),
-            group_by=tuple(group_by),
-        )
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
+        # Docstring inherited.
+        sql_select, _ = self.finish_select(return_columns=False)
+        from_clause = sql_select.cte() if cte else sql_select.subquery()
+        joins_builder = SqlJoinsBuilder(
+            db=self.db,
+            from_clause=from_clause,
+        ).extract_columns(self.final_columns, self.postprocessing)
+        return SqlSelectBuilder(joins_builder, columns=self.final_columns)

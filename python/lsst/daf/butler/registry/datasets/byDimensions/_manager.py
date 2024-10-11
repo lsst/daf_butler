@@ -6,6 +6,7 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import astropy.time
@@ -22,7 +23,7 @@ from ...._exceptions import CollectionTypeError, MissingDatasetTypeError
 from ...._exceptions_legacy import DatasetTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
-from ....direct_query_driver import QueryBuilder, QueryJoiner  # new query system, server+direct only
+from ....direct_query_driver import SqlJoinsBuilder, SqlSelectBuilder  # new query system, server+direct only
 from ....queries import tree as qt  # new query system, both clients + server
 from ..._caching_context import CachingContext, GenericCachingContext
 from ..._collection_summary import CollectionSummary
@@ -1366,9 +1367,13 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         )
         return leaf
 
-    def make_query_joiner(
-        self, dataset_type: DatasetType, collections: Sequence[CollectionRecord], fields: Set[str]
-    ) -> QueryJoiner:
+    def make_joins_builder(
+        self,
+        dataset_type: DatasetType,
+        collections: Sequence[CollectionRecord],
+        fields: Set[str],
+        is_union: bool = False,
+    ) -> SqlJoinsBuilder:
         if (storage := self._find_storage(dataset_type.name)) is None:
             raise MissingDatasetTypeError(f"Dataset type {dataset_type.name!r} has not been registered.")
         # This method largely mimics `make_relation`, but it uses the new query
@@ -1408,8 +1413,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # FOREIGN KEY (and its index) are defined only on dataset_id.
         columns = qt.ColumnSet(dataset_type.dimensions)
         columns.drop_implied_dimension_keys()
-        columns.dataset_fields[dataset_type.name].update(fields)
-        tags_builder: QueryBuilder | None = None
+        fields_key: str | EllipsisType = ... if is_union else dataset_type.name
+        columns.dataset_fields[fields_key].update(fields)
+        tags_builder: SqlSelectBuilder | None = None
         if collection_types != {CollectionType.CALIBRATION}:
             # We'll need a subquery for the tags table if any of the given
             # collections are not a CALIBRATION collection.  This intentionally
@@ -1417,33 +1423,37 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # create a dummy subquery that we know will fail.
             # We give the table an alias because it might appear multiple times
             # in the same query, for different dataset types.
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections)).alias(
+                f"{dataset_type.name}_tags{'_union' if is_union else ''}"
+            )
             tags_builder = self._finish_query_builder(
                 storage,
-                QueryJoiner(self._db, tags_table.alias(f"{dataset_type.name}_tags")).to_builder(columns),
+                SqlJoinsBuilder(db=self._db, from_clause=tags_table).to_select_builder(columns),
                 [record for record in collections if record.type is not CollectionType.CALIBRATION],
                 fields,
+                fields_key,
             )
             if "timespan" in fields:
-                tags_builder.joiner.timespans[dataset_type.name] = (
-                    self._db.getTimespanRepresentation().fromLiteral(None)
+                tags_builder.joins.timespans[fields_key] = self._db.getTimespanRepresentation().fromLiteral(
+                    None
                 )
-        calibs_builder: QueryBuilder | None = None
+        calibs_builder: SqlSelectBuilder | None = None
         if CollectionType.CALIBRATION in collection_types:
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
             calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections)).alias(
-                f"{dataset_type.name}_calibs"
+                f"{dataset_type.name}_calibs{'_union' if is_union else ''}"
             )
             calibs_builder = self._finish_query_builder(
                 storage,
-                QueryJoiner(self._db, calibs_table).to_builder(columns),
+                SqlJoinsBuilder(db=self._db, from_clause=calibs_table).to_select_builder(columns),
                 [record for record in collections if record.type is CollectionType.CALIBRATION],
                 fields,
+                fields_key,
             )
             if "timespan" in fields:
-                calibs_builder.joiner.timespans[dataset_type.name] = (
+                calibs_builder.joins.timespans[fields_key] = (
                     self._db.getTimespanRepresentation().from_columns(calibs_table.columns)
                 )
 
@@ -1455,39 +1465,40 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 # Need a UNION subquery.
                 return tags_builder.union_subquery([calibs_builder])
             else:
-                return tags_builder.to_joiner(postprocessing=None)
+                return tags_builder.into_from_builder(postprocessing=None)
         elif calibs_builder is not None:
-            return calibs_builder.to_joiner(postprocessing=None)
+            return calibs_builder.into_from_builder(postprocessing=None)
         else:
             raise AssertionError("Branch should be unreachable.")
 
     def _finish_query_builder(
         self,
         storage: _DatasetRecordStorage,
-        sql_projection: QueryBuilder,
+        sql_projection: SqlSelectBuilder,
         collections: Sequence[CollectionRecord],
         fields: Set[str],
-    ) -> QueryBuilder:
+        fields_key: str | EllipsisType,
+    ) -> SqlSelectBuilder:
         # This method plays the same role as _finish_single_relation in the new
         # query system. It is called exactly one or two times by
         # make_sql_builder, just as _finish_single_relation is called exactly
         # one or two times by make_relation.  See make_sql_builder comments for
         # what's different.
-        assert sql_projection.joiner.from_clause is not None
+        assert sql_projection.joins.from_clause is not None
         run_collections_only = all(record.type is CollectionType.RUN for record in collections)
-        sql_projection.joiner.where(
-            sql_projection.joiner.from_clause.c.dataset_type_id == storage.dataset_type_id
+        sql_projection.joins.where(
+            sql_projection.joins.from_clause.c.dataset_type_id == storage.dataset_type_id
         )
-        dataset_id_col = sql_projection.joiner.from_clause.c.dataset_id
-        collection_col = sql_projection.joiner.from_clause.c[self._collections.getCollectionForeignKeyName()]
-        fields_provided = sql_projection.joiner.fields[storage.dataset_type.name]
+        dataset_id_col = sql_projection.joins.from_clause.c.dataset_id
+        collection_col = sql_projection.joins.from_clause.c[self._collections.getCollectionForeignKeyName()]
+        fields_provided = sql_projection.joins.fields[fields_key]
         # We always constrain and optionally retrieve the collection(s) via the
         # tags/calibs table.
         if "collection_key" in fields:
-            sql_projection.joiner.fields[storage.dataset_type.name]["collection_key"] = collection_col
+            sql_projection.joins.fields[fields_key]["collection_key"] = collection_col
         if len(collections) == 1:
             only_collection_record = collections[0]
-            sql_projection.joiner.where(collection_col == only_collection_record.key)
+            sql_projection.joins.where(collection_col == only_collection_record.key)
             if "collection" in fields:
                 fields_provided["collection"] = sqlalchemy.literal(only_collection_record.name).cast(
                     # This cast is necessary to ensure that Postgres knows the
@@ -1497,11 +1508,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 )
 
         elif not collections:
-            sql_projection.joiner.where(sqlalchemy.literal(False))
+            sql_projection.joins.where(sqlalchemy.literal(False))
             if "collection" in fields:
                 fields_provided["collection"] = sqlalchemy.literal("NO COLLECTIONS")
         else:
-            sql_projection.joiner.where(collection_col.in_([collection.key for collection in collections]))
+            sql_projection.joins.where(collection_col.in_([collection.key for collection in collections]))
             if "collection" in fields:
                 # Avoid a join to the collection table to get the name by using
                 # a CASE statement.  The SQL will be a bit more verbose but
@@ -1510,7 +1521,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     collections, collection_col
                 )
         # Add more column definitions, starting with the data ID.
-        sql_projection.joiner.extract_dimensions(storage.dataset_type.dimensions.required)
+        sql_projection.joins.extract_dimensions(storage.dataset_type.dimensions.required)
         # We can always get the dataset_id from the tags/calibs table, even if
         # could also get it from the 'static' dataset table.
         if "dataset_id" in fields:
@@ -1558,25 +1569,25 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 need_static_table = True
         if need_static_table:
             # If we need the static table, join it in via dataset_id.  We don't
-            # use QueryJoiner.join because we're joining on dataset ID, not
+            # use SqlJoinsBuilder.join because we're joining on dataset ID, not
             # dimensions.
-            sql_projection.joiner.from_clause = sql_projection.joiner.from_clause.join(
+            sql_projection.joins.from_clause = sql_projection.joins.from_clause.join(
                 self._static.dataset, onclause=(dataset_id_col == self._static.dataset.c.id)
             )
             # Also constrain dataset_type_id in static table in case that helps
             # generate a better plan. We could also include this in the JOIN ON
             # clause, but my guess is that that's a good idea IFF it's in the
             # foreign key, and right now it isn't.
-            sql_projection.joiner.where(self._static.dataset.c.dataset_type_id == storage.dataset_type_id)
+            sql_projection.joins.where(self._static.dataset.c.dataset_type_id == storage.dataset_type_id)
         if need_collection_table:
             # Join the collection table to look up the RUN collection name
             # associated with the dataset.
             (
                 fields_provided["run"],
-                sql_projection.joiner.from_clause,
+                sql_projection.joins.from_clause,
             ) = self._collections.lookup_name_sql(
                 self._static.dataset.c[self._run_key_column],
-                sql_projection.joiner.from_clause,
+                sql_projection.joins.from_clause,
             )
 
         sql_projection.distinct = (
