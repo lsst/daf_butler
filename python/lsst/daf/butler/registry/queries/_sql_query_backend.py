@@ -28,6 +28,7 @@ from __future__ import annotations
 
 __all__ = ("SqlQueryBackend",)
 
+import warnings
 from collections.abc import Iterable, Mapping, Sequence, Set
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
@@ -337,6 +338,11 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             }
             if (constraint_values := constraints.get(dimension_name)) is not None:
                 if not (constraint_values <= all_values):
+                    warnings.warn(
+                        "DataIdValueError will no longer be raised for invalid governor dimension"
+                        " values after v28.",
+                        FutureWarning,
+                    )
                     raise DataIdValueError(
                         f"Unknown values specified for governor dimension {dimension_name}: "
                         f"{constraint_values - all_values}."
