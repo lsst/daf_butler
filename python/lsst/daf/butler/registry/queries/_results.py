@@ -39,9 +39,11 @@ __all__ = (
 )
 
 import itertools
+import warnings
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
+from types import EllipsisType
 from typing import Any, Self
 
 from deprecated.sphinx import deprecated
@@ -529,8 +531,13 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
-        if offset is None:
+    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
+        if offset is not ...:
+            warnings.warn(
+                "offset parameter is not supported in new query system and will be removed after v28.",
+                FutureWarning,
+            )
+        if offset is None or offset is ...:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
         return self
@@ -824,9 +831,14 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
+    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
         # Docstring inherited from base class.
-        if offset is None:
+        if offset is not ...:
+            warnings.warn(
+                "offset parameter is not supported in new query system and will be removed after v28.",
+                FutureWarning,
+            )
+        if offset is None or offset is ...:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
         return self
