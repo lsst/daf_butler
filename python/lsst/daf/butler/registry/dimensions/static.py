@@ -31,6 +31,7 @@ import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -486,7 +487,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         dimensions: DimensionGroup,
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
-        calibration_dataset_types: Set[str],
+        calibration_dataset_types: Set[str | EllipsisType],
     ) -> tuple[qt.Predicate, QueryBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
             self._db, dimensions, calibration_dataset_types, self._overlap_tables
@@ -1023,7 +1024,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         self,
         db: Database,
         dimensions: DimensionGroup,
-        calibration_dataset_types: Set[str],
+        calibration_dataset_types: Set[str | EllipsisType],
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
     ):
         super().__init__(dimensions, calibration_dataset_types)

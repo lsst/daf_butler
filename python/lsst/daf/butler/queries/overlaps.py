@@ -31,6 +31,7 @@ __all__ = ("OverlapsVisitor",)
 
 import itertools
 from collections.abc import Hashable, Iterable, Mapping, Sequence, Set
+from types import EllipsisType
 from typing import Generic, Literal, TypeVar, cast
 
 from lsst.sphgeom import Region
@@ -114,7 +115,7 @@ class CalibrationTemporalEndpoint(TopologicalRelationshipEndpoint):
 
     Parameters
     ----------
-    dataset_type_name : `str`
+    dataset_type_name : `str` or ``...``
         Name of the dataset type.
 
     Notes
@@ -127,12 +128,12 @@ class CalibrationTemporalEndpoint(TopologicalRelationshipEndpoint):
     the same family).
     """
 
-    def __init__(self, dataset_type_name: str):
+    def __init__(self, dataset_type_name: str | EllipsisType):
         self.dataset_type_name = dataset_type_name
 
     @property
     def name(self) -> str:
-        return self.dataset_type_name
+        return self.dataset_type_name if self.dataset_type_name is not ... else "<calibrations>"
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
@@ -147,18 +148,21 @@ class CalibrationTemporalFamily(TopologicalFamily):
 
     Parameters
     ----------
-    dataset_type_name : `str`
+    dataset_type_name : `str` or ``...``
         Name of the dataset type.
     """
 
-    def __init__(self, dataset_type_name: str):
-        super().__init__(dataset_type_name, TopologicalSpace.TEMPORAL)
+    def __init__(self, dataset_type_name: str | EllipsisType):
+        super().__init__(
+            dataset_type_name if dataset_type_name is not ... else "<calibrations>", TopologicalSpace.TEMPORAL
+        )
+        self.dataset_type_name = dataset_type_name
 
     def choose(self, dimensions: DimensionGroup) -> CalibrationTemporalEndpoint:
-        return CalibrationTemporalEndpoint(self.name)
+        return CalibrationTemporalEndpoint(self.dataset_type_name)
 
     def make_column_reference(self, endpoint: TopologicalRelationshipEndpoint) -> tree.DatasetFieldReference:
-        return tree.DatasetFieldReference(dataset_type=endpoint.name, field="timespan")
+        return tree.DatasetFieldReference(dataset_type=self.dataset_type_name, field="timespan")
 
 
 class OverlapsVisitor(SimplePredicateVisitor):
@@ -181,7 +185,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
     implementations that want to rewrite the predicate at the same time.
     """
 
-    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str]):
+    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str | EllipsisType]):
         self.dimensions = dimensions
         self._spatial_connections = _NaiveDisjointSet(self.dimensions.spatial)
         temporal_families: list[TopologicalFamily] = [
@@ -477,7 +481,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
         return None
 
     def visit_validity_range_dimension_join(
-        self, a: str, b: DimensionElement, flags: PredicateVisitFlags
+        self, a: str | EllipsisType, b: DimensionElement, flags: PredicateVisitFlags
     ) -> tree.Predicate | None:
         """Handle a temporal overlap comparison between two dimension elements.
 
@@ -487,7 +491,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
 
         Parameters
         ----------
-        a : `str`
+        a : `str` or ``...``
             Name of a calibration dataset type.
         b : `DimensionElement`
             The dimension element to join the dataset validity range to.
@@ -504,7 +508,9 @@ class OverlapsVisitor(SimplePredicateVisitor):
         self._temporal_connections.merge(CalibrationTemporalFamily(a), cast(TopologicalFamily, b.temporal))
         return None
 
-    def visit_validity_range_join(self, a: str, b: str, flags: PredicateVisitFlags) -> tree.Predicate | None:
+    def visit_validity_range_join(
+        self, a: str | EllipsisType, b: str | EllipsisType, flags: PredicateVisitFlags
+    ) -> tree.Predicate | None:
         """Handle a temporal overlap comparison between two dimension elements.
 
         The default implementation updates the set of known temporal
@@ -513,9 +519,9 @@ class OverlapsVisitor(SimplePredicateVisitor):
 
         Parameters
         ----------
-        a : `str`
+        a : `str` or ``...``
             Name of a calibration dataset type.
-        b : `DimensionElement`
+        b : `str` or ``...``
             Another claibration dataset type to join to.
         flags : `tree.PredicateLeafFlags`
             Information about where this overlap comparison appears in the
