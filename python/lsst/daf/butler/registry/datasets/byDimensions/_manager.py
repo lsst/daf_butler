@@ -6,6 +6,7 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import astropy.time
@@ -1367,7 +1368,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         return leaf
 
     def make_query_joiner(
-        self, dataset_type: DatasetType, collections: Sequence[CollectionRecord], fields: Set[str]
+        self,
+        dataset_type: DatasetType,
+        collections: Sequence[CollectionRecord],
+        fields: Set[str],
+        is_union: bool = False,
     ) -> QueryJoiner:
         if (storage := self._find_storage(dataset_type.name)) is None:
             raise MissingDatasetTypeError(f"Dataset type {dataset_type.name!r} has not been registered.")
@@ -1408,7 +1413,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # FOREIGN KEY (and its index) are defined only on dataset_id.
         columns = qt.ColumnSet(dataset_type.dimensions)
         columns.drop_implied_dimension_keys()
-        columns.dataset_fields[dataset_type.name].update(fields)
+        fields_key: str | EllipsisType = ... if is_union else dataset_type.name
+        columns.dataset_fields[fields_key].update(fields)
         tags_builder: QueryBuilder | None = None
         if collection_types != {CollectionType.CALIBRATION}:
             # We'll need a subquery for the tags table if any of the given
@@ -1417,16 +1423,19 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # create a dummy subquery that we know will fail.
             # We give the table an alias because it might appear multiple times
             # in the same query, for different dataset types.
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections)).alias(
+                f"{dataset_type.name}_tags{'_union' if is_union else ''}"
+            )
             tags_builder = self._finish_query_builder(
                 storage,
-                QueryJoiner(self._db, tags_table.alias(f"{dataset_type.name}_tags")).to_builder(columns),
+                QueryJoiner(db=self._db, from_clause=tags_table).to_builder(columns),
                 [record for record in collections if record.type is not CollectionType.CALIBRATION],
                 fields,
+                fields_key,
             )
             if "timespan" in fields:
-                tags_builder.joiner.timespans[dataset_type.name] = (
-                    self._db.getTimespanRepresentation().fromLiteral(None)
+                tags_builder.joiner.timespans[fields_key] = self._db.getTimespanRepresentation().fromLiteral(
+                    None
                 )
         calibs_builder: QueryBuilder | None = None
         if CollectionType.CALIBRATION in collection_types:
@@ -1434,16 +1443,17 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
             calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections)).alias(
-                f"{dataset_type.name}_calibs"
+                f"{dataset_type.name}_calibs{'_union' if is_union else ''}"
             )
             calibs_builder = self._finish_query_builder(
                 storage,
-                QueryJoiner(self._db, calibs_table).to_builder(columns),
+                QueryJoiner(db=self._db, from_clause=calibs_table).to_builder(columns),
                 [record for record in collections if record.type is CollectionType.CALIBRATION],
                 fields,
+                fields_key,
             )
             if "timespan" in fields:
-                calibs_builder.joiner.timespans[dataset_type.name] = (
+                calibs_builder.joiner.timespans[fields_key] = (
                     self._db.getTimespanRepresentation().from_columns(calibs_table.columns)
                 )
 
@@ -1467,6 +1477,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         sql_projection: QueryBuilder,
         collections: Sequence[CollectionRecord],
         fields: Set[str],
+        fields_key: str | EllipsisType,
     ) -> QueryBuilder:
         # This method plays the same role as _finish_single_relation in the new
         # query system. It is called exactly one or two times by
@@ -1480,11 +1491,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         )
         dataset_id_col = sql_projection.joiner.from_clause.c.dataset_id
         collection_col = sql_projection.joiner.from_clause.c[self._collections.getCollectionForeignKeyName()]
-        fields_provided = sql_projection.joiner.fields[storage.dataset_type.name]
+        fields_provided = sql_projection.joiner.fields[fields_key]
         # We always constrain and optionally retrieve the collection(s) via the
         # tags/calibs table.
         if "collection_key" in fields:
-            sql_projection.joiner.fields[storage.dataset_type.name]["collection_key"] = collection_col
+            sql_projection.joiner.fields[fields_key]["collection_key"] = collection_col
         if len(collections) == 1:
             only_collection_record = collections[0]
             sql_projection.joiner.where(collection_col == only_collection_record.key)

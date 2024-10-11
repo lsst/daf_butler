@@ -27,12 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryJoiner", "QueryBuilder")
+__all__ = ("QueryJoiner", "QueryBuilder", "QueryColumns", "make_table_spec")
 
 import dataclasses
 import itertools
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar
+from types import EllipsisType
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 import sqlalchemy
 
@@ -66,12 +67,12 @@ class QueryBuilder:
     columns: qt.ColumnSet
     """Columns to include the SELECT clause.
 
-    This does not include columns required only by `postprocessing` and columns
+    This does not include columns required only by `Postprocessing` and columns
     in `QueryJoiner.special`, which are also always included in the SELECT
     clause.
     """
 
-    distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = ()
+    distinct: bool | tuple[sqlalchemy.ColumnElement[Any], ...] = ()
     """A representation of a DISTINCT or DISTINCT ON clause.
 
     If `True`, this represents a SELECT DISTINCT.  If a non-empty sequence,
@@ -79,7 +80,7 @@ class QueryBuilder:
     there is no DISTINCT clause.
     """
 
-    group_by: Sequence[sqlalchemy.ColumnElement[Any]] = ()
+    group_by: tuple[sqlalchemy.ColumnElement[Any], ...] = ()
     """A representation of a GROUP BY clause.
 
     If not-empty, a GROUP BY clause with these columns is added.  This
@@ -97,6 +98,16 @@ class QueryBuilder:
     """Type of the column added to a SQL SELECT clause in order to construct
     queries that have no real columns.
     """
+
+    def copy(self) -> QueryBuilder:
+        """Return a copy that can be safely mutated without affecting the
+        original.
+        """
+        return dataclasses.replace(
+            self,
+            joiner=self.joiner.copy(),
+            columns=self.columns.copy(),
+        )
 
     @classmethod
     def handle_empty_columns(
@@ -141,6 +152,7 @@ class QueryBuilder:
         for logical_table, field in self.columns:
             name = self.columns.get_qualified_name(logical_table, field)
             if field is None:
+                assert logical_table is not ...
                 sql_columns.append(self.joiner.dimension_keys[logical_table][0].label(name))
             else:
                 name = self.joiner.db.name_shrinker.shrink(name)
@@ -223,7 +235,7 @@ class QueryBuilder:
             sql_from_clause = (
                 self.select(postprocessing).cte() if cte else self.select(postprocessing).subquery()
             )
-            return QueryJoiner(self.joiner.db, sql_from_clause).extract_columns(
+            return QueryJoiner(db=self.joiner.db, from_clause=sql_from_clause).extract_columns(
                 self.columns, special=self.joiner.special.keys()
             )
         return self.joiner
@@ -283,73 +295,23 @@ class QueryBuilder:
         select0 = self.select(postprocessing)
         other_selects = [other.select(postprocessing) for other in others]
         return QueryJoiner(
-            self.joiner.db,
+            db=self.joiner.db,
             from_clause=select0.union(*other_selects).subquery(),
         ).extract_columns(self.columns, postprocessing)
 
-    def make_table_spec(self, postprocessing: Postprocessing | None) -> ddl.TableSpec:
-        """Make a specification that can be used to create a table to store
-        this query's outputs.
 
-        Parameters
-        ----------
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing in Python, which may
-            require additional columns in the query results.
+@dataclasses.dataclass(kw_only=True)
+class QueryColumns:
+    """A struct that holds SQLAlchemy columns objects for a query, categorized
+    by type.
 
-        Returns
-        -------
-        spec : `.ddl.TableSpec`
-            Table specification for this query's result columns (including
-            those from `postprocessing` and `QueryJoiner.special`).
-        """
-        assert not self.joiner.special, "special columns not supported in make_table_spec"
-        results = ddl.TableSpec(
-            [
-                self.columns.get_column_spec(logical_table, field).to_sql_spec(
-                    name_shrinker=self.joiner.db.name_shrinker
-                )
-                for logical_table, field in self.columns
-            ]
-        )
-        if postprocessing:
-            for element in postprocessing.iter_missing(self.columns):
-                results.fields.add(
-                    ddl.FieldSpec.for_region(
-                        self.joiner.db.name_shrinker.shrink(
-                            self.columns.get_qualified_name(element.name, "region")
-                        )
-                    )
-                )
-        if not results.fields:
-            results.fields.add(ddl.FieldSpec(name=self.EMPTY_COLUMNS_NAME, dtype=self.EMPTY_COLUMNS_TYPE))
-        return results
-
-
-@dataclasses.dataclass
-class QueryJoiner:
-    """A struct used to represent the FROM and WHERE clauses of an
-    under-construction SQL SELECT query.
-
-    This object's methods frequently "consume" ``self``, by either returning
-    it after modification or returning related copy that may share state with
-    the original.  Users should be careful never to use consumed instances, and
-    are recommended to reuse the same variable name to make that hard to do
-    accidentally.
+    This class mostly serves as a base class for `QueryJoiner`, but unlike
+    `QueryJoiner` it is capable of representing columns in a compound SELECT
+    (i.e. UNION or UNION ALL) clause, not just a FROM clause.
     """
 
     db: Database
     """Object that abstracts over the database engine."""
-
-    from_clause: sqlalchemy.FromClause | None = None
-    """SQLAlchemy representation of the FROM clause.
-
-    This is initialized to `None` but in almost all cases is immediately
-    replaced.
-    """
-
-    where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
-    """Sequence of WHERE clause terms to be combined with AND."""
 
     dimension_keys: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
         default_factory=lambda: NonemptyMapping(list)
@@ -360,7 +322,7 @@ class QueryJoiner:
     key (which should all have equal values for all result rows).
     """
 
-    fields: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
+    fields: NonemptyMapping[str | EllipsisType, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
         default_factory=lambda: NonemptyMapping(dict)
     )
     """Mapping of columns that are neither dimension keys nor timespans.
@@ -370,7 +332,9 @@ class QueryJoiner:
     either a dimension element name or dataset type name.
     """
 
-    timespans: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(default_factory=dict)
+    timespans: dict[str | EllipsisType, TimespanDatabaseRepresentation] = dataclasses.field(
+        default_factory=dict
+    )
     """Mapping of timespan columns.
 
     Keys are "logical tables" - dimension element names or dataset type names.
@@ -386,7 +350,9 @@ class QueryJoiner:
     included in raw SQL results.
     """
 
-    def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> QueryJoiner:
+    def extract_dimensions(
+        self, dimensions: Iterable[str], *, column_collection: sqlalchemy.ColumnCollection, **kwargs: str
+    ) -> Self:
         """Add dimension key columns from `from_clause` into `dimension_keys`.
 
         Parameters
@@ -394,21 +360,23 @@ class QueryJoiner:
         dimensions : `~collections.abc.Iterable` [ `str` ]
             Names of dimensions to include, assuming that their names in
             `sql_columns` are just the dimension names.
+        column_collection : `sqlalchemy.ColumnCollection`
+            SQLAlchemy column collection to extract from.
+
         **kwargs : `str`
             Additional dimensions to include, with the names in `sql_columns`
             as keys and the actual dimension names as values.
 
         Returns
         -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
+        self : `QueryColumns`
+            This `QueryColumns` instance (never a copy). Provided to enable
             method chaining.
         """
-        assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
         for dimension_name in dimensions:
-            self.dimension_keys[dimension_name].append(self.from_clause.columns[dimension_name])
+            self.dimension_keys[dimension_name].append(column_collection[dimension_name])
         for k, v in kwargs.items():
-            self.dimension_keys[v].append(self.from_clause.columns[k])
+            self.dimension_keys[v].append(column_collection[k])
         return self
 
     def extract_columns(
@@ -416,7 +384,9 @@ class QueryJoiner:
         columns: qt.ColumnSet,
         postprocessing: Postprocessing | None = None,
         special: Iterable[str] = (),
-    ) -> QueryJoiner:
+        *,
+        column_collection: sqlalchemy.ColumnCollection,
+    ) -> Self:
         """Add columns from `from_clause` into `dimension_keys`.
 
         Parameters
@@ -429,6 +399,97 @@ class QueryJoiner:
             Postprocessing object whose needed columns should also be included.
         special : `~collections.abc.Iterable` [ `str` ], optional
             Additional special columns to extract.
+        column_collection : `sqlalchemy.ColumnCollection`
+            SQLAlchemy column collection to extract from.
+
+        Returns
+        -------
+        self : `QueryColumns`
+            This `QueryColumns` instance (never a copy). Provided to enable
+            method chaining.
+        """
+        for logical_table, field in columns:
+            name = columns.get_qualified_name(logical_table, field)
+            if field is None:
+                assert logical_table is not ...
+                self.dimension_keys[logical_table].append(column_collection[name])
+            else:
+                name = self.db.name_shrinker.shrink(name)
+                if columns.is_timespan(logical_table, field):
+                    self.timespans[logical_table] = self.db.getTimespanRepresentation().from_columns(
+                        column_collection, name
+                    )
+                else:
+                    self.fields[logical_table][field] = column_collection[name]
+        if postprocessing is not None:
+            for element in postprocessing.iter_missing(columns):
+                self.fields[element.name]["region"] = column_collection[
+                    self.db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                ]
+            if postprocessing.check_validity_match_count:
+                self.special[postprocessing.VALIDITY_MATCH_COUNT] = column_collection[
+                    postprocessing.VALIDITY_MATCH_COUNT
+                ]
+        for name in special:
+            self.special[name] = column_collection[name]
+        return self
+
+
+@dataclasses.dataclass(kw_only=True)
+class QueryJoiner(QueryColumns):
+    """A struct used to represent the FROM and WHERE clauses of an
+    under-construction SQL SELECT query.
+
+    This object's methods frequently "consume" ``self``, by either returning
+    it after modification or returning related copy that may share state with
+    the original.  Users should be careful never to use consumed instances, and
+    are recommended to reuse the same variable name to make that hard to do
+    accidentally.
+    """
+
+    from_clause: sqlalchemy.FromClause | None = None
+    """SQLAlchemy representation of the FROM clause.
+
+    This is initialized to `None` but in almost all cases is immediately
+    replaced.
+    """
+
+    where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
+    """Sequence of WHERE clause terms to be combined with AND."""
+
+    def copy(self) -> QueryJoiner:
+        """Return a copy that can be safely mutated without affecting the
+        original.
+        """
+        return dataclasses.replace(
+            self,
+            where_terms=self.where_terms.copy(),
+            dimension_keys=self.dimension_keys.copy(),
+            fields=self.fields.copy(),
+            timespans=self.timespans.copy(),
+            special=self.special.copy(),
+        )
+
+    def extract_dimensions(
+        self,
+        dimensions: Iterable[str],
+        *,
+        column_collection: sqlalchemy.ColumnCollection | None = None,
+        **kwargs: str,
+    ) -> Self:
+        """Add dimension key columns from `from_clause` into `dimension_keys`.
+
+        Parameters
+        ----------
+        dimensions : `~collections.abc.Iterable` [ `str` ]
+            Names of dimensions to include, assuming that their names in
+            `sql_columns` are just the dimension names.
+        column_collection : `sqlalchemy.ColumnCollection`, optional
+            SQLAlchemy column collection to extract from.  Defaults to
+            ``self.from_clause.columns``.
+        **kwargs : `str`
+            Additional dimensions to include, with the names in `sql_columns`
+            as keys and the actual dimension names as values.
 
         Returns
         -------
@@ -436,31 +497,45 @@ class QueryJoiner:
             This `QueryJoiner` instance (never a copy). Provided to enable
             method chaining.
         """
-        assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
-        for logical_table, field in columns:
-            name = columns.get_qualified_name(logical_table, field)
-            if field is None:
-                self.dimension_keys[logical_table].append(self.from_clause.columns[name])
-            else:
-                name = self.db.name_shrinker.shrink(name)
-                if columns.is_timespan(logical_table, field):
-                    self.timespans[logical_table] = self.db.getTimespanRepresentation().from_columns(
-                        self.from_clause.columns, name
-                    )
-                else:
-                    self.fields[logical_table][field] = self.from_clause.columns[name]
-        if postprocessing is not None:
-            for element in postprocessing.iter_missing(columns):
-                self.fields[element.name]["region"] = self.from_clause.columns[
-                    self.db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
-                ]
-            if postprocessing.check_validity_match_count:
-                self.special[postprocessing.VALIDITY_MATCH_COUNT] = self.from_clause.columns[
-                    postprocessing.VALIDITY_MATCH_COUNT
-                ]
-        for name in special:
-            self.special[name] = self.from_clause.columns[name]
-        return self
+        if column_collection is None:
+            assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
+            column_collection = self.from_clause.columns
+        return super().extract_dimensions(dimensions, column_collection=column_collection, **kwargs)
+
+    def extract_columns(
+        self,
+        columns: qt.ColumnSet,
+        postprocessing: Postprocessing | None = None,
+        special: Iterable[str] = (),
+        *,
+        column_collection: sqlalchemy.ColumnCollection | None = None,
+    ) -> Self:
+        """Add columns from `from_clause` into `dimension_keys`.
+
+        Parameters
+        ----------
+        columns : `.queries.tree.ColumnSet`
+            Columns to include, assuming that
+            `.queries.tree.ColumnSet.get_qualified_name` corresponds to the
+            name used in `sql_columns` (after name shrinking).
+        postprocessing : `Postprocessing`, optional
+            Postprocessing object whose needed columns should also be included.
+        special : `~collections.abc.Iterable` [ `str` ], optional
+            Additional special columns to extract.
+        column_collection : `sqlalchemy.ColumnCollection`, optional
+            SQLAlchemy column collection to extract from.  Defaults to
+            ``self.from_clause.columns``.
+
+        Returns
+        -------
+        self : `QueryJoiner`
+            This `QueryJoiner` instance (never a copy). Provided to enable
+            method chaining.
+        """
+        if column_collection is None:
+            assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
+            column_collection = self.from_clause.columns
+        return super().extract_columns(columns, postprocessing, special, column_collection=column_collection)
 
     def join(self, other: QueryJoiner) -> QueryJoiner:
         """Combine this `QueryJoiner` with another via an INNER JOIN on
@@ -560,3 +635,45 @@ class QueryJoiner:
             distinct=distinct if type(distinct) is bool else tuple(distinct),
             group_by=tuple(group_by),
         )
+
+
+def make_table_spec(
+    columns: qt.ColumnSet, db: Database, postprocessing: Postprocessing | None
+) -> ddl.TableSpec:
+    """Make a specification that can be used to create a table to store
+    this query's outputs.
+
+    Parameters
+    ----------
+    columns : `lsst.daf.butler.queries.tree.ColumnSet`
+        Columns to include in the table.
+    db : `Database`
+        Database engine and connection abstraction.
+    postprocessing : `Postprocessing`
+        Struct representing post-query processing in Python, which may
+        require additional columns in the query results.
+
+    Returns
+    -------
+    spec : `.ddl.TableSpec`
+        Table specification for this query's result columns (including
+        those from `postprocessing` and `QueryJoiner.special`).
+    """
+    results = ddl.TableSpec(
+        [
+            columns.get_column_spec(logical_table, field).to_sql_spec(name_shrinker=db.name_shrinker)
+            for logical_table, field in columns
+        ]
+    )
+    if postprocessing:
+        for element in postprocessing.iter_missing(columns):
+            results.fields.add(
+                ddl.FieldSpec.for_region(
+                    db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                )
+            )
+    if not results.fields:
+        results.fields.add(
+            ddl.FieldSpec(name=QueryBuilder.EMPTY_COLUMNS_NAME, dtype=QueryBuilder.EMPTY_COLUMNS_TYPE)
+        )
+    return results

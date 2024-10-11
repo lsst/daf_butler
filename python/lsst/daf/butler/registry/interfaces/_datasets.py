@@ -628,7 +628,11 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @abstractmethod
     def make_query_joiner(
-        self, dataset_type: DatasetType, collections: Sequence[CollectionRecord], fields: Set[str]
+        self,
+        dataset_type: DatasetType,
+        collections: Sequence[CollectionRecord],
+        fields: Set[str],
+        is_union: bool = False,
     ) -> QueryJoiner:
         """Make a `..direct_query_driver.QueryJoiner` that represents a search
         for datasets of this type.
@@ -652,6 +656,10 @@ class DatasetRecordStorageManager(VersionedExtension):
 
             Dimension keys for the dataset type's required dimensions are
             always included.
+        is_union : `bool`, optional
+            If `True`, this search is being joined in as part of one term in
+            a union over all dataset types.  This causes fields to be added to
+            the joiner via the special ``...`` instad of the dataset type name.
 
         Returns
         -------
