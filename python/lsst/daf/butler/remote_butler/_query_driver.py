@@ -223,7 +223,7 @@ class RemoteQueryDriver(QueryDriver):
         return result.messages
 
     def get_default_collections(self) -> tuple[str, ...]:
-        collections = tuple(self._butler.collections)
+        collections = tuple(self._butler.collections.defaults)
         if not collections:
             raise NoDefaultCollectionError("No collections provided and no default collections.")
         return collections
