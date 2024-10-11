@@ -44,6 +44,8 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from typing import Any, Self
 
+from deprecated.sphinx import deprecated
+
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions_legacy import DatasetTypeError
@@ -665,6 +667,11 @@ class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
         yield self
 
     @contextmanager
+    @deprecated(
+        "This method is not supported by the new query system and will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
