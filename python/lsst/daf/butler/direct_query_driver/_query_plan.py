@@ -45,7 +45,7 @@ from ..dimensions import DimensionElement, DimensionGroup
 from ..queries import tree as qt
 from ..registry import CollectionSummary
 from ..registry.interfaces import CollectionRecord, Database
-from ._query_builder import QueryBuilder, QueryColumns, QueryJoiner
+from ._sql_builders import SqlColumns, SqlJoinsBuilder, SqlSelectBuilder
 
 if TYPE_CHECKING:
     from ._driver import DirectQueryDriver
@@ -218,8 +218,8 @@ class QueryPlanBase:
 
     In `DirectQueryDriver.build_query`, a `QueryPlan` instance is constructed
     via `DirectQueryDriver.analyze_query`, which also returns an initial
-    `QueryBuilder`.  After this point the plans are considered frozen, and the
-    nested plan attributes are then passed to each of the corresponding
+    `SqlSelectBuilder`.  After this point the plans are considered frozen, and
+    the nested plan attributes are then passed to each of the corresponding
     `DirectQueryDriver` methods along with the builder, which is mutated (and
     occasionally replaced) into the complete SQL/postprocessing form of the
     query.
@@ -261,8 +261,8 @@ class QueryPlanBase:
     columns used by the `find_first` stage or an ORDER BY expression.
 
     Like all other `.queries.tree.ColumnSet` attributes, it does not include
-    fields added directly to `QueryBuilder.special`, which may also be added
-    to the SELECT clause.
+    fields added directly to `SqlSelectBuilder.special`, which may also be
+    added to the SELECT clause.
     """
 
     postprocessing: Postprocessing
@@ -285,7 +285,7 @@ class QueryPlanBase:
 @dataclasses.dataclass
 class SimpleQueryPlan(QueryPlanBase):
 
-    builder: QueryBuilder
+    select_builder: SqlSelectBuilder
 
     needs_dataset_distinct: bool = False
     """If `True`, the projection columns do not include collection-specific
@@ -304,8 +304,8 @@ class SimpleQueryPlan(QueryPlanBase):
 
     union_dataset_dimensions: ClassVar[None] = None
 
-    def iter_builders(self) -> Iterator[QueryBuilder]:
-        yield self.builder
+    def iter_select_builders(self) -> Iterator[SqlSelectBuilder]:
+        yield self.select_builder
 
     def analyze_projection(self) -> None:
         super().analyze_projection()
@@ -346,7 +346,7 @@ class SimpleQueryPlan(QueryPlanBase):
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         driver.apply_query_projection(
-            self.builder,
+            self.select_builder,
             self.postprocessing,
             join_datasets=self.joins.datasets,
             union_datasets=None,
@@ -361,19 +361,21 @@ class SimpleQueryPlan(QueryPlanBase):
     def apply_find_first(self, driver: DirectQueryDriver) -> None:
         if not self.find_first:
             return
-        self.builder = driver.apply_query_find_first(self.builder, self.postprocessing, self.find_first)
+        self.select_builder = driver.apply_query_find_first(
+            self.select_builder, self.postprocessing, self.find_first
+        )
 
-    def into_sql_select(self, return_columns: bool = True) -> tuple[sqlalchemy.Select, QueryColumns]:
-        return self.builder.select(self.postprocessing), self.builder.joiner
+    def into_sql_select(self, return_columns: bool = True) -> tuple[sqlalchemy.Select, SqlColumns]:
+        return self.select_builder.select(self.postprocessing), self.select_builder.joins
 
-    def into_nested_builder(self, cte: bool = False) -> QueryBuilder:
-        return self.builder.nested(cte=cte, postprocessing=self.postprocessing)
+    def into_nested_builder(self, cte: bool = False) -> SqlSelectBuilder:
+        return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
 
 
 @dataclasses.dataclass
 class UnionQueryPlanTerm:
 
-    builders: list[QueryBuilder]
+    select_builders: list[SqlSelectBuilder]
     """Under-construction SQL queries associated with this plan, to be unioned
     together when complete.
     """
@@ -421,50 +423,50 @@ class UnionQueryPlanTerm:
 @dataclasses.dataclass
 class UnionQueryPlan(QueryPlanBase):
 
-    initial_builder: QueryBuilder | None
+    initial_select_builder: SqlSelectBuilder | None
 
     union_dataset_dimensions: DimensionGroup
 
     union_terms: list[UnionQueryPlanTerm]
 
     @property
-    def builder(self) -> QueryBuilder:
-        """Return the `QueryBuilder` that is common to all union terms.
+    def select_builder(self) -> SqlSelectBuilder:
+        """Return the `SqlSelectBuilder` that is common to all union terms.
 
         This property may not be accessed unless `has_one_builder` is `True`.
         """
-        if self.initial_builder is not None and not self.union_terms:
-            return self.initial_builder
-        elif len(self.union_terms) == 1 and len(self.union_terms[0].builders) == 1:
-            return self.union_terms[0].builders[0]
+        if self.initial_select_builder is not None and not self.union_terms:
+            return self.initial_select_builder
+        elif len(self.union_terms) == 1 and len(self.union_terms[0].select_builders) == 1:
+            return self.union_terms[0].select_builders[0]
         raise AssertionError("QueryPlan does not have a single builder.")
 
     @property
-    def has_one_builder(self) -> int:
-        return (self.initial_builder is not None and not self.union_terms) or (
-            len(self.union_terms) == 1 and len(self.union_terms[0].builders) == 1
+    def has_one_select(self) -> int:
+        return (self.initial_select_builder is not None and not self.union_terms) or (
+            len(self.union_terms) == 1 and len(self.union_terms[0].select_builders) == 1
         )
 
     @property
     def db(self) -> Database:
-        if self.initial_builder is not None:
-            return self.initial_builder.joiner.db
+        if self.initial_select_builder is not None:
+            return self.initial_select_builder.joins.db
         else:
-            return self.union_terms[0].builders[0].joiner.db
+            return self.union_terms[0].select_builders[0].joins.db
 
     @property
     def special(self) -> Set[str]:
-        if self.initial_builder is not None:
-            return self.initial_builder.joiner.special.keys()
+        if self.initial_select_builder is not None:
+            return self.initial_select_builder.joins.special.keys()
         else:
-            return self.union_terms[0].builders[0].joiner.special.keys()
+            return self.union_terms[0].select_builders[0].joins.special.keys()
 
-    def iter_builders(self) -> Iterator[QueryBuilder]:
-        if self.initial_builder is not None:
-            yield self.initial_builder
+    def iter_select_builders(self) -> Iterator[SqlSelectBuilder]:
+        if self.initial_select_builder is not None:
+            yield self.initial_select_builder
         else:
             for union_term in self.union_terms:
-                yield from union_term.builders
+                yield from union_term.select_builders
 
     def analyze_projection(self) -> None:
         super().analyze_projection()
@@ -527,22 +529,22 @@ class UnionQueryPlan(QueryPlanBase):
             )
 
     def apply_union_dataset_joins(self, driver: DirectQueryDriver) -> None:
-        assert self.initial_builder is not None
+        assert self.initial_select_builder is not None
         for union_term in self.union_terms:
             for dataset_type_name in union_term.datasets.name:
-                builder = self.initial_builder.copy()
+                builder = self.initial_select_builder.copy()
                 driver.join_dataset_search(
-                    builder.joiner,
+                    builder.joins,
                     union_term.datasets,
                     self.joins.columns.dataset_fields[...],
                     union_dataset_type_name=dataset_type_name,
                 )
-                union_term.builders.append(builder)
-        self.initial_builder = None
+                union_term.select_builders.append(builder)
+        self.initial_select_builder = None
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         for union_term in self.union_terms:
-            for builder in union_term.builders:
+            for builder in union_term.select_builders:
                 driver.apply_query_projection(
                     builder,
                     self.postprocessing,
@@ -560,15 +562,15 @@ class UnionQueryPlan(QueryPlanBase):
         for union_term in self.union_terms:
             if not union_term.find_first:
                 continue
-            union_term.builders = [
+            union_term.select_builders = [
                 driver.apply_query_find_first(builder, self.postprocessing, union_term.find_first)
-                for builder in union_term.builders
+                for builder in union_term.select_builders
             ]
 
     @overload
     def into_sql_select(
         self, return_columns: Literal[True] = True
-    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, QueryColumns]: ...
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns]: ...
 
     @overload
     def into_sql_select(
@@ -577,14 +579,14 @@ class UnionQueryPlan(QueryPlanBase):
 
     def into_sql_select(
         self, return_columns: bool = True
-    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, QueryColumns | None]:
-        if self.has_one_builder:
-            return self.builder.select(self.postprocessing), self.builder.joiner
-        terms = [builder.select(self.postprocessing) for builder in self.iter_builders()]
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
+        if self.has_one_select:
+            return self.select_builder.select(self.postprocessing), self.select_builder.joins
+        terms = [builder.select(self.postprocessing) for builder in self.iter_select_builders()]
         sql = sqlalchemy.union_all(*terms)
-        columns: QueryColumns | None = None
+        columns: SqlColumns | None = None
         if return_columns:
-            columns = QueryColumns(
+            columns = SqlColumns(
                 db=self.db,
             )
             columns.extract_columns(
@@ -595,16 +597,16 @@ class UnionQueryPlan(QueryPlanBase):
             )
         return sql, columns
 
-    def into_nested_builder(self, cte: bool = False) -> QueryBuilder:
-        if self.has_one_builder:
-            return self.builder.nested(cte=cte, postprocessing=self.postprocessing)
+    def into_nested_builder(self, cte: bool = False) -> SqlSelectBuilder:
+        if self.has_one_select:
+            return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
         sql_select, sql_columns = self.into_sql_select()
         from_clause = sql_select.cte() if cte else sql_select.subquery()
-        joiner = QueryJoiner(
+        joins_builder = SqlJoinsBuilder(
             db=self.db,
             from_clause=from_clause,
         ).extract_columns(self.final_columns, self.postprocessing)
-        return QueryBuilder(joiner, columns=self.final_columns)
+        return SqlSelectBuilder(joins_builder, columns=self.final_columns)
 
 
 QueryPlan: TypeAlias = SimpleQueryPlan | UnionQueryPlan

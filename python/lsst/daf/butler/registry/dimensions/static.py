@@ -59,8 +59,8 @@ from ...dimensions import (
 from ...dimensions.record_cache import DimensionRecordCache
 from ...direct_query_driver import (  # Future query system (direct,server).
     Postprocessing,
-    QueryBuilder,
-    QueryJoiner,
+    SqlJoinsBuilder,
+    SqlSelectBuilder,
 )
 from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
@@ -458,18 +458,18 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             )
         return overlaps, needs_refinement
 
-    def make_query_joiner(self, element: DimensionElement, fields: Set[str]) -> QueryJoiner:
+    def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
         if element.implied_union_target is not None:
             assert not fields, "Dimensions with implied-union storage never have fields."
-            return QueryBuilder(
-                self.make_query_joiner(element.implied_union_target, fields),
+            return SqlSelectBuilder(
+                self.make_joins_builder(element.implied_union_target, fields),
                 columns=qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(),
                 distinct=True,
-            ).to_joiner(postprocessing=None)
+            ).into_from_builder(postprocessing=None)
         if not element.has_own_table:
             raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
-        result = QueryJoiner(db=self._db, from_clause=table)
+        result = SqlJoinsBuilder(db=self._db, from_clause=table)
         for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
             result.dimension_keys[dimension_name].append(table.columns[column_name])
         result.extract_dimensions(element.implied.names)
@@ -488,7 +488,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str | EllipsisType],
-    ) -> tuple[qt.Predicate, QueryBuilder, Postprocessing]:
+    ) -> tuple[qt.Predicate, SqlSelectBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
             self._db, dimensions, calibration_dataset_types, self._overlap_tables
         )
@@ -1028,7 +1028,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
     ):
         super().__init__(dimensions, calibration_dataset_types)
-        self.builder: QueryBuilder = QueryJoiner(db=db).to_builder(qt.ColumnSet(dimensions))
+        self.builder: SqlSelectBuilder = SqlJoinsBuilder(db=db).to_select_builder(qt.ColumnSet(dimensions))
         self.postprocessing = Postprocessing()
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
@@ -1074,16 +1074,16 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     # table that embeds the SQL WHERE clause we want and then
                     # projects out that dimension (with SELECT DISTINCT, to
                     # avoid introducing duplicate rows into the larger query).
-                    joiner = self._make_common_skypix_overlap_joiner(element)
+                    joins_builder = self._make_common_skypix_overlap_joins_builder(element)
                     sql_where_or: list[sqlalchemy.ColumnElement[bool]] = []
-                    sql_skypix_col = joiner.dimension_keys[self.common_skypix.name][0]
+                    sql_skypix_col = joins_builder.dimension_keys[self.common_skypix.name][0]
                     for begin, end in self.common_skypix.pixelization.envelope(region):
                         sql_where_or.append(sqlalchemy.and_(sql_skypix_col >= begin, sql_skypix_col < end))
-                    joiner.where(sqlalchemy.or_(*sql_where_or))
+                    joins_builder.where(sqlalchemy.or_(*sql_where_or))
                     self.builder.join(
-                        joiner.to_builder(
+                        joins_builder.to_select_builder(
                             qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
-                        ).to_joiner(postprocessing=None)
+                        ).into_from_builder(postprocessing=None)
                     )
                     # Short circuit here since the SQL WHERE clause has already
                     # been embedded in the subquery.
@@ -1142,13 +1142,13 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     # index column with SELECT DISTINCT.
 
                     self.builder.join(
-                        self._make_common_skypix_overlap_joiner(a)
-                        .join(self._make_common_skypix_overlap_joiner(b))
-                        .to_builder(
+                        self._make_common_skypix_overlap_joins_builder(a)
+                        .join(self._make_common_skypix_overlap_joins_builder(b))
+                        .to_select_builder(
                             qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
                             distinct=True,
                         )
-                        .to_joiner(postprocessing=None)
+                        .into_from_builder(postprocessing=None)
                     )
                 # In both cases we add postprocessing to check that the regions
                 # really do overlap, since overlapping the same common skypix
@@ -1160,13 +1160,13 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
 
     def _join_common_skypix_overlap(self, element: DatabaseDimensionElement) -> None:
         if element not in self.common_skypix_overlaps_done:
-            self.builder.join(self._make_common_skypix_overlap_joiner(element))
+            self.builder.join(self._make_common_skypix_overlap_joins_builder(element))
             self.common_skypix_overlaps_done.add(element)
 
-    def _make_common_skypix_overlap_joiner(self, element: DatabaseDimensionElement) -> QueryJoiner:
+    def _make_common_skypix_overlap_joins_builder(self, element: DatabaseDimensionElement) -> SqlJoinsBuilder:
         _, overlap_table = self.overlap_tables[element.name]
         return (
-            QueryJoiner(db=self.builder.joiner.db, from_clause=overlap_table)
+            SqlJoinsBuilder(db=self.builder.joins.db, from_clause=overlap_table)
             .extract_dimensions(element.required.names, skypix_index=self.common_skypix.name)
             .where(
                 sqlalchemy.and_(

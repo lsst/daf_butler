@@ -43,7 +43,7 @@ from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:
     from ._driver import DirectQueryDriver
-    from ._query_builder import QueryColumns
+    from ._sql_builders import SqlColumns
 
 
 class SqlColumnVisitor(
@@ -64,7 +64,7 @@ class SqlColumnVisitor(
         Driver used to construct nested queries for "in query" predicates.
     """
 
-    def __init__(self, columns: QueryColumns, driver: DirectQueryDriver):
+    def __init__(self, columns: SqlColumns, driver: DirectQueryDriver):
         self._driver = driver
         self._columns = columns
 
@@ -236,13 +236,13 @@ class SqlColumnVisitor(
         columns = qt.ColumnSet(self._driver.universe.empty)
         column.gather_required_columns(columns)
         plan = self._driver.build_query(query_tree, columns)
-        builder = plan.builder
+        builder = plan.select_builder
         if plan.postprocessing:
             raise NotImplementedError(
                 "Right-hand side subquery in IN expression would require postprocessing."
             )
-        subquery_visitor = SqlColumnVisitor(builder.joiner, self._driver)
-        builder.joiner.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
+        subquery_visitor = SqlColumnVisitor(builder.joins, self._driver)
+        builder.joins.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
         builder.columns = qt.ColumnSet(self._driver.universe.empty)
         subquery_select = builder.select(plan.postprocessing)
         sql_member = self.expect_scalar(member)

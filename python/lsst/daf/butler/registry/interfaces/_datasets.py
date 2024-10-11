@@ -45,7 +45,7 @@ from ...dimensions import DataCoordinate
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...direct_query_driver import QueryJoiner  # new query system, server+direct only
+    from ...direct_query_driver import SqlJoinsBuilder  # new query system, server+direct only
     from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
     from ..queries import SqlQueryContext  # old registry query system
@@ -627,15 +627,15 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_query_joiner(
+    def make_joins_builder(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
         fields: Set[str],
         is_union: bool = False,
-    ) -> QueryJoiner:
-        """Make a `..direct_query_driver.QueryJoiner` that represents a search
-        for datasets of this type.
+    ) -> SqlJoinsBuilder:
+        """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
+        search for datasets of this type.
 
         Parameters
         ----------
@@ -645,7 +645,7 @@ class DatasetRecordStorageManager(VersionedExtension):
             Collections to search, in order, after filtering out collections
             with no datasets of this type via collection summaries.
         fields : `~collections.abc.Set` [ `str` ]
-            Names of fields to make available in the joiner.  Options include:
+            Names of fields to make available in the builder.  Options include:
 
             - ``dataset_id`` (UUID)
             - ``run`` (collection name, `str`)
@@ -659,11 +659,12 @@ class DatasetRecordStorageManager(VersionedExtension):
         is_union : `bool`, optional
             If `True`, this search is being joined in as part of one term in
             a union over all dataset types.  This causes fields to be added to
-            the joiner via the special ``...`` instad of the dataset type name.
+            the builder via the special ``...`` instad of the dataset type
+            name.
 
         Returns
         -------
-        joiner : `..direct_query_driver.QueryJoiner`
+        builder : `..direct_query_driver.SqlJoinsBuilder`
             A query-construction object representing a table or subquery.
         """
         raise NotImplementedError()

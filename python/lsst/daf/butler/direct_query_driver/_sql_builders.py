@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryJoiner", "QueryBuilder", "QueryColumns", "make_table_spec")
+__all__ = ("SqlJoinsBuilder", "SqlSelectBuilder", "SqlColumns", "make_table_spec")
 
 import dataclasses
 import itertools
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass
-class QueryBuilder:
+class SqlSelectBuilder:
     """A struct used to represent an under-construction SQL SELECT query.
 
     This object's methods frequently "consume" ``self``, by either returning
@@ -58,7 +58,7 @@ class QueryBuilder:
     accidentally.
     """
 
-    joiner: QueryJoiner
+    joins: SqlJoinsBuilder
     """Struct representing the SQL FROM and WHERE clauses, as well as the
     columns *available* to the query (but not necessarily in the SELECT
     clause).
@@ -68,7 +68,7 @@ class QueryBuilder:
     """Columns to include the SELECT clause.
 
     This does not include columns required only by `Postprocessing` and columns
-    in `QueryJoiner.special`, which are also always included in the SELECT
+    in `SqlJoinsBuilder.special`, which are also always included in the SELECT
     clause.
     """
 
@@ -85,8 +85,8 @@ class QueryBuilder:
 
     If not-empty, a GROUP BY clause with these columns is added.  This
     generally requires that every `sqlalchemy.ColumnElement` held in the nested
-    `joiner` that is part of `columns` must either be part of `group_by` or
-    hold an aggregate function.
+    `joins` builder that is part of `columns` must either be part of `group_by`
+    or hold an aggregate function.
     """
 
     EMPTY_COLUMNS_NAME: ClassVar[str] = "IGNORED"
@@ -99,15 +99,11 @@ class QueryBuilder:
     queries that have no real columns.
     """
 
-    def copy(self) -> QueryBuilder:
+    def copy(self) -> SqlSelectBuilder:
         """Return a copy that can be safely mutated without affecting the
         original.
         """
-        return dataclasses.replace(
-            self,
-            joiner=self.joiner.copy(),
-            columns=self.columns.copy(),
-        )
+        return dataclasses.replace(self, joins=self.joins.copy(), columns=self.columns.copy())
 
     @classmethod
     def handle_empty_columns(
@@ -153,63 +149,63 @@ class QueryBuilder:
             name = self.columns.get_qualified_name(logical_table, field)
             if field is None:
                 assert logical_table is not ...
-                sql_columns.append(self.joiner.dimension_keys[logical_table][0].label(name))
+                sql_columns.append(self.joins.dimension_keys[logical_table][0].label(name))
             else:
-                name = self.joiner.db.name_shrinker.shrink(name)
+                name = self.joins.db.name_shrinker.shrink(name)
                 if self.columns.is_timespan(logical_table, field):
-                    sql_columns.extend(self.joiner.timespans[logical_table].flatten(name))
+                    sql_columns.extend(self.joins.timespans[logical_table].flatten(name))
                 else:
-                    sql_columns.append(self.joiner.fields[logical_table][field].label(name))
+                    sql_columns.append(self.joins.fields[logical_table][field].label(name))
         if postprocessing is not None:
             for element in postprocessing.iter_missing(self.columns):
                 sql_columns.append(
-                    self.joiner.fields[element.name]["region"].label(
-                        self.joiner.db.name_shrinker.shrink(
+                    self.joins.fields[element.name]["region"].label(
+                        self.joins.db.name_shrinker.shrink(
                             self.columns.get_qualified_name(element.name, "region")
                         )
                     )
                 )
-        for label, sql_column in self.joiner.special.items():
+        for label, sql_column in self.joins.special.items():
             sql_columns.append(sql_column.label(label))
         self.handle_empty_columns(sql_columns)
         result = sqlalchemy.select(*sql_columns)
-        if self.joiner.from_clause is not None:
-            result = result.select_from(self.joiner.from_clause)
+        if self.joins.from_clause is not None:
+            result = result.select_from(self.joins.from_clause)
         if self.distinct is True:
             result = result.distinct()
         elif self.distinct:
             result = result.distinct(*self.distinct)
         if self.group_by:
             result = result.group_by(*self.group_by)
-        if self.joiner.where_terms:
-            result = result.where(*self.joiner.where_terms)
+        if self.joins.where_terms:
+            result = result.where(*self.joins.where_terms)
         return result
 
-    def join(self, other: QueryJoiner) -> QueryBuilder:
+    def join(self, other: SqlJoinsBuilder) -> SqlSelectBuilder:
         """Join tables, subqueries, and WHERE clauses from another query into
         this one, in place.
 
         Parameters
         ----------
-        other : `QueryJoiner`
+        other : `SqlJoinsBuilder`
             Object holding the FROM and WHERE clauses to add to this one.
             JOIN ON clauses are generated via the dimension keys in common.
 
         Returns
         -------
-        self : `QueryBuilder`
-            This `QueryBuilder` instance (never a copy); returned to enable
+        self : `SqlSelectBuilder`
+            This `SqlSelectBuilder` instance (never a copy); returned to enable
             method-chaining.
         """
-        self.joiner.join(other)
+        self.joins.join(other)
         return self
 
-    def to_joiner(
+    def into_from_builder(
         self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
-    ) -> QueryJoiner:
-        """Convert this builder into a `QueryJoiner`, nesting it in a subquery
-        or common table expression only if needed to apply DISTINCT or GROUP BY
-        clauses.
+    ) -> SqlJoinsBuilder:
+        """Convert this builder into a `SqlJoinsBuilder`, nesting it in a
+        subquery or common table expression only if needed to apply DISTINCT or
+        GROUP BY clauses.
 
         This method consumes ``self``.
 
@@ -227,24 +223,24 @@ class QueryBuilder:
 
         Returns
         -------
-        joiner : `QueryJoiner`
-            QueryJoiner` with at least all columns in `columns` available.
-            This may or may not be the `joiner` attribute of this object.
+        joins_builder : `SqlJoinsBuilder`
+            SqlJoinsBuilder` with at least all columns in `columns` available.
+            This may or may not be the `joins` attribute of this object.
         """
         if force or self.distinct or self.group_by:
             sql_from_clause = (
                 self.select(postprocessing).cte() if cte else self.select(postprocessing).subquery()
             )
-            return QueryJoiner(db=self.joiner.db, from_clause=sql_from_clause).extract_columns(
-                self.columns, special=self.joiner.special.keys()
+            return SqlJoinsBuilder(db=self.joins.db, from_clause=sql_from_clause).extract_columns(
+                self.columns, special=self.joins.special.keys()
             )
-        return self.joiner
+        return self.joins
 
     def nested(
         self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
-    ) -> QueryBuilder:
-        """Convert this builder into a `QueryBuiler` that is guaranteed to have
-        no DISTINCT or GROUP BY, nesting it in a subquery or common table
+    ) -> SqlSelectBuilder:
+        """Convert this builder into a `SqlSelectBuilder` that is guaranteed to
+        have no DISTINCT or GROUP BY, nesting it in a subquery or common table
         expression only if needed to apply any current DISTINCT or GROUP BY
         clauses.
 
@@ -264,22 +260,23 @@ class QueryBuilder:
 
         Returns
         -------
-        builder : `QueryBuilder`
-            `QueryBuilder` with at least all columns in `columns` available.
-            This may or may not be the `builder` attribute of this object.
+        builder : `SqlSelectBuilder`
+            `SqlSelectBuilder` with at least all columns in `columns`
+            available.  This may or may not be the `builder` attribute of this
+            object.
         """
-        return QueryBuilder(
-            self.to_joiner(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
+        return SqlSelectBuilder(
+            self.into_from_builder(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
         )
 
     def union_subquery(
-        self, others: Iterable[QueryBuilder], postprocessing: Postprocessing | None = None
-    ) -> QueryJoiner:
+        self, others: Iterable[SqlSelectBuilder], postprocessing: Postprocessing | None = None
+    ) -> SqlJoinsBuilder:
         """Combine this builder with others to make a SELECT UNION subquery.
 
         Parameters
         ----------
-        others : `~collections.abc.Iterable` [ `QueryBuilder` ]
+        others : `~collections.abc.Iterable` [ `SqlSelectBuilder` ]
             Other query builders to union with.  Their `columns` attributes
             must be the same as those of ``self``.
         postprocessing : `Postprocessing`
@@ -288,26 +285,26 @@ class QueryBuilder:
 
         Returns
         -------
-        joiner : `QueryJoiner`
-            `QueryJoiner` with at least all columns in `columns` available.
-            This may or may not be the `joiner` attribute of this object.
+        joins_builder : `SqlJoinsBuilder`
+            `SqlJoinsBuilder` with at least all columns in `columns` available.
+            This may or may not be the `joins` attribute of this object.
         """
         select0 = self.select(postprocessing)
         other_selects = [other.select(postprocessing) for other in others]
-        return QueryJoiner(
-            db=self.joiner.db,
+        return SqlJoinsBuilder(
+            db=self.joins.db,
             from_clause=select0.union(*other_selects).subquery(),
         ).extract_columns(self.columns, postprocessing)
 
 
 @dataclasses.dataclass(kw_only=True)
-class QueryColumns:
+class SqlColumns:
     """A struct that holds SQLAlchemy columns objects for a query, categorized
     by type.
 
-    This class mostly serves as a base class for `QueryJoiner`, but unlike
-    `QueryJoiner` it is capable of representing columns in a compound SELECT
-    (i.e. UNION or UNION ALL) clause, not just a FROM clause.
+    This class mostly serves as a base class for `SqlJoinsBuilder`, but unlike
+    `SqlJoinsBuilder` it is capable of representing columns in a compound
+    SELECT (i.e. UNION or UNION ALL) clause, not just a FROM clause.
     """
 
     db: Database
@@ -342,8 +339,8 @@ class QueryColumns:
 
     special: dict[str, sqlalchemy.ColumnElement[Any]] = dataclasses.field(default_factory=dict)
     """Special columns that are available from the FROM clause and
-    automatically included in the SELECT clause when this joiner is nested
-    within a `QueryBuilder`.
+    automatically included in the SELECT clause when this join builder is
+    nested within a `SqlSelectBuilder`.
 
     These columns are not part of the dimension universe and are not associated
     with a dataset.  They are never returned to users, even if they may be
@@ -436,7 +433,7 @@ class QueryColumns:
 
 
 @dataclasses.dataclass(kw_only=True)
-class QueryJoiner(QueryColumns):
+class SqlJoinsBuilder(SqlColumns):
     """A struct used to represent the FROM and WHERE clauses of an
     under-construction SQL SELECT query.
 
@@ -457,7 +454,7 @@ class QueryJoiner(QueryColumns):
     where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
     """Sequence of WHERE clause terms to be combined with AND."""
 
-    def copy(self) -> QueryJoiner:
+    def copy(self) -> SqlJoinsBuilder:
         """Return a copy that can be safely mutated without affecting the
         original.
         """
@@ -493,8 +490,8 @@ class QueryJoiner(QueryColumns):
 
         Returns
         -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
+        self : `SqlJoinsBuilder`
+            This `SqlJoinsBuilder` instance (never a copy). Provided to enable
             method chaining.
         """
         if column_collection is None:
@@ -528,8 +525,8 @@ class QueryJoiner(QueryColumns):
 
         Returns
         -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
+        self : `SqlJoinsBuilder`
+            This `SqlJoinsBuilder` instance (never a copy). Provided to enable
             method chaining.
         """
         if column_collection is None:
@@ -537,25 +534,25 @@ class QueryJoiner(QueryColumns):
             column_collection = self.from_clause.columns
         return super().extract_columns(columns, postprocessing, special, column_collection=column_collection)
 
-    def join(self, other: QueryJoiner) -> QueryJoiner:
-        """Combine this `QueryJoiner` with another via an INNER JOIN on
+    def join(self, other: SqlJoinsBuilder) -> SqlJoinsBuilder:
+        """Combine this `SqlJoinsBuilder` with another via an INNER JOIN on
         dimension keys.
 
         This method consumes ``self``.
 
         Parameters
         ----------
-        other : `QueryJoiner`
-            Other joiner to combine with this one.
+        other : `SqlJoinsBuilder`
+            Other join builder to combine with this one.
 
         Returns
         -------
-        joined : `QueryJoiner`
-            A `QueryJoiner` with all columns present in either operand, with
-            its `from_clause` representing a SQL INNER JOIN where the dimension
-            key columns common to both operands are constrained to be equal.
-            If either operand does not have `from_clause`, the other's is used.
-            The `where_terms` of the two operands are concatenated,
+        joined : `SqlJoinsBuilder`
+            A `SqlJoinsBuilder` with all columns present in either operand,
+            with its `from_clause` representing a SQL INNER JOIN where the
+            dimension key columns common to both operands are constrained to be
+            equal.  If either operand does not have `from_clause`, the other's
+            is used.  The `where_terms` of the two operands are concatenated,
             representing a logical AND (with no attempt at deduplication).
         """
         join_on: list[sqlalchemy.ColumnElement] = []
@@ -585,7 +582,7 @@ class QueryJoiner(QueryColumns):
         self.where_terms += other.where_terms
         return self
 
-    def where(self, *args: sqlalchemy.ColumnElement[bool]) -> QueryJoiner:
+    def where(self, *args: sqlalchemy.ColumnElement[bool]) -> SqlJoinsBuilder:
         """Add a WHERE clause term.
 
         Parameters
@@ -595,21 +592,21 @@ class QueryJoiner(QueryColumns):
 
         Returns
         -------
-        self : `QueryJoiner`
-            This `QueryJoiner` instance (never a copy). Provided to enable
+        self : `SqlJoinsBuilder`
+            This `SqlJoinsBuilder` instance (never a copy). Provided to enable
             method chaining.
         """
         self.where_terms.extend(args)
         return self
 
-    def to_builder(
+    def to_select_builder(
         self,
         columns: qt.ColumnSet,
         distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = (),
         group_by: Sequence[sqlalchemy.ColumnElement[Any]] = (),
-    ) -> QueryBuilder:
-        """Convert this joiner into a `QueryBuilder` by providing SELECT clause
-        columns and optional DISTINCT or GROUP BY clauses.
+    ) -> SqlSelectBuilder:
+        """Convert this join builder into a `SqlSelectBuilder` by providing
+        SELECT clause columns and optional DISTINCT or GROUP BY clauses.
 
         This method consumes ``self``.
 
@@ -619,17 +616,19 @@ class QueryJoiner(QueryColumns):
             Regular columns to include in the SELECT clause.
         distinct : `bool` or `~collections.abc.Sequence` [ \
                 `sqlalchemy.ColumnElement` ], optional
-            Specification of the DISTINCT clause (see `QueryBuilder.distinct`).
+            Specification of the DISTINCT clause (see
+            `SqlSelectBuilder.distinct`).
         group_by : `~collections.abc.Sequence` [ \
                 `sqlalchemy.ColumnElement` ], optional
-            Specification of the GROUP BY clause (see `QueryBuilder.group_by`).
+            Specification of the GROUP BY clause (see
+            `SqlSelectBuilder.group_by`).
 
         Returns
         -------
-        builder : `QueryBuilder`
+        builder : `SqlSelectBuilder`
             New query builder.
         """
-        return QueryBuilder(
+        return SqlSelectBuilder(
             self,
             columns,
             distinct=distinct if type(distinct) is bool else tuple(distinct),
@@ -657,7 +656,7 @@ def make_table_spec(
     -------
     spec : `.ddl.TableSpec`
         Table specification for this query's result columns (including
-        those from `postprocessing` and `QueryJoiner.special`).
+        those from `postprocessing` and `SqlJoinsBuilder.special`).
     """
     results = ddl.TableSpec(
         [
@@ -674,6 +673,6 @@ def make_table_spec(
             )
     if not results.fields:
         results.fields.add(
-            ddl.FieldSpec(name=QueryBuilder.EMPTY_COLUMNS_NAME, dtype=QueryBuilder.EMPTY_COLUMNS_TYPE)
+            ddl.FieldSpec(name=SqlSelectBuilder.EMPTY_COLUMNS_NAME, dtype=SqlSelectBuilder.EMPTY_COLUMNS_TYPE)
         )
     return results
