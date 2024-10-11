@@ -1953,7 +1953,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -1981,6 +1981,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
+        artifacts_to_ref_id : `dict` [ `~lsst.resources.ResourcePath`, \
+                `list` [ `uuid.UUID` ] ]
+            Mapping of retrieved artifact path to `DatasetRef` ID.
+        artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
+                `StoredDatastoreItemInfo` ]
+            Mapping of retrieved artifact path to datastore record information.
         """
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}")
@@ -1993,21 +1999,30 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # that will map to the same underlying file transfer.
         to_transfer: dict[ResourcePath, ResourcePath] = {}
 
+        # Retrieve all the records in bulk indexed by ref.id.
+        records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
+
+        # One artifact can be used by multiple DatasetRef.
+        # e.g. DECam.
+        artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
+        artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
         for ref in refs:
-            locations = self._get_dataset_locations_info(ref)
-            for location, _ in locations:
+            for info in records[ref.id]:
+                location = info.file_location(self.locationFactory)
                 source_uri = location.uri
                 target_uri = determine_destination_for_retrieved_artifact(
                     destination, location.pathInStore, preserve_path
                 )
                 to_transfer[source_uri] = target_uri
+                artifact_to_ref_id[target_uri].append(ref.id)
+                artifact_to_info[target_uri] = info
 
         # In theory can now parallelize the transfer
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
         for source_uri, target_uri in to_transfer.items():
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
-        return list(to_transfer.values())
+        return list(to_transfer.values()), artifact_to_ref_id, artifact_to_info
 
     def get(
         self,
@@ -2834,6 +2849,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             dataset_records.setdefault(self._table.name, []).append(info)
 
         record_data = DatastoreRecordData(records=records)
+        print("XXXCX: ", self.name, record_data)
         return {self.name: record_data}
 
     def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:

@@ -55,13 +55,14 @@ from .._exceptions import DatasetTypeNotSupportedError, ValidationError
 from .._file_dataset import FileDataset
 from .._storage_class import StorageClassFactory
 from .constraints import Constraints
+from .stored_file_info import StoredFileInfo
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
     from .. import ddl
     from .._config_support import LookupKey
-    from .._dataset_ref import DatasetRef
+    from .._dataset_ref import DatasetId, DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
@@ -1023,7 +1024,7 @@ class Datastore(metaclass=ABCMeta):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1051,12 +1052,18 @@ class Datastore(metaclass=ABCMeta):
         targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
+        artifacts_to_ref_id : `dict` [ `~lsst.resources.ResourcePath`, \
+                `list` [ `uuid.UUID` ] ]
+            Mapping of retrieved artifact path to DatasetRef ID.
+        artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
+                `StoredDatastoreItemInfo` ]
+            Mapping of retrieved artifact path to datastore record information.
 
         Notes
         -----
         For non-file datastores the artifacts written to the destination
         may not match the representation inside the datastore. For example
-        a hierarchichal data structure in a NoSQL database may well be stored
+        a hierarchical data structure in a NoSQL database may well be stored
         as a JSON file.
         """
         raise NotImplementedError()
@@ -1458,7 +1465,7 @@ class NullDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def remove(self, datasetRef: DatasetRef) -> None:
