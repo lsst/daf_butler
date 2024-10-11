@@ -206,6 +206,7 @@ class CategorizedWildcard:
                         " and will be removed after v28. Use globs ('*' wildcards) instead.",
                         FutureWarning,
                     )
+                    raise Exception("regular expressions not allowed")
                 self.patterns.append(element)
                 return None
             if alreadyCoerced:

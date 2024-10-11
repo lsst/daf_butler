@@ -188,12 +188,14 @@ class QueryDatasets:
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
         collections = list(collections)
         if not collections:
+            raise Exception("empty collections")
             warnings.warn(
                 "No --collections specified.  The --collections argument will become mandatory after v28.",
                 FutureWarning,
             )
         glob = list(glob)
         if not glob:
+            raise Exception("empty glob")
             warnings.warn(
                 "No dataset types specified.  Explicitly specifying dataset types will become mandatory"
                 " after v28. Specify '*' to match the current behavior of querying all dataset types.",

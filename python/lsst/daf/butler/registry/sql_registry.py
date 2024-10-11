@@ -1790,6 +1790,7 @@ class SqlRegistry:
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
         if datasetType is not None:
+            raise Exception("datasetType")
             warnings.warn(
                 "The datasetType parameter has never done anything and will be removed after v28",
                 FutureWarning,

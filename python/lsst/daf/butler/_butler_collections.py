@@ -91,6 +91,7 @@ class ButlerCollections(ABC, Sequence):
         category=FutureWarning,
     )
     def __getitem__(self, index: int | slice) -> str | Sequence[str]:
+        raise Exception("butler.collections")
         return self.defaults[index]
 
     @deprecated(
@@ -100,6 +101,7 @@ class ButlerCollections(ABC, Sequence):
         category=FutureWarning,
     )
     def __len__(self) -> int:
+        raise Exception("butler.collections")
         return len(self.defaults)
 
     @property

@@ -533,6 +533,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
 
     def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
         if offset is not ...:
+            raise Exception("offset")
             warnings.warn(
                 "offset parameter is not supported in new query system and will be removed after v28.",
                 FutureWarning,
@@ -680,6 +681,7 @@ class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
         category=FutureWarning,
     )
     def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
+        raise Exception("materialize")
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
             yield DatabaseParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
@@ -834,6 +836,7 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
     def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
         # Docstring inherited from base class.
         if offset is not ...:
+            raise Exception("offset")
             warnings.warn(
                 "offset parameter is not supported in new query system and will be removed after v28.",
                 FutureWarning,

@@ -577,6 +577,7 @@ def query_dimension_records(**kwargs: Any) -> None:
     """Query for dimension information."""
     if kwargs.pop("no_check") is not None:
         click.echo("WARNING: --no-check option has no effect and will be removed after v28.")
+        raise Exception("no_check")
     table = script.queryDimensionRecords(**kwargs)
     if table:
         table.pprint_all()

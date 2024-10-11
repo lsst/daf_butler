@@ -39,7 +39,6 @@ from ..._collection_type import CollectionType
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
-from ..._exceptions import DataIdValueError
 from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
 from ...dimensions.record_cache import DimensionRecordCache
 from ..interfaces import CollectionRecord, Database
@@ -342,10 +341,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                         "DataIdValueError will no longer be raised for invalid governor dimension"
                         " values after v28.",
                         FutureWarning,
-                    )
-                    raise DataIdValueError(
-                        f"Unknown values specified for governor dimension {dimension_name}: "
-                        f"{constraint_values - all_values}."
                     )
                 result[dimension_name] = constraint_values
             else:
