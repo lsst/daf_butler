@@ -2426,7 +2426,7 @@ class SqlRegistry:
         if isinstance(datasetType, str):
             datasetType = self.getDatasetType(datasetType)
         resolved_collections = self.queryCollections(
-            collections, datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
+            collections, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
         with self._query() as query:
             query = query.join_dataset_search(datasetType, resolved_collections)
