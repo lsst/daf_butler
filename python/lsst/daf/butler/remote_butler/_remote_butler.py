@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("RemoteButler",)
 
 import uuid
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ from typing import TYPE_CHECKING, Any, TextIO, cast
 from deprecated.sphinx import deprecated
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
+    retrieve_and_zip,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
@@ -57,6 +59,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs, DatastoreConfig
 from ..datastore.cache_manager import AbstractDatastoreCacheManager, DatastoreCacheManager
+from ..datastore.stored_file_info import StoredFileInfo
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
@@ -414,14 +417,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         return apply_storage_class_override(ref, dataset_type, storage_class)
 
-    def retrieveArtifacts(
+    def _retrieve_artifacts(
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         destination = ResourcePath(destination).abspath()
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}.")
@@ -429,6 +432,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if transfer not in ("auto", "copy"):
             raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
 
+        artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
+        artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
         output_uris: list[ResourcePath] = []
         for ref in refs:
             file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
@@ -442,8 +447,28 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 # after retrieving the URL.
                 target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
                 output_uris.append(target_uri)
+                artifact_to_ref_id[target_uri].append(ref.id)
+                artifact_to_info[target_uri] = StoredFileInfo.from_simple(file.datastoreRecords)
 
-        return output_uris
+        return output_uris, artifact_to_ref_id, artifact_to_info
+
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        return retrieve_and_zip(refs, destination, self._retrieve_artifacts)
+
+    def retrieveArtifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+    ) -> list[ResourcePath]:
+        paths, _, _ = self._retrieve_artifacts(refs, destination, transfer, preserve_path, overwrite)
+        return paths
 
     def exists(
         self,

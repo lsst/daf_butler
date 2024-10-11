@@ -206,6 +206,13 @@ class HybridButler(Butler):
             **kwargs,
         )
 
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        return self._remote_butler.retrieve_artifacts_zip(refs, destination)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],

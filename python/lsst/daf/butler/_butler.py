@@ -988,6 +988,31 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        """Retrieve artifacts from a Butler and place in ZIP file.
+
+        Parameters
+        ----------
+        refs : `collections.abc.Iterable` [ `DatasetRef` ]
+            The datasets to be included in the zip file. Must all be from
+            the same dataset type.
+        destination : `lsst.resources.ResourcePathExpression`
+            Directory to write the new ZIP file. This directory will
+            also be used as a staging area for the datasets being downloaded
+            from the datastore.
+
+        Returns
+        -------
+        zip_file : `lsst.resources.ResourcePath`
+            The path to the new ZIP file.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],

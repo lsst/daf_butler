@@ -67,6 +67,7 @@ from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
 from ..datastore import Datastore, NullDatastore
+from ..datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from ..dimensions import DataCoordinate, Dimension
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
@@ -1290,6 +1291,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return ref
 
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1299,13 +1307,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         overwrite: bool = False,
     ) -> list[ResourcePath]:
         # Docstring inherited.
-        return self._datastore.retrieveArtifacts(
+        paths, _, _ = self._datastore.retrieveArtifacts(
             refs,
             ResourcePath(destination),
             transfer=transfer,
             preserve_path=preserve_path,
             overwrite=overwrite,
         )
+        return paths
 
     def exists(
         self,

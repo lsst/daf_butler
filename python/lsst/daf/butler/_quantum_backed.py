@@ -39,7 +39,7 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import pydantic
-from lsst.resources import ResourcePathExpression
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._butler_config import ButlerConfig
 from ._config import Config
@@ -51,6 +51,7 @@ from ._quantum import Quantum
 from ._storage_class import StorageClass, StorageClassFactory
 from .datastore import Datastore
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
+from .datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from .dimensions import DimensionUniverse
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
 from .registry.databases.sqlite import SqliteDatabase
@@ -497,6 +498,30 @@ class QuantumBackedButler(LimitedButler):
         if unstore:
             # Point of no return for removing artifacts
             self._datastore.emptyTrash()
+
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        """Retrieve artifacts from the graph and place in ZIP file.
+
+        Parameters
+        ----------
+        refs : `collections.abc.Iterable` [ `DatasetRef` ]
+            The datasets to be included in the zip file. Must all be from
+            the same dataset type.
+        destination : `lsst.resources.ResourcePathExpression`
+            Directory to write the new ZIP file. This directory will
+            also be used as a staging area for the datasets being downloaded
+            from the datastore.
+
+        Returns
+        -------
+        zip_file : `lsst.resources.ResourcePath`
+            The path to the new ZIP file.
+        """
+        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts)
 
     def extract_provenance_data(self) -> QuantumProvenanceData:
         """Extract provenance information and datastore records from this
