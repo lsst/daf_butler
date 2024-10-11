@@ -704,23 +704,27 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # by an exposure ID that doesn't exist and return no matches
                 # for a detector even though it's a good detector name.
                 filtered_data_id = {
-                    k: v for k, v in newDataId.items() if k in self.dimensions[dimensionName].required
+                    k: v
+                    for k, v in newDataId.items()
+                    if k in self.dimensions[dimensionName].minimal_group.names
                 }
-                # Build up a WHERE expression
-                bind = dict(values.items())
-                where = " AND ".join(f"{dimensionName}.{k} = {k}" for k in bind)
 
-                # Hopefully we get a single record that matches
-                records = set(
-                    self.query_dimension_records(
-                        dimensionName,
-                        data_id=filtered_data_id,
-                        where=where,
-                        bind=bind,
-                        explain=False,
-                        **kwargs,
-                    )
-                )
+                def _get_attr(obj: Any, attr: str) -> Any:
+                    # Used to implement x.exposure.seq_num when given
+                    # x and "exposure.seq_num".
+                    for component in attr.split("."):
+                        obj = getattr(obj, component)
+                    return obj
+
+                with self.query() as q:
+                    x = q.expression_factory
+                    # Build up a WHERE expression.
+                    predicates = tuple(_get_attr(x, f"{dimensionName}.{k}") == v for k, v in values.items())
+                    extra_args: dict[str, Any] = {}  # For mypy.
+                    extra_args.update(filtered_data_id)
+                    extra_args.update(kwargs)
+                    q = q.where(x.all(*predicates), **extra_args)
+                    records = set(q.dimension_records(dimensionName))
 
                 if len(records) != 1:
                     if len(records) > 1:
