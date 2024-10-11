@@ -1789,6 +1789,11 @@ class SqlRegistry:
         # Right now the datasetTypes argument is completely ignored, but that
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
+        if datasetType is not None:
+            warnings.warn(
+                "The datasetType parameter has never done anything and will be removed after v28",
+                FutureWarning,
+            )
         try:
             wildcard = CollectionWildcard.from_expression(expression)
         except TypeError as exc:
