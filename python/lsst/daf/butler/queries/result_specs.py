@@ -36,6 +36,7 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from types import EllipsisType
 from typing import Annotated, Literal, TypeAlias, cast
 
 import pydantic
@@ -96,7 +97,7 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
                 )
 
     @property
-    def find_first_dataset(self) -> str | None:
+    def find_first_dataset(self) -> str | EllipsisType | None:
         """The dataset type for which find-first resolution is required, if
         any.
         """
