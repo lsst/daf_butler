@@ -182,7 +182,9 @@ class CategorizedWildcard:
         # a local function so we can recurse after coercion.
 
         def process(element: Any, alreadyCoerced: bool = False) -> EllipsisType | None:
+            was_string = False
             if isinstance(element, str):
+                was_string = True
                 if defaultItemValue is not None:
                     self.items.append((element, defaultItemValue))
                     return None
@@ -198,11 +200,12 @@ class CategorizedWildcard:
                         self.strings.append(element)
                         return None
             if allowPatterns and isinstance(element, re.Pattern):
-                warnings.warn(
-                    "Using regular expressions in collection or dataset type searches is deprecated"
-                    " and will be removed after v28. Use globs ('*' wildcards) instead.",
-                    FutureWarning,
-                )
+                if not was_string:
+                    warnings.warn(
+                        "Using regular expressions in collection or dataset type searches is deprecated"
+                        " and will be removed after v28. Use globs ('*' wildcards) instead.",
+                        FutureWarning,
+                    )
                 self.patterns.append(element)
                 return None
             if alreadyCoerced:
