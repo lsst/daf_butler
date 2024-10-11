@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any
@@ -185,6 +186,20 @@ class QueryDatasets:
     ):
         if (repo and butler) or (not repo and not butler):
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
+        collections = list(collections)
+        if not collections:
+            warnings.warn(
+                "No --collections specified.  The --collections argument will become mandatory after v28.",
+                FutureWarning,
+            )
+        glob = list(glob)
+        if not glob:
+            warnings.warn(
+                "No dataset types specified.  Explicitly specifying dataset types will become mandatory"
+                " after v28. Specify '*' to match the current behavior of querying all dataset types.",
+                FutureWarning,
+            )
+
         # show_uri requires a datastore.
         without_datastore = not show_uri
         self.butler = butler or Butler.from_config(repo, without_datastore=without_datastore)
