@@ -584,11 +584,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         methods to a standardized format for the REST API.
         """
         if collections is None:
-            if not self.collections:
+            if not self.collections.defaults:
                 raise NoDefaultCollectionError(
                     "No collections provided, and no defaults from butler construction."
                 )
-            collections = self.collections
+            collections = self.collections.defaults
         return convert_collection_arg_to_glob_string_list(collections)
 
     def clone(
