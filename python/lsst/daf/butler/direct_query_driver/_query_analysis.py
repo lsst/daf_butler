@@ -28,8 +28,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "QueryJoinsPlan",
-    "QueryFindFirstPlan",
+    "QueryJoinsAnalysis",
+    "QueryFindFirstAnalysis",
     "ResolvedDatasetSearch",
     "QueryCollectionAnalysis",
 )
@@ -45,7 +45,8 @@ from ..registry import CollectionSummary
 from ..registry.interfaces import CollectionRecord
 
 if TYPE_CHECKING:
-    pass
+    from ._postprocessing import Postprocessing
+    from ._sql_builders import SqlSelectBuilder
 
 _T = TypeVar("_T")
 
@@ -84,10 +85,11 @@ class ResolvedDatasetSearch(Generic[_T]):
 
 
 @dataclasses.dataclass
-class QueryJoinsPlan:
+class QueryJoinsAnalysis:
     """A struct describing the "joins" section of a butler query.
 
-    See `QueryPlan` and `QueryPlan.joins` for additional information.
+    See `DirectQueryBuilderBase` and `DirectQueryBuilderBase.joins` for
+    additional information.
     """
 
     predicate: qt.Predicate
@@ -166,14 +168,15 @@ class QueryJoinsPlan:
 
 
 @dataclasses.dataclass
-class QueryFindFirstPlan(Generic[_T]):
+class QueryFindFirstAnalysis(Generic[_T]):
     """A struct describing the "find-first" stage of a butler query.
 
-    See `QueryPlan` and `QueryPlan.find_first` for additional information.
+    See `DirectQueryBuilderBase`, `SingleSelectQueryBuilder.find_first`,
+    and `UnionQueryBuilderTerm.find_first` for additional information.
     """
 
     search: ResolvedDatasetSearch[_T]
-    """Information about the dataset being searched for."""
+    """Information about the dataset type or types being searched for."""
 
     @property
     def dataset_type(self) -> _T:
@@ -191,3 +194,11 @@ class QueryCollectionAnalysis:
     summaries_by_dataset_type: dict[str | EllipsisType, list[tuple[CollectionRecord, CollectionSummary]]] = (
         dataclasses.field(default_factory=dict)
     )
+
+
+@dataclasses.dataclass
+class QueryTreeAnalysis:
+    joins: QueryJoinsAnalysis
+    union_datasets: list[ResolvedDatasetSearch[list[str]]]
+    initial_select_builder: SqlSelectBuilder
+    postprocessing: Postprocessing

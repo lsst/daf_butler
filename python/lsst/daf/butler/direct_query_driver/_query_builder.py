@@ -28,10 +28,10 @@
 from __future__ import annotations
 
 __all__ = (
-    "QueryPlan",
-    "SimpleQueryPlan",
-    "UnionQueryPlan",
-    "UnionQueryPlanTerm",
+    "QueryBuilder",
+    "SingleSelectQueryBuilder",
+    "UnionQueryBuilder",
+    "UnionQueryBuilderTerm",
 )
 
 import dataclasses
@@ -44,7 +44,7 @@ import sqlalchemy
 from ..dimensions import DimensionGroup
 from ..queries import tree as qt
 from ..registry.interfaces import Database
-from ._query_plan import QueryFindFirstPlan, QueryJoinsPlan, ResolvedDatasetSearch
+from ._query_analysis import QueryFindFirstAnalysis, QueryJoinsAnalysis, ResolvedDatasetSearch
 from ._sql_builders import SqlColumns, SqlJoinsBuilder, SqlSelectBuilder
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ _T = TypeVar("_T")
 
 
 @dataclasses.dataclass(kw_only=True)
-class QueryPlanBase:
+class QueryBuilderBase:
     """A struct that aggregates information about a complete butler query.
 
     Notes
@@ -97,7 +97,7 @@ class QueryPlanBase:
     plan can in turn yield mutiple SELECTs in the final UNION or UNION ALL.
     """
 
-    joins: QueryJoinsPlan
+    joins: QueryJoinsAnalysis
     """Description of the "joins" stage of query construction."""
 
     projection_columns: qt.ColumnSet
@@ -149,7 +149,7 @@ class QueryPlanBase:
 
 
 @dataclasses.dataclass
-class SimpleQueryPlan(QueryPlanBase):
+class SingleSelectQueryBuilder(QueryBuilderBase):
 
     select_builder: SqlSelectBuilder
 
@@ -160,7 +160,7 @@ class SimpleQueryPlan(QueryPlanBase):
     unique.
     """
 
-    find_first: QueryFindFirstPlan[str] | None = None
+    find_first: QueryFindFirstAnalysis[str] | None = None
     """Description of the "find_first" stage of query construction.
 
     This attribute is `None` if there is no find-first search at all, and
@@ -198,7 +198,7 @@ class SimpleQueryPlan(QueryPlanBase):
 
     def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
         assert find_first_dataset is not ..., "No dataset union in this query"
-        self.find_first = QueryFindFirstPlan(self.joins.datasets[find_first_dataset])
+        self.find_first = QueryFindFirstAnalysis(self.joins.datasets[find_first_dataset])
         # If we're doing a find-first search and there's a calibration
         # collection in play, we need to make sure the rows coming out of
         # the base query have only one timespan for each data ID +
@@ -231,15 +231,15 @@ class SimpleQueryPlan(QueryPlanBase):
             self.select_builder, self.postprocessing, self.find_first
         )
 
-    def into_sql_select(self, return_columns: bool = True) -> tuple[sqlalchemy.Select, SqlColumns]:
+    def finish_select(self, return_columns: bool = True) -> tuple[sqlalchemy.Select, SqlColumns]:
         return self.select_builder.select(self.postprocessing), self.select_builder.joins
 
-    def into_nested_builder(self, cte: bool = False) -> SqlSelectBuilder:
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
         return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
 
 
 @dataclasses.dataclass
-class UnionQueryPlanTerm:
+class UnionQueryBuilderTerm:
 
     select_builders: list[SqlSelectBuilder]
     """Under-construction SQL queries associated with this plan, to be unioned
@@ -277,7 +277,7 @@ class UnionQueryPlanTerm:
     hence this term just needs a dummy column (with "1" as the value).
     """
 
-    find_first: QueryFindFirstPlan[list[str]] | None = None
+    find_first: QueryFindFirstAnalysis[list[str]] | None = None
     """Description of the "find_first" stage of query construction.
 
     This attribute is `None` if there is no find-first search at all, and
@@ -287,13 +287,13 @@ class UnionQueryPlanTerm:
 
 
 @dataclasses.dataclass
-class UnionQueryPlan(QueryPlanBase):
+class UnionQueryBuilder(QueryBuilderBase):
 
     initial_select_builder: SqlSelectBuilder | None
 
     union_dataset_dimensions: DimensionGroup
 
-    union_terms: list[UnionQueryPlanTerm]
+    union_terms: list[UnionQueryBuilderTerm]
 
     @property
     def select_builder(self) -> SqlSelectBuilder:
@@ -371,7 +371,7 @@ class UnionQueryPlan(QueryPlanBase):
     def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
         if find_first_dataset is ...:
             for union_term in self.union_terms:
-                union_term.find_first = QueryFindFirstPlan(union_term.datasets)
+                union_term.find_first = QueryFindFirstAnalysis(union_term.datasets)
                 # If we're doing a find-first search and there's a calibration
                 # collection in play, we need to make sure the rows coming out
                 # of the base query have only one timespan for each data ID +
@@ -434,16 +434,16 @@ class UnionQueryPlan(QueryPlanBase):
             ]
 
     @overload
-    def into_sql_select(
+    def finish_select(
         self, return_columns: Literal[True] = True
     ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns]: ...
 
     @overload
-    def into_sql_select(
+    def finish_select(
         self, return_columns: Literal[False]
     ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, None]: ...
 
-    def into_sql_select(
+    def finish_select(
         self, return_columns: bool = True
     ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
         if self.has_one_select:
@@ -463,10 +463,10 @@ class UnionQueryPlan(QueryPlanBase):
             )
         return sql, columns
 
-    def into_nested_builder(self, cte: bool = False) -> SqlSelectBuilder:
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
         if self.has_one_select:
             return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
-        sql_select, sql_columns = self.into_sql_select()
+        sql_select, _ = self.finish_select(return_columns=False)
         from_clause = sql_select.cte() if cte else sql_select.subquery()
         joins_builder = SqlJoinsBuilder(
             db=self.db,
@@ -475,4 +475,4 @@ class UnionQueryPlan(QueryPlanBase):
         return SqlSelectBuilder(joins_builder, columns=self.final_columns)
 
 
-QueryPlan: TypeAlias = SimpleQueryPlan | UnionQueryPlan
+QueryBuilder: TypeAlias = SingleSelectQueryBuilder | UnionQueryBuilder

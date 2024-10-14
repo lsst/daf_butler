@@ -70,8 +70,14 @@ from ..registry.managers import RegistryManagerInstances
 from ..registry.wildcards import CollectionWildcard
 from ._postprocessing import Postprocessing
 from ._predicate_constraints_summary import PredicateConstraintsSummary
-from ._query_builder import QueryPlan, SimpleQueryPlan, UnionQueryPlan, UnionQueryPlanTerm
-from ._query_plan import QueryCollectionAnalysis, QueryFindFirstPlan, QueryJoinsPlan, ResolvedDatasetSearch
+from ._query_analysis import (
+    QueryCollectionAnalysis,
+    QueryFindFirstAnalysis,
+    QueryJoinsAnalysis,
+    QueryTreeAnalysis,
+    ResolvedDatasetSearch,
+)
+from ._query_builder import QueryBuilder, SingleSelectQueryBuilder, UnionQueryBuilder, UnionQueryBuilderTerm
 from ._result_page_converter import (
     DataCoordinateResultPageConverter,
     DatasetRefResultPageConverter,
@@ -213,7 +219,7 @@ class DirectQueryDriver(QueryDriver):
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
         )
-        sql_select, sql_columns = plan.into_sql_select()
+        sql_select, sql_columns = plan.finish_select()
         if result_spec.order_by:
             visitor = SqlColumnVisitor(sql_columns, self)
             sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
@@ -304,7 +310,7 @@ class DirectQueryDriver(QueryDriver):
         #   search is straightforward and definitely well-indexed, and not much
         #   (if at all) worse than joining back in on a materialized UUID.
         #
-        sql_select, sql_columns = plan.into_sql_select()
+        sql_select, sql_columns = plan.finish_select()
         table = self._exit_stack.enter_context(
             self.db.temporary_table(make_table_spec(plan.final_columns, self.db, plan.postprocessing))
         )
@@ -371,7 +377,7 @@ class DirectQueryDriver(QueryDriver):
         if plan.postprocessing:
             if not discard:
                 raise InvalidQueryError("Cannot count query rows exactly without discarding them.")
-            sql_select, _ = plan.into_sql_select(return_columns=False)
+            sql_select, _ = plan.finish_select(return_columns=False)
             plan.postprocessing.limit = result_spec.limit
             n = 0
             with self.db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
@@ -380,7 +386,7 @@ class DirectQueryDriver(QueryDriver):
             return n
         # If the query has DISTINCT, GROUP BY, or UNION [ALL], nest it in a
         # subquery so we count deduplicated rows.
-        builder = plan.into_nested_builder()
+        builder = plan.finish_nested()
         # Replace the columns of the query with just COUNT(*).
         builder.columns = qt.ColumnSet(self._universe.empty)
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
@@ -403,20 +409,20 @@ class DirectQueryDriver(QueryDriver):
                 raise InvalidQueryError("Cannot obtain exact result for 'any' without executing.")
             return True
         if plan.postprocessing and exact:
-            sql_select, _ = plan.into_sql_select(return_columns=False)
+            sql_select, _ = plan.finish_select(return_columns=False)
             with self.db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
                 for _ in plan.postprocessing.apply(result):
                     return True
                 return False
-        sql_select, _ = plan.into_sql_select()
+        sql_select, _ = plan.finish_select()
         with self.db.query(sql_select.limit(1)) as result:
             return result.first() is not None
 
     def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
-        plan = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
+        plan = self.build_query(tree, qt.ColumnSet(tree.dimensions), analyze_only=True)
         if plan.joins.messages or not execute:
             return plan.joins.messages
         # TODO: guess at ways to split up query that might fail or succeed if
@@ -439,7 +445,8 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | EllipsisType | None = None,
-    ) -> QueryPlan:
+        analyze_only: bool = False,
+    ) -> QueryBuilder:
         """Convert a query description into a mostly-completed
         `SqlSelectBuilder`.
 
@@ -457,64 +464,18 @@ class DirectQueryDriver(QueryDriver):
             ID should be returned, with the colletions searched in order.
             ``...`` is used to represent the search for all dataset types with
             a particular set of dimensions in ``tree.any_dataset``.
+        TODO
 
         Returns
         -------
-        plan : `QueryPlan`
-            Plan used to transform the query into SQL, including a builder
-            object that can be used to create a SQL SELECT via its
-            `~SqlSelectBuilder.select` method and a `Postprocessing` object
-            that describes work to be done after executing the query.
+        TODO
         """
-        # See the QueryPlan docs for an overview of what these stages of query
-        # construction do.
-        plan = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
-        self.apply_query_joins(plan)
-        plan.apply_projection(self, order_by)
-        plan.apply_find_first(self)
-        for builder in plan.iter_select_builders():
-            builder.columns = final_columns
-        return plan
-
-    def analyze_query(
-        self,
-        tree: qt.QueryTree,
-        final_columns: qt.ColumnSet,
-        order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | EllipsisType | None = None,
-    ) -> QueryPlan:
-        """Construct a plan for building a query and initialize a builder.
-
-        Parameters
-        ----------
-        tree : `.queries.tree.QueryTree`
-            Description of the joins and row filters in the query.
-        final_columns : `.queries.tree.ColumnSet`
-            Final output columns that should be emitted by the SQL query.
-        order_by : `~collections.abc.Iterable` [ \
-                `.queries.tree.OrderExpression` ], optional
-            Column expressions to sort by.
-        find_first_dataset : `str`, ``...``, or `None`, optional
-            Name of a dataset type for which only one result row for each data
-            ID should be returned, with the collections searched in order.
-            ``...`` is used to represent the search for all dataset types with
-            a particular set of dimensions in ``tree.any_dataset``.
-
-        Returns
-        -------
-        plan : `QueryPlan`
-            Plan used to transform the query into SQL, including a builder
-            object that can be used to create a SQL SELECT via its
-            `~SqlSelectBuilder.select` method and a `Postprocessing` object
-            that describes work to be done after executing the query.
-        """
-        # The fact that this method returns both a QueryPlan and an initial
-        # SqlSelectBuilder (rather than just a QueryPlan) is a tradeoff that
-        # lets DimensionRecordStorageManager.process_query_overlaps (which is
-        # called by the `_analyze_query_tree` call below) pull out overlap
-        # expressions from the predicate at the same time it turns them into
-        # SQL table joins (in the builder).
-        joins_plan, union_dataset_searches, builder, postprocessing = self._analyze_query_tree(tree)
+        # Analyze the dimensions, dataset searches, and other join operands
+        # that will go into the query.  This also initializes a
+        # SqlSelectBuilder and Postprocessing with spatial/temporal constraints
+        # potentially transformed by the dimensions manager (but none of the
+        # rest of the analysis reflected in that SqlSelectBuilder).
+        query_tree_analysis = self._analyze_query_tree(tree)
         # The "projection" columns differ from the final columns by not
         # omitting any dimension keys (this keeps queries for different result
         # types more similar during construction), including any columns needed
@@ -524,49 +485,199 @@ class DirectQueryDriver(QueryDriver):
         projection_columns.restore_dimension_keys()
         for term in order_by:
             term.gather_required_columns(projection_columns)
-        # There are two kinds of query plans: simple SELECTS and UNIONs over
-        # dataset types.
-        plan: QueryPlan
+        # There are two kinds of query pbuilderlans: simple SELECTS and UNIONs
+        # over dataset types.
+        builder: QueryBuilder
         if tree.any_dataset is not None:
-            plan = UnionQueryPlan(
-                initial_select_builder=builder,
+            builder = UnionQueryBuilder(
+                initial_select_builder=query_tree_analysis.initial_select_builder,
                 union_dataset_dimensions=tree.any_dataset.dimensions,
-                joins=joins_plan,
+                joins=query_tree_analysis.joins,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
-                postprocessing=postprocessing,
+                postprocessing=query_tree_analysis.postprocessing,
                 union_terms=[
                     # At this stage all of the union terms share the same
                     # builder instance; we'll separate them later when we
                     # actually start to do different things to them.
-                    UnionQueryPlanTerm([], resolved_search)
-                    for resolved_search in union_dataset_searches
+                    UnionQueryBuilderTerm([], resolved_search)
+                    for resolved_search in query_tree_analysis.union_datasets
                 ],
             )
         else:
-            plan = SimpleQueryPlan(
-                joins=joins_plan,
+            builder = SingleSelectQueryBuilder(
+                joins=query_tree_analysis.joins,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
-                postprocessing=postprocessing,
-                select_builder=builder,
+                postprocessing=query_tree_analysis.postprocessing,
+                select_builder=query_tree_analysis.initial_select_builder,
             )
         # Finish setting up the projection part of the plan.
-        plan.analyze_projection()
+        builder.analyze_projection()
         # The joins-stage query also needs to include all columns needed by the
         # downstream projection query.  Note that this:
         # - never adds new dimensions to the joins stage (since those are
         #   always a superset of the projection-stage dimensions);
-        # - does not affect our determination of
+        # - does not affect our previous determination of
         #   plan.projection.needs_dataset_distinct, because any dataset fields
         #   being added to the joins stage here are already in the projection.
-        plan.joins.columns.update(plan.projection_columns)
+        builder.joins.columns.update(builder.projection_columns)
         # Set up the find-first part of the plan.
         if find_first_dataset is not None:
-            plan.analyze_find_first(find_first_dataset)
-        return plan
+            builder.analyze_find_first(find_first_dataset)
+        # At this point, analysis is complete, and we can proceed to making
+        # the select_builder(s) reflect that analysis.
+        if not analyze_only:
+            self.apply_query_joins(builder)
+            builder.apply_projection(self, order_by)
+            builder.apply_find_first(self)
+            for select_builder in builder.iter_select_builders():
+                select_builder.columns = final_columns
+        return builder
 
-    def apply_query_joins(self, plan: QueryPlan) -> None:
+    def _analyze_query_tree(self, tree: qt.QueryTree) -> QueryTreeAnalysis:
+        """Start constructing a plan for building a query from a
+        `.queries.tree.QueryTree`.
+
+        Parameters
+        ----------
+        tree : `.queries.tree.QueryTree`
+            Description of the joins and row filters in the query.
+
+        Returns
+        -------
+        joins_plan : `QueryJoinsPlan`
+            Initial component of the plan relevant for the "joins" stage,
+            including all joins and columns needed by ``tree``.  Additional
+            columns will be added to this plan later.
+        union_dataset_searches : `list` [ `ResolvedDatasetSearch` ]
+            Resolved dataset searches that expand `QueryTree.any_dataset` out
+            into groups of dataset types with the same collection search path.
+        builder : `SqlSelectBuilder`
+            In-progress SQL query builder, initialized with just spatial and
+            temporal overlaps.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
+
+        Notes
+        -----
+        The fact that this method returns both a QueryPlan and an initial
+        SqlSelectBuilder (rather than just a QueryPlan) is a tradeoff that lets
+        DimensionRecordStorageManager.process_query_overlaps (which is called
+        by the `_analyze_query_tree` call below) pull out overlap expressions
+        from the predicate at the same time it turns them into SQL table joins
+        (in the builder).
+        """
+        # Fetch the records and summaries for any collections we might be
+        # searching for datasets and organize them for the kind of lookups
+        # we'll do later.
+        collection_analysis = self._analyze_collections(tree)
+        # Delegate to the dimensions manager to rewrite the predicate and start
+        # a SqlSelectBuilder to cover any spatial overlap joins or constraints.
+        # We'll return that SqlSelectBuilder (or copies of it) at the end.
+        (
+            predicate,
+            select_builder,
+            postprocessing,
+        ) = self.managers.dimensions.process_query_overlaps(
+            tree.dimensions,
+            tree.predicate,
+            tree.get_joined_dimension_groups(),
+            collection_analysis.calibration_dataset_types,
+        )
+        # Extract the data ID implied by the predicate; we can use the governor
+        # dimensions in that to constrain the collections we search for
+        # datasets later.
+        predicate_constraints = PredicateConstraintsSummary(predicate)
+        # Use the default data ID to apply additional constraints where needed.
+        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
+        predicate = predicate_constraints.predicate
+        # Initialize the plan we're return at the end of the method.
+        joins = QueryJoinsAnalysis(predicate=predicate, columns=select_builder.columns)
+        # Add columns required by postprocessing.
+        postprocessing.gather_columns_required(joins.columns)
+        # Add materializations, which can also bring in more postprocessing.
+        for m_key, m_dimensions in tree.materializations.items():
+            m_state = self._materializations[m_key]
+            joins.materializations[m_key] = m_dimensions
+            # When a query is materialized, the new tree has an empty
+            # (trivially true) predicate because the original was used to make
+            # the materialized rows.  But the original postprocessing isn't
+            # executed when the materialization happens, so we have to include
+            # it here.
+            postprocessing.spatial_join_filtering.extend(m_state.postprocessing.spatial_join_filtering)
+            postprocessing.spatial_where_filtering.extend(m_state.postprocessing.spatial_where_filtering)
+        # Add data coordinate uploads.
+        joins.data_coordinate_uploads.update(tree.data_coordinate_uploads)
+        # Add dataset_searches and filter out collections that don't have the
+        # right dataset type or governor dimensions.  We re-resolve dataset
+        # searches now that we have a constraint data ID.
+        for dataset_type_name, dataset_search in tree.datasets.items():
+            resolved_dataset_search = self._resolve_dataset_search(
+                dataset_type_name,
+                dataset_search,
+                predicate_constraints.constraint_data_id,
+                collection_analysis.summaries_by_dataset_type[dataset_type_name],
+            )
+            if resolved_dataset_search.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
+                # This is really for server-side defensiveness; it's hard to
+                # imagine the query getting different dimensions for a dataset
+                # type in two calls to the same query driver.
+                raise InvalidQueryError(
+                    f"Incorrect dimensions {resolved_dataset_search.dimensions} for dataset "
+                    f"{dataset_type_name!r} in query "
+                    f"(vs. {self.get_dataset_type(dataset_type_name).dimensions})."
+                )
+            joins.datasets[dataset_type_name] = resolved_dataset_search
+            if not resolved_dataset_search.collection_records:
+                joins.messages.append(
+                    f"Search for dataset type {resolved_dataset_search.name!r} in "
+                    f"{list(dataset_search.collections)} is doomed to fail."
+                )
+                joins.messages.extend(resolved_dataset_search.messages)
+        # Process the special any_dataset search, if there is one. This entails
+        # making a modified copy of the plan for each distinct post-filtering
+        # collection search path.
+        if tree.any_dataset is None:
+            return QueryTreeAnalysis(
+                joins, union_datasets=[], initial_select_builder=select_builder, postprocessing=postprocessing
+            )
+        # Gather the filtered collection search path for each union dataset
+        # type.
+        collections_by_dataset_type = defaultdict[str, list[str]](list)
+        for collection_record, collection_summary in collection_analysis.summaries_by_dataset_type[...]:
+            for dataset_type in collection_summary.dataset_types:
+                if dataset_type.dimensions == tree.any_dataset.dimensions:
+                    collections_by_dataset_type[dataset_type.name].append(collection_record.name)
+        # Reverse the lookup order on the mapping we just made to group
+        # dataset types by their collection search path.  Each such group
+        # yields an output plan.
+        dataset_searches_by_collections: dict[tuple[str, ...], ResolvedDatasetSearch[list[str]]] = {}
+        for dataset_type_name, collection_path in collections_by_dataset_type.items():
+            key = tuple(collection_path)
+            if (resolved_search := dataset_searches_by_collections.get(key)) is None:
+                resolved_search = ResolvedDatasetSearch[list[str]](
+                    [],
+                    dimensions=tree.any_dataset.dimensions,
+                    collection_records=[
+                        collection_analysis.collection_records[collection_name]
+                        for collection_name in collection_path
+                    ],
+                    messages=[],
+                )
+                resolved_search.is_calibration_search = any(
+                    r.type is CollectionType.CALIBRATION for r in resolved_search.collection_records
+                )
+                dataset_searches_by_collections[key] = resolved_search
+            resolved_search.name.append(dataset_type_name)
+        return QueryTreeAnalysis(
+            joins,
+            union_datasets=list(dataset_searches_by_collections.values()),
+            initial_select_builder=select_builder,
+            postprocessing=postprocessing,
+        )
+
+    def apply_query_joins(self, plan: QueryBuilder) -> None:
         """Modify the builder inside a `QueryPlan` to include all tables and
         other FROM and WHERE clause terms needed.
 
@@ -808,7 +919,7 @@ class DirectQueryDriver(QueryDriver):
         self,
         select_builder: SqlSelectBuilder,
         postprocessing: Postprocessing,
-        find_first_plan: QueryFindFirstPlan,
+        find_first_plan: QueryFindFirstAnalysis,
     ) -> SqlSelectBuilder:
         """Modify an under-construction SQL query to return only one row for
         each data ID, searching collections in order.
@@ -870,135 +981,6 @@ class DirectQueryDriver(QueryDriver):
         # Don't propagate _ROWNUM into downstream queries.
         del select_builder.joins.special["_ROWNUM"]
         return select_builder
-
-    def _analyze_query_tree(
-        self, tree: qt.QueryTree
-    ) -> tuple[QueryJoinsPlan, list[ResolvedDatasetSearch], SqlSelectBuilder, Postprocessing]:
-        """Start constructing a plan for building a query from a
-        `.queries.tree.QueryTree`.
-
-        Parameters
-        ----------
-        tree : `.queries.tree.QueryTree`
-            Description of the joins and row filters in the query.
-
-        Returns
-        -------
-        joins_plan : `QueryJoinsPlan`
-            Initial component of the plan relevant for the "joins" stage,
-            including all joins and columns needed by ``tree``.  Additional
-            columns will be added to this plan later.
-        union_dataset_searches : `list` [ `ResolvedDatasetSearch` ]
-            Resolved dataset searches that expand `QueryTree.any_dataset`
-            out into groups of dataset types with the same collection search
-            path.
-        builder : `SqlSelectBuilder`
-            In-progress SQL query builder, initialized with just spatial and
-            temporal overlaps.
-        postprocessing : `Postprocessing`
-            Struct representing post-query processing to be done in Python.
-        """
-        # Fetch the records and summaries for any collections we might be
-        # searching for datasets and organize them for the kind of lookups
-        # we'll do later.
-        collection_analysis = self._analyze_collections(tree)
-        # Delegate to the dimensions manager to rewrite the predicate and start
-        # a SqlSelectBuilder to cover any spatial overlap joins or constraints.
-        # We'll return that SqlSelectBuilder (or copies of it) at the end.
-        (
-            predicate,
-            select_builder,
-            postprocessing,
-        ) = self.managers.dimensions.process_query_overlaps(
-            tree.dimensions,
-            tree.predicate,
-            tree.get_joined_dimension_groups(),
-            collection_analysis.calibration_dataset_types,
-        )
-        # Extract the data ID implied by the predicate; we can use the governor
-        # dimensions in that to constrain the collections we search for
-        # datasets later.
-        predicate_constraints = PredicateConstraintsSummary(predicate)
-        # Use the default data ID to apply additional constraints where needed.
-        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
-        predicate = predicate_constraints.predicate
-        # Initialize the plan we're return at the end of the method.
-        plan = QueryJoinsPlan(predicate=predicate, columns=select_builder.columns)
-        # Add columns required by postprocessing.
-        postprocessing.gather_columns_required(plan.columns)
-        # Add materializations, which can also bring in more postprocessing.
-        for m_key, m_dimensions in tree.materializations.items():
-            m_state = self._materializations[m_key]
-            plan.materializations[m_key] = m_dimensions
-            # When a query is materialized, the new tree has an empty
-            # (trivially true) predicate because the original was used to make
-            # the materialized rows.  But the original postprocessing isn't
-            # executed when the materialization happens, so we have to include
-            # it here.
-            postprocessing.spatial_join_filtering.extend(m_state.postprocessing.spatial_join_filtering)
-            postprocessing.spatial_where_filtering.extend(m_state.postprocessing.spatial_where_filtering)
-        # Add data coordinate uploads.
-        plan.data_coordinate_uploads.update(tree.data_coordinate_uploads)
-        # Add dataset_searches and filter out collections that don't have the
-        # right dataset type or governor dimensions.  We re-resolve dataset
-        # searches now that we have a constraint data ID.
-        for dataset_type_name, dataset_search in tree.datasets.items():
-            resolved_dataset_search = self._resolve_dataset_search(
-                dataset_type_name,
-                dataset_search,
-                predicate_constraints.constraint_data_id,
-                collection_analysis.summaries_by_dataset_type[dataset_type_name],
-            )
-            if resolved_dataset_search.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
-                # This is really for server-side defensiveness; it's hard to
-                # imagine the query getting different dimensions for a dataset
-                # type in two calls to the same query driver.
-                raise InvalidQueryError(
-                    f"Incorrect dimensions {resolved_dataset_search.dimensions} for dataset "
-                    f"{dataset_type_name!r} in query "
-                    f"(vs. {self.get_dataset_type(dataset_type_name).dimensions})."
-                )
-            plan.datasets[dataset_type_name] = resolved_dataset_search
-            if not resolved_dataset_search.collection_records:
-                plan.messages.append(
-                    f"Search for dataset type {resolved_dataset_search.name!r} in "
-                    f"{list(dataset_search.collections)} is doomed to fail."
-                )
-                plan.messages.extend(resolved_dataset_search.messages)
-        # Process the special any_dataset search, if there is one. This entails
-        # making a modified copy of the plan for each distinct post-filtering
-        # collection search path.
-        if tree.any_dataset is None:
-            return plan, [], select_builder, postprocessing
-        # Gather the filtered collection search path for each union dataset
-        # type.
-        collections_by_dataset_type = defaultdict[str, list[str]](list)
-        for collection_record, collection_summary in collection_analysis.summaries_by_dataset_type[...]:
-            for dataset_type in collection_summary.dataset_types:
-                if dataset_type.dimensions == tree.any_dataset.dimensions:
-                    collections_by_dataset_type[dataset_type.name].append(collection_record.name)
-        # Reverse the lookup order on the mapping we just made to group
-        # dataset types by their collection search path.  Each such group
-        # yields an output plan.
-        dataset_searches_by_collections: dict[tuple[str, ...], ResolvedDatasetSearch[list[str]]] = {}
-        for dataset_type_name, collection_path in collections_by_dataset_type.items():
-            key = tuple(collection_path)
-            if (resolved_search := dataset_searches_by_collections.get(key)) is None:
-                resolved_search = ResolvedDatasetSearch[list[str]](
-                    [],
-                    dimensions=tree.any_dataset.dimensions,
-                    collection_records=[
-                        collection_analysis.collection_records[collection_name]
-                        for collection_name in collection_path
-                    ],
-                    messages=[],
-                )
-                resolved_search.is_calibration_search = any(
-                    r.type is CollectionType.CALIBRATION for r in resolved_search.collection_records
-                )
-                dataset_searches_by_collections[key] = resolved_search
-            resolved_search.name.append(dataset_type_name)
-        return plan, list(dataset_searches_by_collections.values()), select_builder, postprocessing
 
     def _analyze_collections(self, tree: qt.QueryTree) -> QueryCollectionAnalysis:
         # Retrieve collection information for all collections in a tree.
