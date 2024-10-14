@@ -149,6 +149,11 @@ class RegistryTests(ABC):
     searches.  The new one is able to search in these collections.)
     """
 
+    supportsNonCommonSkypixQueries: bool = True
+    """True if the registry class being tested supports data ID constraints
+    like {'htm11' = ...}
+    """
+
     @classmethod
     @abstractmethod
     def getDataDir(cls) -> str:
@@ -3430,17 +3435,21 @@ class RegistryTests(ABC):
             Test("visit", "-visit.name", (2, 1)),
             Test("visit", "day_obs,-visit.timespan.begin", (2, 1)),
         ]
-        if self.supportsQueryOffset:
-            test_data.append(Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)))
 
-        with self.assertWarns(FutureWarning):
-            for test in test_data:
-                order_by = test.order_by.split(",")
-                query = do_query(test.element).order_by(*order_by)
-                if test.limit is not None:
-                    query = query.limit(*test.limit)
-                dataIds = tuple(rec.id for rec in query)
-                self.assertEqual(dataIds, test.result)
+        def do_test(test: Test):
+            order_by = test.order_by.split(",")
+            query = do_query(test.element).order_by(*order_by)
+            if test.limit is not None:
+                query = query.limit(*test.limit)
+            dataIds = tuple(rec.id for rec in query)
+            self.assertEqual(dataIds, test.result)
+
+        for test in test_data:
+            do_test(test)
+
+        if self.supportsQueryOffset:
+            with self.assertWarns(FutureWarning):
+                do_test(Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)))
 
         # errors in a name
         for order_by in ("", "-"):
@@ -3723,8 +3732,8 @@ class RegistryTests(ABC):
         # New query system does not support non-common skypix constraints
         # and we are deprecating it to replace with region-based constraints.
         # TODO: Drop this tests once we remove support for non-common skypix.
-        with self.assertWarns(FutureWarning):
-            with contextlib.suppress(NotImplementedError):
+        if self.supportsNonCommonSkypixQueries:
+            with self.assertWarns(FutureWarning):
                 self.assertEqual(
                     {
                         (data_id["tract"], data_id["patch"])
