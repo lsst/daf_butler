@@ -40,7 +40,7 @@ import os
 import re
 import subprocess
 import tempfile
-import unittest
+import unittest.mock
 from collections import namedtuple
 from collections.abc import Callable
 from functools import partial
@@ -152,8 +152,12 @@ class CliLogTestBase:
         """
 
         def __init__(self, component: str) -> None:
-            self.logger = lsstLog.getLogger(component) if lsstLog else None
-            self.initialLevel = self.logger.getLevel() if lsstLog else None
+            if lsstLog:
+                self.logger = lsstLog.getLogger(component)
+                self.initialLevel = self.logger.getLevel()
+            else:
+                self.logger = None
+                self.initialLevel = None
 
     def runTest(self, cmd: Callable) -> None:
         """Test that the log context manager works with the butler cli.
@@ -188,6 +192,8 @@ class CliLogTestBase:
         self.assertEqual(pyLsstRoot.logger.level, logging.INFO)
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
+            assert lsstRoot.logger is not None
+            assert lsstButler.logger is not None
             self.assertEqual(lsstRoot.logger.getLevel(), lsstLog.INFO)
             # lsstLogLevel can either be the initial level, or uninitialized or
             # the defined default value.
@@ -385,7 +391,7 @@ class CliLogTestBase:
                     self.assertIn("DEBUG", records_text[num], str(records_text[num]))
                     self.assertNotIn("{", records_text[num], str(records_text[num]))
 
-                    self.assertGreater(len(records), n_records)
+                    self.assertGreater(len(records_text), n_records)
 
     def testLogTty(self) -> None:
         """Verify that log output to terminal can be suppressed."""
