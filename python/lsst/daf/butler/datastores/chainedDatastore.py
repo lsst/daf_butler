@@ -862,7 +862,12 @@ class ChainedDatastore(Datastore):
                 # cache is exactly what we should be doing.
                 continue
             try:
-                datastore_refs = {ref for ref in pending if datastore.exists(ref)}
+                # Checking file existence is expensive. Have the option
+                # of checking whether the datastore knows of these datasets
+                # instead, which is fast but can potentially lead to
+                # retrieveArtifacts failing.
+                knows = datastore.knows_these(pending)
+                datastore_refs = {ref for ref, exists in knows.items() if exists}
             except NotImplementedError:
                 # Some datastores may not support retrieving artifacts
                 continue
