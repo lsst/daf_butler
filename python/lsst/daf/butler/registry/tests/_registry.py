@@ -42,6 +42,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import timedelta
 from threading import Barrier
 from typing import TypeVar
@@ -835,15 +836,19 @@ class RegistryTests(ABC):
 
         if self.supportsCollectionRegex:
             # Query for collections matching a regex.
-            self.assertCountEqual(
-                list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
-                ["imported_r", "imported_g"],
-            )
+            with self.assertWarns(FutureWarning):
+                self.assertCountEqual(
+                    list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
+                    ["imported_r", "imported_g"],
+                )
             # Query for collections matching a regex or an explicit str.
-            self.assertCountEqual(
-                list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
-                ["imported_r", "imported_g", "chain1"],
-            )
+            with self.assertWarns(FutureWarning):
+                self.assertCountEqual(
+                    list(
+                        registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)
+                    ),
+                    ["imported_r", "imported_g", "chain1"],
+                )
         # Same queries as the regex ones above, but using globs instead of
         # regex.
         self.assertCountEqual(
@@ -1388,7 +1393,8 @@ class RegistryTests(ABC):
         if self.supportsQueryGovernorValidation:
             # Specifying non-existing skymap is an exception
             with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-                do_query()
+                with self.assertWarns(FutureWarning):
+                    do_query()
         else:
             # New query system returns zero rows instead of raising an
             # exception.
@@ -1726,14 +1732,15 @@ class RegistryTests(ABC):
 
         # Materialize the bias dataset queries (only) by putting the results
         # into temporary tables, then repeat those tests.
-        with subsetDataIds.findDatasets(
-            bias, collections=["imported_r", "imported_g"], findFirst=False
-        ).materialize() as biases:
-            self.assertCountEqual(list(biases), expectedAllBiases)
-        with subsetDataIds.findDatasets(
-            bias, collections=["imported_r", "imported_g"], findFirst=True
-        ).materialize() as biases:
-            self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+        with self.assertWarns(FutureWarning):
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=False
+            ).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedAllBiases)
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=True
+            ).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
             self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
@@ -1753,14 +1760,15 @@ class RegistryTests(ABC):
                 expectedDeduplicatedBiases,
             )
             # Materialize the dataset queries, too.
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=False
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedAllBiases)
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=True
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+            with self.assertWarns(FutureWarning):
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=False
+                ).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedAllBiases)
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=True
+                ).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
             self.assertEqual(dataIds.dimensions, expected_dimensions)
@@ -1792,14 +1800,15 @@ class RegistryTests(ABC):
                 expectedDeduplicatedBiases,
             )
             # Materialize just the bias dataset queries.
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=False
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedAllBiases)
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=True
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+            with self.assertWarns(FutureWarning):
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=False
+                ).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedAllBiases)
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=True
+                ).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
             # Materialize the subset data ID query, but not the dataset
             # queries.
             with subsetDataIds.materialize() as subsetDataIds:
@@ -1823,14 +1832,15 @@ class RegistryTests(ABC):
                 )
                 # Materialize the bias dataset queries, too, so now we're
                 # materializing every single step.
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=False
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedAllBiases)
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=True
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+                with self.assertWarns(FutureWarning):
+                    with subsetDataIds.findDatasets(
+                        bias, collections=["imported_r", "imported_g"], findFirst=False
+                    ).materialize() as biases:
+                        self.assertCountEqual(list(biases), expectedAllBiases)
+                    with subsetDataIds.findDatasets(
+                        bias, collections=["imported_r", "imported_g"], findFirst=True
+                    ).materialize() as biases:
+                        self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
 
     def testStorageClassPropagation(self):
         """Test that queries for datasets respect the storage class passed in
@@ -2700,7 +2710,8 @@ class RegistryTests(ABC):
         # regular expression will skip too
         if self.supportsCollectionRegex:
             pattern = re.compile(".*")
-            datasets = list(registry.queryDatasets("bias", collections=pattern))
+            with self.assertWarns(FutureWarning):
+                datasets = list(registry.queryDatasets("bias", collections=pattern))
             self.assertGreater(len(datasets), 0)
 
         # ellipsis should work as usual
@@ -3364,7 +3375,10 @@ class RegistryTests(ABC):
             dimensions = test.dimensions.split(",")
             if test.exception:
                 with self.assertRaises(test.exception):
-                    do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs).count()
+                    with ExitStack() as stack:
+                        if test.exception == DataIdValueError:
+                            stack.enter_context(self.assertWarns(FutureWarning))
+                        do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs).count()
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                 self.assertEqual(query.count(discard=True), test.count)
@@ -3372,9 +3386,12 @@ class RegistryTests(ABC):
             # and materialize
             if test.exception:
                 with self.assertRaises(test.exception):
-                    query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
-                    with query.materialize() as materialized:
-                        materialized.count(discard=True)
+                    with ExitStack() as stack:
+                        if test.exception == DataIdValueError:
+                            stack.enter_context(self.assertWarns(FutureWarning))
+                        query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
+                        with query.materialize() as materialized:
+                            materialized.count(discard=True)
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                 with query.materialize() as materialized:
@@ -3416,13 +3433,14 @@ class RegistryTests(ABC):
         if self.supportsQueryOffset:
             test_data.append(Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)))
 
-        for test in test_data:
-            order_by = test.order_by.split(",")
-            query = do_query(test.element).order_by(*order_by)
-            if test.limit is not None:
-                query = query.limit(*test.limit)
-            dataIds = tuple(rec.id for rec in query)
-            self.assertEqual(dataIds, test.result)
+        with self.assertWarns(FutureWarning):
+            for test in test_data:
+                order_by = test.order_by.split(",")
+                query = do_query(test.element).order_by(*order_by)
+                if test.limit is not None:
+                    query = query.limit(*test.limit)
+                dataIds = tuple(rec.id for rec in query)
+                self.assertEqual(dataIds, test.result)
 
         # errors in a name
         for order_by in ("", "-"):
@@ -3482,23 +3500,31 @@ class RegistryTests(ABC):
         self.assertEqual(result.count(), 4)
 
         if self.supportsQueryGovernorValidation:
-            with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-                result = registry.queryDimensionRecords("detector", instrument="NotCam1")
-                result.count()
+            with self.assertWarns(FutureWarning):
+                with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
+                    result = registry.queryDimensionRecords("detector", instrument="NotCam1")
+                    result.count()
 
-            with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-                result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
-                result.count()
+            with self.assertWarns(FutureWarning):
+                with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
+                    result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
+                    result.count()
 
-            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-                result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
-                result.count()
+            with self.assertWarns(FutureWarning):
+                with self.assertRaisesRegex(
+                    DataIdValueError, "Unknown values specified for governor dimension"
+                ):
+                    result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
+                    result.count()
 
-            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-                result = registry.queryDimensionRecords(
-                    "detector", where="instrument=instr", bind={"instr": "NotCam1"}
-                )
-                result.count()
+            with self.assertWarns(FutureWarning):
+                with self.assertRaisesRegex(
+                    DataIdValueError, "Unknown values specified for governor dimension"
+                ):
+                    result = registry.queryDimensionRecords(
+                        "detector", where="instrument=instr", bind={"instr": "NotCam1"}
+                    )
+                    result.count()
 
     def testDatasetConstrainedDimensionRecordQueries(self):
         """Test that queryDimensionRecords works even when given a dataset
@@ -3697,17 +3723,18 @@ class RegistryTests(ABC):
         # New query system does not support non-common skypix constraints
         # and we are deprecating it to replace with region-based constraints.
         # TODO: Drop this tests once we remove support for non-common skypix.
-        with contextlib.suppress(NotImplementedError):
-            self.assertEqual(
-                {
-                    (data_id["tract"], data_id["patch"])
-                    for data_id in registry.queryDataIds(
-                        ["patch"],
-                        dataId={skypix_dimension.name: skypix_id},
-                    )
-                },
-                overlapping_patches,
-            )
+        with self.assertWarns(FutureWarning):
+            with contextlib.suppress(NotImplementedError):
+                self.assertEqual(
+                    {
+                        (data_id["tract"], data_id["patch"])
+                        for data_id in registry.queryDataIds(
+                            ["patch"],
+                            dataId={skypix_dimension.name: skypix_id},
+                        )
+                    },
+                    overlapping_patches,
+                )
         # Test that a three-way join that includes the common skypix system in
         # the dimensions doesn't generate redundant join terms in the query.
         # TODO: In the new query system this raises InvalidQueryError, change
