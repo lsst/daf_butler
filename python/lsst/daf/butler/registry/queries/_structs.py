@@ -404,6 +404,7 @@ class QuerySummary:
                     "  Will be removed after v28.",
                     FutureWarning,
                 )
+                raise Exception(f"htm thing {dimension}")
 
     requested: DimensionGroup
     """Dimensions whose primary keys should be included in the result rows of
