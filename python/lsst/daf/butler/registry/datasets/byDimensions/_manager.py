@@ -696,7 +696,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def import_(
         self,
-        dataset_type_name: str,
+        dataset_type: DatasetType,
         run: RunRecord,
         data_ids: Mapping[DatasetId, DataCoordinate],
     ) -> list[DatasetRef]:
@@ -705,8 +705,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # Just in case an empty mapping is provided we want to avoid
             # adding dataset type to summary tables.
             return []
-        if (storage := self._find_storage(dataset_type_name)) is None:
-            raise MissingDatasetTypeError(f"Dataset type {dataset_type_name!r} has not been registered.")
+        if (storage := self._find_storage(dataset_type.name)) is None:
+            raise MissingDatasetTypeError(f"Dataset type {dataset_type.name!r} has not been registered.")
         # Current timestamp, type depends on schema version.
         if self._use_astropy_ingest_date:
             # Astropy `now()` precision should be the same as `now()` which
@@ -751,7 +751,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             )
             refs = [
                 DatasetRef(
-                    datasetType=storage.dataset_type,
+                    datasetType=dataset_type,
                     id=dataset_id,
                     dataId=dataId,
                     run=run.name,

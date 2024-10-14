@@ -1176,7 +1176,7 @@ class SqlRegistry:
             data_ids = {dataset.id: dataset.dataId for dataset in datasets}
 
         try:
-            refs = list(self._managers.datasets.import_(datasetType.name, runRecord, data_ids))
+            refs = list(self._managers.datasets.import_(datasetType, runRecord, data_ids))
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
