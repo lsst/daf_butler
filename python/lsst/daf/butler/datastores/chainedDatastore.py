@@ -49,6 +49,7 @@ from lsst.daf.butler.datastore import (
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 
@@ -805,6 +806,7 @@ class ChainedDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -827,6 +829,10 @@ class ChainedDatastore(Datastore):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level called ``_index.json``
+            containing a serialization of a `ZipIndex` for the downloaded
+            datasets.
 
         Returns
         -------
@@ -893,10 +899,17 @@ class ChainedDatastore(Datastore):
                 transfer=transfer,
                 preserve_path=preserve_path,
                 overwrite=overwrite,
+                write_index=False,  # Disable index writing regardless.
             )
             targets.extend(retrieved)
             merged_artifacts_to_ref_id.update(artifacts_to_ref_id)
             merged_artifacts_to_info.update(artifacts_to_info)
+
+        if write_index:
+            index = ZipIndex.from_artifact_maps(
+                refs, merged_artifacts_to_ref_id, merged_artifacts_to_info, destination
+            )
+            index.write_index(destination)
 
         return targets, merged_artifacts_to_ref_id, merged_artifacts_to_info
 

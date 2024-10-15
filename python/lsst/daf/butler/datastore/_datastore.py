@@ -1024,6 +1024,7 @@ class Datastore(metaclass=ABCMeta):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the artifacts associated with the supplied refs.
 
@@ -1046,6 +1047,10 @@ class Datastore(metaclass=ABCMeta):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level called ``_index.json``
+            containing a serialization of a `ZipIndex` for the downloaded
+            datasets.
 
         Returns
         -------
@@ -1465,6 +1470,7 @@ class NullDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
