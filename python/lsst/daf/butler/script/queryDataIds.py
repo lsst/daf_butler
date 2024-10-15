@@ -139,7 +139,7 @@ def queryDataIds(
     `~lsst.daf.butler.Registry.queryDataIds`.
     """
     if offset:
-        raise RuntimeError("Offset is no longer supported by the query system.")
+        raise NotImplementedError("--offset is no longer supported.  It will be removed after v28.")
 
     butler = Butler.from_config(repo, without_datastore=True)
 

@@ -77,6 +77,9 @@ def queryDimensionRecords(
     `~lsst.daf.butler.Registry.queryDimensionRecords` except for ``no_check``,
     which is the inverse of ``check``.
     """
+    if offset:
+        raise NotImplementedError("--offset is no longer supported.  It will be removed after v28.")
+
     butler = Butler.from_config(repo, without_datastore=True)
 
     with butler.query() as query:
