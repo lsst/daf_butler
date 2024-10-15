@@ -85,8 +85,8 @@ class ButlerCollections(ABC, Sequence):
     def __getitem__(self, index: slice) -> Sequence[str]: ...
 
     @deprecated(
-        "'Butler.collections' will no longer directly contain the list of default collections"
-        " after v28. Use 'Butler.collections.defaults' instead.",
+        "‘Butler.collections’ should no longer be used to get the list of default collections."
+        " Use ‘Butler.collections.default’ instead. Will be removed after v28.",
         version="v28",
         category=FutureWarning,
     )
@@ -94,8 +94,8 @@ class ButlerCollections(ABC, Sequence):
         return self.defaults[index]
 
     @deprecated(
-        "'Butler.collections' will no longer directly contain the list of default collections"
-        " after v28. Use 'Butler.collections.defaults' instead.",
+        "‘Butler.collections’ should no longer be used to get the list of default collections."
+        " Use ‘Butler.collections.default’ instead. Will be removed after v28.",
         version="v28",
         category=FutureWarning,
     )

@@ -399,9 +399,9 @@ class QuerySummary:
                 dimension.startswith("htm") or dimension.startswith("healpix")
             ) and not dimension == self.universe.commonSkyPix.name:
                 warnings.warn(
-                    f"Queries using dimension '{dimension}' are deprecated."
+                    f"Dimension '{dimension}' should no longer be used in data IDs."
                     " Use the region 'OVERLAPS' operator in the where clause instead."
-                    "  Will be removed after v28.",
+                    " Will be removed after v28.",
                     FutureWarning,
                 )
 

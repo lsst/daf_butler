@@ -1791,7 +1791,8 @@ class SqlRegistry:
         # ticket will take care of that.
         if datasetType is not None:
             warnings.warn(
-                "The datasetType parameter has never done anything and will be removed after v28",
+                "The datasetType parameter should no longer be used. It has"
+                " never had any effect. Will be removed after v28",
                 FutureWarning,
             )
         try:

@@ -339,8 +339,8 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             if (constraint_values := constraints.get(dimension_name)) is not None:
                 if not (constraint_values <= all_values):
                     warnings.warn(
-                        "DataIdValueError will no longer be raised for invalid governor dimension"
-                        " values after v28.",
+                        "DataIdValueError will no longer be raised for invalid governor dimension values."
+                        " Instead, an empty list will be returned.  Will be changed after v28.",
                         FutureWarning,
                     )
                     raise DataIdValueError(

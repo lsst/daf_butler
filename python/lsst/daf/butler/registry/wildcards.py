@@ -202,8 +202,8 @@ class CategorizedWildcard:
             if allowPatterns and isinstance(element, re.Pattern):
                 if not was_string:
                     warnings.warn(
-                        "Using regular expressions in collection or dataset type searches is deprecated"
-                        " and will be removed after v28. Use globs ('*' wildcards) instead.",
+                        "Regular expressions should no longer be used in collection or dataset type searches."
+                        " Use globs ('*' wildcards) instead. Will be removed after v28.",
                         FutureWarning,
                     )
                 self.patterns.append(element)

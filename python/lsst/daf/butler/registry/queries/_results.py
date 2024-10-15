@@ -534,7 +534,8 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
     def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
         if offset is not ...:
             warnings.warn(
-                "offset parameter is not supported in new query system and will be removed after v28.",
+                "'offset' parameter should no longer be used. It is not supported by the new query system."
+                " Will be removed after v28.",
                 FutureWarning,
             )
         if offset is None or offset is ...:
@@ -675,7 +676,7 @@ class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
 
     @contextmanager
     @deprecated(
-        "This method is not supported by the new query system and will be removed after v28.",
+        "This method should no longer be used. Will be removed after v28.",
         version="v28",
         category=FutureWarning,
     )
@@ -835,7 +836,8 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         # Docstring inherited from base class.
         if offset is not ...:
             warnings.warn(
-                "offset parameter is not supported in new query system and will be removed after v28.",
+                "'offset' parameter should no longer be used. It is not supported by the new query system."
+                " Will be removed after v28.",
                 FutureWarning,
             )
         if offset is None or offset is ...:
