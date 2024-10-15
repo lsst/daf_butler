@@ -81,6 +81,7 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     get_dataset_as_python_object_from_get_info,
 )
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    ZipIndex,
     determine_destination_for_retrieved_artifact,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
@@ -1953,6 +1954,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -1975,6 +1977,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level called ``_index.json``
+            containing a serialization of a `ZipIndex` for the downloaded
+            datasets.
 
         Returns
         -------
@@ -2021,6 +2027,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
         for source_uri, target_uri in to_transfer.items():
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
+
+        if write_index:
+            index = ZipIndex.from_artifact_maps(refs, artifact_to_ref_id, artifact_to_info, destination)
+            index.write_index(destination)
 
         return list(to_transfer.values()), artifact_to_ref_id, artifact_to_info
 

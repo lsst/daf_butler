@@ -67,7 +67,7 @@ from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
 from ..datastore import Datastore, NullDatastore
-from ..datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
+from ..datastores.file_datastore.retrieve_artifacts import ZipIndex, retrieve_and_zip
 from ..dimensions import DataCoordinate, Dimension
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
@@ -1307,13 +1307,21 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         overwrite: bool = False,
     ) -> list[ResourcePath]:
         # Docstring inherited.
-        paths, _, _ = self._datastore.retrieveArtifacts(
+        outdir = ResourcePath(destination)
+        paths, id_map, info_map = self._datastore.retrieveArtifacts(
             refs,
-            ResourcePath(destination),
+            outdir,
             transfer=transfer,
             preserve_path=preserve_path,
             overwrite=overwrite,
         )
+        # Write the index file.
+        index = ZipIndex.from_artifact_maps(
+            refs, id_map, info_map, ResourcePath(destination, forceDirectory=True)
+        )
+        index_path = outdir.join("_index.json")
+        with index_path.open("w") as fd:
+            print(index.model_dump_json(exclude_defaults=True, exclude_unset=True), file=fd)
         return paths
 
     def exists(
