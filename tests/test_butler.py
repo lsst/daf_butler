@@ -361,6 +361,8 @@ class ButlerPutGetTests(TestCaseMixin):
                             )
                             self.assertGreater(len(transferred), 0)
                             artifacts = list(ResourcePath.findFileResources([destination]))
+                            # Filter out the index file.
+                            artifacts = [a for a in artifacts if a.basename() != "_index.json"]
                             self.assertEqual(set(transferred), set(artifacts))
 
                             for artifact in transferred:

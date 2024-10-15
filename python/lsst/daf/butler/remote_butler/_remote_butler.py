@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from deprecated.sphinx import deprecated
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    ZipIndex,
     determine_destination_for_retrieved_artifact,
     retrieve_and_zip,
 )
@@ -424,6 +425,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         destination = ResourcePath(destination).abspath()
         if not destination.isdir():
@@ -450,6 +452,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 artifact_to_ref_id[target_uri].append(ref.id)
                 artifact_to_info[target_uri] = StoredFileInfo.from_simple(file.datastoreRecords)
 
+        if write_index:
+            index = ZipIndex.from_artifact_maps(refs, artifact_to_ref_id, artifact_to_info, destination)
+            index.write_index(destination)
+
         return output_uris, artifact_to_ref_id, artifact_to_info
 
     def retrieve_artifacts_zip(
@@ -467,7 +473,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        paths, _, _ = self._retrieve_artifacts(refs, destination, transfer, preserve_path, overwrite)
+        paths, _, _ = self._retrieve_artifacts(
+            refs,
+            destination,
+            transfer,
+            preserve_path,
+            overwrite,
+        )
         return paths
 
     def exists(

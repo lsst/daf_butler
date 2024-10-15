@@ -524,6 +524,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool | None = False,
+        write_index: bool = True,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -546,6 +547,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level called ``_index.json``
+            containing a serialization of a `ZipIndex` for the downloaded
+            datasets.
 
         Notes
         -----

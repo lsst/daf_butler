@@ -33,6 +33,7 @@ import tempfile
 import uuid
 import zipfile
 from collections.abc import Callable, Iterable
+from typing import ClassVar, Self
 
 from lsst.daf.butler import DatasetId, DatasetIdFactory, DatasetRef, SerializedDatasetRef
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo, StoredFileInfo
@@ -56,6 +57,114 @@ class ZipIndex(BaseModel):
     """Mapping of Zip member to one or more dataset UUIDs."""
     info_map: dict[str, SerializedStoredFileInfo]
     """Mapping of each Zip member to the associated datastore record."""
+
+    index_name: ClassVar[str] = "_index.json"
+    """Name to use when saving the index to a file."""
+
+    def generate_uuid5(self) -> uuid.UUID:
+        """Create a UUID based on the Zip index.
+
+        Returns
+        -------
+        id_ : `uuid.UUID`
+            A UUID5 created from the paths inside the Zip file. Guarantees
+            that if the Zip file is regenerated with exactly the same file
+            paths the same answer will be returned.
+        """
+        # Options are:
+        # - uuid5 based on file paths in zip
+        # - uuid5 based on ref uuids.
+        # - checksum derived from the above.
+        # - uuid5 from file paths and dataset refs.
+        # Do not attempt to include file contents in UUID.
+        # Start with uuid5 from file paths.
+        data = ",".join(self.info_map.keys())
+        # No need to come up with a different namespace.
+        return uuid.uuid5(DatasetIdFactory.NS_UUID, data)
+
+    def write_index(self, dir: ResourcePath) -> ResourcePath:
+        """Write the index to the specified directory.
+
+        Parameters
+        ----------
+        dir : `~lsst.resources.ResourcePath`
+            Directory to write the index file to.
+
+        Returns
+        -------
+        index_path : `~lsst.resources.ResourcePath`
+            Path to the index file that was written.
+        """
+        index_path = dir.join(self.index_name, forceDirectory=False)
+        with index_path.open("w") as fd:
+            print(self.model_dump_json(exclude_defaults=True, exclude_unset=True), file=fd)
+        return index_path
+
+    @classmethod
+    def calc_relative_paths(
+        cls, root: ResourcePath, paths: Iterable[ResourcePath]
+    ) -> dict[ResourcePath, str]:
+        """Calculate the path to use inside the Zip file from the full path.
+
+        Parameters
+        ----------
+        root : `lsst.resources.ResourcePath`
+            The reference root directory.
+        paths : `~collections.abc.Iterable` [ `lsst.resources.ResourcePath` ]
+            The paths to the files that should be included in the Zip file.
+
+        Returns
+        -------
+        abs_to_rel : `dict` [ `~lsst.resources.ResourcePath`, `str` ]
+            Mapping of the original file path to the relative path to use
+            in Zip file.
+        """
+        file_to_relative: dict[ResourcePath, str] = {}
+        for p in paths:
+            # It is an error if there is no relative path.
+            rel = p.relative_to(root)
+            assert rel is not None
+            file_to_relative[p] = rel
+        return file_to_relative
+
+    @classmethod
+    def from_artifact_maps(
+        cls,
+        refs: Iterable[DatasetRef],
+        id_map: dict[ResourcePath, list[DatasetId]],
+        info_map: dict[ResourcePath, StoredFileInfo],
+        root: ResourcePath,
+    ) -> Self:
+        """Create an index from the mappings returned from
+        `Datastore.retrieveArtifacts`.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `list` ]
+            Datasets present in the index.
+        id_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `list` [ `uuid.UUID`] ]
+            Mapping of retrieved artifact path to `DatasetRef` ID.
+        info_map : `dict` [ `~lsst.resources.ResourcePath`, \
+                `StoredDatastoreItemInfo` ]
+            Mapping of retrieved artifact path to datastore record information.
+        root : `lsst.resources.ResourcePath`
+            Root path to be removed from all the paths before creating the
+            index.
+        """
+        # Calculate the paths relative to the given root since the Zip file
+        # uses relative paths.
+        file_to_relative = cls.calc_relative_paths(root, info_map.keys())
+
+        # Convert the mappings to simplified form for pydantic.
+        # and use the relative paths that will match the zip.
+        simplified_refs = [ref.to_simple() for ref in refs]
+        simplified_ref_map = {}
+        for path, ids in id_map.items():
+            simplified_ref_map[file_to_relative[path]] = ids
+        simplified_info_map = {file_to_relative[path]: info.to_simple() for path, info in info_map.items()}
+
+        return cls(refs=simplified_refs, ref_map=simplified_ref_map, info_map=simplified_info_map)
 
 
 def determine_destination_for_retrieved_artifact(
@@ -102,7 +211,7 @@ def retrieve_and_zip(
     refs: Iterable[DatasetRef],
     destination: ResourcePathExpression,
     retrieval_callback: Callable[
-        [Iterable[DatasetRef], ResourcePath, str, bool, bool],
+        [Iterable[DatasetRef], ResourcePath, str, bool, bool, bool],
         tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]],
     ],
 ) -> ResourcePath:
@@ -139,48 +248,20 @@ def retrieve_and_zip(
     # - Return name of zip file.
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
-        paths, refmap, infomap = retrieval_callback(refs, tmpdir_path, "copy", True, False)
-        # Will store the relative paths in the zip file.
-        # These relative paths cannot be None but mypy doesn't know this.
-        file_to_relative: dict[ResourcePath, str] = {}
-        for p in paths:
-            rel = p.relative_to(tmpdir_path)
-            assert rel is not None
-            file_to_relative[p] = rel
+        # Retrieve the artifacts and write the index file.
+        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", True, False, True)
 
-        # Name of zip file. Options are:
-        # - uuid that changes every time.
-        # - uuid5 based on file paths in zip
-        # - uuid5 based on ref uuids.
-        # - checksum derived from the above.
-        # Start with uuid5 from file paths.
-        data = ",".join(file_to_relative.values())
-        # No need to come up with a different namespace.
-        zip_uuid = uuid.uuid5(DatasetIdFactory.NS_UUID, data)
-        zip_file_name = f"{zip_uuid}.zip"
+        # Read the index to construct file name.
+        index_path = tmpdir_path.join(ZipIndex.index_name, forceDirectory=False)
+        index_json = index_path.read()
+        index = ZipIndex.model_validate_json(index_json)
 
-        # Index maps relative path to DatasetRef.
-        # The index has to:
-        # - list all the DatasetRef
-        # - map each artifact's path to a ref
-        # - include the datastore records to allow formatter to be
-        #   extracted for that path and component be associated.
-        # Simplest not to try to include the full set of StoredItemInfo.
-
-        # Convert the mappings to simplified form for pydantic.
-        # and use the relative paths that will match the zip.
-        simplified_refs = [ref.to_simple() for ref in refs]
-        simplified_ref_map = {}
-        for path, ids in refmap.items():
-            simplified_ref_map[file_to_relative[path]] = ids
-        simplified_info_map = {file_to_relative[path]: info.to_simple() for path, info in infomap.items()}
-
-        index = ZipIndex(refs=simplified_refs, ref_map=simplified_ref_map, info_map=simplified_info_map)
-
+        # Use unique name based on files in Zip.
+        zip_file_name = f"{index.generate_uuid5()}.zip"
         zip_path = outdir.join(zip_file_name, forceDirectory=False)
         with zipfile.ZipFile(zip_path.ospath, "w") as zip:
-            zip.writestr("_index.json", index.model_dump_json(exclude_defaults=True, exclude_unset=True))
-            for path, name in file_to_relative.items():
+            zip.write(index_path.ospath, index_path.basename())
+            for path, name in index.calc_relative_paths(tmpdir_path, paths).items():
                 zip.write(path.ospath, name)
 
     return zip_path

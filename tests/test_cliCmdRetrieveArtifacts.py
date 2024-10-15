@@ -75,7 +75,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
                 self.assertTrue(result.stdout.endswith(": 6\n"), f"Expected 6 got: {result.stdout}")
 
                 artifacts = self.find_files(destdir)
-                self.assertEqual(len(artifacts), 6, f"Expected 6 artifacts: {artifacts}")
+                self.assertEqual(len(artifacts), 7, f"Expected 7 artifacts including index: {artifacts}")
                 self.assertIn(f"{destdir}{prefix}", str(artifacts[1]))
 
     def testRetrieveSubset(self):
@@ -95,7 +95,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertTrue(result.stdout.endswith(": 3\n"), f"Expected 3 got: {result.stdout}")
             artifacts = self.find_files(destdir)
-            self.assertEqual(len(artifacts), 3, f"Expected 3 artifacts: {artifacts}")
+            self.assertEqual(len(artifacts), 4, f"Expected 4 artifacts including index: {artifacts}")
 
     def testOverwriteLink(self):
         runner = LogCliRunner()
