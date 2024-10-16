@@ -235,16 +235,16 @@ class SqlColumnVisitor(
         # Docstring inherited.
         columns = qt.ColumnSet(self._driver.universe.empty)
         column.gather_required_columns(columns)
-        plan = self._driver.build_query(query_tree, columns)
-        builder = plan.select_builder
-        if plan.postprocessing:
+        builder = self._driver.build_query(query_tree, columns)
+        if builder.postprocessing:
             raise NotImplementedError(
                 "Right-hand side subquery in IN expression would require postprocessing."
             )
-        subquery_visitor = SqlColumnVisitor(builder.joins, self._driver)
-        builder.joins.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
-        builder.columns = qt.ColumnSet(self._driver.universe.empty)
-        subquery_select = builder.select(plan.postprocessing)
+        select_builder = builder.finish_nested()
+        subquery_visitor = SqlColumnVisitor(select_builder.joins, self._driver)
+        select_builder.joins.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
+        select_builder.columns = qt.ColumnSet(self._driver.universe.empty)
+        subquery_select = select_builder.select(postprocessing=None)
         sql_member = self.expect_scalar(member)
         return sql_member.in_(subquery_select)
 

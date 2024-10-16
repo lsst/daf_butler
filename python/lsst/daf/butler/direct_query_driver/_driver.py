@@ -77,7 +77,7 @@ from ._query_analysis import (
     QueryTreeAnalysis,
     ResolvedDatasetSearch,
 )
-from ._query_builder import QueryBuilder, SingleSelectQueryBuilder, UnionQueryBuilder, UnionQueryBuilderTerm
+from ._query_builder import QueryBuilder, SingleSelectQueryBuilder, UnionQueryBuilder
 from ._result_page_converter import (
     DataCoordinateResultPageConverter,
     DatasetRefResultPageConverter,
@@ -213,26 +213,26 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before queries can be executed.")
-        plan = self.build_query(
+        builder = self.build_query(
             tree,
             final_columns=result_spec.get_result_columns(),
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
         )
-        sql_select, sql_columns = plan.finish_select()
+        sql_select, sql_columns = builder.finish_select()
         if result_spec.order_by:
             visitor = SqlColumnVisitor(sql_columns, self)
             sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
         if result_spec.limit is not None:
-            if plan.postprocessing:
-                plan.postprocessing.limit = result_spec.limit
+            if builder.postprocessing:
+                builder.postprocessing.limit = result_spec.limit
             else:
                 sql_select = sql_select.limit(result_spec.limit)
-        if plan.postprocessing.limit is not None:
+        if builder.postprocessing.limit is not None:
             # We might want to fetch many fewer rows than the default page
             # size if we have to implement limit in postprocessing.
             raw_page_size = min(
-                self._postprocessing_filter_factor * plan.postprocessing.limit,
+                self._postprocessing_filter_factor * builder.postprocessing.limit,
                 self._raw_page_size,
             )
         else:
@@ -242,9 +242,9 @@ class DirectQueryDriver(QueryDriver):
         cursor = _Cursor(
             self.db,
             sql_select,
-            postprocessing=plan.postprocessing,
+            postprocessing=builder.postprocessing,
             raw_page_size=raw_page_size,
-            page_converter=self._create_result_page_converter(result_spec, plan.final_columns),
+            page_converter=self._create_result_page_converter(result_spec, builder.final_columns),
         )
         # Since this function isn't a context manager and the caller could stop
         # iterating before we retrieve all the results, we have to track open
@@ -310,7 +310,7 @@ class DirectQueryDriver(QueryDriver):
         #   search is straightforward and definitely well-indexed, and not much
         #   (if at all) worse than joining back in on a materialized UUID.
         #
-        sql_select, sql_columns = plan.finish_select()
+        sql_select, _ = plan.finish_select(return_columns=False)
         table = self._exit_stack.enter_context(
             self.db.temporary_table(make_table_spec(plan.final_columns, self.db, plan.postprocessing))
         )
@@ -368,31 +368,31 @@ class DirectQueryDriver(QueryDriver):
     ) -> int:
         # Docstring inherited.
         columns = result_spec.get_result_columns()
-        plan = self.build_query(tree, columns, find_first_dataset=result_spec.find_first_dataset)
-        if not all(d.collection_records for d in plan.joins.datasets.values()):
+        builder = self.build_query(tree, columns, find_first_dataset=result_spec.find_first_dataset)
+        if not all(d.collection_records for d in builder.joins_analysis.datasets.values()):
             return 0
         # No need to do similar check on
         if not exact:
-            plan.postprocessing = Postprocessing()
-        if plan.postprocessing:
+            builder.postprocessing = Postprocessing()
+        if builder.postprocessing:
             if not discard:
                 raise InvalidQueryError("Cannot count query rows exactly without discarding them.")
-            sql_select, _ = plan.finish_select(return_columns=False)
-            plan.postprocessing.limit = result_spec.limit
+            sql_select, _ = builder.finish_select(return_columns=False)
+            builder.postprocessing.limit = result_spec.limit
             n = 0
             with self.db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
-                for _ in plan.postprocessing.apply(results):
+                for _ in builder.postprocessing.apply(results):
                     n += 1
             return n
         # If the query has DISTINCT, GROUP BY, or UNION [ALL], nest it in a
         # subquery so we count deduplicated rows.
-        builder = plan.finish_nested()
+        select_builder = builder.finish_nested()
         # Replace the columns of the query with just COUNT(*).
-        builder.columns = qt.ColumnSet(self._universe.empty)
+        select_builder.columns = qt.ColumnSet(self._universe.empty)
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
-        builder.joins.special["_ROWCOUNT"] = count_func
+        select_builder.joins.special["_ROWCOUNT"] = count_func
         # Render and run the query.
-        sql_select = builder.select(plan.postprocessing)
+        sql_select = select_builder.select(builder.postprocessing)
         with self.db.query(sql_select) as result:
             count = cast(int, result.scalar())
         if result_spec.limit is not None:
@@ -401,30 +401,30 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        plan = self.build_query(tree, qt.ColumnSet(tree.dimensions))
-        if not all(d.collection_records for d in plan.joins.datasets.values()):
+        builder = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        if not all(d.collection_records for d in builder.joins_analysis.datasets.values()):
             return False
         if not execute:
             if exact:
                 raise InvalidQueryError("Cannot obtain exact result for 'any' without executing.")
             return True
-        if plan.postprocessing and exact:
-            sql_select, _ = plan.finish_select(return_columns=False)
+        if builder.postprocessing and exact:
+            sql_select, _ = builder.finish_select(return_columns=False)
             with self.db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
-                for _ in plan.postprocessing.apply(result):
+                for _ in builder.postprocessing.apply(result):
                     return True
                 return False
-        sql_select, _ = plan.finish_select()
+        sql_select, _ = builder.finish_select()
         with self.db.query(sql_select.limit(1)) as result:
             return result.first() is not None
 
     def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
         plan = self.build_query(tree, qt.ColumnSet(tree.dimensions), analyze_only=True)
-        if plan.joins.messages or not execute:
-            return plan.joins.messages
+        if plan.joins_analysis.messages or not execute:
+            return plan.joins_analysis.messages
         # TODO: guess at ways to split up query that might fail or succeed if
         # run separately, execute them with LIMIT 1 and report the results.
         return []
@@ -443,6 +443,7 @@ class DirectQueryDriver(QueryDriver):
         self,
         tree: qt.QueryTree,
         final_columns: qt.ColumnSet,
+        *,
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | EllipsisType | None = None,
         analyze_only: bool = False,
@@ -485,54 +486,41 @@ class DirectQueryDriver(QueryDriver):
         projection_columns.restore_dimension_keys()
         for term in order_by:
             term.gather_required_columns(projection_columns)
-        # There are two kinds of query pbuilderlans: simple SELECTS and UNIONs
+        # There are two kinds of query builders: simple SELECTS and UNIONs
         # over dataset types.
         builder: QueryBuilder
         if tree.any_dataset is not None:
             builder = UnionQueryBuilder(
-                initial_select_builder=query_tree_analysis.initial_select_builder,
+                query_tree_analysis,
                 union_dataset_dimensions=tree.any_dataset.dimensions,
-                joins=query_tree_analysis.joins,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
-                postprocessing=query_tree_analysis.postprocessing,
-                union_terms=[
-                    # At this stage all of the union terms share the same
-                    # builder instance; we'll separate them later when we
-                    # actually start to do different things to them.
-                    UnionQueryBuilderTerm([], resolved_search)
-                    for resolved_search in query_tree_analysis.union_datasets
-                ],
             )
         else:
             builder = SingleSelectQueryBuilder(
-                joins=query_tree_analysis.joins,
+                tree_analysis=query_tree_analysis,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
-                postprocessing=query_tree_analysis.postprocessing,
-                select_builder=query_tree_analysis.initial_select_builder,
             )
-        # Finish setting up the projection part of the plan.
+        # Finish setting up the projection part of the builder.
         builder.analyze_projection()
         # The joins-stage query also needs to include all columns needed by the
         # downstream projection query.  Note that this:
         # - never adds new dimensions to the joins stage (since those are
         #   always a superset of the projection-stage dimensions);
         # - does not affect our previous determination of
-        #   plan.projection.needs_dataset_distinct, because any dataset fields
-        #   being added to the joins stage here are already in the projection.
-        builder.joins.columns.update(builder.projection_columns)
-        # Set up the find-first part of the plan.
+        #   needs_dataset_distinct, because any dataset fields being added to
+        #   the joins stage here are already in the projection.
+        builder.joins_analysis.columns.update(builder.projection_columns)
+        # Set up the find-first part of the builder.
         if find_first_dataset is not None:
             builder.analyze_find_first(find_first_dataset)
         # At this point, analysis is complete, and we can proceed to making
         # the select_builder(s) reflect that analysis.
         if not analyze_only:
-            self.apply_query_joins(builder)
+            builder.apply_joins(self)
             builder.apply_projection(self, order_by)
             builder.apply_find_first(self)
-            for select_builder in builder.iter_select_builders():
-                select_builder.columns = final_columns
         return builder
 
     def _analyze_query_tree(self, tree: qt.QueryTree) -> QueryTreeAnalysis:
@@ -643,6 +631,7 @@ class DirectQueryDriver(QueryDriver):
             return QueryTreeAnalysis(
                 joins, union_datasets=[], initial_select_builder=select_builder, postprocessing=postprocessing
             )
+        joins.union_dataset_dimensions = tree.any_dataset.dimensions
         # Gather the filtered collection search path for each union dataset
         # type.
         collections_by_dataset_type = defaultdict[str, list[str]](list)
@@ -678,18 +667,12 @@ class DirectQueryDriver(QueryDriver):
             postprocessing=postprocessing,
         )
 
-    def apply_query_joins(self, plan: QueryBuilder) -> None:
-        """Modify the builder inside a `QueryPlan` to include all tables and
-        other FROM and WHERE clause terms needed.
-
-        Parameters
-        ----------
-        plan : `QueryPlan`
-            `QueryPlan` to modify in-place.
-        """
+    def apply_initial_query_joins(
+        self, select_builder: SqlSelectBuilder, joins_analysis: QueryJoinsAnalysis
+    ) -> None:
         # Process data coordinate upload joins.
-        for upload_key, upload_dimensions in plan.joins.data_coordinate_uploads.items():
-            plan.select_builder.joins.join(
+        for upload_key, upload_dimensions in joins_analysis.data_coordinate_uploads.items():
+            select_builder.joins.join(
                 SqlJoinsBuilder(db=self.db, from_clause=self._upload_tables[upload_key]).extract_dimensions(
                     upload_dimensions.required
                 )
@@ -699,52 +682,52 @@ class DirectQueryDriver(QueryDriver):
         # can be dropped if they are only present to provide a constraint on
         # data IDs, since that's already embedded in a materialization.
         materialized_datasets: set[str] = set()
-        for materialization_key, materialization_dimensions in plan.joins.materializations.items():
+        for materialization_key, materialization_dimensions in joins_analysis.materializations.items():
             materialized_datasets.update(
                 self._join_materialization(
-                    plan.select_builder.joins, materialization_key, materialization_dimensions
+                    select_builder.joins, materialization_key, materialization_dimensions
                 )
             )
         # Process dataset joins (not including any union dataset).
-        for dataset_search in plan.joins.datasets.values():
+        for dataset_search in joins_analysis.datasets.values():
             self.join_dataset_search(
-                plan.select_builder.joins,
+                select_builder.joins,
                 dataset_search,
-                plan.joins.columns.dataset_fields[dataset_search.name],
+                joins_analysis.columns.dataset_fields[dataset_search.name],
             )
         # Join in dimension element tables that we know we need relationships
         # or columns from.
-        for element in plan.joins.iter_mandatory(plan.union_dataset_dimensions):
-            plan.select_builder.joins.join(
+        for element in joins_analysis.iter_mandatory(joins_analysis.union_dataset_dimensions):
+            select_builder.joins.join(
                 self.managers.dimensions.make_joins_builder(
-                    element, plan.joins.columns.dimension_fields[element.name]
+                    element, joins_analysis.columns.dimension_fields[element.name]
                 )
             )
-        # Join in the union datasets, if there are any.  For union dataset
-        # queries, this makes one copy of the builder for each dataset type,
-        # and hence from here on we have to repeat whatever we do to all
-        # builders.
-        plan.apply_union_dataset_joins(self)
-        for builder in plan.iter_select_builders():
-            # See if any dimension keys are still missing, and if so join in
-            # their tables. Note that we know there are no fields needed from
-            # these.
-            while not (builder.joins.dimension_keys.keys() >= plan.joins.columns.dimensions.names):
-                # Look for opportunities to join in multiple dimensions via
-                # single table, to reduce the total number of tables joined in.
-                missing_dimension_names = (
-                    plan.joins.columns.dimensions.names - builder.joins.dimension_keys.keys()
+
+    def apply_missing_dimension_joins(
+        self, select_builder: SqlSelectBuilder, joins_analysis: QueryJoinsAnalysis
+    ) -> None:
+        # See if any dimension keys are still missing, and if so join in
+        # their tables. Note that we know there are no fields needed from
+        # these.
+        while not (select_builder.joins.dimension_keys.keys() >= joins_analysis.columns.dimensions.names):
+            # Look for opportunities to join in multiple dimensions via
+            # single table, to reduce the total number of tables joined in.
+            missing_dimension_names = (
+                joins_analysis.columns.dimensions.names - select_builder.joins.dimension_keys.keys()
+            )
+            best = self._universe[
+                max(
+                    missing_dimension_names,
+                    key=lambda name: len(self._universe[name].dimensions.names & missing_dimension_names),
                 )
-                best = self._universe[
-                    max(
-                        missing_dimension_names,
-                        key=lambda name: len(self._universe[name].dimensions.names & missing_dimension_names),
-                    )
-                ]
-                to_join = self.managers.dimensions.make_joins_builder(best, frozenset())
-                builder.joins.join(to_join)
-            # Add the WHERE clause to the builder.
-            builder.joins.where(plan.joins.predicate.visit(SqlColumnVisitor(builder.joins, self)))
+            ]
+            to_join = self.managers.dimensions.make_joins_builder(best, frozenset())
+            select_builder.joins.join(to_join)
+        # Add the WHERE clause to the builder.
+        select_builder.joins.where(
+            joins_analysis.predicate.visit(SqlColumnVisitor(select_builder.joins, self))
+        )
 
     def apply_query_projection(
         self,

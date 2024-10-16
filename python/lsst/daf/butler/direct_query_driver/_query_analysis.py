@@ -86,11 +86,7 @@ class ResolvedDatasetSearch(Generic[_T]):
 
 @dataclasses.dataclass
 class QueryJoinsAnalysis:
-    """A struct describing the "joins" section of a butler query.
-
-    See `DirectQueryBuilderBase` and `DirectQueryBuilderBase.joins` for
-    additional information.
-    """
+    """A struct describing the "joins" section of a butler query."""
 
     predicate: qt.Predicate
     """Boolean expression to apply to rows."""
@@ -112,6 +108,8 @@ class QueryJoinsAnalysis:
         default_factory=dict
     )
     """Data coordinate uploads to join into the query."""
+
+    union_dataset_dimensions: DimensionGroup | None = None
 
     messages: list[str] = dataclasses.field(default_factory=list)
     """Diagnostic messages that report reasons the query may not return any

@@ -35,7 +35,8 @@ __all__ = (
 )
 
 import dataclasses
-from collections.abc import Iterable, Iterator, Set
+from abc import ABC, abstractmethod
+from collections.abc import Iterable, Set
 from types import EllipsisType
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, overload
 
@@ -44,7 +45,12 @@ import sqlalchemy
 from ..dimensions import DimensionGroup
 from ..queries import tree as qt
 from ..registry.interfaces import Database
-from ._query_analysis import QueryFindFirstAnalysis, QueryJoinsAnalysis, ResolvedDatasetSearch
+from ._query_analysis import (
+    QueryFindFirstAnalysis,
+    QueryJoinsAnalysis,
+    QueryTreeAnalysis,
+    ResolvedDatasetSearch,
+)
 from ._sql_builders import SqlColumns, SqlJoinsBuilder, SqlSelectBuilder
 
 if TYPE_CHECKING:
@@ -54,8 +60,7 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-@dataclasses.dataclass(kw_only=True)
-class QueryBuilderBase:
+class QueryBuilderBase(ABC):
     """A struct that aggregates information about a complete butler query.
 
     Notes
@@ -97,7 +102,21 @@ class QueryBuilderBase:
     plan can in turn yield mutiple SELECTs in the final UNION or UNION ALL.
     """
 
-    joins: QueryJoinsAnalysis
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+    ):
+        self.joins_analysis = tree_analysis.joins
+        self.postprocessing = tree_analysis.postprocessing
+        self.projection_columns = projection_columns
+        self.final_columns = final_columns
+        self.needs_dimension_distinct = False
+        self.find_first_dataset = None
+
+    joins_analysis: QueryJoinsAnalysis
     """Description of the "joins" stage of query construction."""
 
     projection_columns: qt.ColumnSet
@@ -136,22 +155,65 @@ class QueryBuilderBase:
     additional columns in the query results.
     """
 
+    @abstractmethod
     def analyze_projection(self) -> None:
         # The projection gets interesting if it does not have all of the
         # dimension keys or dataset fields of the "joins" stage, because that
         # means it needs to do a GROUP BY or DISTINCT ON to get unique rows.
         # Subclass implementations handle the check for dataset fields.
-        if self.projection_columns.dimensions != self.joins.columns.dimensions:
-            assert self.projection_columns.dimensions.issubset(self.joins.columns.dimensions)
+        if self.projection_columns.dimensions != self.joins_analysis.columns.dimensions:
+            assert self.projection_columns.dimensions.issubset(self.joins_analysis.columns.dimensions)
             # We're going from a larger set of dimensions to a smaller set;
             # that means we'll be doing a SELECT DISTINCT [ON] or GROUP BY.
             self.needs_dimension_distinct = True
 
+    @abstractmethod
+    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+        raise NotImplementedError()
 
-@dataclasses.dataclass
+    @abstractmethod
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
+        raise NotImplementedError()
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[True] = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns]: ...
+
+    @overload
+    def finish_select(
+        self, return_columns: Literal[False]
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, None]: ...
+
+    @abstractmethod
+    def finish_select(
+        self, return_columns: bool = True
+    ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
+        raise NotImplementedError()
+
+
 class SingleSelectQueryBuilder(QueryBuilderBase):
 
-    select_builder: SqlSelectBuilder
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+    ) -> None:
+        super().__init__(
+            tree_analysis=tree_analysis,
+            projection_columns=projection_columns,
+            final_columns=final_columns,
+        )
+        assert not tree_analysis.union_datasets, "UnionQueryPlan should be used instead."
+        self._select_builder = tree_analysis.initial_select_builder
+        self.find_first = None
+        self.needs_dataset_distinct = False
 
     needs_dataset_distinct: bool = False
     """If `True`, the projection columns do not include collection-specific
@@ -170,21 +232,18 @@ class SingleSelectQueryBuilder(QueryBuilderBase):
 
     union_dataset_dimensions: ClassVar[None] = None
 
-    def iter_select_builders(self) -> Iterator[SqlSelectBuilder]:
-        yield self.select_builder
-
     def analyze_projection(self) -> None:
         super().analyze_projection()
         # See if we need to do a DISTINCT [ON] or GROUP BY to get unique rows
         # because we have rows for datasets in multiple collections with the
         # same data ID and dataset type.
-        for dataset_type in self.joins.columns.dataset_fields:
+        for dataset_type in self.joins_analysis.columns.dataset_fields:
             assert dataset_type is not ..., "Union dataset in non-dataset-union query."
             if not self.projection_columns.dataset_fields[dataset_type]:
                 # The "joins"-stage query has one row for each collection for
                 # each data ID, but the projection-stage query just wants
                 # one row for each data ID.
-                if len(self.joins.datasets[dataset_type].collection_records) > 1:
+                if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                     self.needs_dataset_distinct = True
                     break
         # If there are any dataset fields being propagated through the
@@ -193,12 +252,12 @@ class SingleSelectQueryBuilder(QueryBuilderBase):
         # or GROUP BY columns.
         for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
             assert dataset_type is not ..., "Union dataset in non-dataset-union query."
-            if len(self.joins.datasets[dataset_type].collection_records) > 1:
+            if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                 fields_for_dataset.add("collection_key")
 
     def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
         assert find_first_dataset is not ..., "No dataset union in this query"
-        self.find_first = QueryFindFirstAnalysis(self.joins.datasets[find_first_dataset])
+        self.find_first = QueryFindFirstAnalysis(self.joins_analysis.datasets[find_first_dataset])
         # If we're doing a find-first search and there's a calibration
         # collection in play, we need to make sure the rows coming out of
         # the base query have only one timespan for each data ID +
@@ -207,14 +266,15 @@ class SingleSelectQueryBuilder(QueryBuilderBase):
         if self.find_first.search.is_calibration_search:
             self.postprocessing.check_validity_match_count = True
 
-    def apply_union_dataset_joins(self, driver: DirectQueryDriver) -> None:
-        pass
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
+        driver.apply_initial_query_joins(self._select_builder, self.joins_analysis)
+        driver.apply_missing_dimension_joins(self._select_builder, self.joins_analysis)
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         driver.apply_query_projection(
-            self.select_builder,
+            self._select_builder,
             self.postprocessing,
-            join_datasets=self.joins.datasets,
+            join_datasets=self.joins_analysis.datasets,
             union_datasets=None,
             projection_columns=self.projection_columns,
             needs_dimension_distinct=self.needs_dimension_distinct,
@@ -227,15 +287,22 @@ class SingleSelectQueryBuilder(QueryBuilderBase):
     def apply_find_first(self, driver: DirectQueryDriver) -> None:
         if not self.find_first:
             return
-        self.select_builder = driver.apply_query_find_first(
-            self.select_builder, self.postprocessing, self.find_first
+        self._select_builder = driver.apply_query_find_first(
+            self._select_builder, self.postprocessing, self.find_first
         )
 
-    def finish_select(self, return_columns: bool = True) -> tuple[sqlalchemy.Select, SqlColumns]:
-        return self.select_builder.select(self.postprocessing), self.select_builder.joins
+    # The overloads in the base class seem to keep MyPy from recognizing the
+    # return type as covariant.
+    def finish_select(  # type: ignore
+        self,
+        return_columns: bool = True,
+    ) -> tuple[sqlalchemy.Select, SqlColumns]:
+        self._select_builder.columns = self.final_columns
+        return self._select_builder.select(self.postprocessing), self._select_builder.joins
 
     def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
-        return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
+        self._select_builder.columns = self.final_columns
+        return self._select_builder.nested(cte=cte, postprocessing=self.postprocessing)
 
 
 @dataclasses.dataclass
@@ -286,32 +353,33 @@ class UnionQueryBuilderTerm:
     """
 
 
-@dataclasses.dataclass
 class UnionQueryBuilder(QueryBuilderBase):
+
+    def __init__(
+        self,
+        tree_analysis: QueryTreeAnalysis,
+        *,
+        projection_columns: qt.ColumnSet,
+        final_columns: qt.ColumnSet,
+        union_dataset_dimensions: DimensionGroup,
+    ):
+        super().__init__(
+            tree_analysis=tree_analysis,
+            projection_columns=projection_columns,
+            final_columns=final_columns,
+        )
+        self.initial_select_builder = tree_analysis.initial_select_builder
+        self.union_dataset_dimensions = union_dataset_dimensions
+        self.union_terms = [
+            UnionQueryBuilderTerm(select_builders=[], datasets=datasets)
+            for datasets in tree_analysis.union_datasets
+        ]
 
     initial_select_builder: SqlSelectBuilder | None
 
     union_dataset_dimensions: DimensionGroup
 
     union_terms: list[UnionQueryBuilderTerm]
-
-    @property
-    def select_builder(self) -> SqlSelectBuilder:
-        """Return the `SqlSelectBuilder` that is common to all union terms.
-
-        This property may not be accessed unless `has_one_builder` is `True`.
-        """
-        if self.initial_select_builder is not None and not self.union_terms:
-            return self.initial_select_builder
-        elif len(self.union_terms) == 1 and len(self.union_terms[0].select_builders) == 1:
-            return self.union_terms[0].select_builders[0]
-        raise AssertionError("QueryPlan does not have a single builder.")
-
-    @property
-    def has_one_select(self) -> int:
-        return (self.initial_select_builder is not None and not self.union_terms) or (
-            len(self.union_terms) == 1 and len(self.union_terms[0].select_builders) == 1
-        )
 
     @property
     def db(self) -> Database:
@@ -327,25 +395,18 @@ class UnionQueryBuilder(QueryBuilderBase):
         else:
             return self.union_terms[0].select_builders[0].joins.special.keys()
 
-    def iter_select_builders(self) -> Iterator[SqlSelectBuilder]:
-        if self.initial_select_builder is not None:
-            yield self.initial_select_builder
-        else:
-            for union_term in self.union_terms:
-                yield from union_term.select_builders
-
     def analyze_projection(self) -> None:
         super().analyze_projection()
         # See if we need to do a DISTINCT [ON] or GROUP BY to get unique rows
         # because we have rows for datasets in multiple collections with the
         # same data ID and dataset type.
-        for dataset_type in self.joins.columns.dataset_fields:
+        for dataset_type in self.joins_analysis.columns.dataset_fields:
             if not self.projection_columns.dataset_fields[dataset_type]:
                 if dataset_type is ...:
                     for union_term in self.union_terms:
                         if len(union_term.datasets.collection_records) > 1:
                             union_term.needs_dataset_distinct = True
-                elif len(self.joins.datasets[dataset_type].collection_records) > 1:
+                elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                     # If a dataset being joined into all union terms has
                     # multiple collections, need_dataset_distinct is true
                     # for all union terms and we can exit the loop early.
@@ -365,7 +426,7 @@ class UnionQueryBuilder(QueryBuilderBase):
                     if len(union_term.datasets.collection_records) > 1:
                         fields_for_dataset.add("collection_key")
                         break
-            elif len(self.joins.datasets[dataset_type].collection_records) > 1:
+            elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                 fields_for_dataset.add("collection_key")
 
     def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
@@ -394,19 +455,26 @@ class UnionQueryBuilder(QueryBuilderBase):
                 "union dataset query as a constraint in data IDs, not as a find-first result."
             )
 
-    def apply_union_dataset_joins(self, driver: DirectQueryDriver) -> None:
+    def apply_joins(self, driver: DirectQueryDriver) -> None:
         assert self.initial_select_builder is not None
+        driver.apply_initial_query_joins(self.initial_select_builder, self.joins_analysis)
+        # Join in the union datasets. This makes one copy of the initial
+        # select builder for each dataset type, and hence from here on we have
+        # to repeat whatever we do to all select builders.
         for union_term in self.union_terms:
             for dataset_type_name in union_term.datasets.name:
-                builder = self.initial_select_builder.copy()
+                select_builder = self.initial_select_builder.copy()
                 driver.join_dataset_search(
-                    builder.joins,
+                    select_builder.joins,
                     union_term.datasets,
-                    self.joins.columns.dataset_fields[...],
+                    self.joins_analysis.columns.dataset_fields[...],
                     union_dataset_type_name=dataset_type_name,
                 )
-                union_term.select_builders.append(builder)
+                union_term.select_builders.append(select_builder)
         self.initial_select_builder = None
+        for union_term in self.union_terms:
+            for select_builder in union_term.select_builders:
+                driver.apply_missing_dimension_joins(select_builder, self.joins_analysis)
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         for union_term in self.union_terms:
@@ -414,7 +482,7 @@ class UnionQueryBuilder(QueryBuilderBase):
                 driver.apply_query_projection(
                     builder,
                     self.postprocessing,
-                    join_datasets=self.joins.datasets,
+                    join_datasets=self.joins_analysis.datasets,
                     union_datasets=union_term.datasets,
                     projection_columns=self.projection_columns,
                     needs_dimension_distinct=self.needs_dimension_distinct,
@@ -446,10 +514,14 @@ class UnionQueryBuilder(QueryBuilderBase):
     def finish_select(
         self, return_columns: bool = True
     ) -> tuple[sqlalchemy.CompoundSelect | sqlalchemy.Select, SqlColumns | None]:
-        if self.has_one_select:
-            return self.select_builder.select(self.postprocessing), self.select_builder.joins
-        terms = [builder.select(self.postprocessing) for builder in self.iter_select_builders()]
-        sql = sqlalchemy.union_all(*terms)
+        terms: list[sqlalchemy.Select] = []
+        for union_term in self.union_terms:
+            for select_builder in union_term.select_builders:
+                select_builder.columns = self.final_columns
+                terms.append(select_builder.select(self.postprocessing))
+        sql: sqlalchemy.Select | sqlalchemy.CompoundSelect = (
+            sqlalchemy.union_all(*terms) if len(terms) > 1 else terms[0]
+        )
         columns: SqlColumns | None = None
         if return_columns:
             columns = SqlColumns(
@@ -464,8 +536,6 @@ class UnionQueryBuilder(QueryBuilderBase):
         return sql, columns
 
     def finish_nested(self, cte: bool = False) -> SqlSelectBuilder:
-        if self.has_one_select:
-            return self.select_builder.nested(cte=cte, postprocessing=self.postprocessing)
         sql_select, _ = self.finish_select(return_columns=False)
         from_clause = sql_select.cte() if cte else sql_select.subquery()
         joins_builder = SqlJoinsBuilder(
