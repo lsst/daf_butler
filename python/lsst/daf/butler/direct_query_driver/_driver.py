@@ -594,6 +594,7 @@ class DirectQueryDriver(QueryDriver):
         predicate = predicate_constraints.predicate
         # Initialize the plan we're return at the end of the method.
         joins = QueryJoinsAnalysis(predicate=predicate, columns=select_builder.columns)
+        joins.messages.extend(predicate_constraints.messages)
         # Add columns required by postprocessing.
         postprocessing.gather_columns_required(joins.columns)
         # Add materializations, which can also bring in more postprocessing.
