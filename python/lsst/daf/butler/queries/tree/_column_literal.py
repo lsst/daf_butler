@@ -34,6 +34,7 @@ __all__ = (
 )
 
 import datetime
+import numbers
 import uuid
 import warnings
 from base64 import b64decode, b64encode
@@ -400,6 +401,9 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
             dec = icrs.dec.degree
             lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra, dec)
             return _make_region_literal_from_lonlat(lon_lat)
+        case numbers.Integral():
+            # numpy.int64 and other integer-like values.
+            return IntColumnLiteral.from_value(int(value))
 
     raise TypeError(f"Invalid type {type(value).__name__!r} of value {value!r} for column literal.")
 

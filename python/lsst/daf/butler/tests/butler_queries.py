@@ -40,6 +40,7 @@ from uuid import UUID
 import astropy.coordinates
 import astropy.time
 from lsst.sphgeom import LonLat, Region
+from numpy import int64
 
 from .._butler import Butler
 from .._collection_type import CollectionType
@@ -1963,6 +1964,30 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         result = butler.query_dimension_records("physical_filter", where="instrument IN ('Cam2')")
         names = [x.name for x in result]
         self.assertCountEqual(names, ["Cam2-G"])
+
+    def test_unusual_column_literals(self) -> None:
+        butler = self.make_butler("base.yaml")
+
+        # Users frequently use numpy integer types as literals in queries.
+        result = butler.query_dimension_records(
+            "detector", data_id={"instrument": "Cam1", "detector": int64(1)}
+        )
+        names = [x.full_name for x in result]
+        self.assertEqual(names, ["Aa"])
+
+        result = butler.query_dimension_records(
+            "detector", where="instrument='Cam1' and detector=an_integer", bind={"an_integer": int64(2)}
+        )
+        names = [x.full_name for x in result]
+        self.assertEqual(names, ["Ab"])
+
+        with butler.query() as query:
+            x = query.expression_factory
+            result = list(
+                query.dimension_records("detector").where(x.instrument == "Cam1", x.detector == int64(3))
+            )
+            names = [x.full_name for x in result]
+            self.assertEqual(names, ["Ba"])
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
