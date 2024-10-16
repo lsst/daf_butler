@@ -35,6 +35,5 @@ from ._predicate import LogicalNot
 from ._query_tree import *
 
 LogicalNot.model_rebuild()
-del LogicalNot
 
 Predicate.model_rebuild()

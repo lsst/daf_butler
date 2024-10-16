@@ -104,6 +104,17 @@ Python API reference
    :no-inherited-members:
    :skip: RegistryConfig
 
+Advanced query system
+---------------------
+
+.. automodapi:: lsst.daf.butler.queries
+   :headings: ^"
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.queries.expression_factory
+   :headings: ^"
+   :no-main-docstr:
+
 Example datastores
 ------------------
 
@@ -172,6 +183,17 @@ Datastore utilities
    :no-inherited-members:
    :headings: ^"
    :skip: Datastore
+
+Advanced query system internals
+-------------------------------
+
+.. automodapi:: lsst.daf.butler.queries.tree
+   :no-main-docstr:
+   :no-inherited-members:
+   :headings: ^"
+   :include: Predicate
+   :skip: DataCoordinateUploadKey
+   :skip: MaterializationKey
 
 Registry utilities and interfaces
 ---------------------------------
