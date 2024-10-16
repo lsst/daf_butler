@@ -244,6 +244,8 @@ class TestQueryRelationsTests(unittest.TestCase):
         # could special-case skypix dimensions that are coarser than the common
         # dimension and part of the same system to simplify both the SQL query
         # and avoid post-query filtering, but we don't at present.
+        with self.assertWarns(FutureWarning):
+            relation_string = self.butler.registry.queryDataIds(["patch"], htm11=self.htm11)
         self.assert_relation_str(
             f"""
             Π[patch, skymap, tract](
@@ -265,7 +267,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.butler.registry.queryDataIds(["patch"], htm11=self.htm11),
+            relation_string,
         )
         # Constrain a regular spatial dimension (patch) from the common
         # skypix dimension.  This does not require post-query filtering.
@@ -286,6 +288,10 @@ class TestQueryRelationsTests(unittest.TestCase):
         # and also constrain via a skypix dimension other than the common one.
         # Once again we could special-case this for skypix dimensions that are
         # coarser than the common dimension in the same syste, but we don't.
+        with self.assertWarns(FutureWarning):
+            relation_string = self.butler.registry.queryDataIds(
+                ["detector"], visit=self.visit, instrument=self.instrument, htm11=self.htm11
+            )
         self.assert_relation_str(
             # This query also doesn't need visit or physical_filter joined in,
             # but we can live with that.
@@ -319,9 +325,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                 )
             )
             """,
-            self.butler.registry.queryDataIds(
-                ["detector"], visit=self.visit, instrument=self.instrument, htm11=self.htm11
-            ),
+            relation_string,
         )
         # Constrain a regular dimension (detector) via a different dimension
         # (visit) that combine together to define a more fine-grained region,

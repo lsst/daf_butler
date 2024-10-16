@@ -34,6 +34,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, overload
 
+from deprecated.sphinx import deprecated
 from pydantic import BaseModel
 
 from ._collection_type import CollectionType
@@ -83,9 +84,21 @@ class ButlerCollections(ABC, Sequence):
     @overload
     def __getitem__(self, index: slice) -> Sequence[str]: ...
 
+    @deprecated(
+        "‘Butler.collections’ should no longer be used to get the list of default collections."
+        " Use ‘Butler.collections.default’ instead. Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def __getitem__(self, index: int | slice) -> str | Sequence[str]:
         return self.defaults[index]
 
+    @deprecated(
+        "‘Butler.collections’ should no longer be used to get the list of default collections."
+        " Use ‘Butler.collections.default’ instead. Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def __len__(self) -> int:
         return len(self.defaults)
 

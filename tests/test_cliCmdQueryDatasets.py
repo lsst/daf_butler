@@ -174,7 +174,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             self.repoDir, configFile=os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
         )
 
-        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
         # Want second datastore root since in-memory is ephemeral and
         # all the relevant datasets are stored in the second as well as third
@@ -192,7 +192,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test for expected output with show_uri=True."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
         roots = testRepo.butler.get_datastore_roots()
         datastore_root = list(roots.values())[0]
@@ -209,7 +209,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             storageClassName="StructuredCompositeReadCompNoDisassembly",
         )
 
-        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
         roots = testRepo.butler.get_datastore_roots()
         datastore_root = list(roots.values())[0]
@@ -252,7 +252,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test for expected output without show_uri (default is False)."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=testRepo.butler)
+        tables = self._queryDatasets(repo=testRepo.butler, collections="*", glob="*")
 
         expectedTables = (
             AstropyTable(
@@ -274,7 +274,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(repo=testRepo.butler, where="instrument='DummyCamComp' AND visit=423")
+        tables = self._queryDatasets(
+            repo=testRepo.butler, where="instrument='DummyCamComp' AND visit=423", collections="*", glob="*"
+        )
 
         expectedTables = (
             AstropyTable(
@@ -286,7 +288,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertRaises(RuntimeError):
-            self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True)
+            self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True, glob="*")
 
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
@@ -311,7 +313,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, datasetType=datasetType)
 
         # verify the new dataset type increases the number of tables found:
-        tables = self._queryDatasets(repo=testRepo.butler)
+        tables = self._queryDatasets(repo=testRepo.butler, collections="*", glob="*")
 
         expectedTables = (
             AstropyTable(
@@ -331,13 +333,19 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
+        # Dataset type (glob) argument will become mandatory soon
+        with self.assertWarns(FutureWarning):
+            self._queryDatasets(repo=testRepo.butler, collections="*")
+
     def test_limit_order(self):
         """Test limit and ordering."""
         # Create and register an additional DatasetType
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
-            tables = self._queryDatasets(repo=testRepo.butler, limit=-1, order_by=("visit"))
+            tables = self._queryDatasets(
+                repo=testRepo.butler, limit=-1, order_by=("visit"), collections="*", glob="*"
+            )
 
         self.assertIn("increase this limit", cm.output[0])
 
@@ -350,7 +358,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
-            tables = self._queryDatasets(repo=testRepo.butler, limit=-1, order_by=("-visit"))
+            tables = self._queryDatasets(
+                repo=testRepo.butler, limit=-1, order_by=("-visit"), collections="*", glob="*"
+            )
         self.assertIn("increase this limit", cm.output[0])
 
         expectedTables = [
@@ -376,7 +386,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo.butler.collections.redefine_chain("chain", ["foo", "ingest/run"])
 
         # Verify that without find-first, duplicate datasets are returned
-        tables = self._queryDatasets(repo=testRepo.butler, collections=["chain"], show_uri=True)
+        tables = self._queryDatasets(repo=testRepo.butler, collections=["chain"], show_uri=True, glob="*")
 
         # The test should be running with a single FileDatastore.
         roots = testRepo.butler.get_datastore_roots()
@@ -519,7 +529,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
         tables = self._queryDatasets(
-            repo=testRepo.butler, collections=["chain"], show_uri=True, find_first=True
+            repo=testRepo.butler, collections=["chain"], show_uri=True, find_first=True, glob="*"
         )
 
         expectedTables = (
@@ -621,7 +631,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         # Verify that globs are not supported with find_first=True.
         with self.assertRaises(RuntimeError):
-            self._queryDatasets(repo=testRepo.butler, collections=["*"], show_uri=True, find_first=True)
+            self._queryDatasets(
+                repo=testRepo.butler, collections=["*"], show_uri=True, find_first=True, glob="*"
+            )
+
+        # Collections argument will become mandatory soon
+        with self.assertWarns(FutureWarning):
+            self._queryDatasets(repo=testRepo.butler, glob="*")
 
 
 if __name__ == "__main__":

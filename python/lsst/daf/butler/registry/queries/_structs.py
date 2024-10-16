@@ -29,6 +29,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 import dataclasses
+import warnings
 from collections.abc import Iterable, Mapping, Set
 from typing import Any
 
@@ -393,6 +394,16 @@ class QuerySummary:
         self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
         self.columns_required, self.dimensions, self.region = self._compute_columns_required()
+        for dimension in self.where.data_id.dimensions.names:
+            if (
+                dimension.startswith("htm") or dimension.startswith("healpix")
+            ) and not dimension == self.universe.commonSkyPix.name:
+                warnings.warn(
+                    f"Dimension '{dimension}' should no longer be used in data IDs."
+                    " Use the region 'OVERLAPS' operator in the where clause instead."
+                    " Will be removed after v28.",
+                    FutureWarning,
+                )
 
     requested: DimensionGroup
     """Dimensions whose primary keys should be included in the result rows of

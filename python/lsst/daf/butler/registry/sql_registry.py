@@ -1789,6 +1789,12 @@ class SqlRegistry:
         # Right now the datasetTypes argument is completely ignored, but that
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
+        if datasetType is not None:
+            warnings.warn(
+                "The datasetType parameter should no longer be used. It has"
+                " never had any effect. Will be removed after v28",
+                FutureWarning,
+            )
         try:
             wildcard = CollectionWildcard.from_expression(expression)
         except TypeError as exc:
@@ -2421,7 +2427,7 @@ class SqlRegistry:
         if isinstance(datasetType, str):
             datasetType = self.getDatasetType(datasetType)
         resolved_collections = self.queryCollections(
-            collections, datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
+            collections, collectionTypes=collectionTypes, flattenChains=flattenChains
         )
         with self._query() as query:
             query = query.join_dataset_search(datasetType, resolved_collections)

@@ -39,10 +39,14 @@ __all__ = (
 )
 
 import itertools
+import warnings
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
+from types import EllipsisType
 from typing import Any, Self
+
+from deprecated.sphinx import deprecated
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
@@ -527,8 +531,14 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
-        if offset is None:
+    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
+        if offset is not ...:
+            warnings.warn(
+                "'offset' parameter should no longer be used. It is not supported by the new query system."
+                " Will be removed after v28.",
+                FutureWarning,
+            )
+        if offset is None or offset is ...:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
         return self
@@ -665,6 +675,11 @@ class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
         yield self
 
     @contextmanager
+    @deprecated(
+        "This method should no longer be used. Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
@@ -817,9 +832,15 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
+    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
         # Docstring inherited from base class.
-        if offset is None:
+        if offset is not ...:
+            warnings.warn(
+                "'offset' parameter should no longer be used. It is not supported by the new query system."
+                " Will be removed after v28.",
+                FutureWarning,
+            )
+        if offset is None or offset is ...:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
         return self

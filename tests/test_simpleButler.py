@@ -725,17 +725,20 @@ class SimpleButlerTests(TestCaseMixin):
             ("*oll*", {"collection", "coll3"}),
             ("*[0-9]", {"coll3"}),
         ]
-        if self.supportsCollectionRegex:
-            expressions.extend(
-                [
-                    (re.compile("u.*"), {"u/user/test"}),
-                    (re.compile(".*oll.*"), {"collection", "coll3"}),
-                    ((re.compile(r".*\d$"), "u/user/test"), {"coll3", "u/user/test"}),
-                ]
-            )
         for expression, expected in expressions:
             result = butler.registry.queryCollections(expression)
             self.assertEqual(set(result), expected)
+
+        if self.supportsCollectionRegex:
+            expressions = [
+                (re.compile("u.*"), {"u/user/test"}),
+                (re.compile(".*oll.*"), {"collection", "coll3"}),
+                ((re.compile(r".*\d$"), "u/user/test"), {"coll3", "u/user/test"}),
+            ]
+            for expression, expected in expressions:
+                with self.assertWarns(FutureWarning):
+                    result = butler.registry.queryCollections(expression)
+                    self.assertEqual(set(result), expected)
 
     def test_skypix_templates(self):
         """Test that skypix templates can work."""

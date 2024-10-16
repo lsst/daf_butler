@@ -472,7 +472,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 )
                 self.assertEqual(count, stop)
 
-            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections)
+            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections.defaults)
             assert compRef is not None
             summary = butler.get(compRef)
             self.assertEqual(summary, metric.summary)
@@ -1235,7 +1235,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.find_dataset(datasetType, dataId, collections=butler.collections))
+        self.assertIsNone(butler.find_dataset(datasetType, dataId, collections=butler.collections.defaults))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
             butler.get(ref)

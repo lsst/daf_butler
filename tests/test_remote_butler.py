@@ -150,6 +150,7 @@ class RemoteButlerRegistryTests(RegistryTests):
     supportsDetailedQueryExplain = False
     supportsQueryOffset = False
     supportsQueryGovernorValidation = False
+    supportsNonCommonSkypixQueries = False
 
     # Jim decided to drop these expressions from the new query system -- they
     # can be written less ambiguously by writing e.g. ``time <
