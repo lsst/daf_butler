@@ -54,6 +54,7 @@ def retrieveArtifacts(
     transfer: str,
     preserve_path: bool,
     clobber: bool,
+    zip: bool,
 ) -> list[ResourcePath]:
     """Parameters are those required for querying datasets plus a destination
     URI.
@@ -89,11 +90,14 @@ def retrieveArtifacts(
         destination directory, else only the filename will be used.
     clobber : `bool`
         If `True` allow transfers to overwrite files at the destination.
+    zip : `bool`
+        If `True` retrieve the datasets and place in a zip file.
 
     Returns
     -------
     transferred : `list` of `lsst.resources.ResourcePath`
-        The destination URIs of every transferred artifact.
+        The destination URIs of every transferred artifact or a list with a
+        single entry of the name of the zip file.
     """
     query_types = dataset_type or "*"
     query_collections: tuple[str, ...] = collections or ("*",)
@@ -114,8 +118,15 @@ def retrieveArtifacts(
     )
     refs = list(itertools.chain(*query.getDatasets()))
     log.info("Number of datasets matching query: %d", len(refs))
+    if not refs:
+        return []
 
-    transferred = butler.retrieveArtifacts(
-        refs, destination=destination, transfer=transfer, preserve_path=preserve_path, overwrite=clobber
-    )
+    if not zip:
+        transferred = butler.retrieveArtifacts(
+            refs, destination=destination, transfer=transfer, preserve_path=preserve_path, overwrite=clobber
+        )
+    else:
+        zip_file = butler.retrieve_artifacts_zip(refs, destination=destination)
+        transferred = [zip_file]
+
     return transferred

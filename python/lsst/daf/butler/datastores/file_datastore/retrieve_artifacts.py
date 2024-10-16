@@ -239,6 +239,10 @@ def retrieve_and_zip(
     outdir = ResourcePath(destination, forceDirectory=True)
     if not outdir.isdir():
         raise ValueError(f"Destination location must refer to a directory. Given {destination}")
+
+    if not outdir.exists():
+        outdir.mkdir()
+
     # Simplest approach:
     # - create temp dir in destination
     # - Run retrieveArtifacts to that temp dir

@@ -602,17 +602,26 @@ def query_dimension_records(**kwargs: Any) -> None:
     default=False,
     help="If clobber, overwrite files if they exist locally.",
 )
+@click.option(
+    "--zip/--no-zip",
+    is_flag=True,
+    default=False,
+    help="Retrieve artifacts and place in a Zip file.",
+)
 @options_file_option()
 def retrieve_artifacts(**kwargs: Any) -> None:
     """Retrieve file artifacts associated with datasets in a repository."""
     verbose = kwargs.pop("verbose")
     transferred = script.retrieveArtifacts(**kwargs)
-    if verbose and transferred:
-        print(f"Transferred the following to {kwargs['destination']}:")
-        for uri in transferred:
-            print(uri)
-        print()
-    print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")
+    if kwargs["zip"] and transferred:
+        print(f"Zip files written to {transferred[0]}")
+    else:
+        if verbose and transferred:
+            print(f"Transferred the following to {kwargs['destination']}:")
+            for uri in transferred:
+                print(uri)
+            print()
+        print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")
 
 
 @click.command(cls=ButlerCommand)
