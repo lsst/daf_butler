@@ -97,6 +97,26 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             artifacts = self.find_files(destdir)
             self.assertEqual(len(artifacts), 4, f"Expected 4 artifacts including index: {artifacts}")
 
+    def testRetrieveAsZip(self):
+        runner = LogCliRunner()
+        with runner.isolated_filesystem():
+            destdir = "tmp1/"
+            result = runner.invoke(
+                cli,
+                [
+                    "retrieve-artifacts",
+                    self.root,
+                    destdir,
+                    "--where",
+                    "instrument='DummyCamComp' AND visit=423",
+                    "--zip",
+                ],
+            )
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn("a90bbdc0-6c95-5352-b25b-d8ccf5b08adc.zip", result.stdout)
+            artifacts = self.find_files(destdir)
+            self.assertEqual(len(artifacts), 1, f"Expected one zip file: {artifacts}")
+
     def testOverwriteLink(self):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
