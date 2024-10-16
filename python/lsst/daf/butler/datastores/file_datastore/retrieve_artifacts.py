@@ -313,6 +313,19 @@ class ZipIndex(BaseModel):
             info_map=simplified_info_map,
         )
 
+    @classmethod
+    def from_zip_file(cls, zip_path: ResourcePath) -> Self:
+        """Given a path to a Zip file return the index.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        """
+        with zip_path.open("rb") as fd, zipfile.ZipFile(fd) as zf:
+            json_data = zf.read(cls.index_name)
+        return cls.model_validate_json(json_data)
+
 
 def determine_destination_for_retrieved_artifact(
     destination_directory: ResourcePath, source_path: ResourcePath, preserve_path: bool
