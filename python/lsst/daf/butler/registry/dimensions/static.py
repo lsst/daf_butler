@@ -324,9 +324,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 mapping = row._mapping
             return element.RecordClass(**mapping)
 
-    def save_dimension_group(self, graph: DimensionGroup) -> int:
+    def save_dimension_group(self, group: DimensionGroup) -> int:
         # Docstring inherited from DimensionRecordStorageManager.
-        return self._dimension_group_storage.save(graph)
+        return self._dimension_group_storage.save(group)
 
     def load_dimension_group(self, key: int) -> DimensionGroup:
         # Docstring inherited from DimensionRecordStorageManager.
