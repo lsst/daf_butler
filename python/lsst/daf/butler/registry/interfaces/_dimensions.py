@@ -238,6 +238,9 @@ class DimensionRecordStorageManager(VersionedExtension):
         """Save a `DimensionGroup` definition to the database, allowing it to
         be retrieved later via the returned key.
 
+        If this dimension group has already been saved, this method just
+        returns the key already associated with it.
+
         Parameters
         ----------
         group : `DimensionGroup`
