@@ -1228,6 +1228,25 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+        """Ingest a Zip file into this butler.
+
+        The Zip file must have been created by `retrieve_artifacts_zip`.
+
+        Parameters
+        ----------
+        zip_file : `lsst.resources.ResourcePathExpression`
+            Path to the Zip file.
+        transfer : `str`, optional
+            Method to use to transfer the Zip into the datastore.
+
+        Notes
+        -----
+        Run collections are created as needed.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def export(
         self,
         *,
