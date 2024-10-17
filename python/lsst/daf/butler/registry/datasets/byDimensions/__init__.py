@@ -26,3 +26,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._manager import *
+from ._storage import *

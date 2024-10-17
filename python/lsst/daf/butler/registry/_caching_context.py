@@ -27,19 +27,19 @@
 
 from __future__ import annotations
 
-__all__ = ["CachingContext", "GenericCachingContext"]
+__all__ = ["CachingContext"]
 
-from typing import Generic, TypeAlias, TypeVar
+from typing import TYPE_CHECKING
 
 from ._collection_record_cache import CollectionRecordCache
 from ._collection_summary_cache import CollectionSummaryCache
 from ._dataset_type_cache import DatasetTypeCache
 
-_T = TypeVar("_T")
-_U = TypeVar("_U")
+if TYPE_CHECKING:
+    from .interfaces import DatasetRecordStorage
 
 
-class GenericCachingContext(Generic[_T, _U]):
+class CachingContext:
     """Collection of caches for various types of records retrieved from
     database.
 
@@ -54,16 +54,10 @@ class GenericCachingContext(Generic[_T, _U]):
 
     Dataset type cache is always enabled for now, this avoids the need for
     explicitly enabling caching in pipetask executors.
-
-    `GenericCachingContext` is generic over two kinds of opaque dataset type
-    data, with the expectation that most code will use the ``CachingContext``
-    type alias (which resolves to `GenericCachingContext[object, object]`);
-    the `DatasetRecordStorageManager` can then cast this to a
-    `GenericCachingContext` with the actual opaque data types it uses.
     """
 
     def __init__(self) -> None:
-        self._dataset_types: DatasetTypeCache[_T, _U] = DatasetTypeCache()
+        self._dataset_types: DatasetTypeCache[DatasetRecordStorage] = DatasetTypeCache()
         self._collection_records: CollectionRecordCache | None = None
         self._collection_summaries: CollectionSummaryCache | None = None
         self._depth = 0
@@ -109,9 +103,6 @@ class GenericCachingContext(Generic[_T, _U]):
         return self._collection_summaries
 
     @property
-    def dataset_types(self) -> DatasetTypeCache[_T, _U]:
+    def dataset_types(self) -> DatasetTypeCache[DatasetRecordStorage]:
         """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
         return self._dataset_types
-
-
-CachingContext: TypeAlias = GenericCachingContext[object, object]

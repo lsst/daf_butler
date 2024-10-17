@@ -118,19 +118,19 @@ class GeneralQueryResults(QueryResultsBase):
             Structure containing data coordinate, refs, and a copy of the row.
         """
         all_dimensions = self._spec.dimensions
-        dataset_keys: list[tuple[DatasetType, DimensionGroup, str, str]] = []
+        dataset_keys: list[tuple[DimensionGroup, str, str]] = []
         for dataset_type in dataset_types:
             dimensions = dataset_type.dimensions
             id_key = f"{dataset_type.name}.dataset_id"
             run_key = f"{dataset_type.name}.run"
-            dataset_keys.append((dataset_type, dimensions, id_key, run_key))
+            dataset_keys.append((dimensions, id_key, run_key))
         for row in self:
             values = tuple(
                 row[key] for key in itertools.chain(all_dimensions.required, all_dimensions.implied)
             )
             data_coordinate = DataCoordinate.from_full_values(all_dimensions, values)
             refs = []
-            for dataset_type, dimensions, id_key, run_key in dataset_keys:
+            for dimensions, id_key, run_key in dataset_keys:
                 values = tuple(row[key] for key in itertools.chain(dimensions.required, dimensions.implied))
                 data_id = DataCoordinate.from_full_values(dimensions, values)
                 refs.append(DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key]))

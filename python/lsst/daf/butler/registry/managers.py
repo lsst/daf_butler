@@ -40,6 +40,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any, Generic, TypeVar
 
+import sqlalchemy
 from lsst.utils import doImportType
 
 from .._column_type_info import ColumnTypeInfo
@@ -228,6 +229,11 @@ class RegistryManagerTypes(
 
         universe = DimensionUniverse(dimensionConfig)
         with database.declareStaticTables(create=True) as context:
+            if self.datasets.getIdColumnType() is sqlalchemy.BigInteger:
+                raise RuntimeError(
+                    "New data repositories should be created with UUID dataset IDs instead of autoincrement "
+                    "integer dataset IDs.",
+                )
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
 
         # store managers and their versions in attributes table

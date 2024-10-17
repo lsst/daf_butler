@@ -31,6 +31,7 @@ __all__ = ("DummyRegistry",)
 from collections.abc import Iterable, Iterator
 from typing import Any
 
+import sqlalchemy
 from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
@@ -172,11 +173,13 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         self,
         opaque: OpaqueTableStorageManager,
         universe: DimensionUniverse,
+        datasetIdColumnType: type,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(
             opaque=opaque,
             universe=universe,
+            datasetIdColumnType=datasetIdColumnType,
             registry_schema_version=registry_schema_version,
         )
         self._bridges: dict[str, EphemeralDatastoreRegistryBridge] = {}
@@ -185,6 +188,7 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         return DummyDatastoreRegistryBridgeManager(
             opaque=opaque,
             universe=self.universe,
+            datasetIdColumnType=self.datasetIdColumnType,
             registry_schema_version=self._registry_schema_version,
         )
 
@@ -204,6 +208,7 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         return cls(
             opaque=opaque,
             universe=universe,
+            datasetIdColumnType=datasets.getIdColumnType(),
             registry_schema_version=registry_schema_version,
         )
 
@@ -233,7 +238,9 @@ class DummyRegistry:
     def __init__(self) -> None:
         self._opaque = DummyOpaqueTableStorageManager()
         self.dimensions = DimensionUniverse()
-        self._datastoreBridges = DummyDatastoreRegistryBridgeManager(self._opaque, self.dimensions, None)
+        self._datastoreBridges = DummyDatastoreRegistryBridgeManager(
+            self._opaque, self.dimensions, sqlalchemy.BigInteger
+        )
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         return self._datastoreBridges

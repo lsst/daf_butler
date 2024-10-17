@@ -259,6 +259,8 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         Manager object for opaque table storage in the `Registry`.
     universe : `DimensionUniverse`
         All dimensions know to the `Registry`.
+    datasetIdColumnType : `type`
+        Type for dataset ID column.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
 
@@ -283,11 +285,13 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         *,
         opaque: OpaqueTableStorageManager,
         universe: DimensionUniverse,
+        datasetIdColumnType: type,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self.opaque = opaque
         self.universe = universe
+        self.datasetIdColumnType = datasetIdColumnType
 
     @abstractmethod
     def clone(
