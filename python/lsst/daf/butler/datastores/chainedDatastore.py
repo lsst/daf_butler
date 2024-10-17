@@ -913,6 +913,49 @@ class ChainedDatastore(Datastore):
 
         return targets, merged_artifacts_to_ref_id, merged_artifacts_to_info
 
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        """Ingest an indexed Zip file and contents.
+
+        The Zip file must have an index file as created by `retrieveArtifacts`.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        transfer : `str`
+            Method to use for transferring the Zip file into the datastore.
+
+        Notes
+        -----
+        Datastore constraints are bypassed with Zip ingest. A zip file can
+        contain multiple dataset types. Should the entire Zip be rejected
+        if one dataset type is in the constraints list? If configured to
+        reject everything, ingest should not be attempted.
+
+        The Zip file is given to each datastore in turn, ignoring datastores
+        where it is not supported. Is deemed successful if any of the
+        datastores accept the file.
+        """
+        n_success = 0
+        final_exception: Exception | None = None
+        for number, datastore in enumerate(self.datastores):
+            if datastore.isEphemeral:
+                continue
+            try:
+                datastore.ingest_zip(zip_path, transfer=transfer)
+            except NotImplementedError:
+                continue
+            except Exception as e:
+                final_exception = e
+            else:
+                n_success += 1
+
+        if n_success:
+            return
+        if final_exception:
+            raise final_exception
+        raise RuntimeError("Ingest was not successful in any datastores.")
+
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.
 

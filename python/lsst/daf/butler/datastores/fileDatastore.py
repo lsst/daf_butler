@@ -297,6 +297,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             self.cacheManager = DatastoreDisabledCacheManager("", universe=bridgeManager.universe)
 
+        self.universe = bridgeManager.universe
+
     @classmethod
     def _create_from_config(
         cls,
@@ -2033,6 +2035,85 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             index.write_index(destination)
 
         return list(to_transfer.values()), artifact_to_ref_id, artifact_to_info
+
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        """Ingest an indexed Zip file and contents.
+
+        The Zip file must have an index file as created by `retrieveArtifacts`.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        transfer : `str`
+            Method to use for transferring the Zip file into the datastore.
+
+        Notes
+        -----
+        Datastore constraints are bypassed with Zip ingest. A zip file can
+        contain multiple dataset types. Should the entire Zip be rejected
+        if one dataset type is in the constraints list?
+
+        If any dataset is already present in the datastore the entire ingest
+        will fail.
+        """
+        index = ZipIndex.from_zip_file(zip_path)
+
+        # Transfer the Zip file into the datastore file system.
+        # There is no RUN as such to use for naming.
+        # Potentially could use the RUN from the first ref in the index
+        # There is no requirement that the contents of the Zip files share
+        # the same RUN.
+        # Could use the Zip UUID from the index + special "zips/" prefix.
+        if transfer is None:
+            # Indicated that the zip file is already in the right place.
+            if not zip_path.isabs():
+                tgtLocation = self.locationFactory.fromPath(zip_path.ospath, trusted_path=False)
+            else:
+                pathInStore = zip_path.relative_to(self.root)
+                if pathInStore is None:
+                    raise RuntimeError(
+                        f"Unexpectedly learned that {zip_path} is not within datastore {self.root}"
+                    )
+                tgtLocation = self.locationFactory.fromPath(pathInStore, trusted_path=True)
+        elif transfer == "direct":
+            # Reference in original location.
+            tgtLocation = None
+        else:
+            zip_name = index.calculate_zip_file_name()
+            # Zip name is UUID so add subdir of first few characters of UUID
+            # to spread things out if there are many Zip files.
+            tgtLocation = self.locationFactory.fromPath(f"zips/{zip_name[:4]}/{zip_name}")
+            if not tgtLocation.uri.dirname().exists():
+                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
+                tgtLocation.uri.dirname().mkdir()
+
+            # Transfer the Zip file into the datastore.
+            tgtLocation.uri.transfer_from(
+                zip_path, transfer=transfer, transaction=self._transaction, overwrite=True
+            )
+
+        if tgtLocation is None:
+            path_in_store = str(zip_path)
+        else:
+            path_in_store = tgtLocation.pathInStore.path
+
+        # Refs indexed by UUID.
+        refs = index.refs.to_refs(universe=self.universe)
+        id_to_ref = {ref.id: ref for ref in refs}
+
+        # Associate each file with a (DatasetRef, StoredFileInfo) tuple.
+        artifacts: list[tuple[DatasetRef, StoredFileInfo]] = []
+        for path_in_zip, serialized_info in index.info_map.items():
+            # Need to modify the info to include the path to the Zip file
+            # that was previously written to the datastore.
+            serialized_info.path = f"{path_in_store}#zip-path={path_in_zip}"
+
+            info = StoredFileInfo.from_simple(serialized_info)
+            for id_ in index.ref_map[path_in_zip]:
+                artifacts.append((id_to_ref[id_], info))
+
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     def get(
         self,

@@ -82,6 +82,10 @@ class SerializedDatasetRefContainer(BaseModel):
     compact_refs: dict[uuid.UUID, MinimalistDatasetRef]
     """Minimal dataset ref information indexed by UUID."""
 
+    def __len__(self) -> int:
+        """Return the number of datasets in the container."""
+        return len(self.compact_refs)
+
     @classmethod
     def from_refs(cls, refs: Iterable[DatasetRef]) -> Self:
         """Construct a serializable form from a list of `DatasetRef`.
@@ -214,6 +218,21 @@ class ZipIndex(BaseModel):
         data = ",".join(self.info_map.keys())
         # No need to come up with a different namespace.
         return uuid.uuid5(DatasetIdFactory.NS_UUID, data)
+
+    def __len__(self) -> int:
+        """Return the number of files in the Zip."""
+        return len(self.info_map)
+
+    def calculate_zip_file_name(self) -> str:
+        """Calculate the default name for the Zip file based on the index
+        contents.
+
+        Returns
+        -------
+        name : `str`
+            Name of the zip file based on index.
+        """
+        return f"{self.generate_uuid5()}.zip"
 
     def write_index(self, dir: ResourcePath) -> ResourcePath:
         """Write the index to the specified directory.
@@ -421,7 +440,7 @@ def retrieve_and_zip(
         index = ZipIndex.model_validate_json(index_json)
 
         # Use unique name based on files in Zip.
-        zip_file_name = f"{index.generate_uuid5()}.zip"
+        zip_file_name = index.calculate_zip_file_name()
         zip_path = outdir.join(zip_file_name, forceDirectory=False)
         with zipfile.ZipFile(zip_path.ospath, "w") as zip:
             zip.write(index_path.ospath, index_path.basename())
