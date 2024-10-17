@@ -823,6 +823,35 @@ class SimpleButlerTests(TestCaseMixin):
         self.assertCountEqual(clone5.registry.defaults.collections, ["imported_r"])
         self.assertEqual(clone5.run, "imported_r")
 
+    def test_calibration_dataset_type_registration(self) -> None:
+        # Register two dataset types that should share the same tags table,
+        # but only one is a calibration and hence needs a calibs table.
+        butler1 = self.makeButler(writeable=True)
+        a = DatasetType("a", ["instrument"], universe=butler1.dimensions, storageClass="StructuredDataDict")
+        b = DatasetType(
+            "b",
+            ["instrument"],
+            universe=butler1.dimensions,
+            storageClass="StructuredDataDict",
+            isCalibration=True,
+        )
+        butler1.registry.registerDatasetType(a)
+        butler1.registry.registerDatasetType(b)
+        self.assertEqual(butler1.get_dataset_type("a"), a)
+        self.assertEqual(butler1.get_dataset_type("b"), b)
+        butler1.registry.refresh()
+        self.assertEqual(butler1.get_dataset_type("a"), a)
+        self.assertEqual(butler1.get_dataset_type("b"), b)
+        # Register them in the opposite order in a new repo.
+        butler2 = self.makeButler(writeable=True)
+        butler2.registry.registerDatasetType(b)
+        butler2.registry.registerDatasetType(a)
+        self.assertEqual(butler2.get_dataset_type("a"), a)
+        self.assertEqual(butler2.get_dataset_type("b"), b)
+        butler2.registry.refresh()
+        self.assertEqual(butler2.get_dataset_type("a"), a)
+        self.assertEqual(butler2.get_dataset_type("b"), b)
+
 
 class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
     """Run tests against DirectButler implementation."""
