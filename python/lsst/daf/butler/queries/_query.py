@@ -82,7 +82,7 @@ class Query(QueryBase):
     Notes
     -----
     `Query` objects should never be constructed directly by users; use
-    `Butler._query` instead.
+    `Butler.query` instead.
 
     A `Query` object represents the first stage of query construction, in which
     constraints and joins are defined (roughly corresponding to the WHERE and
@@ -135,6 +135,7 @@ class Query(QueryBase):
     @property
     def expression_factory(self) -> ExpressionFactory:
         """A factory for column expressions using overloaded operators.
+        (`~lsst.daf.butler.queries.expression_factory.ExpressionFactory`).
 
         Notes
         -----
