@@ -531,6 +531,24 @@ class DynamicTables:
                 makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
             )
 
+    def add_calibs(self, db: Database, collections: type[CollectionManager]) -> None:
+        """Create a calibs table for a dataset type whose dimensions already
+        have a tags table.
+
+        Parameters
+        ----------
+        db : `Database`
+            Database interface.
+        collections : `type` [ `CollectionManager` ]
+            Manager class for collections; used to create foreign key columns
+            for collections.
+        """
+        self.calibs_name = makeCalibTableName(self.dimensions_key)
+        self._calibs_table = db.ensureTableExists(
+            self.calibs_name,
+            makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+        )
+
     def tags(self, db: Database, collections: type[CollectionManager]) -> sqlalchemy.Table:
         """Return the "tags" table that associates datasets with data IDs in
         TAGGED and RUN collections.

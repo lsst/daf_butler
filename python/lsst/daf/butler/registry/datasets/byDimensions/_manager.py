@@ -327,6 +327,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     dataset_type.dimensions, dimensions_key, dataset_type.isCalibration()
                 )
                 dynamic_tables.create(self._db, type(self._collections))
+            elif dataset_type.isCalibration() and dynamic_tables.calibs_name is None:
+                dynamic_tables.add_calibs(self._db, type(self._collections))
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": dataset_type.name},
