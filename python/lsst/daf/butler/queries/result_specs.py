@@ -221,11 +221,6 @@ class GeneralResultSpec(ResultSpecBase):
     def find_first_dataset(self) -> str | None:
         # Docstring inherited.
         if self.find_first:
-            if len(self.dataset_fields) != 1:
-                raise InvalidQueryError(
-                    "General query with find_first=True cannot have results from multiple "
-                    "dataset searches."
-                )
             (dataset_type,) = self.dataset_fields.keys()
             return dataset_type
         return None

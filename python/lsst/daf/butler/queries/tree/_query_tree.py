@@ -217,7 +217,7 @@ class QueryTree(QueryTreeBase):
         )
 
     def join_dataset(self, dataset_type: str, search: DatasetSearch) -> QueryTree:
-        """Return a new tree that joins in a search for a dataset.
+        """Return a new tree joins in a search for a dataset.
 
         Parameters
         ----------
@@ -231,6 +231,11 @@ class QueryTree(QueryTreeBase):
         -------
         result : `QueryTree`
             A new tree that joins in the dataset search.
+
+        Notes
+        -----
+        If this dataset type was already joined in, the new `DatasetSearch`
+        replaces the old one.
         """
         if existing := self.datasets.get(dataset_type):
             assert existing == search, "Dataset search should be new or the same."

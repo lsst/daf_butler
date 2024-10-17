@@ -422,7 +422,7 @@ class DirectQueryDriver(QueryDriver):
 
     def get_dataset_type(self, name: str) -> DatasetType:
         # Docstring inherited
-        return self.managers.datasets.get_dataset_type(name)
+        return self.managers.datasets[name].datasetType
 
     def get_default_collections(self) -> tuple[str, ...]:
         # Docstring inherited.
@@ -1133,6 +1133,7 @@ class DirectQueryDriver(QueryDriver):
         fields : `~collections.abc.Set` [ `str` ]
             Dataset fields to include.
         """
+        storage = self.managers.datasets[resolved_search.name]
         # The next two asserts will need to be dropped (and the implications
         # dealt with instead) if materializations start having dataset fields.
         assert (
@@ -1141,11 +1142,7 @@ class DirectQueryDriver(QueryDriver):
         assert (
             resolved_search.name not in joiner.timespans
         ), "Dataset timespan has unexpectedly already been joined in."
-        joiner.join(
-            self.managers.datasets.make_query_joiner(
-                self.get_dataset_type(resolved_search.name), resolved_search.collection_records, fields
-            )
-        )
+        joiner.join(storage.make_query_joiner(resolved_search.collection_records, fields))
 
 
 @dataclasses.dataclass

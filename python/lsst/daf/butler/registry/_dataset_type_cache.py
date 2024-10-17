@@ -33,51 +33,35 @@ from collections.abc import Iterable, Iterator
 from typing import Generic, TypeVar
 
 from .._dataset_type import DatasetType
-from ..dimensions import DimensionGroup
 
 _T = TypeVar("_T")
-_U = TypeVar("_U")
 
 
-class DatasetTypeCache(Generic[_T, _U]):
+class DatasetTypeCache(Generic[_T]):
     """Cache for dataset types.
 
     Notes
     -----
-    This cache is a pair of mappings with different kinds of keys:
+    This class caches mapping of dataset type name to a corresponding
+    `DatasetType` instance. Registry manager also needs to cache corresponding
+    "storage" instance, so this class allows storing additional opaque object
+    along with the dataset type.
 
-    - the `DatasetType` itself is cached by name, as is some opaque data used
-      only by a `DatasetRecordStorageManager` implementation;
-    - additional opaque data (also used only by `DatasetRecordStorageManager`
-      implementations can be cached by the dimensions dataset types (i.e. a
-      `DimensionGroup`).
-
-    `DatasetTypeCache` is generic over these two opaque data types.
-
-    In some contexts (e.g. ``resolve_wildcard``) a full list of dataset types
+    In come contexts (e.g. ``resolve_wildcard``) a full list of dataset types
     is needed. To signify that cache content can be used in such contexts,
-    cache defines a special ``full`` flag that needs to be set by client.  The
-    ``dimensions_full`` flag similarly reports whether all per-dimension-group
-    state is present in the cache.
+    cache defines special ``full`` flag that needs to be set by client.
     """
 
     def __init__(self) -> None:
-        self._by_name_cache: dict[str, tuple[DatasetType, _T]] = {}
-        self._by_dimensions_cache: dict[DimensionGroup, _U] = {}
+        self._cache: dict[str, tuple[DatasetType, _T | None]] = {}
         self._full = False
-        self._dimensions_full = False
 
     @property
     def full(self) -> bool:
         """`True` if cache holds all known dataset types (`bool`)."""
         return self._full
 
-    @property
-    def dimensions_full(self) -> bool:
-        """`True` if cache holds all known dataset type dimensions (`bool`)."""
-        return self._dimensions_full
-
-    def add(self, dataset_type: DatasetType, extra: _T) -> None:
+    def add(self, dataset_type: DatasetType, extra: _T | None = None) -> None:
         """Add one record to the cache.
 
         Parameters
@@ -85,46 +69,33 @@ class DatasetTypeCache(Generic[_T, _U]):
         dataset_type : `DatasetType`
             Dataset type, replaces any existing dataset type with the same
             name.
-        extra : `Any`
+        extra : `Any`, optional
             Additional opaque object stored with this dataset type.
         """
-        self._by_name_cache[dataset_type.name] = (dataset_type, extra)
+        self._cache[dataset_type.name] = (dataset_type, extra)
 
-    def set(
-        self,
-        data: Iterable[tuple[DatasetType, _T]],
-        *,
-        full: bool = False,
-        dimensions_data: Iterable[tuple[DimensionGroup, _U]] | None = None,
-        dimensions_full: bool = False,
-    ) -> None:
+    def set(self, data: Iterable[DatasetType | tuple[DatasetType, _T | None]], *, full: bool = False) -> None:
         """Replace cache contents with the new set of dataset types.
 
         Parameters
         ----------
         data : `~collections.abc.Iterable`
-            Sequence of tuples of `DatasetType` and an extra opaque object.
-        full : `bool`, optional
+            Sequence of `DatasetType` instances or tuples of `DatasetType` and
+            an extra opaque object.
+        full : `bool`
             If `True` then ``data`` contains all known dataset types.
-        dimensions_data : `~collections.abc.Iterable`, optional
-            Sequence of tuples of `DimensionGroup` and an extra opaque object.
-        dimensions_full : `bool`, optional
-            If `True` then ``data`` contains all known dataset type dimensions.
         """
         self.clear()
         for item in data:
-            self._by_name_cache[item[0].name] = item
+            if isinstance(item, DatasetType):
+                item = (item, None)
+            self._cache[item[0].name] = item
         self._full = full
-        if dimensions_data is not None:
-            self._by_dimensions_cache.update(dimensions_data)
-            self._dimensions_full = dimensions_full
 
     def clear(self) -> None:
         """Remove everything from the cache."""
-        self._by_name_cache = {}
-        self._by_dimensions_cache = {}
+        self._cache = {}
         self._full = False
-        self._dimensions_full = False
 
     def discard(self, name: str) -> None:
         """Remove named dataset type from the cache.
@@ -134,7 +105,7 @@ class DatasetTypeCache(Generic[_T, _U]):
         name : `str`
             Name of the dataset type to remove.
         """
-        self._by_name_cache.pop(name, None)
+        self._cache.pop(name, None)
 
     def get(self, name: str) -> tuple[DatasetType | None, _T | None]:
         """Return cached info given dataset type name.
@@ -151,9 +122,9 @@ class DatasetTypeCache(Generic[_T, _U]):
             cache.
         extra : `Any` or `None`
             Cached opaque data, `None` is returned if the name is not in the
-            cache.
+            cache or no extra info was stored for this dataset type.
         """
-        item = self._by_name_cache.get(name)
+        item = self._cache.get(name)
         if item is None:
             return (None, None)
         return item
@@ -172,19 +143,14 @@ class DatasetTypeCache(Generic[_T, _U]):
             Cached dataset type, `None` is returned if the name is not in the
             cache.
         """
-        item = self._by_name_cache.get(name)
+        item = self._cache.get(name)
         if item is None:
             return None
         return item[0]
 
-    def items(self) -> Iterator[tuple[DatasetType, _T]]:
+    def items(self) -> Iterator[tuple[DatasetType, _T | None]]:
         """Return iterator for the set of items in the cache, can only be
         used if `full` is true.
-
-        Returns
-        -------
-        iter : `~collections.abc.Iterator`
-            Iterator over tuples of `DatasetType` and opaque data.
 
         Raises
         ------
@@ -193,51 +159,4 @@ class DatasetTypeCache(Generic[_T, _U]):
         """
         if not self._full:
             raise RuntimeError("cannot call items() if cache is not full")
-        return iter(self._by_name_cache.values())
-
-    def add_by_dimensions(self, dimensions: DimensionGroup, extra: _U) -> None:
-        """Add information about a set of dataset type dimensions to the cache.
-
-        Parameters
-        ----------
-        dimensions : `DimensionGroup`
-            Dimensions of one or more dataset types.
-        extra : `Any`
-            Additional opaque object stored with these dimensions.
-        """
-        self._by_dimensions_cache[dimensions] = extra
-
-    def get_by_dimensions(self, dimensions: DimensionGroup) -> _U | None:
-        """Get information about a set of dataset type dimensions.
-
-        Parameters
-        ----------
-        dimensions : `DimensionGroup`
-            Dimensions of one or more dataset types.
-
-        Returns
-        -------
-        extra : `Any` or `None`
-            Additional opaque object stored with these dimensions, or `None` if
-            these dimensions are not present in the cache.
-        """
-        return self._by_dimensions_cache.get(dimensions)
-
-    def by_dimensions_items(self) -> Iterator[tuple[DimensionGroup, _U]]:
-        """Return iterator for all dimensions-keyed data in the cache.
-
-        This can only be called if `dimensions_full` is `True`.
-
-        Returns
-        -------
-        iter : `~collections.abc.Iterator`
-            Iterator over tuples of `DimensionGroup` and opaque data.
-
-        Raises
-        ------
-        RuntimeError
-            Raised if ``self.dimensions_full`` is `False`.
-        """
-        if not self._dimensions_full:
-            raise RuntimeError("cannot call by_dimensions_items() if cache does not have full dimensions.")
-        return iter(self._by_dimensions_cache.items())
+        return iter(self._cache.values())
