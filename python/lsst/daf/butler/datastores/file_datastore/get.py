@@ -204,7 +204,9 @@ def _read_artifact_into_memory(
     recorded_size = getInfo.info.file_size
 
     formatter = getInfo.formatter
-
+    print("Formatter filed: ", formatter.file_descriptor)
+    print("Loc: ", formatter.file_descriptor.location)
+    print("Loc URI: ", formatter.file_descriptor.location.uri)
     if isinstance(formatter, Formatter):
         formatter = FormatterV1inV2(
             formatter.file_descriptor,

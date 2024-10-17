@@ -83,6 +83,7 @@ class Location:
             raise ValueError(f"Path within datastore must be relative not absolute, got {path_uri}")
 
         self._path = path_uri
+        print(self._path)
 
         # Internal cache of the full location as a ResourcePath
         self._uri: ResourcePath | None = None
@@ -142,6 +143,10 @@ class Location:
                 uri = self._path
             else:
                 uri = root.join(self._path, forceDirectory=False)
+                print()
+                print("--- Root: ", root)
+                print(">>> path: ", self._path._uri)
+                print("+++ JOIN: ", uri)
             self._uri = uri
         return self._uri
 
