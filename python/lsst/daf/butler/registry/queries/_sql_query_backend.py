@@ -39,7 +39,7 @@ from ..._collection_type import CollectionType
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
-from ..._exceptions import DataIdValueError
+from ..._exceptions import DataIdValueError, MissingDatasetTypeError
 from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
 from ...dimensions.record_cache import DimensionRecordCache
 from ..interfaces import CollectionRecord, Database
@@ -163,24 +163,25 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             "Caller is responsible for handling the case of all collections being rejected (we can't "
             "write a good error message without knowing why collections were rejected)."
         )
-        dataset_storage = self._managers.datasets.find(dataset_type.name)
-        if dataset_storage is None:
-            # Unrecognized dataset type means no results.
-            return self.make_doomed_dataset_relation(
+        try:
+            return self._managers.datasets.make_relation(
                 dataset_type,
-                columns,
-                messages=[
-                    f"Dataset type {dataset_type.name!r} is not registered, "
-                    "so no instances of it can exist in any collection."
-                ],
-                context=context,
-            )
-        else:
-            return dataset_storage.make_relation(
                 *collections,
                 columns=columns,
                 context=context,
             )
+        except MissingDatasetTypeError:
+            pass
+        # Unrecognized dataset type means no results.
+        return self.make_doomed_dataset_relation(
+            dataset_type,
+            columns,
+            messages=[
+                f"Dataset type {dataset_type.name!r} is not registered, "
+                "so no instances of it can exist in any collection."
+            ],
+            context=context,
+        )
 
     def make_dimension_relation(
         self,

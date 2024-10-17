@@ -316,8 +316,6 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         Manager object for opaque table storage in the `Registry`.
     universe : `DimensionUniverse`
         All dimensions know to the `Registry`.
-    datasetIdColumnType : `type`
-        Type for dataset ID column.
     registry_schema_version : `VersionTuple` or `None`, optional
         The version of the registry schema.
     """
@@ -329,13 +327,11 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         tables: _TablesTuple,
         opaque: OpaqueTableStorageManager,
         universe: DimensionUniverse,
-        datasetIdColumnType: type,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(
             opaque=opaque,
             universe=universe,
-            datasetIdColumnType=datasetIdColumnType,
             registry_schema_version=registry_schema_version,
         )
         self._db = db
@@ -348,7 +344,6 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
             tables=self._tables,
             opaque=opaque,
             universe=self.universe,
-            datasetIdColumnType=self.datasetIdColumnType,
             registry_schema_version=self._registry_schema_version,
         )
 
@@ -370,7 +365,6 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
             tables=cast(_TablesTuple, tables),
             opaque=opaque,
             universe=universe,
-            datasetIdColumnType=datasets.getIdColumnType(),
             registry_schema_version=registry_schema_version,
         )
 

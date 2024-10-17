@@ -27,8 +27,6 @@
 
 from __future__ import annotations
 
-from .... import ddl
-
 __all__ = (
     "addDatasetForeignKey",
     "makeCalibTableName",
@@ -44,12 +42,16 @@ from typing import Any
 
 import sqlalchemy
 
-from ...._dataset_type import DatasetType
-from ....dimensions import DimensionUniverse, GovernorDimension, addDimensionForeignKey
+from .... import ddl
+from ....dimensions import DimensionGroup, DimensionUniverse, GovernorDimension, addDimensionForeignKey
 from ....timespan_database_representation import TimespanDatabaseRepresentation
-from ...interfaces import CollectionManager, VersionTuple
+from ...interfaces import CollectionManager, Database, VersionTuple
 
 DATASET_TYPE_NAME_LENGTH = 128
+
+
+class MissingDatabaseTableError(RuntimeError):
+    """Exception raised when a table is not found in a database."""
 
 
 StaticDatasetTablesTuple = namedtuple(
@@ -63,7 +65,6 @@ StaticDatasetTablesTuple = namedtuple(
 
 def addDatasetForeignKey(
     tableSpec: ddl.TableSpec,
-    dtype: type,
     *,
     name: str = "dataset",
     onDelete: str | None = None,
@@ -81,9 +82,6 @@ def addDatasetForeignKey(
     tableSpec : `ddl.TableSpec`
         Specification for the table that should reference the dataset
         table.  Will be modified in place.
-    dtype : `type`
-        Type of the column, same as the column type of the PK column of
-        a referenced table (``dataset.id``).
     name : `str`, optional
         A name to use for the prefix of the new field; the full name is
         ``{name}_id``.
@@ -104,7 +102,7 @@ def addDatasetForeignKey(
     idSpec : `ddl.FieldSpec`
         Specification for the ID field.
     """
-    idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=dtype, **kwargs)
+    idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=ddl.GUID, **kwargs)
     tableSpec.fields.add(idFieldSpec)
     if constraint:
         tableSpec.foreignKeys.append(
@@ -116,8 +114,6 @@ def addDatasetForeignKey(
 def makeStaticTableSpecs(
     collections: type[CollectionManager],
     universe: DimensionUniverse,
-    dtype: type,
-    autoincrement: bool,
     schema_version: VersionTuple,
 ) -> StaticDatasetTablesTuple:
     """Construct all static tables used by the classes in this package.
@@ -131,10 +127,6 @@ def makeStaticTableSpecs(
         Manager object for the collections in this `Registry`.
     universe : `DimensionUniverse`
         Universe graph containing all dimensions known to this `Registry`.
-    dtype : `type`
-        Type of the dataset ID (primary key) column.
-    autoincrement : `bool`
-        If `True` then dataset ID column will be auto-incrementing.
     schema_version : `VersionTuple`
         The version of this schema.
 
@@ -222,8 +214,7 @@ def makeStaticTableSpecs(
             fields=[
                 ddl.FieldSpec(
                     name="id",
-                    dtype=dtype,
-                    autoincrement=autoincrement,
+                    dtype=ddl.GUID,
                     primaryKey=True,
                     doc="A unique field used as the primary key for dataset.",
                 ),
@@ -252,15 +243,12 @@ def makeStaticTableSpecs(
     return specs
 
 
-def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
+def makeTagTableName(dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag table used
     by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a name for.  Multiple dataset types may
-        share the same table.
     dimensionsKey : `int`
         Integer key used to save ``datasetType.dimensions`` to the database.
 
@@ -272,15 +260,12 @@ def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     return f"dataset_tags_{dimensionsKey:08d}"
 
 
-def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
+def makeCalibTableName(dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag + validity
     range table used by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a name for.  Multiple dataset types may
-        share the same table.
     dimensionsKey : `int`
         Integer key used to save ``datasetType.dimensions`` to the database.
 
@@ -289,27 +274,22 @@ def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     name : `str`
         Name for the table.
     """
-    assert datasetType.isCalibration()
     return f"dataset_calibs_{dimensionsKey:08d}"
 
 
 def makeTagTableSpec(
-    datasetType: DatasetType, collections: type[CollectionManager], dtype: type, *, constraints: bool = True
+    dimensions: DimensionGroup, collections: type[CollectionManager], *, constraints: bool = True
 ) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a spec for.  Multiple dataset types may
-        share the same table.
+    dimensions : `DimensionGroup`
+        Dimensions of the dataset type.
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
-    dtype : `type`
-        Type of the FK column, same as the column type of the PK column of
-        a referenced table (``dataset.id``).
     constraints : `bool`, optional
         If `False` (`True` is default), do not define foreign key constraints.
 
@@ -337,7 +317,7 @@ def makeTagTableSpec(
     # sufficient and saves us from worrying about nulls in the constraint.
     constraint = ["dataset_type_id"]
     # Add foreign key fields to dataset table (part of the primary key)
-    addDatasetForeignKey(tableSpec, dtype, primaryKey=True, onDelete="CASCADE", constraint=constraints)
+    addDatasetForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE", constraint=constraints)
     # Add foreign key fields to collection table (part of the primary key and
     # the data ID unique constraint).
     collectionFieldSpec = collections.addCollectionForeignKey(
@@ -353,8 +333,8 @@ def makeTagTableSpec(
                 target=(collectionFieldSpec.name, "dataset_type_id"),
             )
         )
-    for dimension_name in datasetType.dimensions.required:
-        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
+    for dimension_name in dimensions.required:
+        dimension = dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(
             tableSpec, dimension=dimension, nullable=False, primaryKey=False, constraint=constraints
         )
@@ -375,27 +355,22 @@ def makeTagTableSpec(
 
 
 def makeCalibTableSpec(
-    datasetType: DatasetType,
+    dimensions: DimensionGroup,
     collections: type[CollectionManager],
     TimespanReprClass: type[TimespanDatabaseRepresentation],
-    dtype: type,
 ) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag +
     validity range table used by the classes in this package.
 
     Parameters
     ----------
-    datasetType : `DatasetType`
-        Dataset type to construct a spec for.  Multiple dataset types may
-        share the same table.
+    dimensions : `DimensionGroup`
+        Dimensions of the dataset type.
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
     TimespanReprClass : `type` of `TimespanDatabaseRepresentation`
         The Python type to use to represent a timespan.
-    dtype : `type`
-        Type of the FK column, same as the column type of the PK column of
-        a referenced table (``dataset.id``).
 
     Returns
     -------
@@ -425,7 +400,7 @@ def makeCalibTableSpec(
     index: list[str | type[TimespanDatabaseRepresentation]] = ["dataset_type_id"]
     # Add foreign key fields to dataset table (not part of the temporal
     # lookup/constraint).
-    addDatasetForeignKey(tableSpec, dtype, nullable=False, onDelete="CASCADE")
+    addDatasetForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
     # Add foreign key fields to collection table (part of the temporal lookup
     # index/constraint).
     collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
@@ -439,8 +414,8 @@ def makeCalibTableSpec(
         )
     )
     # Add dimension fields (part of the temporal lookup index.constraint).
-    for dimension_name in datasetType.dimensions.required:
-        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
+    for dimension_name in dimensions.required:
+        dimension = dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         index.append(fieldSpec.name)
         # If this is a governor dimension, add a foreign key constraint to the
@@ -472,3 +447,148 @@ def makeCalibTableSpec(
         index.extend(fieldSpec.name for fieldSpec in tsFieldSpecs)
         tableSpec.indexes.add(ddl.IndexSpec(*index))  # type: ignore
     return tableSpec
+
+
+class DynamicTables:
+    """A struct that holds the "dynamic" tables common to dataset types that
+    share the same dimensions.
+
+    Parameters
+    ----------
+    dimensions : `DimensionGroup`
+        Dimensions of the dataset types that use these tables.
+    dimensions_key : `int`
+        Integer key used to persist this dimension group in the database and
+        name the associated tables.
+    tags_name : `str`
+        Name of the "tags" table that associates datasets with data IDs in
+        RUN and TAGGED collections.
+    calibs_name : `str` or `None`
+        Name of the "calibs" table that associates datasets with data IDs and
+        timespans in CALIBRATION collections.  This is `None` if none of the
+        dataset types (or at least none of those seen by this client) are
+        calibrations.
+    """
+
+    def __init__(
+        self, dimensions: DimensionGroup, dimensions_key: int, tags_name: str, calibs_name: str | None
+    ):
+        self._dimensions = dimensions
+        self.dimensions_key = dimensions_key
+        self.tags_name = tags_name
+        self.calibs_name = calibs_name
+        self._tags_table: sqlalchemy.Table | None = None
+        self._calibs_table: sqlalchemy.Table | None = None
+
+    @classmethod
+    def from_dimensions_key(
+        cls, dimensions: DimensionGroup, dimensions_key: int, is_calibration: bool
+    ) -> DynamicTables:
+        """Construct with table names generated from the dimension key.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of the dataset types that use these tables.
+        dimensions_key : `int`
+            Integer key used to persist this dimension group in the database
+            and name the associated tables.
+        is_calibration : `bool`
+            Whether any of the dataset types that use these tables are
+            calibrations.
+
+        Returns
+        -------
+        dynamic_tables : `DynamicTables`
+            Struct that holds tables for a group of dataset types.
+        """
+        return cls(
+            dimensions,
+            dimensions_key=dimensions_key,
+            tags_name=makeTagTableName(dimensions_key),
+            calibs_name=makeCalibTableName(dimensions_key) if is_calibration else None,
+        )
+
+    def create(self, db: Database, collections: type[CollectionManager]) -> None:
+        """Create the tables if they don't already exist.
+
+        Parameters
+        ----------
+        db : `Database`
+            Database interface.
+        collections : `type` [ `CollectionManager` ]
+            Manager class for collections; used to create foreign key columns
+            for collections.
+        """
+        if self._tags_table is None:
+            self._tags_table = db.ensureTableExists(
+                self.tags_name,
+                makeTagTableSpec(self._dimensions, collections),
+            )
+        if self.calibs_name is not None and self._calibs_table is None:
+            self._calibs_table = db.ensureTableExists(
+                self.calibs_name,
+                makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+            )
+
+    def tags(self, db: Database, collections: type[CollectionManager]) -> sqlalchemy.Table:
+        """Return the "tags" table that associates datasets with data IDs in
+        TAGGED and RUN collections.
+
+        This method caches its result the first time it is called (and assumes
+        the arguments it is given never change).
+
+        Parameters
+        ----------
+        db : `Database`
+            Database interface.
+        collections : `type` [ `CollectionManager` ]
+            Manager class for collections; used to create foreign key columns
+            for collections.
+
+        Returns
+        -------
+        table : `sqlalchemy.Table`
+            SQLAlchemy table object.
+        """
+        if self._tags_table is None:
+            spec = makeTagTableSpec(self._dimensions, collections)
+            table = db.getExistingTable(self.tags_name, spec)
+            if table is None:
+                raise MissingDatabaseTableError(f"Table {self.tags_name!r} is missing from database schema.")
+            self._tags_table = table
+        return self._tags_table
+
+    def calibs(self, db: Database, collections: type[CollectionManager]) -> sqlalchemy.Table:
+        """Return the "calibs" table that associates datasets with data IDs and
+        timespans in CALIBRATION collections.
+
+        This method caches its result the first time it is called (and assumes
+        the arguments it is given never change).  It may only be called if the
+        dataset type is calibration.
+
+        Parameters
+        ----------
+        db : `Database`
+            Database interface.
+        collections : `type` [ `CollectionManager` ]
+            Manager class for collections; used to create foreign key columns
+            for collections.
+
+        Returns
+        -------
+        table : `sqlalchemy.Table`
+            SQLAlchemy table object.
+        """
+        assert (
+            self.calibs_name is not None
+        ), "Dataset type should be checked to be calibration by calling code."
+        if self._calibs_table is None:
+            spec = makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation())
+            table = db.getExistingTable(self.calibs_name, spec)
+            if table is None:
+                raise MissingDatabaseTableError(
+                    f"Table {self.calibs_name!r} is missing from database schema."
+                )
+            self._calibs_table = table
+        return self._calibs_table

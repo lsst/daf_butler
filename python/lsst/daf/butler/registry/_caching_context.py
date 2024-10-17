@@ -27,19 +27,19 @@
 
 from __future__ import annotations
 
-__all__ = ["CachingContext"]
+__all__ = ["CachingContext", "GenericCachingContext"]
 
-from typing import TYPE_CHECKING
+from typing import Generic, TypeAlias, TypeVar
 
 from ._collection_record_cache import CollectionRecordCache
 from ._collection_summary_cache import CollectionSummaryCache
 from ._dataset_type_cache import DatasetTypeCache
 
-if TYPE_CHECKING:
-    from .interfaces import DatasetRecordStorage
+_T = TypeVar("_T")
+_U = TypeVar("_U")
 
 
-class CachingContext:
+class GenericCachingContext(Generic[_T, _U]):
     """Collection of caches for various types of records retrieved from
     database.
 
@@ -54,10 +54,16 @@ class CachingContext:
 
     Dataset type cache is always enabled for now, this avoids the need for
     explicitly enabling caching in pipetask executors.
+
+    `GenericCachingContext` is generic over two kinds of opaque dataset type
+    data, with the expectation that most code will use the ``CachingContext``
+    type alias (which resolves to `GenericCachingContext[object, object]`);
+    the `DatasetRecordStorageManager` can then cast this to a
+    `GenericCachingContext` with the actual opaque data types it uses.
     """
 
     def __init__(self) -> None:
-        self._dataset_types: DatasetTypeCache[DatasetRecordStorage] = DatasetTypeCache()
+        self._dataset_types: DatasetTypeCache[_T, _U] = DatasetTypeCache()
         self._collection_records: CollectionRecordCache | None = None
         self._collection_summaries: CollectionSummaryCache | None = None
         self._depth = 0
@@ -103,6 +109,9 @@ class CachingContext:
         return self._collection_summaries
 
     @property
-    def dataset_types(self) -> DatasetTypeCache[DatasetRecordStorage]:
+    def dataset_types(self) -> DatasetTypeCache[_T, _U]:
         """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
         return self._dataset_types
+
+
+CachingContext: TypeAlias = GenericCachingContext[object, object]
