@@ -113,7 +113,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
                 ],
             )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            self.assertIn("a90bbdc0-6c95-5352-b25b-d8ccf5b08adc.zip", result.stdout)
+            self.assertIn("2ac4dd89-17ac-5354-9c15-cfec8dab5b3b.zip", result.stdout)
             artifacts = self.find_files(destdir)
             self.assertEqual(len(artifacts), 1, f"Expected one zip file: {artifacts}")
 

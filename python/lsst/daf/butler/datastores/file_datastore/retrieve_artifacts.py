@@ -431,8 +431,8 @@ def retrieve_and_zip(
     # - Return name of zip file.
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
-        # Retrieve the artifacts and write the index file.
-        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", True, False, True)
+        # Retrieve the artifacts and write the index file. Strip paths.
+        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True)
 
         # Read the index to construct file name.
         index_path = tmpdir_path.join(ZipIndex.index_name, forceDirectory=False)
