@@ -813,3 +813,18 @@ def export_calibs(*args: Any, **kwargs: Any) -> None:
     table = script.exportCalibs(*args, **kwargs)
     if table:
         table.pprint_all(align="<")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@click.argument("zip", required=True)
+@transfer_option()
+def ingest_zip(**kwargs: Any) -> None:
+    """Ingest a Zip file created by retrieve-artifacts.
+
+    ZIP is the URI to the Zip file that should be ingested.
+
+    This command does not create dimension records and so any records must
+    be created by other means.
+    """
+    script.ingest_zip(**kwargs)

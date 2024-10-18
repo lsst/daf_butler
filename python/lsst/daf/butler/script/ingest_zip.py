@@ -2,7 +2,7 @@
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -23,27 +23,30 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-from ._associate import associate  # depends on QueryDatasets
-from ._pruneDatasets import pruneDatasets  # depends on QueryDatasets
-from .butlerImport import butlerImport
-from .certifyCalibrations import certifyCalibrations
-from .collectionChain import collectionChain
-from .configDump import configDump
-from .configValidate import configValidate
-from .createRepo import createRepo
-from .exportCalibs import exportCalibs
-from .ingest_files import ingest_files
-from .ingest_zip import ingest_zip
-from .queryCollections import queryCollections
-from .queryDataIds import queryDataIds
-from .queryDatasets import QueryDatasets
-from .queryDatasetTypes import queryDatasetTypes
-from .queryDimensionRecords import queryDimensionRecords
-from .register_dataset_type import register_dataset_type
-from .removeCollections import removeCollections
-from .removeDatasetType import removeDatasetType
-from .removeRuns import RemoveRun, removeRuns
-from .retrieveArtifacts import retrieveArtifacts
-from .transferDatasets import transferDatasets
+__all__ = ["ingest_zip"]
+
+from .._butler import Butler
+
+
+def ingest_zip(
+    repo: str,
+    zip: str,
+    transfer: str = "auto",
+) -> None:
+    """Ingest a Zip file into the given butler.
+
+    Parameters
+    ----------
+    repo : `str`
+        URI string of the Butler repo to use.
+    zip : `str`
+        URI string of the location of the Zip file.
+    transfer : `str`, optional
+        Transfer mode to use for ingest.
+    """
+    butler = Butler.from_config(repo, writeable=True)
+
+    butler.ingest_zip(zip, transfer=transfer)
