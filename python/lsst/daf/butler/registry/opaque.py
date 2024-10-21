@@ -98,7 +98,10 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # the database itself providing any rollback functionality.
         self._db.replace(self._table, *data)
 
-    def fetch(self, **where: Any) -> Iterator[sqlalchemy.RowMapping]:
+    def fetch(
+        self,
+        **where: Any,
+    ) -> Iterator[sqlalchemy.RowMapping]:
         # Docstring inherited from OpaqueTableStorage.
 
         def _batch_in_clause(
@@ -123,8 +126,12 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
                 if isinstance(v, list | tuple | set):
                     batches.append(_batch_in_clause(column, v))
                 else:
-                    # single "batch" for a regular eq operator
-                    batches.append([column == v])
+                    if isinstance(v, str) and v.endswith("%"):
+                        # Special case prefix queries.
+                        batches.append([column.startswith(v[:-1])])
+                    else:
+                        # single "batch" for a regular eq operator
+                        batches.append([column == v])
 
             for clauses in itertools.product(*batches):
                 yield sqlalchemy.sql.and_(*clauses)

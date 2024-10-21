@@ -569,23 +569,50 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
 
-    def _refs_associated_with_artifacts(self, paths: list[str | ResourcePath]) -> dict[str, set[DatasetId]]:
+    def _refs_associated_with_artifacts(
+        self, paths: Iterable[str | ResourcePath]
+    ) -> dict[str, set[DatasetId]]:
         """Return paths and associated dataset refs.
 
         Parameters
         ----------
         paths : `list` of `str` or `lsst.resources.ResourcePath`
-            All the paths to include in search.
+            All the paths to include in search. These are exact matches
+            to the entries in the records table and can include fragments.
 
         Returns
         -------
         mapping : `dict` of [`str`, `set` [`DatasetId`]]
             Mapping of each path to a set of associated database IDs.
+            These are artifacts and so any fragments are stripped from the
+            keys.
         """
-        records = self._table.fetch(path=[str(path) for path in paths])
-        result = defaultdict(set)
-        for row in records:
-            result[row["path"]].add(row["dataset_id"])
+        # Group paths by those that have fragments and those that do not.
+        with_fragment = set()
+        without_fragment = set()
+        for rpath in paths:
+            spath = str(rpath)  # Typing says can be ResourcePath so must force to string.
+            if "#" in spath:
+                spath, fragment = spath.rsplit("#", 1)
+                with_fragment.add(spath)
+            else:
+                without_fragment.add(spath)
+
+        result: dict[str, set[DatasetId]] = defaultdict(set)
+        if without_fragment:
+            records = self._table.fetch(path=without_fragment)
+            for row in records:
+                path = row["path"]
+                result[path].add(row["dataset_id"])
+        if with_fragment:
+            # Do a query per prefix.
+            for path in with_fragment:
+                records = self._table.fetch(path=f"{path}#%")
+                for row in records:
+                    # Need to strip fragments before adding to dict.
+                    row_path = row["path"]
+                    artifact_path = row_path[: row_path.rfind("#")]
+                    result[artifact_path].add(row["dataset_id"])
         return result
 
     def _registered_refs_per_artifact(self, pathInStore: ResourcePath) -> set[DatasetId]:
@@ -2405,36 +2432,49 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # This requires multiple copies of the trashed items
             trashed, artifacts_to_keep = trash_data
 
-            if artifacts_to_keep is None:
+            # Assume that # in path means there are fragments involved. The
+            # fragments can not be handled by the emptyTrash bridge call
+            # so need to be processed independently.
+            # The generator has to be converted to a list for multiple
+            # iterations. Clean up the typing so that multiple isinstance
+            # tests aren't needed later.
+            trashed_list = [(ref, ninfo) for ref, ninfo in trashed if isinstance(ninfo, StoredFileInfo)]
+
+            if artifacts_to_keep is None or any("#" in info[1].path for info in trashed_list):
                 # The bridge is not helping us so have to work it out
                 # ourselves. This is not going to be as efficient.
-                trashed = list(trashed)
+                # This mapping does not include the fragments.
+                if artifacts_to_keep is not None:
+                    # This means we have already checked for non-fragment
+                    # examples so can filter.
+                    paths_to_check = {info.path for _, info in trashed_list if "#" in info.path}
+                else:
+                    paths_to_check = {info.path for _, info in trashed_list}
 
-                # The instance check is for mypy since up to this point it
-                # does not know the type of info.
-                path_map = self._refs_associated_with_artifacts(
-                    [info.path for _, info in trashed if isinstance(info, StoredFileInfo)]
-                )
+                path_map = self._refs_associated_with_artifacts(paths_to_check)
 
-                for ref, info in trashed:
-                    # Mypy needs to know this is not the base class
-                    assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
+                for ref, info in trashed_list:
+                    path = info.artifact_path
+                    # For disassembled composites in a Zip it is possible
+                    # for the same path to correspond to the same dataset ref
+                    # multiple times so trap for that.
+                    if ref.id in path_map[path]:
+                        path_map[path].remove(ref.id)
+                    if not path_map[path]:
+                        del path_map[path]
 
-                    path_map[info.path].remove(ref.id)
-                    if not path_map[info.path]:
-                        del path_map[info.path]
+                slow_artifacts_to_keep = set(path_map)
+                if artifacts_to_keep is not None:
+                    artifacts_to_keep.update(slow_artifacts_to_keep)
+                else:
+                    artifacts_to_keep = slow_artifacts_to_keep
 
-                artifacts_to_keep = set(path_map)
-
-            for ref, info in trashed:
+            for ref, info in trashed_list:
                 # Should not happen for this implementation but need
                 # to keep mypy happy.
                 assert info is not None, f"Internal logic error in emptyTrash with ref {ref}."
 
-                # Mypy needs to know this is not the base class
-                assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
-
-                if info.path in artifacts_to_keep:
+                if info.artifact_path in artifacts_to_keep:
                     # This is a multi-dataset artifact and we are not
                     # removing all associated refs.
                     continue
@@ -2940,7 +2980,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             dataset_records.setdefault(self._table.name, []).append(info)
 
         record_data = DatastoreRecordData(records=records)
-        print("XXXCX: ", self.name, record_data)
         return {self.name: record_data}
 
     def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
