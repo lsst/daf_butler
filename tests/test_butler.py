@@ -923,6 +923,50 @@ class ButlerTests(ButlerPutGetTests):
         test_dict3 = butler.get(this_type, dataId=dataId, visit=425)
         self.assertEqual(get_full_type_name(test_dict3), "dict")
 
+    def test_ingest_zip(self) -> None:
+        """Create butler, export data, delete data, import from Zip."""
+        butler, dataset_type = self.create_butler(
+            run=self.default_run, storageClass="StructuredData", datasetTypeName="metrics"
+        )
+
+        metric = makeExampleMetrics()
+        refs = []
+        for visit in (423, 424, 425):
+            ref = butler.put(metric, dataset_type, instrument="DummyCamComp", visit=visit)
+            refs.append(ref)
+
+        # Retrieve a Zip file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            zip = butler.retrieve_artifacts_zip(refs, destination=tmpdir)
+
+            # Ingest will fail.
+            with self.assertRaises(ConflictingDefinitionError):
+                butler.ingest_zip(zip)
+
+            # Clear out the collection.
+            butler.removeRuns([self.default_run], unstore=True)
+            self.assertFalse(butler.exists(refs[0]))
+
+            butler.ingest_zip(zip, transfer="copy")
+
+        # Check that the refs can be read again.
+        _ = [butler.get(ref) for ref in refs]
+
+        uri = butler.getURI(refs[2])
+        self.assertTrue(uri.exists())
+
+        # Delete one dataset. The Zip file should still exist and allow
+        # remaining refs to be read.
+        butler.pruneDatasets([refs[0]], purge=True, unstore=True)
+        self.assertTrue(uri.exists())
+
+        metric2 = butler.get(refs[1])
+        self.assertEqual(metric2, metric, msg=f"{metric2} != {metric}")
+
+        butler.removeRuns([self.default_run], unstore=True)
+        self.assertFalse(uri.exists())
+        self.assertFalse(butler.exists(refs[-1]))
+
     def testIngest(self) -> None:
         butler = self.create_empty_butler(run=self.default_run)
 
@@ -2137,6 +2181,9 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     registryStr = "/gen3.sqlite3"
 
     def testIngest(self) -> None:
+        pass
+
+    def test_ingest_zip(self) -> None:
         pass
 
 
