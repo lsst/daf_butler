@@ -2086,6 +2086,16 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         """
         index = ZipIndex.from_zip_file(zip_path)
 
+        # Refs indexed by UUID.
+        refs = index.refs.to_refs(universe=self.universe)
+        id_to_ref = {ref.id: ref for ref in refs}
+
+        # Any failing constraints trigger entire failure.
+        if any(not self.constraints.isAcceptable(ref) for ref in refs):
+            raise DatasetTypeNotSupportedError(
+                "Some refs in the Zip file are not supported by this datastore"
+            )
+
         # Transfer the Zip file into the datastore file system.
         # There is no RUN as such to use for naming.
         # Potentially could use the RUN from the first ref in the index
@@ -2124,10 +2134,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             path_in_store = str(zip_path)
         else:
             path_in_store = tgtLocation.pathInStore.path
-
-        # Refs indexed by UUID.
-        refs = index.refs.to_refs(universe=self.universe)
-        id_to_ref = {ref.id: ref for ref in refs}
 
         # Associate each file with a (DatasetRef, StoredFileInfo) tuple.
         artifacts: list[tuple[DatasetRef, StoredFileInfo]] = []
