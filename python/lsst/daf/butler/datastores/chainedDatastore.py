@@ -38,7 +38,13 @@ import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetId, DatasetRef, DatasetTypeNotSupportedError, FileDataset
+from lsst.daf.butler import (
+    DatasetId,
+    DatasetRef,
+    DatasetTypeNotSupportedError,
+    DimensionUniverse,
+    FileDataset,
+)
 from lsst.daf.butler.datastore import (
     DatasetRefURIs,
     Datastore,
@@ -114,6 +120,9 @@ class ChainedDatastore(Datastore):
 
     datastoreConstraints: Sequence[Constraints | None]
     """Constraints to be applied to each of the child datastores."""
+
+    universe: DimensionUniverse
+    """Dimension universe associated with the butler."""
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
@@ -223,6 +232,8 @@ class ChainedDatastore(Datastore):
 
         else:
             self.datastoreConstraints = (None,) * len(self.datastores)
+
+        self.universe = bridgeManager.universe
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
@@ -936,10 +947,35 @@ class ChainedDatastore(Datastore):
         where it is not supported. Is deemed successful if any of the
         datastores accept the file.
         """
+        index = ZipIndex.from_zip_file(zip_path)
+        refs = index.refs.to_refs(self.universe)
+
+        # For now raise if any refs are not supported.
+        # Being selective will require that we return the ingested refs
+        # to the caller so that registry can be modified to remove the
+        # entries.
+        if any(not self.constraints.isAcceptable(ref) for ref in refs):
+            raise DatasetTypeNotSupportedError(
+                "Some of the refs in the given Zip file are not acceptable to this datastore."
+            )
+
         n_success = 0
         final_exception: Exception | None = None
-        for number, datastore in enumerate(self.datastores):
+        for number, (datastore, constraints) in enumerate(
+            zip(self.datastores, self.datastoreConstraints, strict=True)
+        ):
             if datastore.isEphemeral:
+                continue
+
+            # There can be constraints for the datastore in the configuration
+            # of the chaining, or constraints in the configuration of the
+            # datastore itself.
+            if any(
+                (constraints is not None and not constraints.isAcceptable(ref))
+                or not datastore.constraints.isAcceptable(ref)
+                for ref in refs
+            ):
+                log.debug("Datastore %s skipping zip ingest due to constraints", datastore.name)
                 continue
             try:
                 datastore.ingest_zip(zip_path, transfer=transfer)
