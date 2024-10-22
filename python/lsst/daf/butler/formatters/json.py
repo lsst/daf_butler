@@ -63,7 +63,13 @@ class JsonFormatter(TypelessFormatter):
             data = pytype.model_validate_json(json_bytes)
         else:
             # This can raise ValueError.
-            data = from_json(json_bytes)
+            try:
+                data = from_json(json_bytes)
+            except ValueError as e:
+                n_bytes = min(60, len(json_bytes))
+                bytes_str = json_bytes[:n_bytes].decode(errors="replace")
+                e.add_note(f"Error parsing JSON bytes starting with {bytes_str!r}")
+                raise
 
         return data
 
