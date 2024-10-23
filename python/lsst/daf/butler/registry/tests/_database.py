@@ -685,6 +685,24 @@ class DatabaseTests(ABC):
             [r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2a, row3]
         )
 
+    def test_replace_pkey_only(self):
+        """Test `Database.replace` on a table that only has primary key"""
+        spec = ddl.TableSpec(
+            [
+                ddl.FieldSpec("a1", dtype=sqlalchemy.BigInteger, primaryKey=True),
+                ddl.FieldSpec("a2", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            ]
+        )
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            table = context.addTable("a", spec)
+        row1 = {"a1": 1, "a2": 2}
+        row2 = {"a1": 1, "a2": 3}
+        db.replace(table, row1)
+        db.replace(table, row2)
+        db.replace(table, row1)
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, table.select())], [row1, row2])
+
     def testEnsure(self):
         """Tests for `Database.ensure`."""
         db = self.makeEmptyDatabase(origin=1)

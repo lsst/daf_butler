@@ -351,6 +351,9 @@ class PostgresqlDatabase(Database):
             for column in table.columns
             if column.name not in table.primary_key
         }
+        if not data:
+            self.ensure(table, *rows)
+            return
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
         with self._transaction() as (_, connection):
             connection.execute(query, rows)
