@@ -49,7 +49,14 @@ class YamlFormatter(TypelessFormatter):
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # Can not use ResourcePath.open()
-        data = yaml.safe_load(uri.read())
+        yaml_bytes = uri.read()
+        try:
+            data = yaml.safe_load(yaml_bytes)
+        except Exception as e:
+            n_bytes = min(60, len(yaml_bytes))
+            bytes_str = yaml_bytes[:n_bytes].decode(errors="replace")
+            e.add_note(f"Error parsing JSON bytes starting with {bytes_str!r}")
+            raise
         return data
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:

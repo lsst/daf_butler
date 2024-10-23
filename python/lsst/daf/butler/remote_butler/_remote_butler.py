@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("RemoteButler",)
 
 import uuid
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -38,7 +39,9 @@ from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from deprecated.sphinx import deprecated
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    ZipIndex,
     determine_destination_for_retrieved_artifact,
+    retrieve_and_zip,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
@@ -57,6 +60,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs, DatastoreConfig
 from ..datastore.cache_manager import AbstractDatastoreCacheManager, DatastoreCacheManager
+from ..datastore.stored_file_info import StoredFileInfo
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
@@ -414,6 +418,64 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         return apply_storage_class_override(ref, dataset_type, storage_class)
 
+    def _retrieve_artifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+        destination = ResourcePath(destination).abspath()
+        if not destination.isdir():
+            raise ValueError(f"Destination location must refer to a directory. Given {destination}.")
+
+        if transfer not in ("auto", "copy"):
+            raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
+
+        artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
+        artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
+        output_uris: list[ResourcePath] = []
+        have_copied: dict[ResourcePath, ResourcePath] = {}
+        for ref in refs:
+            prefix = str(ref.id)[:8] + "-" if add_prefix else ""
+            file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
+            for file in file_info:
+                source_uri = ResourcePath(str(file.url))
+                # For decam/zip situation we only want to copy once.
+                cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
+                if cleaned_source_uri not in have_copied:
+                    relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
+                    target_uri = determine_destination_for_retrieved_artifact(
+                        destination, relative_path, preserve_path, prefix
+                    )
+                    # Because signed URLs expire, we want to do the transfer
+                    # son after retrieving the URL.
+                    target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
+                    output_uris.append(target_uri)
+                    have_copied[cleaned_source_uri] = target_uri
+                else:
+                    target_uri = have_copied[cleaned_source_uri]
+                # TODO: Fix this with Zip files that need to be unzipped
+                # on retrieval and index merged.
+                artifact_to_info[target_uri] = StoredFileInfo.from_simple(file.datastoreRecords)
+                artifact_to_ref_id[target_uri].append(ref.id)
+
+        if write_index:
+            index = ZipIndex.from_artifact_maps(refs, artifact_to_ref_id, artifact_to_info, destination)
+            index.write_index(destination)
+
+        return output_uris, artifact_to_ref_id, artifact_to_info
+
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+    ) -> ResourcePath:
+        return retrieve_and_zip(refs, destination, self._retrieve_artifacts)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -422,28 +484,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        destination = ResourcePath(destination).abspath()
-        if not destination.isdir():
-            raise ValueError(f"Destination location must refer to a directory. Given {destination}.")
-
-        if transfer not in ("auto", "copy"):
-            raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
-
-        output_uris: list[ResourcePath] = []
-        for ref in refs:
-            file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
-            for file in file_info:
-                source_uri = ResourcePath(str(file.url))
-                relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
-                target_uri = determine_destination_for_retrieved_artifact(
-                    destination, relative_path, preserve_path
-                )
-                # Because signed URLs expire, we want to do the transfer soon
-                # after retrieving the URL.
-                target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
-                output_uris.append(target_uri)
-
-        return output_uris
+        paths, _, _ = self._retrieve_artifacts(
+            refs,
+            destination,
+            transfer,
+            preserve_path,
+            overwrite,
+        )
+        return paths
 
     def exists(
         self,
@@ -495,6 +543,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         transfer: str | None = "auto",
         record_validation_info: bool = True,
     ) -> None:
+        # Docstring inherited.
+        raise NotImplementedError()
+
+    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
         # Docstring inherited.
         raise NotImplementedError()
 
