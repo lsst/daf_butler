@@ -438,21 +438,30 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
         artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
         output_uris: list[ResourcePath] = []
+        have_copied: dict[ResourcePath, ResourcePath] = {}
         for ref in refs:
             prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
             for file in file_info:
                 source_uri = ResourcePath(str(file.url))
-                relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
-                target_uri = determine_destination_for_retrieved_artifact(
-                    destination, relative_path, preserve_path, prefix
-                )
-                # Because signed URLs expire, we want to do the transfer soon
-                # after retrieving the URL.
-                target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
-                output_uris.append(target_uri)
-                artifact_to_ref_id[target_uri].append(ref.id)
+                # For decam/zip situation we only want to copy once.
+                cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
+                if cleaned_source_uri not in have_copied:
+                    relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
+                    target_uri = determine_destination_for_retrieved_artifact(
+                        destination, relative_path, preserve_path, prefix
+                    )
+                    # Because signed URLs expire, we want to do the transfer
+                    # son after retrieving the URL.
+                    target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
+                    output_uris.append(target_uri)
+                    have_copied[cleaned_source_uri] = target_uri
+                else:
+                    target_uri = have_copied[cleaned_source_uri]
+                # TODO: Fix this with Zip files that need to be unzipped
+                # on retrieval and index merged.
                 artifact_to_info[target_uri] = StoredFileInfo.from_simple(file.datastoreRecords)
+                artifact_to_ref_id[target_uri].append(ref.id)
 
         if write_index:
             index = ZipIndex.from_artifact_maps(refs, artifact_to_ref_id, artifact_to_info, destination)

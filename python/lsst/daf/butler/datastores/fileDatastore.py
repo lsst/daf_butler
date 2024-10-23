@@ -2134,9 +2134,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # This will override any previous target URI if a source file
                 # has multiple refs associated with it but that is okay.
                 # Any prefix used will be from the final ref and all refs
-                # must be recorded.
-                to_transfer[source_uri] = target_uri
+                # must be recorded. Fragments have to be removed from the
+                # transfer list though to prevent duplicate copies.
+                cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
+                to_transfer[cleaned_source_uri] = target_uri
                 artifact_to_ref_id[target_uri].append(ref.id)
+                # TODO: If this is a Zip file, it should be unzipped and the
+                # index merged. Else only a single info record is recorded.
                 artifact_to_info[target_uri] = info
 
         # In theory can now parallelize the transfer
