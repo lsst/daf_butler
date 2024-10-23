@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("NonemptyMapping",)
 
+import copy
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any, TypeVar, overload
 
@@ -97,3 +98,13 @@ class NonemptyMapping(Mapping[_K, _V]):
         if value := self._mapping.get(key):
             return value
         return default
+
+    def copy(self) -> NonemptyMapping[_K, _V]:
+        """Return a copy of the mapping.
+
+        This deep-copies values while referencing the ``default_factory``
+        callback and keys.
+        """
+        result = NonemptyMapping[_K, _V](self._default_factory)
+        result._mapping = copy.deepcopy(self._mapping)
+        return result

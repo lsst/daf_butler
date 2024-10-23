@@ -30,7 +30,8 @@ from __future__ import annotations
 __all__ = ("ColumnSet", "ColumnOrder", "ResultColumn")
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
-from typing import NamedTuple
+from types import EllipsisType
+from typing import NamedTuple, cast
 
 from ... import column_spec
 from ...dimensions import DataIdValue, DimensionGroup
@@ -64,7 +65,7 @@ class ColumnSet:
         self._dimensions = dimensions
         self._removed_dimension_keys: set[str] = set()
         self._dimension_fields: dict[str, set[str]] = {name: set() for name in dimensions.elements}
-        self._dataset_fields = NonemptyMapping[str, set[str]](set)
+        self._dataset_fields = NonemptyMapping[str | EllipsisType, set[str]](set)
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -82,7 +83,7 @@ class ColumnSet:
         return self._dimension_fields
 
     @property
-    def dataset_fields(self) -> NonemptyMapping[str, set[str]]:
+    def dataset_fields(self) -> NonemptyMapping[str | EllipsisType, set[str]]:
         """Dataset fields included in the set, grouped by dataset type name.
 
         The keys of this mapping are just those that actually have nonempty
@@ -269,20 +270,20 @@ class ColumnSet:
         # We sort dataset types and their fields lexicographically just to keep
         # our queries from having any dependence on set-iteration order.
         dataset_fields: list[ResultColumn] = []
-        for dataset_type in sorted(self._dataset_fields):
+        for dataset_type in sorted(self._dataset_fields, key=str):  # transform ... to "..." for sorting
             for field in sorted(self._dataset_fields[dataset_type]):
                 dataset_fields.append(ResultColumn(dataset_type, field))
 
         return ColumnOrder(dimension_names, dimension_elements, dataset_fields)
 
-    def is_timespan(self, logical_table: str, field: str | None) -> bool:
+    def is_timespan(self, logical_table: EllipsisType | str, field: str | None) -> bool:
         """Test whether the given column is a timespan.
 
         Parameters
         ----------
-        logical_table : `str`
+        logical_table : `str` or ``...``
             Name of the dimension element or dataset type the column belongs
-            to.
+            to.  ``...`` is used to represent any dataset type.
         field : `str` or `None`
             Column within the logical table, or `None` for dimension key
             columns.
@@ -295,14 +296,14 @@ class ColumnSet:
         return field == "timespan"
 
     @staticmethod
-    def get_qualified_name(logical_table: str, field: str | None) -> str:
+    def get_qualified_name(logical_table: EllipsisType | str, field: str | None) -> str:
         """Return string that should be used to fully identify a column.
 
         Parameters
         ----------
-        logical_table : `str`
+        logical_table : `str` or ``...```
             Name of the dimension element or dataset type the column belongs
-            to.
+            to.  ``...`` is used to represent any dataset type.
         field : `str` or `None`
             Column within the logical table, or `None` for dimension key
             columns.
@@ -312,16 +313,16 @@ class ColumnSet:
         name : `str`
             Fully-qualified name.
         """
-        return logical_table if field is None else f"{logical_table}:{field}"
+        return str(logical_table) if field is None else f"{logical_table}:{field}"
 
-    def get_column_spec(self, logical_table: str, field: str | None) -> column_spec.ColumnSpec:
+    def get_column_spec(self, logical_table: EllipsisType | str, field: str | None) -> column_spec.ColumnSpec:
         """Return a complete description of a column.
 
         Parameters
         ----------
-        logical_table : `str`
+        logical_table : `str` or ``...``
             Name of the dimension element or dataset type the column belongs
-            to.
+            to. ``...`` is used to represent any dataset type.
         field : `str` or `None`
             Column within the logical table, or `None` for dimension key
             columns.
@@ -333,10 +334,12 @@ class ColumnSet:
         """
         qualified_name = self.get_qualified_name(logical_table, field)
         if field is None:
+            assert logical_table is not ...
             return self._dimensions.universe.dimensions[logical_table].primary_key.model_copy(
                 update=dict(name=qualified_name)
             )
         if logical_table in self._dimension_fields:
+            assert logical_table is not ...
             return (
                 self._dimensions.universe[logical_table]
                 .schema.all[field]
@@ -369,7 +372,7 @@ class ColumnSet:
 class ResultColumn(NamedTuple):
     """Defines a column that can be output from a query."""
 
-    logical_table: str
+    logical_table: EllipsisType | str
     """Dimension element name or dataset type name."""
 
     field: str | None
@@ -377,7 +380,7 @@ class ResultColumn(NamedTuple):
     if it is a dimension key column."""
 
     def __str__(self) -> str:
-        return self.logical_table if self.field is None else f"{self.logical_table}.{self.field}"
+        return str(self.logical_table) if self.field is None else f"{self.logical_table}.{self.field}"
 
 
 class ColumnOrder:
@@ -417,7 +420,7 @@ class ColumnOrder:
         """Return the names of the dimension key columns included in result
         rows, in the order they appear in the row.
         """
-        return [column.logical_table for column in self._dimension_keys]
+        return [cast(str, column.logical_table) for column in self._dimension_keys]
 
     def extract_dimension_key_columns(self, row: Sequence[DataIdValue]) -> Sequence[DataIdValue]:
         """Given a full result row, return just the dimension key columns.

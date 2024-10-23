@@ -27,4 +27,4 @@
 
 from ._driver import DirectQueryDriver
 from ._postprocessing import Postprocessing
-from ._query_builder import QueryBuilder, QueryJoiner
+from ._sql_builders import SqlJoinsBuilder, SqlSelectBuilder
