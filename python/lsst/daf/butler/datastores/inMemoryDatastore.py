@@ -528,6 +528,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         preserve_path: bool = True,
         overwrite: bool | None = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -554,6 +555,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             If `True` write a file at the top level called ``_index.json``
             containing a serialization of a `ZipIndex` for the downloaded
             datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Notes
         -----

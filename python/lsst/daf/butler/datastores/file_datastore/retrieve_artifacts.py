@@ -215,7 +215,7 @@ class ZipIndex(BaseModel):
         # - uuid5 from file paths and dataset refs.
         # Do not attempt to include file contents in UUID.
         # Start with uuid5 from file paths.
-        data = ",".join(self.info_map.keys())
+        data = ",".join(sorted(self.info_map.keys()))
         # No need to come up with a different namespace.
         return uuid.uuid5(DatasetIdFactory.NS_UUID, data)
 
@@ -347,7 +347,7 @@ class ZipIndex(BaseModel):
 
 
 def determine_destination_for_retrieved_artifact(
-    destination_directory: ResourcePath, source_path: ResourcePath, preserve_path: bool
+    destination_directory: ResourcePath, source_path: ResourcePath, preserve_path: bool, prefix: str = ""
 ) -> ResourcePath:
     """Determine destination path for an artifact retrieved from a datastore.
 
@@ -358,10 +358,12 @@ def determine_destination_for_retrieved_artifact(
     source_path : `ResourcePath`
         Path to the source file to be transferred.  This may be relative to the
         datastore root, or an absolute path.
-    preserve_path : `bool`, optional
+    preserve_path : `bool`
         If `True` the full path of the artifact within the datastore
         is preserved. If `False` the final file component of the path
         is used.
+    prefix : `str`, optional
+        Prefix to add to the file name if ``preserve_path`` is `False`.
 
     Returns
     -------
@@ -379,6 +381,8 @@ def determine_destination_for_retrieved_artifact(
             target_path = target_path.relativeToPathRoot
     else:
         target_path = source_path.basename()
+        if prefix:
+            target_path = prefix + target_path
 
     target_uri = destination_directory.join(target_path).abspath()
     if target_uri.relative_to(destination_directory) is None:
@@ -390,7 +394,7 @@ def retrieve_and_zip(
     refs: Iterable[DatasetRef],
     destination: ResourcePathExpression,
     retrieval_callback: Callable[
-        [Iterable[DatasetRef], ResourcePath, str, bool, bool, bool],
+        [Iterable[DatasetRef], ResourcePath, str, bool, bool, bool, bool],
         tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]],
     ],
 ) -> ResourcePath:
@@ -432,7 +436,7 @@ def retrieve_and_zip(
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
         # Retrieve the artifacts and write the index file. Strip paths.
-        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True)
+        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True, True)
 
         # Read the index to construct file name.
         index_path = tmpdir_path.join(ZipIndex.index_name, forceDirectory=False)

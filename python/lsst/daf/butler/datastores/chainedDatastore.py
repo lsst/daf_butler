@@ -818,6 +818,7 @@ class ChainedDatastore(Datastore):
         preserve_path: bool = True,
         overwrite: bool = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -844,6 +845,9 @@ class ChainedDatastore(Datastore):
             If `True` write a file at the top level called ``_index.json``
             containing a serialization of a `ZipIndex` for the downloaded
             datasets.
+        add_prefix : `bool`, optional
+            Add a prefix based on the DatasetId. Only used if ``preserve_path``
+            is `False`.
 
         Returns
         -------
@@ -911,6 +915,7 @@ class ChainedDatastore(Datastore):
                 preserve_path=preserve_path,
                 overwrite=overwrite,
                 write_index=False,  # Disable index writing regardless.
+                add_prefix=add_prefix,
             )
             targets.extend(retrieved)
             merged_artifacts_to_ref_id.update(artifacts_to_ref_id)
