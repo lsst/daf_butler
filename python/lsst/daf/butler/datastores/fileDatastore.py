@@ -2049,6 +2049,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         preserve_path: bool = True,
         overwrite: bool = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
@@ -2075,6 +2076,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             If `True` write a file at the top level called ``_index.json``
             containing a serialization of a `ZipIndex` for the downloaded
             datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Returns
         -------
@@ -2119,12 +2124,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
         artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
         for ref in refs:
+            prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             for info in records[ref.id]:
                 location = info.file_location(self.locationFactory)
                 source_uri = location.uri
                 target_uri = determine_destination_for_retrieved_artifact(
-                    destination, location.pathInStore, preserve_path
+                    destination, location.pathInStore, preserve_path, prefix
                 )
+                # This will override any previous target URI if a source file
+                # has multiple refs associated with it but that is okay.
+                # Any prefix used will be from the final ref and all refs
+                # must be recorded.
                 to_transfer[source_uri] = target_uri
                 artifact_to_ref_id[target_uri].append(ref.id)
                 artifact_to_info[target_uri] = info

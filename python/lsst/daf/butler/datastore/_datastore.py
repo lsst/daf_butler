@@ -1025,6 +1025,7 @@ class Datastore(metaclass=ABCMeta):
         preserve_path: bool = True,
         overwrite: bool = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         """Retrieve the artifacts associated with the supplied refs.
 
@@ -1051,6 +1052,10 @@ class Datastore(metaclass=ABCMeta):
             If `True` write a file at the top level called ``_index.json``
             containing a serialization of a `ZipIndex` for the downloaded
             datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Returns
         -------
@@ -1489,6 +1494,7 @@ class NullDatastore(Datastore):
         preserve_path: bool = True,
         overwrite: bool = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 

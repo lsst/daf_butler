@@ -426,6 +426,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         preserve_path: bool = True,
         overwrite: bool = False,
         write_index: bool = True,
+        add_prefix: bool = False,
     ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
         destination = ResourcePath(destination).abspath()
         if not destination.isdir():
@@ -438,12 +439,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
         output_uris: list[ResourcePath] = []
         for ref in refs:
+            prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
             for file in file_info:
                 source_uri = ResourcePath(str(file.url))
                 relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
                 target_uri = determine_destination_for_retrieved_artifact(
-                    destination, relative_path, preserve_path
+                    destination, relative_path, preserve_path, prefix
                 )
                 # Because signed URLs expire, we want to do the transfer soon
                 # after retrieving the URL.

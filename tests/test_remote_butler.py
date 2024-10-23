@@ -138,6 +138,17 @@ class RemoteButlerMiscTests(unittest.TestCase):
             ResourcePath("/tmp/output_directory/not/relative.txt"),
         )
 
+        # Test prefixing.
+        self.assertEqual(
+            determine_destination_for_retrieved_artifact(
+                ResourcePath("/tmp/output_directory/"),
+                ResourcePath("file:///not/relative.txt"),
+                preserve_path=False,
+                prefix="prefix-",
+            ),
+            ResourcePath("/tmp/output_directory/prefix-relative.txt"),
+        )
+
 
 class RemoteButlerRegistryTests(RegistryTests):
     """Tests for RemoteButler's `Registry` shim."""
