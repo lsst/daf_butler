@@ -29,13 +29,18 @@ from __future__ import annotations
 
 __all__ = ("NonemptyMapping",)
 
-import copy
 from collections.abc import Callable, Iterator, Mapping
-from typing import Any, TypeVar, overload
+from typing import Any, Protocol, Self, TypeVar, overload
+
+
+class Copyable(Protocol):
+
+    def copy(self) -> Self: ...
+
 
 _K = TypeVar("_K")
 _T = TypeVar("_T")
-_V = TypeVar("_V", covariant=True)
+_V = TypeVar("_V", bound=Copyable, covariant=True)
 
 
 class NonemptyMapping(Mapping[_K, _V]):
@@ -56,7 +61,8 @@ class NonemptyMapping(Mapping[_K, _V]):
     it can be modified only by invoking ``__getitem__`` with a key that does
     not exist.  It is expected that the value type will be a mutable container
     like `set` or `dict`, and that an empty nested container should be
-    considered equivalent to the absence of a key.
+    considered equivalent to the absence of a key.  The value type must have
+    a `copy` method that copies all mutable state.
     """
 
     def __init__(self, default_factory: Callable[[], _V]) -> None:
@@ -106,5 +112,6 @@ class NonemptyMapping(Mapping[_K, _V]):
         callback and keys.
         """
         result = NonemptyMapping[_K, _V](self._default_factory)
-        result._mapping = copy.deepcopy(self._mapping)
+        for k, v in self._mapping.items():
+            result._mapping[k] = v.copy()
         return result
