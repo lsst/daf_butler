@@ -33,7 +33,6 @@ __all__ = (
     "main",
 )
 
-
 import abc
 import functools
 import logging
@@ -46,6 +45,7 @@ from typing import Any
 import click
 import yaml
 from lsst.utils import doImport
+from lsst.utils.timer import time_this
 
 from .cliLog import CliLog
 from .opt import log_file_option, log_label_option, log_level_option, log_tty_option, long_log_option
@@ -185,7 +185,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         # The click.command decorator returns an instance of a class, which
         # is something that doImport is not expecting. We add it in as an
         # option here to appease mypy.
-        plugin = _importPlugin(module_str)
+        with time_this(log, msg="Importing command %s (via %s)", args=(name, module_str)):
+            plugin = _importPlugin(module_str)
         if not plugin:
             return None
         if not isinstance(plugin, click.Command):
