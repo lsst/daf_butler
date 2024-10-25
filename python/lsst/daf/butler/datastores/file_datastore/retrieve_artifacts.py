@@ -146,7 +146,7 @@ class SerializedDatasetRefContainer(BaseModel):
 
         if universe.namespace != self.universe_namespace:
             raise RuntimeError(
-                f"Can not convert to refs in universe {universe.namespace} that were created frp, "
+                f"Can not convert to refs in universe {universe.namespace} that were created from "
                 f"universe {self.universe_namespace}"
             )
 

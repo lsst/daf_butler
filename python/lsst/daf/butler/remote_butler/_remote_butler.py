@@ -452,7 +452,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                         destination, relative_path, preserve_path, prefix
                     )
                     # Because signed URLs expire, we want to do the transfer
-                    # son after retrieving the URL.
+                    # soon after retrieving the URL.
                     target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
                     output_uris.append(target_uri)
                     have_copied[cleaned_source_uri] = target_uri

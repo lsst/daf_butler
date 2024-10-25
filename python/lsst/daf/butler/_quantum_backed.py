@@ -508,7 +508,7 @@ class QuantumBackedButler(LimitedButler):
 
         Parameters
         ----------
-        refs : `collections.abc.Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             The datasets to be included in the zip file. Must all be from
             the same dataset type.
         destination : `lsst.resources.ResourcePathExpression`
