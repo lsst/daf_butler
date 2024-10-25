@@ -37,7 +37,6 @@ __all__ = (
 import dataclasses
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Set
-from types import EllipsisType
 from typing import TYPE_CHECKING, Literal, TypeVar, overload
 
 import sqlalchemy
@@ -109,7 +108,7 @@ class QueryBuilder(ABC):
     used to make post-projection rows unique.
     """
 
-    find_first_dataset: str | EllipsisType | None = None
+    find_first_dataset: str | qt.AnyDatasetType | None = None
     """If not `None`, this is a find-first query for this dataset.
 
     This is set even if the find-first search is trivial because there is only
@@ -161,7 +160,7 @@ class QueryBuilder(ABC):
             self.needs_dimension_distinct = True
 
     @abstractmethod
-    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
         """Analyze the "find first" stage of query construction, in  which a
         Common Table Expression with PARTITION ON may be used to find the first
         dataset for each data ID and dataset type in an ordered collection
@@ -345,7 +344,7 @@ class SingleSelectQueryBuilder(QueryBuilder):
         # because we have rows for datasets in multiple collections with the
         # same data ID and dataset type.
         for dataset_type in self.joins_analysis.columns.dataset_fields:
-            assert dataset_type is not ..., "Union dataset in non-dataset-union query."
+            assert dataset_type is not qt.ANY_DATASET, "Union dataset in non-dataset-union query."
             if not self.projection_columns.dataset_fields[dataset_type]:
                 # The "joins"-stage query has one row for each collection for
                 # each data ID, but the projection-stage query just wants
@@ -358,13 +357,13 @@ class SingleSelectQueryBuilder(QueryBuilder):
         # the collection_key column so we can use that as one of the DISTINCT
         # or GROUP BY columns.
         for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
-            assert dataset_type is not ..., "Union dataset in non-dataset-union query."
+            assert dataset_type is not qt.ANY_DATASET, "Union dataset in non-dataset-union query."
             if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                 fields_for_dataset.add("collection_key")
 
-    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
         # Docstring inherited.
-        assert find_first_dataset is not ..., "No dataset union in this query"
+        assert find_first_dataset is not qt.ANY_DATASET, "No dataset union in this query"
         self.find_first = QueryFindFirstAnalysis(self.joins_analysis.datasets[find_first_dataset])
         # If we're doing a find-first search and there's a calibration
         # collection in play, we need to make sure the rows coming out of
@@ -556,7 +555,7 @@ class UnionQueryBuilder(QueryBuilder):
         # same data ID and dataset type.
         for dataset_type in self.joins_analysis.columns.dataset_fields:
             if not self.projection_columns.dataset_fields[dataset_type]:
-                if dataset_type is ...:
+                if dataset_type is qt.ANY_DATASET:
                     for union_term in self.union_terms:
                         if len(union_term.datasets.collection_records) > 1:
                             union_term.needs_dataset_distinct = True
@@ -572,7 +571,7 @@ class UnionQueryBuilder(QueryBuilder):
         # the collection_key column so we can use that as one of the DISTINCT
         # or GROUP BY columns.
         for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
-            if dataset_type is ...:
+            if dataset_type is qt.ANY_DATASET:
                 for union_term in self.union_terms:
                     # If there is more than one collection for one union term,
                     # we need to add collection_key to all of them to keep the
@@ -583,9 +582,9 @@ class UnionQueryBuilder(QueryBuilder):
             elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
                 fields_for_dataset.add("collection_key")
 
-    def analyze_find_first(self, find_first_dataset: str | EllipsisType) -> None:
+    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
         # Docstring inherited.
-        if find_first_dataset is ...:
+        if find_first_dataset is qt.ANY_DATASET:
             for union_term in self.union_terms:
                 union_term.find_first = QueryFindFirstAnalysis(union_term.datasets)
                 # If we're doing a find-first search and there's a calibration
@@ -625,7 +624,7 @@ class UnionQueryBuilder(QueryBuilder):
                 driver.join_dataset_search(
                     select_builder.joins,
                     union_term.datasets,
-                    self.joins_analysis.columns.dataset_fields[...],
+                    self.joins_analysis.columns.dataset_fields[qt.ANY_DATASET],
                     union_dataset_type_name=dataset_type_name,
                 )
                 union_term.select_builders.append(select_builder)
@@ -647,7 +646,7 @@ class UnionQueryBuilder(QueryBuilder):
                     needs_dimension_distinct=self.needs_dimension_distinct,
                     needs_dataset_distinct=union_term.needs_dataset_distinct,
                     needs_validity_match_count=union_term.needs_validity_match_count,
-                    find_first_dataset=None if union_term.find_first is None else ...,
+                    find_first_dataset=None if union_term.find_first is None else qt.ANY_DATASET,
                     order_by=order_by,
                 )
 

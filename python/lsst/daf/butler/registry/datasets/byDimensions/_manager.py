@@ -6,7 +6,6 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
-from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import astropy.time
@@ -1413,7 +1412,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # FOREIGN KEY (and its index) are defined only on dataset_id.
         columns = qt.ColumnSet(dataset_type.dimensions)
         columns.drop_implied_dimension_keys()
-        fields_key: str | EllipsisType = ... if is_union else dataset_type.name
+        fields_key: str | qt.AnyDatasetType = qt.ANY_DATASET if is_union else dataset_type.name
         columns.dataset_fields[fields_key].update(fields)
         tags_builder: SqlSelectBuilder | None = None
         if collection_types != {CollectionType.CALIBRATION}:
@@ -1477,7 +1476,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         sql_projection: SqlSelectBuilder,
         collections: Sequence[CollectionRecord],
         fields: Set[str],
-        fields_key: str | EllipsisType,
+        fields_key: str | qt.AnyDatasetType,
     ) -> SqlSelectBuilder:
         # This method plays the same role as _finish_single_relation in the new
         # query system. It is called exactly one or two times by

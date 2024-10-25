@@ -37,7 +37,6 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Set
 from contextlib import ExitStack
-from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 import sqlalchemy
@@ -95,7 +94,7 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
-_T = TypeVar("_T", bound=str | EllipsisType)
+_T = TypeVar("_T", bound=str | qt.AnyDatasetType)
 
 
 class DirectQueryDriver(QueryDriver):
@@ -445,7 +444,7 @@ class DirectQueryDriver(QueryDriver):
         final_columns: qt.ColumnSet,
         *,
         order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | EllipsisType | None = None,
+        find_first_dataset: str | qt.AnyDatasetType | None = None,
         analyze_only: bool = False,
     ) -> QueryBuilder:
         """Convert a query description into a nearly-complete builder object
@@ -460,11 +459,11 @@ class DirectQueryDriver(QueryDriver):
         order_by : `~collections.abc.Iterable` [ \
                 `.queries.tree.OrderExpression` ], optional
             Column expressions to sort by.
-        find_first_dataset : `str`, ``...``, or `None`, optional
+        find_first_dataset : `str`, ``ANY_DATASET``, or `None`, optional
             Name of a dataset type for which only one result row for each data
             ID should be returned, with the colletions searched in order.
-            ``...`` is used to represent the search for all dataset types with
-            a particular set of dimensions in ``tree.any_dataset``.
+            ``ANY_DATASET`` is used to represent the search for all dataset
+            types with a particular set of dimensions in ``tree.any_dataset``.
         analyze_only : `bool`, optional
             If `True`, perform the initial analysis needed to construct the
             builder, but do not call methods that build its SQL form.  This can
@@ -694,7 +693,9 @@ class DirectQueryDriver(QueryDriver):
         # Gather the filtered collection search path for each union dataset
         # type.
         collections_by_dataset_type = defaultdict[str, list[str]](list)
-        for collection_record, collection_summary in collection_analysis.summaries_by_dataset_type[...]:
+        for collection_record, collection_summary in collection_analysis.summaries_by_dataset_type[
+            qt.ANY_DATASET
+        ]:
             for dataset_type in collection_summary.dataset_types:
                 if dataset_type.dimensions == tree.any_dataset.dimensions:
                     collections_by_dataset_type[dataset_type.name].append(collection_record.name)
@@ -837,7 +838,7 @@ class DirectQueryDriver(QueryDriver):
         needs_dimension_distinct: bool,
         needs_dataset_distinct: bool,
         needs_validity_match_count: bool,
-        find_first_dataset: str | EllipsisType | None,
+        find_first_dataset: str | qt.AnyDatasetType | None,
         order_by: Iterable[qt.OrderExpression],
     ) -> None:
         """Apply the "projection" stage of query construction to a single
@@ -875,9 +876,9 @@ class DirectQueryDriver(QueryDriver):
             ``postprocessing.check_valdity_match_count`` is `True`, a dummy
             count column that is just "1" should be added, because the check
             is needed only for some other SELECT term in a UNION ALL.
-        find_first_dataset : `str` or ``...`` or `None`
+        find_first_dataset : `str` or ``ANY_DATASET`` or `None`
             Name of the dataset type that will need a find-first stage.
-            Ellipsis ``...`` is used when the union datasets need a find-first
+            ``ANY_DATASET`` is used when the union datasets need a find-first
             search, while `None` is used to represent both ``find_first=False``
             and the case when ``find_first=True`` but only only collection has
             survived filtering.
@@ -905,7 +906,7 @@ class DirectQueryDriver(QueryDriver):
         # fields: if rows are uniqe over the 'unique_key' fields, then they're
         # automatically unique over these 'derived_fields'.  We just remember
         # these as pairs of (logical_table, field) for now.
-        derived_fields: list[tuple[str | EllipsisType, str]] = []
+        derived_fields: list[tuple[str | qt.AnyDatasetType, str]] = []
 
         # There are two reasons we might need an aggregate function:
         # - to make sure temporal constraints and joins have resulted in at
@@ -952,7 +953,7 @@ class DirectQueryDriver(QueryDriver):
         # it's a find-first query.
         for dataset_type, fields_for_dataset in projection_columns.dataset_fields.items():
             dataset_search: ResolvedDatasetSearch[Any]
-            if dataset_type is ...:
+            if dataset_type is qt.ANY_DATASET:
                 assert union_datasets is not None
                 dataset_search = union_datasets
             else:
@@ -1219,7 +1220,7 @@ class DirectQueryDriver(QueryDriver):
 
         Parameters
         ----------
-        dataset_type_name : `str` or ``...``
+        dataset_type_name : `str` or ``ANY_DATASET``
             Name of the dataset being searched for.
         dataset_search : `.queries.tree.DatasetSearch`
             Struct holding the dimensions and original collection search path.
@@ -1242,7 +1243,10 @@ class DirectQueryDriver(QueryDriver):
             result.messages.append("No datasets can be found because collection list is empty.")
         for collection_record, collection_summary in collections:
             rejected: bool = False
-            if result.name is not ... and result.name not in collection_summary.dataset_types.names:
+            if (
+                result.name is not qt.ANY_DATASET
+                and result.name not in collection_summary.dataset_types.names
+            ):
                 result.messages.append(
                     f"No datasets of type {result.name!r} in collection {collection_record.name!r}."
                 )
@@ -1346,10 +1350,10 @@ class DirectQueryDriver(QueryDriver):
         else:
             dataset_type = self.get_dataset_type(union_dataset_type_name)
             assert (
-                ... not in joins_builder.fields
+                qt.ANY_DATASET not in joins_builder.fields
             ), "Union dataset fields have unexpectedly already been joined in."
             assert (
-                ... not in joins_builder.timespans
+                qt.ANY_DATASET not in joins_builder.timespans
             ), "Union dataset timespan has unexpectedly already been joined in."
 
         joins_builder.join(

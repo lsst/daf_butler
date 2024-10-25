@@ -31,7 +31,6 @@ __all__ = ("OverlapsVisitor",)
 
 import itertools
 from collections.abc import Hashable, Iterable, Mapping, Sequence, Set
-from types import EllipsisType
 from typing import Generic, Literal, TypeVar, cast
 
 from lsst.sphgeom import Region
@@ -115,7 +114,7 @@ class CalibrationTemporalEndpoint(TopologicalRelationshipEndpoint):
 
     Parameters
     ----------
-    dataset_type_name : `str` or ``...``
+    dataset_type_name : `str` or ``ANY_DATASET``
         Name of the dataset type.
 
     Notes
@@ -128,12 +127,12 @@ class CalibrationTemporalEndpoint(TopologicalRelationshipEndpoint):
     the same family).
     """
 
-    def __init__(self, dataset_type_name: str | EllipsisType):
-        self.dataset_type_name = dataset_type_name
+    def __init__(self, dataset_type_name: str | tree.AnyDatasetType):
+        self.dataset_type_name: str | tree.AnyDatasetType = dataset_type_name
 
     @property
     def name(self) -> str:
-        return self.dataset_type_name if self.dataset_type_name is not ... else "<calibrations>"
+        return self.dataset_type_name if self.dataset_type_name is not tree.ANY_DATASET else "<calibrations>"
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
@@ -148,15 +147,16 @@ class CalibrationTemporalFamily(TopologicalFamily):
 
     Parameters
     ----------
-    dataset_type_name : `str` or ``...``
+    dataset_type_name : `str` or ``ANY_DATASET``
         Name of the dataset type.
     """
 
-    def __init__(self, dataset_type_name: str | EllipsisType):
+    def __init__(self, dataset_type_name: str | tree.AnyDatasetType):
         super().__init__(
-            dataset_type_name if dataset_type_name is not ... else "<calibrations>", TopologicalSpace.TEMPORAL
+            dataset_type_name if dataset_type_name is not tree.ANY_DATASET else "<calibrations>",
+            TopologicalSpace.TEMPORAL,
         )
-        self.dataset_type_name = dataset_type_name
+        self.dataset_type_name: str | tree.AnyDatasetType = dataset_type_name
 
     def choose(self, dimensions: DimensionGroup) -> CalibrationTemporalEndpoint:
         return CalibrationTemporalEndpoint(self.dataset_type_name)
@@ -185,7 +185,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
     implementations that want to rewrite the predicate at the same time.
     """
 
-    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str | EllipsisType]):
+    def __init__(self, dimensions: DimensionGroup, calibration_dataset_types: Set[str | tree.AnyDatasetType]):
         self.dimensions = dimensions
         self._spatial_connections = _NaiveDisjointSet(self.dimensions.spatial)
         temporal_families: list[TopologicalFamily] = [
@@ -481,7 +481,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
         return None
 
     def visit_validity_range_dimension_join(
-        self, a: str | EllipsisType, b: DimensionElement, flags: PredicateVisitFlags
+        self, a: str | tree.AnyDatasetType, b: DimensionElement, flags: PredicateVisitFlags
     ) -> tree.Predicate | None:
         """Handle a temporal overlap comparison between two dimension elements.
 
@@ -491,7 +491,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
 
         Parameters
         ----------
-        a : `str` or ``...``
+        a : `str` or ``tree.AnyDatasetType``
             Name of a calibration dataset type.
         b : `DimensionElement`
             The dimension element to join the dataset validity range to.
@@ -509,7 +509,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
         return None
 
     def visit_validity_range_join(
-        self, a: str | EllipsisType, b: str | EllipsisType, flags: PredicateVisitFlags
+        self, a: str | tree.AnyDatasetType, b: str | tree.AnyDatasetType, flags: PredicateVisitFlags
     ) -> tree.Predicate | None:
         """Handle a temporal overlap comparison between two dimension elements.
 
@@ -519,9 +519,9 @@ class OverlapsVisitor(SimplePredicateVisitor):
 
         Parameters
         ----------
-        a : `str` or ``...``
+        a : `str` or ``tree.AnyDatasetType``
             Name of a calibration dataset type.
-        b : `str` or ``...``
+        b : `str` or ``tree.AnyDatasetType``
             Another claibration dataset type to join to.
         flags : `tree.PredicateLeafFlags`
             Information about where this overlap comparison appears in the

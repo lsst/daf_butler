@@ -32,7 +32,6 @@ __all__ = (
     "get_universe_from_context",
     "SerializableRegion",
     "SerializableTime",
-    "SerializableEllipsis",
 )
 
 from types import EllipsisType
@@ -336,17 +335,3 @@ def _deserialize_ellipsis(value: object, handler: pydantic.ValidatorFunctionWrap
     if s == "...":
         return ...
     raise ValueError(f"String {s!r} is not '...'.")
-
-
-SerializableEllipsis: TypeAlias = Annotated[
-    EllipsisType,
-    pydantic.GetPydanticSchema(lambda _, h: h(str)),
-    pydantic.WrapValidator(_deserialize_ellipsis),
-    pydantic.WrapSerializer(_serialize_ellipsis),
-    pydantic.WithJsonSchema({"const": "..."}),
-]
-"""A Pydantic-annotated version of the special ellipsis object (``...``).
-
-The serialized form is just the string "...", and hence to participate in a
-union with `str` correctly, this type must come first.
-"""

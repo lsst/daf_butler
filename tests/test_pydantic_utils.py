@@ -31,12 +31,7 @@ import unittest
 
 import pydantic
 from astropy.time import Time
-from lsst.daf.butler.pydantic_utils import (
-    DeferredValidation,
-    SerializableEllipsis,
-    SerializableRegion,
-    SerializableTime,
-)
+from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion, SerializableTime
 from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 
 
@@ -141,24 +136,6 @@ class SerializableExtensionsTestCase(unittest.TestCase):
             adapter.validate_python("one")
         with self.assertRaises(ValueError):
             adapter.validate_json({})
-
-    def test_ellipsis(self) -> None:
-        adapter = pydantic.TypeAdapter(SerializableEllipsis)
-        json_roundtripped = adapter.validate_json(adapter.dump_json(...))
-        self.assertIs(json_roundtripped, ...)
-        python_roundtripped = adapter.validate_python(adapter.dump_python(...))
-        self.assertIs(python_roundtripped, ...)
-
-    def test_ellipsis_union(self) -> None:
-        adapter = pydantic.TypeAdapter(SerializableEllipsis | str)
-        json_roundtripped = adapter.validate_json(adapter.dump_json(...))
-        self.assertIs(json_roundtripped, ...)
-        python_roundtripped = adapter.validate_python(adapter.dump_python(...))
-        self.assertIs(python_roundtripped, ...)
-        json_roundtripped = adapter.validate_json(adapter.dump_json("other"))
-        self.assertEqual(json_roundtripped, "other")
-        python_roundtripped = adapter.validate_python(adapter.dump_python("other"))
-        self.assertEqual(python_roundtripped, "other")
 
 
 if __name__ == "__main__":

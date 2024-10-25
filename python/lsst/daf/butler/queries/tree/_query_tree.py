@@ -38,7 +38,6 @@ __all__ = (
 
 import uuid
 from collections.abc import Iterator, Mapping
-from types import EllipsisType
 from typing import TypeAlias, final
 
 import pydantic
@@ -46,7 +45,7 @@ import pydantic
 from ..._exceptions import InvalidQueryError
 from ...dimensions import DimensionGroup, DimensionUniverse
 from ...pydantic_utils import DeferredValidation
-from ._base import QueryTreeBase
+from ._base import ANY_DATASET, AnyDatasetType, QueryTreeBase
 from ._column_set import ColumnSet
 from ._predicate import Predicate
 
@@ -147,10 +146,10 @@ class QueryTree(QueryTreeBase):
     predicate: Predicate = Predicate.from_bool(True)
     """Boolean expression trees whose logical AND defines a row filter."""
 
-    def iter_all_dataset_searches(self) -> Iterator[tuple[str | EllipsisType, DatasetSearch]]:
+    def iter_all_dataset_searches(self) -> Iterator[tuple[str | AnyDatasetType, DatasetSearch]]:
         yield from self.datasets.items()
         if self.any_dataset is not None:
-            yield (..., self.any_dataset)
+            yield (ANY_DATASET, self.any_dataset)
 
     def get_joined_dimension_groups(self) -> frozenset[DimensionGroup]:
         """Return a set of the dimension groups of all data coordinate uploads,
@@ -312,7 +311,7 @@ class QueryTree(QueryTreeBase):
             predicate = predicate.logical_and(where_term)
         missing_dataset_types = columns.dataset_fields.keys() - self.datasets.keys()
         if self.any_dataset is not None:
-            missing_dataset_types.discard(...)
+            missing_dataset_types.discard(ANY_DATASET)
         if missing_dataset_types:
             raise InvalidQueryError(
                 f"Cannot reference dataset type(s) {missing_dataset_types} that have not been joined."

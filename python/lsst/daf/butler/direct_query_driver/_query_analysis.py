@@ -36,7 +36,6 @@ __all__ = (
 
 import dataclasses
 from collections.abc import Iterator, Mapping
-from types import EllipsisType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from ..dimensions import DimensionElement, DimensionGroup
@@ -205,16 +204,16 @@ class QueryCollectionAnalysis:
     This includes CHAINED collections.
     """
 
-    calibration_dataset_types: set[str | EllipsisType] = dataclasses.field(default_factory=set)
+    calibration_dataset_types: set[str | qt.AnyDatasetType] = dataclasses.field(default_factory=set)
     """A set of the anmes of all calibration dataset types.
 
-    If ``...`` appears in the set, the dataset type union includes at least one
-    calibration dataset type.
+    If ``ANY_DATASET`` appears in the set, the dataset type union includes at
+    least one calibration dataset type.
     """
 
-    summaries_by_dataset_type: dict[str | EllipsisType, list[tuple[CollectionRecord, CollectionSummary]]] = (
-        dataclasses.field(default_factory=dict)
-    )
+    summaries_by_dataset_type: dict[
+        str | qt.AnyDatasetType, list[tuple[CollectionRecord, CollectionSummary]]
+    ] = dataclasses.field(default_factory=dict)
     """Collection records and summaries, in search order, keyed by dataset type
     name.
 
