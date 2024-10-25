@@ -552,9 +552,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             If `True` allow transfers to overwrite existing files at the
             destination.
         write_index : `bool`, optional
-            If `True` write a file at the top level called ``_index.json``
-            containing a serialization of a `ZipIndex` for the downloaded
-            datasets.
+            If `True` write a file at the top level containing a serialization
+            of a `ZipIndex` for the downloaded datasets.
         add_prefix : `bool`, optional
             If `True` and if ``preserve_path`` is `False`, apply a prefix to
             the filenames corresponding to some part of the dataset ref ID.

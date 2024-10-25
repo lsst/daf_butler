@@ -195,7 +195,7 @@ class ZipIndex(BaseModel):
     info_map: dict[str, SerializedStoredFileInfo]
     """Mapping of each Zip member to the associated datastore record."""
 
-    index_name: ClassVar[str] = "_index.json"
+    index_name: ClassVar[str] = "_butler_zip_index.json"
     """Name to use when saving the index to a file."""
 
     def generate_uuid5(self) -> uuid.UUID:

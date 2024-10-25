@@ -88,6 +88,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
@@ -362,7 +363,7 @@ class ButlerPutGetTests(TestCaseMixin):
                             self.assertGreater(len(transferred), 0)
                             artifacts = list(ResourcePath.findFileResources([destination]))
                             # Filter out the index file.
-                            artifacts = [a for a in artifacts if a.basename() != "_index.json"]
+                            artifacts = [a for a in artifacts if a.basename() != ZipIndex.index_name]
                             self.assertEqual(set(transferred), set(artifacts))
 
                             for artifact in transferred:

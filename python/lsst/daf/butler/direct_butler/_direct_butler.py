@@ -1309,20 +1309,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> list[ResourcePath]:
         # Docstring inherited.
         outdir = ResourcePath(destination)
-        paths, id_map, info_map = self._datastore.retrieveArtifacts(
+        paths, _, _ = self._datastore.retrieveArtifacts(
             refs,
             outdir,
             transfer=transfer,
             preserve_path=preserve_path,
             overwrite=overwrite,
+            write_index=True,
         )
-        # Write the index file.
-        index = ZipIndex.from_artifact_maps(
-            refs, id_map, info_map, ResourcePath(destination, forceDirectory=True)
-        )
-        index_path = outdir.join("_index.json")
-        with index_path.open("w") as fd:
-            print(index.model_dump_json(exclude_defaults=True, exclude_unset=True), file=fd)
         return paths
 
     def exists(
