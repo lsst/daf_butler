@@ -690,6 +690,33 @@ class DirectQueryDriver(QueryDriver):
             return QueryTreeAnalysis(
                 joins, union_datasets=[], initial_select_builder=select_builder, postprocessing=postprocessing
             )
+        union_datasets = self._resolve_union_datasets(tree.any_dataset.dimensions, collection_analysis)
+        return QueryTreeAnalysis(
+            joins,
+            union_datasets=union_datasets,
+            initial_select_builder=select_builder,
+            postprocessing=postprocessing,
+        )
+
+    def _resolve_union_datasets(
+        self, dimensions: DimensionGroup, collection_analysis: QueryCollectionAnalysis
+    ) -> list[ResolvedDatasetSearch[list[str]]]:
+        """Resolve searches for union datasets.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimnensions of the union dataset types in this query.
+        collection_analysis : `CollectionAnalysis`
+            Information about the collections appearing in this collection.
+
+        Returns
+        -------
+        searches : `list` [ `ResolvedDatasetSearch` ]
+            Resolved dataset searches for all union dataset types with these
+            dimensions.  Each item in the list groups dataset types with the
+            same colletion search path.
+        """
         # Gather the filtered collection search path for each union dataset
         # type.
         collections_by_dataset_type = defaultdict[str, list[str]](list)
@@ -697,18 +724,18 @@ class DirectQueryDriver(QueryDriver):
             qt.ANY_DATASET
         ]:
             for dataset_type in collection_summary.dataset_types:
-                if dataset_type.dimensions == tree.any_dataset.dimensions:
+                if dataset_type.dimensions == dimensions:
                     collections_by_dataset_type[dataset_type.name].append(collection_record.name)
         # Reverse the lookup order on the mapping we just made to group
         # dataset types by their collection search path.  Each such group
-        # yields an output plan.
+        # yields a term in a union query builder
         dataset_searches_by_collections: dict[tuple[str, ...], ResolvedDatasetSearch[list[str]]] = {}
         for dataset_type_name, collection_path in collections_by_dataset_type.items():
             key = tuple(collection_path)
             if (resolved_search := dataset_searches_by_collections.get(key)) is None:
                 resolved_search = ResolvedDatasetSearch[list[str]](
                     [],
-                    dimensions=tree.any_dataset.dimensions,
+                    dimensions=dimensions,
                     collection_records=[
                         collection_analysis.collection_records[collection_name]
                         for collection_name in collection_path
@@ -720,12 +747,7 @@ class DirectQueryDriver(QueryDriver):
                 )
                 dataset_searches_by_collections[key] = resolved_search
             resolved_search.name.append(dataset_type_name)
-        return QueryTreeAnalysis(
-            joins,
-            union_datasets=list(dataset_searches_by_collections.values()),
-            initial_select_builder=select_builder,
-            postprocessing=postprocessing,
-        )
+        return list(dataset_searches_by_collections.values())
 
     def apply_initial_query_joins(
         self,
