@@ -440,7 +440,7 @@ class FormatterV2:
         # be extracted.
         uri = self.file_descriptor.location.uri
         if uri.fragment and uri.unquoted_fragment.startswith("zip-path="):
-            _, path_in_zip = uri.unquoted_fragment.split("=")
+            _, _, path_in_zip = uri.unquoted_fragment.partition("=")
 
             # Open the Zip file using ResourcePath.
             with uri.open("rb") as fd:
