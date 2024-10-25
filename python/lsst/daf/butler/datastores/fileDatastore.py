@@ -2122,21 +2122,23 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # e.g. DECam.
         artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
         artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
+        have_copied: dict[ResourcePath, ResourcePath] = {}
         for ref in refs:
             prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             for info in records[ref.id]:
                 location = info.file_location(self.locationFactory)
                 source_uri = location.uri
-                target_uri = determine_destination_for_retrieved_artifact(
-                    destination, location.pathInStore, preserve_path, prefix
-                )
-                # This will override any previous target URI if a source file
-                # has multiple refs associated with it but that is okay.
-                # Any prefix used will be from the final ref and all refs
-                # must be recorded. Fragments have to be removed from the
-                # transfer list though to prevent duplicate copies.
+                # For DECam/zip we only want to copy once.
+                # We need to remove fragments for consistency.
                 cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
-                to_transfer[cleaned_source_uri] = target_uri
+                if cleaned_source_uri not in have_copied:
+                    target_uri = determine_destination_for_retrieved_artifact(
+                        destination, location.pathInStore, preserve_path, prefix
+                    )
+                    to_transfer[cleaned_source_uri] = target_uri
+                    have_copied[cleaned_source_uri] = target_uri
+                else:
+                    target_uri = have_copied[cleaned_source_uri]
                 artifact_to_ref_id[target_uri].append(ref.id)
                 # TODO: If this is a Zip file, it should be unzipped and the
                 # index merged. Else only a single info record is recorded.
