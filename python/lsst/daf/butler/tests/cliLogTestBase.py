@@ -49,8 +49,15 @@ from logging import DEBUG, INFO, WARNING
 from typing import TYPE_CHECKING, Any
 
 import click
-from lsst.daf.butler.cli.butler import cli as butlerCli
+from lsst.daf.butler.cli.butler import UncachedButlerCLI
 from lsst.daf.butler.cli.cliLog import CliLog
+from lsst.daf.butler.cli.opt import (
+    log_file_option,
+    log_label_option,
+    log_level_option,
+    log_tty_option,
+    long_log_option,
+)
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, command_test_env
 from lsst.daf.butler.logging import ButlerLogRecords
 from lsst.utils.logging import TRACE
@@ -66,6 +73,34 @@ except ModuleNotFoundError:
     lsstLog_INFO = 0
     lsstLog_DEBUG = 0
     lsstLog_WARN = 0
+
+
+@click.command(cls=UncachedButlerCLI)
+@log_level_option()
+@long_log_option()
+@log_file_option()
+@log_tty_option()
+@log_label_option()
+def butlerCli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str) -> None:
+    """Uncached ButlerCLI.
+
+    Parameters
+    ----------
+    log_level : `str`
+        The log level to use by default. ``log_level`` is handled by
+        ``get_command`` and ``list_commands``, and is called in
+        one of those functions before this is called.
+    long_log : `bool`
+        Enable extended log output. ``long_log`` is handled by
+        ``setup_logging``.
+    log_file : `str`
+        The log file name.
+    log_tty : `bool`
+        Whether to send logs to standard output.
+    log_label : `str`
+        Log labels.
+    """
+    pass
 
 
 @click.command()

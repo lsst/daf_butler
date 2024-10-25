@@ -37,6 +37,7 @@ from unittest.mock import patch
 import click
 import yaml
 from lsst.daf.butler.cli import butler, cmd
+from lsst.daf.butler.cli.butler import UncachedButlerCLI
 from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env
 
 
@@ -64,6 +65,12 @@ def duplicate_command_test_env(runner):
             yield
 
 
+@click.command(cls=UncachedButlerCLI)
+def uncached_cli():
+    """ButlerCLI that does not cache the commands."""
+    pass
+
+
 class FailedLoadTest(unittest.TestCase):
     """Test failed plugin loading."""
 
@@ -73,7 +80,7 @@ class FailedLoadTest(unittest.TestCase):
     def test_unimportablePlugin(self):
         with command_test_env(self.runner, "test_cliPluginLoader", "non-existant-command-function"):
             with self.assertLogs() as cm:
-                result = self.runner.invoke(butler.cli, "--help")
+                result = self.runner.invoke(uncached_cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output!r} exception: {result.exception}")
             expectedErrMsg = (
                 "Could not import plugin from test_cliPluginLoader.non_existant_command_function, skipping."
@@ -104,7 +111,7 @@ class PluginLoaderTest(unittest.TestCase):
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
         with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
-            result = self.runner.invoke(butler.cli, "command-test")
+            result = self.runner.invoke(uncached_cli, "command-test")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
 
@@ -118,7 +125,7 @@ class PluginLoaderTest(unittest.TestCase):
     def test_loadTopHelp(self):
         """Test that an expected command is produced by 'butler --help'"""
         with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
-            result = self.runner.invoke(butler.cli, "--help")
+            result = self.runner.invoke(uncached_cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)
 
@@ -146,7 +153,7 @@ class PluginLoaderTest(unittest.TestCase):
         """
         self.maxDiff = None
         with duplicate_command_test_env(self.runner):
-            result = self.runner.invoke(butler.cli, ["create", "test_repo"])
+            result = self.runner.invoke(uncached_cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(
                 result.output,

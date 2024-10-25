@@ -40,6 +40,7 @@ import os
 import traceback
 import types
 from collections import defaultdict
+from functools import cache
 from typing import Any
 
 import click
@@ -303,6 +304,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             cls._mergeCommandLists(commands, defaultdict(list, pluginCommands))
         return commands
 
+    @cache
     def _getCommands(self) -> defaultdict[str, list[str]]:
         """Get the commands offered by daf_butler and plugin packages.
 
@@ -370,6 +372,21 @@ class ButlerCLI(LoaderCLI):
         if commandName == "import":
             return "butler_import"
         return super()._cmdNameToFuncName(commandName)
+
+
+class UncachedButlerCLI(ButlerCLI):
+    """ButlerCLI that can be used where caching of the commands is disabled."""
+
+    def _getCommands(self) -> defaultdict[str, list[str]]:  # type: ignore[override]
+        """Get the commands offered by daf_butler and plugin packages.
+
+        Returns
+        -------
+        commands : `defaultdict` [`str`, `list` [`str`]]
+            The key is the command name. The value is a list of package(s) that
+            contains the command.
+        """
+        return self._mergeCommandLists(self.getLocalCommands(), self._getPluginCommands())
 
 
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
