@@ -509,8 +509,7 @@ class QuantumBackedButler(LimitedButler):
         Parameters
         ----------
         refs : `~collections.abc.Iterable` [ `DatasetRef` ]
-            The datasets to be included in the zip file. Must all be from
-            the same dataset type.
+            The datasets to be included in the zip file.
         destination : `lsst.resources.ResourcePathExpression`
             Directory to write the new ZIP file. This directory will
             also be used as a staging area for the datasets being downloaded
@@ -520,6 +519,11 @@ class QuantumBackedButler(LimitedButler):
         -------
         zip_file : `lsst.resources.ResourcePath`
             The path to the new ZIP file.
+
+        Raises
+        ------
+        ValueError
+            Raised if there are no refs to retrieve.
         """
         return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts)
 

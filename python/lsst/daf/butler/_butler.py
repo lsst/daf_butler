@@ -998,8 +998,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         Parameters
         ----------
         refs : `~collections.abc.Iterable` [ `DatasetRef` ]
-            The datasets to be included in the zip file. Must all be from
-            the same dataset type.
+            The datasets to be included in the zip file.
         destination : `lsst.resources.ResourcePathExpression`
             Directory to write the new ZIP file. This directory will
             also be used as a staging area for the datasets being downloaded
@@ -1009,6 +1008,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         -------
         zip_file : `lsst.resources.ResourcePath`
             The path to the new ZIP file.
+
+        Raises
+        ------
+        ValueError
+            Raised if there are no refs to retrieve.
         """
         raise NotImplementedError()
 

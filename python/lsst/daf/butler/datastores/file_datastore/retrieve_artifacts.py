@@ -418,7 +418,15 @@ def retrieve_and_zip(
     -------
     zip_file : `lsst.resources.ResourcePath`
         The path to the new ZIP file.
+
+    Raises
+    ------
+    ValueError
+        Raised if there are no refs to retrieve.
     """
+    if not refs:
+        raise ValueError("Requested Zip file with no contents.")
+
     outdir = ResourcePath(destination, forceDirectory=True)
     if not outdir.isdir():
         raise ValueError(f"Destination location must refer to a directory. Given {destination}")

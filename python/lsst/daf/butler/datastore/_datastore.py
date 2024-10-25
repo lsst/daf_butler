@@ -1066,7 +1066,7 @@ class Datastore(metaclass=ABCMeta):
                 `list` [ `uuid.UUID` ] ]
             Mapping of retrieved artifact path to DatasetRef ID.
         artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
-                `StoredDatastoreItemInfo` ]
+                `StoredFileInfo` ]
             Mapping of retrieved artifact path to datastore record information.
 
         Notes

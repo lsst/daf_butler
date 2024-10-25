@@ -967,6 +967,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertFalse(uri.exists())
         self.assertFalse(butler.exists(refs[-1]))
 
+        with self.assertRaises(ValueError):
+            butler.retrieve_artifacts_zip([], destination=".")
+
     def testIngest(self) -> None:
         butler = self.create_empty_butler(run=self.default_run)
 

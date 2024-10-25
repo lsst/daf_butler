@@ -613,10 +613,12 @@ def retrieve_artifacts(**kwargs: Any) -> None:
     """Retrieve file artifacts associated with datasets in a repository."""
     verbose = kwargs.pop("verbose")
     transferred = script.retrieveArtifacts(**kwargs)
-    if kwargs["zip"] and transferred:
-        print(f"Zip files written to {transferred[0]}")
+    if not transferred:
+        print("No datasets matched query.")
+    elif kwargs["zip"]:
+        print(f"Zip file written to {transferred[0]}")
     else:
-        if verbose and transferred:
+        if verbose:
             print(f"Transferred the following to {kwargs['destination']}:")
             for uri in transferred:
                 print(uri)
