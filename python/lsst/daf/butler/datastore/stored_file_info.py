@@ -385,11 +385,11 @@ class SerializedStoredFileInfo(pydantic.BaseModel):
     storage_class: str
     """Name of the StorageClass associated with Dataset."""
 
-    component: str | None
+    component: str | None = None
     """Component associated with this file. Can be `None` if the file does
     not refer to a component of a composite."""
 
-    checksum: str | None
+    checksum: str | None = None
     """Checksum of the serialized dataset."""
 
     file_size: int
