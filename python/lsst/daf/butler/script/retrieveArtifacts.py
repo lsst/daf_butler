@@ -104,7 +104,7 @@ def retrieveArtifacts(
 
     butler = Butler.from_config(repo, writeable=False)
 
-    # Need to store in list so we can count the number to give some feedback
+    # Need to store in set so we can count the number to give some feedback
     # to caller.
     query = QueryDatasets(
         butler=butler,
@@ -116,7 +116,7 @@ def retrieveArtifacts(
         order_by=order_by,
         show_uri=False,
     )
-    refs = list(itertools.chain(*query.getDatasets()))
+    refs = set(itertools.chain(*query.getDatasets()))
     log.info("Number of datasets matching query: %d", len(refs))
     if not refs:
         return []

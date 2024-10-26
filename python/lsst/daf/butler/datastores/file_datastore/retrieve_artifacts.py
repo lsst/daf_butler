@@ -183,7 +183,7 @@ class ArtifactIndexInfo(BaseModel):
     info: SerializedStoredFileInfo
     """Datastore record information for this file artifact."""
 
-    ids: list[uuid.UUID]
+    ids: set[uuid.UUID]
     """Dataset IDs for this artifact."""
 
     def append(self, id_: uuid.UUID) -> None:
@@ -194,7 +194,7 @@ class ArtifactIndexInfo(BaseModel):
         id_ : `uuid.UUID`
             Additional dataset ID to associate with this artifact.
         """
-        self.ids.append(id_)
+        self.ids.add(id_)
 
     @classmethod
     def from_single(cls, info: SerializedStoredFileInfo, id_: uuid.UUID) -> Self:
