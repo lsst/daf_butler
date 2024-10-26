@@ -50,7 +50,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey
     from lsst.daf.butler.datastore import DatastoreOpaqueTable
-    from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
+    from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -529,7 +529,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         overwrite: bool | None = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters

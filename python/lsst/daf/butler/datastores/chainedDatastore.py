@@ -38,13 +38,7 @@ import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import (
-    DatasetId,
-    DatasetRef,
-    DatasetTypeNotSupportedError,
-    DimensionUniverse,
-    FileDataset,
-)
+from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, DimensionUniverse, FileDataset
 from lsst.daf.butler.datastore import (
     DatasetRefURIs,
     Datastore,
@@ -54,8 +48,7 @@ from lsst.daf.butler.datastore import (
 )
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
-from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
-from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 
@@ -819,7 +812,7 @@ class ChainedDatastore(Datastore):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -853,12 +846,9 @@ class ChainedDatastore(Datastore):
         targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
-        artifacts_to_ref_id : `dict` [ `~lsst.resources.ResourcePath`, \
-                `list` [ `uuid.UUID` ] ]
-            Mapping of retrieved artifact path to `DatasetRef` ID.
-        artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
-                `StoredDatastoreItemInfo` ]
-            Mapping of retrieved artifact path to datastore record information.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
         """
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}")
@@ -904,10 +894,9 @@ class ChainedDatastore(Datastore):
 
         # Now do the transfer.
         targets: list[ResourcePath] = []
-        merged_artifacts_to_ref_id: dict[ResourcePath, list[DatasetId]] = {}
-        merged_artifacts_to_info: dict[ResourcePath, StoredFileInfo] = {}
+        merged_artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
         for number, datastore_refs in grouped_by_datastore.items():
-            retrieved, artifacts_to_ref_id, artifacts_to_info = self.datastores[number].retrieveArtifacts(
+            retrieved, artifact_map = self.datastores[number].retrieveArtifacts(
                 datastore_refs,
                 destination,
                 transfer=transfer,
@@ -917,16 +906,13 @@ class ChainedDatastore(Datastore):
                 add_prefix=add_prefix,
             )
             targets.extend(retrieved)
-            merged_artifacts_to_ref_id.update(artifacts_to_ref_id)
-            merged_artifacts_to_info.update(artifacts_to_info)
+            merged_artifact_map.update(artifact_map)
 
         if write_index:
-            index = ZipIndex.from_artifact_maps(
-                refs, merged_artifacts_to_ref_id, merged_artifacts_to_info, destination
-            )
+            index = ZipIndex.from_artifact_map(refs, merged_artifact_map, destination)
             index.write_index(destination)
 
-        return targets, merged_artifacts_to_ref_id, merged_artifacts_to_info
+        return targets, merged_artifact_map
 
     def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
         """Ingest an indexed Zip file and contents.

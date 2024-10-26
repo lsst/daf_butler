@@ -1309,7 +1309,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> list[ResourcePath]:
         # Docstring inherited.
         outdir = ResourcePath(destination)
-        paths, _, _ = self._datastore.retrieveArtifacts(
+        paths, _ = self._datastore.retrieveArtifacts(
             refs,
             outdir,
             transfer=transfer,
@@ -1544,13 +1544,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         id_to_ref = {ref.id: ref for ref in refs}
         datasets: list[FileDataset] = []
         processed_ids: set[uuid.UUID] = set()
-        for path, ids in index.ref_map.items():
+        for path_in_zip, index_info in index.artifact_map.items():
             # Disassembled composites need to check this ref isn't already
             # included.
-            unprocessed = {id_ for id_ in ids if id_ not in processed_ids}
+            unprocessed = {id_ for id_ in index_info.ids if id_ not in processed_ids}
             if not unprocessed:
                 continue
-            dataset = FileDataset(refs=[id_to_ref[id_] for id_ in unprocessed], path=path)
+            dataset = FileDataset(refs=[id_to_ref[id_] for id_ in unprocessed], path=path_in_zip)
             datasets.append(dataset)
             processed_ids.update(unprocessed)
 

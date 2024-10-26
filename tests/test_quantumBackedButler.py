@@ -228,7 +228,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         zip_refs = index.refs.to_refs(universe=qbb.dimensions)
         self.assertEqual(len(zip_refs), 4)
         self.assertEqual(set(zip_refs), set(self.output_refs))
-        self.assertEqual(len(index.info_map), 4)  # Count number of artifacts in Zip.
+        self.assertEqual(len(index.artifact_map), 4)  # Count number of artifacts in Zip.
 
     def test_getDeferred(self) -> None:
         """Test for getDeferred method"""

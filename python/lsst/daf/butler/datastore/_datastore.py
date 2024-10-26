@@ -55,16 +55,16 @@ from .._exceptions import DatasetTypeNotSupportedError, ValidationError
 from .._file_dataset import FileDataset
 from .._storage_class import StorageClassFactory
 from .constraints import Constraints
-from .stored_file_info import StoredFileInfo
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
     from .. import ddl
     from .._config_support import LookupKey
-    from .._dataset_ref import DatasetId, DatasetRef
+    from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
+    from ..datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .record_data import DatastoreRecordData
     from .stored_file_info import StoredDatastoreItemInfo
@@ -1026,7 +1026,7 @@ class Datastore(metaclass=ABCMeta):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1061,12 +1061,9 @@ class Datastore(metaclass=ABCMeta):
         targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
-        artifacts_to_ref_id : `dict` [ `~lsst.resources.ResourcePath`, \
-                `list` [ `uuid.UUID` ] ]
-            Mapping of retrieved artifact path to DatasetRef ID.
-        artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
-                `StoredFileInfo` ]
-            Mapping of retrieved artifact path to datastore record information.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
 
         Notes
         -----
@@ -1494,7 +1491,7 @@ class NullDatastore(Datastore):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def remove(self, datasetRef: DatasetRef) -> None:

@@ -36,8 +36,8 @@ import zipfile
 from collections.abc import Callable, Iterable
 from typing import ClassVar, Self
 
-from lsst.daf.butler import DatasetId, DatasetIdFactory, DatasetRef
-from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo, StoredFileInfo
+from lsst.daf.butler import DatasetIdFactory, DatasetRef
+from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo
 from lsst.resources import ResourcePath, ResourcePathExpression
 from pydantic import BaseModel
 
@@ -177,6 +177,39 @@ class SerializedDatasetRefContainer(BaseModel):
         return refs
 
 
+class ArtifactIndexInfo(BaseModel):
+    """Information related to an artifact in an index."""
+
+    info: SerializedStoredFileInfo
+    """Datastore record information for this file artifact."""
+
+    ids: list[uuid.UUID]
+    """Dataset IDs for this artifact."""
+
+    def append(self, id_: uuid.UUID) -> None:
+        """Add an additional dataset ID.
+
+        Parameters
+        ----------
+        id_ : `uuid.UUID`
+            Additional dataset ID to associate with this artifact.
+        """
+        self.ids.append(id_)
+
+    @classmethod
+    def from_single(cls, info: SerializedStoredFileInfo, id_: uuid.UUID) -> Self:
+        """Create a mapping from a single ID and info.
+
+        Parameters
+        ----------
+        info : `SerializedStoredFileInfo`
+            Datastore record for this artifact.
+        id_ : `uuid.UUID`
+            First dataset ID to associate with this artifact.
+        """
+        return cls(info=info, ids=[id_])
+
+
 class ZipIndex(BaseModel):
     """Index of a Zip file of Butler datasets.
 
@@ -189,11 +222,8 @@ class ZipIndex(BaseModel):
     refs: SerializedDatasetRefContainer
     """Deduplicated information for all the `DatasetRef` in the index."""
 
-    ref_map: dict[str, list[uuid.UUID]]
-    """Mapping of Zip member to one or more dataset UUIDs."""
-
-    info_map: dict[str, SerializedStoredFileInfo]
-    """Mapping of each Zip member to the associated datastore record."""
+    artifact_map: dict[str, ArtifactIndexInfo]
+    """Mapping of each Zip member to associated lookup information."""
 
     index_name: ClassVar[str] = "_butler_zip_index.json"
     """Name to use when saving the index to a file."""
@@ -215,13 +245,13 @@ class ZipIndex(BaseModel):
         # - uuid5 from file paths and dataset refs.
         # Do not attempt to include file contents in UUID.
         # Start with uuid5 from file paths.
-        data = ",".join(sorted(self.info_map.keys()))
+        data = ",".join(sorted(self.artifact_map.keys()))
         # No need to come up with a different namespace.
         return uuid.uuid5(DatasetIdFactory.NS_UUID, data)
 
     def __len__(self) -> int:
         """Return the number of files in the Zip."""
-        return len(self.info_map)
+        return len(self.artifact_map)
 
     def calculate_zip_file_name(self) -> str:
         """Calculate the default name for the Zip file based on the index
@@ -280,11 +310,10 @@ class ZipIndex(BaseModel):
         return file_to_relative
 
     @classmethod
-    def from_artifact_maps(
+    def from_artifact_map(
         cls,
         refs: Iterable[DatasetRef],
-        id_map: dict[ResourcePath, list[DatasetId]],
-        info_map: dict[ResourcePath, StoredFileInfo],
+        artifact_map: dict[ResourcePath, ArtifactIndexInfo],
         root: ResourcePath,
     ) -> Self:
         """Create an index from the mappings returned from
@@ -294,42 +323,31 @@ class ZipIndex(BaseModel):
         ----------
         refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets present in the index.
-        id_map : `dict` [ `lsst.resources.ResourcePath`, \
-                `list` [ `uuid.UUID`] ]
-            Mapping of retrieved artifact path to `DatasetRef` ID.
-        info_map : `dict` [ `~lsst.resources.ResourcePath`, \
-                `StoredDatastoreItemInfo` ]
-            Mapping of retrieved artifact path to datastore record information.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, `ArtifactMap` ]
+            Mapping of artifact path to information linking it to the
+            associated refs and datastore information.
         root : `lsst.resources.ResourcePath`
             Root path to be removed from all the paths before creating the
             index.
         """
         if not refs:
             return cls(
-                universe_version=0,
-                universe_namespace="daf_butler",
                 refs=SerializedDatasetRefContainer.from_refs(refs),
-                ref_map={},
-                info_map={},
+                artifact_map={},
             )
 
         # Calculate the paths relative to the given root since the Zip file
         # uses relative paths.
-        file_to_relative = cls.calc_relative_paths(root, info_map.keys())
+        file_to_relative = cls.calc_relative_paths(root, artifact_map.keys())
 
         simplified_refs = SerializedDatasetRefContainer.from_refs(refs)
 
-        # Convert the mappings to simplified form for pydantic.
-        # and use the relative paths that will match the zip.
-        simplified_ref_map = {}
-        for path, ids in id_map.items():
-            simplified_ref_map[file_to_relative[path]] = ids
-        simplified_info_map = {file_to_relative[path]: info.to_simple() for path, info in info_map.items()}
+        # Convert the artifact mapping to relative path.
+        relative_artifact_map = {file_to_relative[path]: info for path, info in artifact_map.items()}
 
         return cls(
             refs=simplified_refs,
-            ref_map=simplified_ref_map,
-            info_map=simplified_info_map,
+            artifact_map=relative_artifact_map,
         )
 
     @classmethod
@@ -395,7 +413,7 @@ def retrieve_and_zip(
     destination: ResourcePathExpression,
     retrieval_callback: Callable[
         [Iterable[DatasetRef], ResourcePath, str, bool, bool, bool, bool],
-        tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]],
+        tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]],
     ],
 ) -> ResourcePath:
     """Retrieve artifacts from a Butler and place in ZIP file.
@@ -444,7 +462,7 @@ def retrieve_and_zip(
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
         # Retrieve the artifacts and write the index file. Strip paths.
-        paths, _, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True, True)
+        paths, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True, True)
 
         # Read the index to construct file name.
         index_path = tmpdir_path.join(ZipIndex.index_name, forceDirectory=False)

@@ -81,6 +81,7 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     get_dataset_as_python_object_from_get_info,
 )
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    ArtifactIndexInfo,
     ZipIndex,
     determine_destination_for_retrieved_artifact,
 )
@@ -2050,7 +2051,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, list[DatasetId]], dict[ResourcePath, StoredFileInfo]]:
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -2085,12 +2086,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
-        artifacts_to_ref_id : `dict` [ `~lsst.resources.ResourcePath`, \
-                `list` [ `uuid.UUID` ] ]
-            Mapping of retrieved artifact path to `DatasetRef` ID.
-        artifacts_to_info : `dict` [ `~lsst.resources.ResourcePath`, \
-                `StoredDatastoreItemInfo` ]
-            Mapping of retrieved artifact path to datastore record information.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
         """
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}")
@@ -2120,9 +2118,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # One artifact can be used by multiple DatasetRef.
         # e.g. DECam.
-        artifact_to_ref_id: dict[ResourcePath, list[DatasetId]] = defaultdict(list)
-        artifact_to_info: dict[ResourcePath, StoredFileInfo] = {}
-        have_copied: dict[ResourcePath, ResourcePath] = {}
+        artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
         for ref in refs:
             prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             for info in records[ref.id]:
@@ -2130,19 +2126,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 source_uri = location.uri
                 # For DECam/zip we only want to copy once.
                 # We need to remove fragments for consistency.
+                # TODO: Unzip zip files on retrieval and merge indexes.
                 cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
-                if cleaned_source_uri not in have_copied:
+                if cleaned_source_uri not in to_transfer:
                     target_uri = determine_destination_for_retrieved_artifact(
                         destination, location.pathInStore, preserve_path, prefix
                     )
                     to_transfer[cleaned_source_uri] = target_uri
-                    have_copied[cleaned_source_uri] = target_uri
+                    artifact_map[target_uri] = ArtifactIndexInfo.from_single(info.to_simple(), ref.id)
                 else:
-                    target_uri = have_copied[cleaned_source_uri]
-                artifact_to_ref_id[target_uri].append(ref.id)
-                # TODO: If this is a Zip file, it should be unzipped and the
-                # index merged. Else only a single info record is recorded.
-                artifact_to_info[target_uri] = info
+                    target_uri = to_transfer[cleaned_source_uri]
+                    artifact_map[target_uri].append(ref.id)
 
         # In theory can now parallelize the transfer
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
@@ -2150,10 +2144,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
         if write_index:
-            index = ZipIndex.from_artifact_maps(refs, artifact_to_ref_id, artifact_to_info, destination)
+            index = ZipIndex.from_artifact_map(refs, artifact_map, destination)
             index.write_index(destination)
 
-        return list(to_transfer.values()), artifact_to_ref_id, artifact_to_info
+        return list(to_transfer.values()), artifact_map
 
     def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
         """Ingest an indexed Zip file and contents.
@@ -2229,13 +2223,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Associate each file with a (DatasetRef, StoredFileInfo) tuple.
         artifacts: list[tuple[DatasetRef, StoredFileInfo]] = []
-        for path_in_zip, serialized_info in index.info_map.items():
+        for path_in_zip, index_info in index.artifact_map.items():
             # Need to modify the info to include the path to the Zip file
             # that was previously written to the datastore.
-            serialized_info.path = f"{path_in_store}#zip-path={path_in_zip}"
+            index_info.info.path = f"{path_in_store}#zip-path={path_in_zip}"
 
-            info = StoredFileInfo.from_simple(serialized_info)
-            for id_ in index.ref_map[path_in_zip]:
+            info = StoredFileInfo.from_simple(index_info.info)
+            for id_ in index_info.ids:
                 artifacts.append((id_to_ref[id_], info))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
