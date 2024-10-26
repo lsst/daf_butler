@@ -191,6 +191,7 @@ class QueryDatasets:
             warnings.warn(
                 "No --collections specified.  The --collections argument will become mandatory after v28.",
                 FutureWarning,
+                stacklevel=2,
             )
         glob = list(glob)
         if not glob:
@@ -198,6 +199,7 @@ class QueryDatasets:
                 "No dataset types specified.  Explicitly specifying dataset types will become mandatory"
                 " after v28. Specify '*' to match the current behavior of querying all dataset types.",
                 FutureWarning,
+                stacklevel=2,
             )
 
         # show_uri requires a datastore.

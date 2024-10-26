@@ -47,6 +47,7 @@ from types import EllipsisType
 from typing import Any, Self
 
 from deprecated.sphinx import deprecated
+from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
@@ -537,6 +538,9 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
                 "'offset' parameter should no longer be used. It is not supported by the new query system."
                 " Will be removed after v28.",
                 FutureWarning,
+                stacklevel=find_outside_stacklevel(
+                    "lsst.daf.butler", allow_modules={"lsst.daf.butler.registry.tests"}
+                ),
             )
         if offset is None or offset is ...:
             offset = 0
