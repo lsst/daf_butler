@@ -27,17 +27,17 @@
 
 from __future__ import annotations
 
-import uuid
-
 __all__ = ("DirectQueryDriver",)
 
 import dataclasses
 import itertools
 import logging
 import sys
+import uuid
+from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Set
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 import sqlalchemy
 
@@ -69,14 +69,14 @@ from ..registry.managers import RegistryManagerInstances
 from ..registry.wildcards import CollectionWildcard
 from ._postprocessing import Postprocessing
 from ._predicate_constraints_summary import PredicateConstraintsSummary
-from ._query_builder import QueryBuilder, QueryJoiner
-from ._query_plan import (
-    QueryFindFirstPlan,
-    QueryJoinsPlan,
-    QueryPlan,
-    QueryProjectionPlan,
+from ._query_analysis import (
+    QueryCollectionAnalysis,
+    QueryFindFirstAnalysis,
+    QueryJoinsAnalysis,
+    QueryTreeAnalysis,
     ResolvedDatasetSearch,
 )
+from ._query_builder import QueryBuilder, SingleSelectQueryBuilder, UnionQueryBuilder
 from ._result_page_converter import (
     DataCoordinateResultPageConverter,
     DatasetRefResultPageConverter,
@@ -85,6 +85,7 @@ from ._result_page_converter import (
     ResultPageConverter,
     ResultPageConverterContext,
 )
+from ._sql_builders import SqlJoinsBuilder, SqlSelectBuilder, make_table_spec
 from ._sql_column_visitor import SqlColumnVisitor
 
 if TYPE_CHECKING:
@@ -92,6 +93,8 @@ if TYPE_CHECKING:
 
 
 _LOG = logging.getLogger(__name__)
+
+_T = TypeVar("_T", bound=str | qt.AnyDatasetType)
 
 
 class DirectQueryDriver(QueryDriver):
@@ -209,15 +212,15 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before queries can be executed.")
-        _, builder = self.build_query(
+        builder = self.build_query(
             tree,
             final_columns=result_spec.get_result_columns(),
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
         )
-        sql_select = builder.select()
+        sql_select, sql_columns = builder.finish_select()
         if result_spec.order_by:
-            visitor = SqlColumnVisitor(builder.joiner, self)
+            visitor = SqlColumnVisitor(sql_columns, self)
             sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
         if result_spec.limit is not None:
             if builder.postprocessing:
@@ -240,7 +243,7 @@ class DirectQueryDriver(QueryDriver):
             sql_select,
             postprocessing=builder.postprocessing,
             raw_page_size=raw_page_size,
-            page_converter=self._create_result_page_converter(result_spec, builder),
+            page_converter=self._create_result_page_converter(result_spec, builder.final_columns),
         )
         # Since this function isn't a context manager and the caller could stop
         # iterating before we retrieve all the results, we have to track open
@@ -262,10 +265,10 @@ class DirectQueryDriver(QueryDriver):
             self._cursors.discard(cursor)
             cursor.close()
 
-    def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
+    def _create_result_page_converter(self, spec: ResultSpec, columns: qt.ColumnSet) -> ResultPageConverter:
         context = ResultPageConverterContext(
             db=self.db,
-            column_order=builder.columns.get_column_order(),
+            column_order=columns.get_column_order(),
             dimension_record_cache=self._dimension_record_cache,
         )
         match spec:
@@ -292,7 +295,7 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
-        _, builder = self.build_query(tree, qt.ColumnSet(dimensions))
+        plan = self.build_query(tree, qt.ColumnSet(dimensions))
         # Current implementation ignores 'datasets' aside from remembering
         # them, because figuring out what to put in the temporary table for
         # them is tricky, especially if calibration collections are involved.
@@ -306,12 +309,14 @@ class DirectQueryDriver(QueryDriver):
         #   search is straightforward and definitely well-indexed, and not much
         #   (if at all) worse than joining back in on a materialized UUID.
         #
-        sql_select = builder.select()
-        table = self._exit_stack.enter_context(self.db.temporary_table(builder.make_table_spec()))
+        sql_select, _ = plan.finish_select(return_columns=False)
+        table = self._exit_stack.enter_context(
+            self.db.temporary_table(make_table_spec(plan.final_columns, self.db, plan.postprocessing))
+        )
         self.db.insert(table, select=sql_select)
         if key is None:
             key = uuid.uuid4()
-        self._materializations[key] = _MaterializationState(table, datasets, builder.postprocessing)
+        self._materializations[key] = _MaterializationState(table, datasets, plan.postprocessing)
         return key
 
     def upload_data_coordinates(
@@ -333,10 +338,12 @@ class DirectQueryDriver(QueryDriver):
         if not columns:
             table_spec.fields.add(
                 ddl.FieldSpec(
-                    QueryBuilder.EMPTY_COLUMNS_NAME, dtype=QueryBuilder.EMPTY_COLUMNS_TYPE, nullable=True
+                    SqlSelectBuilder.EMPTY_COLUMNS_NAME,
+                    dtype=SqlSelectBuilder.EMPTY_COLUMNS_TYPE,
+                    nullable=True,
                 )
             )
-            dict_rows = [{QueryBuilder.EMPTY_COLUMNS_NAME: None}]
+            dict_rows = [{SqlSelectBuilder.EMPTY_COLUMNS_NAME: None}]
         else:
             dict_rows = [dict(zip(dimensions.required, values)) for values in rows]
         from_clause: sqlalchemy.FromClause
@@ -360,30 +367,31 @@ class DirectQueryDriver(QueryDriver):
     ) -> int:
         # Docstring inherited.
         columns = result_spec.get_result_columns()
-        plan, builder = self.build_query(tree, columns, find_first_dataset=result_spec.find_first_dataset)
-        if not all(d.collection_records for d in plan.joins.datasets.values()):
+        builder = self.build_query(tree, columns, find_first_dataset=result_spec.find_first_dataset)
+        if not all(d.collection_records for d in builder.joins_analysis.datasets.values()):
             return 0
+        # No need to do similar check on
         if not exact:
             builder.postprocessing = Postprocessing()
         if builder.postprocessing:
             if not discard:
                 raise InvalidQueryError("Cannot count query rows exactly without discarding them.")
-            sql_select = builder.select()
+            sql_select, _ = builder.finish_select(return_columns=False)
             builder.postprocessing.limit = result_spec.limit
             n = 0
             with self.db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
                 for _ in builder.postprocessing.apply(results):
                     n += 1
             return n
-        # If the query has DISTINCT or GROUP BY, nest it in a subquery so we
-        # count deduplicated rows.
-        builder = builder.nested()
+        # If the query has DISTINCT, GROUP BY, or UNION [ALL], nest it in a
+        # subquery so we count deduplicated rows.
+        select_builder = builder.finish_nested()
         # Replace the columns of the query with just COUNT(*).
-        builder.columns = qt.ColumnSet(self._universe.empty)
+        select_builder.columns = qt.ColumnSet(self._universe.empty)
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
-        builder.joiner.special["_ROWCOUNT"] = count_func
+        select_builder.joins.special["_ROWCOUNT"] = count_func
         # Render and run the query.
-        sql_select = builder.select()
+        sql_select = select_builder.select(builder.postprocessing)
         with self.db.query(sql_select) as result:
             count = cast(int, result.scalar())
         if result_spec.limit is not None:
@@ -392,30 +400,30 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        plan, builder = self.build_query(tree, qt.ColumnSet(tree.dimensions))
-        if not all(d.collection_records for d in plan.joins.datasets.values()):
+        builder = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        if not all(d.collection_records for d in builder.joins_analysis.datasets.values()):
             return False
         if not execute:
             if exact:
                 raise InvalidQueryError("Cannot obtain exact result for 'any' without executing.")
             return True
         if builder.postprocessing and exact:
-            sql_select = builder.select()
+            sql_select, _ = builder.finish_select(return_columns=False)
             with self.db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
                 for _ in builder.postprocessing.apply(result):
                     return True
                 return False
-        sql_select = builder.select().limit(1)
-        with self.db.query(sql_select) as result:
+        sql_select, _ = builder.finish_select()
+        with self.db.query(sql_select.limit(1)) as result:
             return result.first() is not None
 
     def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
-        plan, _ = self.analyze_query(tree, qt.ColumnSet(tree.dimensions))
-        if plan.joins.messages or not execute:
-            return plan.joins.messages
+        plan = self.build_query(tree, qt.ColumnSet(tree.dimensions), analyze_only=True)
+        if plan.joins_analysis.messages or not execute:
+            return plan.joins_analysis.messages
         # TODO: guess at ways to split up query that might fail or succeed if
         # run separately, execute them with LIMIT 1 and report the results.
         return []
@@ -434,10 +442,13 @@ class DirectQueryDriver(QueryDriver):
         self,
         tree: qt.QueryTree,
         final_columns: qt.ColumnSet,
+        *,
         order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder]:
-        """Convert a query description into a mostly-completed `QueryBuilder`.
+        find_first_dataset: str | qt.AnyDatasetType | None = None,
+        analyze_only: bool = False,
+    ) -> QueryBuilder:
+        """Convert a query description into a nearly-complete builder object
+        for the SQL version of that query.
 
         Parameters
         ----------
@@ -448,152 +459,328 @@ class DirectQueryDriver(QueryDriver):
         order_by : `~collections.abc.Iterable` [ \
                 `.queries.tree.OrderExpression` ], optional
             Column expressions to sort by.
-        find_first_dataset : `str` or `None`, optional
+        find_first_dataset : `str`, ``ANY_DATASET``, or `None`, optional
             Name of a dataset type for which only one result row for each data
             ID should be returned, with the colletions searched in order.
+            ``ANY_DATASET`` is used to represent the search for all dataset
+            types with a particular set of dimensions in ``tree.any_dataset``.
+        analyze_only : `bool`, optional
+            If `True`, perform the initial analysis needed to construct the
+            builder, but do not call methods that build its SQL form.  This can
+            be useful for obtaining diagnostic information about the query that
+            would be generated.
 
         Returns
         -------
-        plan : `QueryPlan`
-            Plan used to transform the query into SQL, including some
-            information (e.g. diagnostics about doomed-to-fail dataset
-            searches) that isn't transferred into the builder itself.
         builder : `QueryBuilder`
-            Builder object that can be used to create a SQL SELECT via its
-            `~QueryBuilder.select` method.  We return this instead of a
-            `sqlalchemy.Select` object itself to allow different methods to
-            customize the SELECT clause itself (e.g. `count` can replace the
-            columns selected with ``COUNT(*)``).
+            An object that contains an analysis of the queries columns and
+            general structure, SQLAlchemy representations of most of the
+            constructed query, and a description of Python-side postprocessing
+            to be performed after executing it.  Callers should generally only
+            have to call `finish_select` or `finish_nested`; all ``apply``
+            methods will have already been called.
+
+        Notes
+        -----
+        The SQL queries produced by this driver are built in three steps:
+
+        - First we "analyze" the entire query, fetching extra information as
+          needed to identify the tables we'll join in, the columns we'll have
+          at each level of what may be a nested SELECT, and the degree to which
+          we'll have to use GROUP BY / DISTINCT or window functions to obtain
+          just the rows we want.  This process initializes a `QueryBuilder`
+          instance, but does not call any of its ``apply*`` methods to actually
+          build the SQLAlchemy version of the query, and it is all that is done
+          when ``analyze_only=True``.
+        - In the next step we call `QueryBuilder` ``apply*`` methods to mutate
+          and/or replace the `QueryBuilder` object's nested `SqlSelectBuilder`
+          instances to reflect that analysis, building the SQL from the inside
+          out (subqueries before their parents).  This is also done by the
+          `build_query` method by default
+        - The returned builder can be used by calling either `finish_select`
+          (to get the full executable query) or `finish_nested` (to wrap
+          that query as a subquery - if needed - in order to do related
+          queries, like ``COUNT(*)`` or ``LIMIT 1`` checks).
+
+        Within both the analysis and application steps, we further split the
+        query *structure* and building process into three stages, mapping
+        roughly to levels of (potential) subquery nesting:
+
+        - In the "joins" stage, we join all the tables we need columns or
+          constraints from and apply the predicate as a WHERE clause.  All
+          non-calculated columns are included in the query at this stage.
+        - In the optional "projection" stage, we apply a GROUP BY or DISTINCT
+          to reduce the set of columns and/or rows, and in some cases add new
+          calculated columns.
+        - In the optional "find first" stage, we use a common table expression
+          with PARTITION ON to search for datasets in a sequence of collections
+          in the order those collections were provided.
+
+        In addition, there are two different overall structures for butler
+        queries, modeled as two different `QueryBuilder` subclasses.
+
+        - `SingleSelectQueryBuilder` produces a single possibly-nested SELECT
+          query structured directly according to the stages above.  This is
+          used for almost all queries - specifically whenever
+          `QueryTree.any_dataset` is `None`.
+        - `UnionQueryBuilder` implements queries for datasets of multiple types
+          with the same dimensions as a UNION ALL combination of SELECTs, in
+          which each component SELECT has the joins/projection/find-first
+          structure.  This cannot be implemented as a sequence of
+          `SingleSelectQueryBuilder` objets, however, since the need for the
+          terms to share a single `Postprocessing` object and column list means
+          that they are not independent.
+
+        The `build_query` method delegates to methods of the `QueryBuilder`
+        object when "applying" to let them handle these differences.  These
+        often call back to other methods on the driver (so code shared by both
+        builders mostly lives in the driver class).
         """
-        # See the QueryPlan docs for an overview of what these stages of query
-        # construction do.
-        plan, builder = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
-        self.apply_query_joins(plan.joins, builder.joiner)
-        self.apply_query_projection(plan.projection, builder, order_by)
-        builder = self.apply_query_find_first(plan.find_first, builder)
-        builder.columns = plan.final_columns
-        return plan, builder
-
-    def analyze_query(
-        self,
-        tree: qt.QueryTree,
-        final_columns: qt.ColumnSet,
-        order_by: Iterable[qt.OrderExpression] = (),
-        find_first_dataset: str | None = None,
-    ) -> tuple[QueryPlan, QueryBuilder]:
-        """Construct a plan for building a query and initialize a builder.
-
-        Parameters
-        ----------
-        tree : `.queries.tree.QueryTree`
-            Description of the joins and row filters in the query.
-        final_columns : `.queries.tree.ColumnSet`
-            Final output columns that should be emitted by the SQL query.
-        order_by : `~collections.abc.Iterable` [ \
-                `.queries.tree.OrderExpression` ], optional
-            Column expressions to sort by.
-        find_first_dataset : `str` or `None`, optional
-            Name of a dataset type for which only one result row for each data
-            ID should be returned, with the collections searched in order.
-
-        Returns
-        -------
-        plan : `QueryPlan`
-            Plan used to transform the query into SQL, including some
-            information (e.g. diagnostics about doomed-to-fail dataset
-            searches) that isn't transferred into the builder itself.
-        builder : `QueryBuilder`
-            Builder object initialized with overlap joins and constraints
-            potentially included, with the remainder still present in
-            `QueryJoinPlans.predicate`.
-        """
-        # The fact that this method returns both a QueryPlan and an initial
-        # QueryBuilder (rather than just a QueryPlan) is a tradeoff that lets
-        # DimensionRecordStorageManager.process_query_overlaps (which is called
-        # by the `_analyze_query_tree` call below) pull out overlap expressions
-        # from the predicate at the same time it turns them into SQL table
-        # joins (in the builder).
-        joins_plan, builder = self._analyze_query_tree(tree)
-
+        # Analyze the dimensions, dataset searches, and other join operands
+        # that will go into the query.  This also initializes a
+        # SqlSelectBuilder and Postprocessing with spatial/temporal constraints
+        # potentially transformed by the dimensions manager (but none of the
+        # rest of the analysis reflected in that SqlSelectBuilder).
+        query_tree_analysis = self._analyze_query_tree(tree)
         # The "projection" columns differ from the final columns by not
         # omitting any dimension keys (this keeps queries for different result
         # types more similar during construction), including any columns needed
         # only by order_by terms, and including the collection key if we need
         # it for GROUP BY or DISTINCT.
-        projection_plan = QueryProjectionPlan(
-            final_columns.copy(), joins_plan.datasets, find_first_dataset=find_first_dataset
-        )
-        projection_plan.columns.restore_dimension_keys()
+        projection_columns = final_columns.copy()
+        projection_columns.restore_dimension_keys()
         for term in order_by:
-            term.gather_required_columns(projection_plan.columns)
-        # The projection gets interesting if it does not have all of the
-        # dimension keys or dataset fields of the "joins" stage, because that
-        # means it needs to do a GROUP BY or DISTINCT ON to get unique rows.
-        if projection_plan.columns.dimensions != joins_plan.columns.dimensions:
-            assert projection_plan.columns.dimensions.issubset(joins_plan.columns.dimensions)
-            # We're going from a larger set of dimensions to a smaller set,
-            # that means we'll be doing a SELECT DISTINCT [ON] or GROUP BY.
-            projection_plan.needs_dimension_distinct = True
-        for dataset_type, fields_for_dataset in joins_plan.columns.dataset_fields.items():
-            if not projection_plan.columns.dataset_fields[dataset_type]:
-                # The "joins"-stage query has one row for each collection for
-                # each data ID, but the projection-stage query just wants
-                # one row for each data ID.
-                if len(joins_plan.datasets[dataset_type].collection_records) > 1:
-                    projection_plan.needs_dataset_distinct = True
-                    break
-        # If there are any dataset fields being propagated through that
-        # projection and there is more than one collection, we need to
-        # include the collection_key column so we can use that as one of
-        # the DISTINCT or GROUP BY columns.
-        for dataset_type, fields_for_dataset in projection_plan.columns.dataset_fields.items():
-            if len(joins_plan.datasets[dataset_type].collection_records) > 1:
-                fields_for_dataset.add("collection_key")
-
+            term.gather_required_columns(projection_columns)
+        # There are two kinds of query builders: simple SELECTS and UNIONs
+        # over dataset types.
+        builder: QueryBuilder
+        if tree.any_dataset is not None:
+            builder = UnionQueryBuilder(
+                query_tree_analysis,
+                union_dataset_dimensions=tree.any_dataset.dimensions,
+                projection_columns=projection_columns,
+                final_columns=final_columns,
+            )
+        else:
+            builder = SingleSelectQueryBuilder(
+                tree_analysis=query_tree_analysis,
+                projection_columns=projection_columns,
+                final_columns=final_columns,
+            )
+        # Finish setting up the projection part of the builder.
+        builder.analyze_projection()
         # The joins-stage query also needs to include all columns needed by the
         # downstream projection query.  Note that this:
         # - never adds new dimensions to the joins stage (since those are
         #   always a superset of the projection-stage dimensions);
-        # - does not affect our determination of
-        #   projection_plan.needs_dataset_distinct, because any dataset fields
-        #   being added to the joins stage here are already in the projection.
-        joins_plan.columns.update(projection_plan.columns)
-
-        find_first_plan = None
+        # - does not affect our previous determination of
+        #   needs_dataset_distinct, because any dataset fields being added to
+        #   the joins stage here are already in the projection.
+        builder.joins_analysis.columns.update(builder.projection_columns)
+        # Set up the find-first part of the builder.
         if find_first_dataset is not None:
-            find_first_plan = QueryFindFirstPlan(joins_plan.datasets[find_first_dataset])
-            # If we're doing a find-first search and there's a calibration
-            # collection in play, we need to make sure the rows coming out of
-            # the base query have only one timespan for each data ID +
-            # collection, and we can only do that with a GROUP BY and COUNT
-            # that we inspect in postprocessing.
-            if find_first_plan.search.is_calibration_search:
-                builder.postprocessing.check_validity_match_count = True
-        plan = QueryPlan(
-            joins=joins_plan,
-            projection=projection_plan,
-            find_first=find_first_plan,
-            final_columns=final_columns,
-        )
-        return plan, builder
+            builder.analyze_find_first(find_first_dataset)
+        # At this point, analysis is complete, and we can proceed to making
+        # the select_builder(s) reflect that analysis.
+        if not analyze_only:
+            builder.apply_joins(self)
+            builder.apply_projection(self, order_by)
+            builder.apply_find_first(self)
+        return builder
 
-    def apply_query_joins(self, plan: QueryJoinsPlan, joiner: QueryJoiner) -> None:
-        """Modify a `QueryJoiner` to include all tables and other FROM and
-        WHERE clause terms needed.
+    def _analyze_query_tree(self, tree: qt.QueryTree) -> QueryTreeAnalysis:
+        """Analyze a `.queries.tree.QueryTree` as the first step in building
+        a SQL query.
 
         Parameters
         ----------
-        plan : `QueryJoinPlan`
-            Component of a `QueryPlan` relevant for the "joins" stage.
-        joiner : `QueryJoiner`
-            Component of a `QueryBuilder` that holds the FROM and WHERE
-            clauses.  This is expected to be initialized by `analyze_query`
-            and will be modified in-place on return.
+        tree : `.queries.tree.QueryTree`
+            Description of the joins and row filters in the query.
+
+        Returns
+        -------
+        tree_analysis : `QueryTreeAnalysis`
+            Struct containing additional information need to build the joins
+            stage of a query.
+
+        Notes
+        -----
+        See `build_query` for the complete picture of how SQL queries are
+        constructed.  This method is the very first step for all queries.
+
+        The fact that this method returns both a QueryPlan and an initial
+        SqlSelectBuilder (rather than just a QueryPlan) is a tradeoff that lets
+        DimensionRecordStorageManager.process_query_overlaps (which is called
+        by the `_analyze_query_tree` call below) pull out overlap expressions
+        from the predicate at the same time it turns them into SQL table joins
+        (in the builder).
+        """
+        # Fetch the records and summaries for any collections we might be
+        # searching for datasets and organize them for the kind of lookups
+        # we'll do later.
+        collection_analysis = self._analyze_collections(tree)
+        # Delegate to the dimensions manager to rewrite the predicate and start
+        # a SqlSelectBuilder to cover any spatial overlap joins or constraints.
+        # We'll return that SqlSelectBuilder (or copies of it) at the end.
+        (
+            predicate,
+            select_builder,
+            postprocessing,
+        ) = self.managers.dimensions.process_query_overlaps(
+            tree.dimensions,
+            tree.predicate,
+            tree.get_joined_dimension_groups(),
+            collection_analysis.calibration_dataset_types,
+        )
+        # Extract the data ID implied by the predicate; we can use the governor
+        # dimensions in that to constrain the collections we search for
+        # datasets later.
+        predicate_constraints = PredicateConstraintsSummary(predicate)
+        # Use the default data ID to apply additional constraints where needed.
+        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
+        predicate = predicate_constraints.predicate
+        # Initialize the plan we're return at the end of the method.
+        joins = QueryJoinsAnalysis(predicate=predicate, columns=select_builder.columns)
+        joins.messages.extend(predicate_constraints.messages)
+        # Add columns required by postprocessing.
+        postprocessing.gather_columns_required(joins.columns)
+        # Add materializations, which can also bring in more postprocessing.
+        for m_key, m_dimensions in tree.materializations.items():
+            m_state = self._materializations[m_key]
+            joins.materializations[m_key] = m_dimensions
+            # When a query is materialized, the new tree has an empty
+            # (trivially true) predicate because the original was used to make
+            # the materialized rows.  But the original postprocessing isn't
+            # executed when the materialization happens, so we have to include
+            # it here.
+            postprocessing.spatial_join_filtering.extend(m_state.postprocessing.spatial_join_filtering)
+            postprocessing.spatial_where_filtering.extend(m_state.postprocessing.spatial_where_filtering)
+        # Add data coordinate uploads.
+        joins.data_coordinate_uploads.update(tree.data_coordinate_uploads)
+        # Add dataset_searches and filter out collections that don't have the
+        # right dataset type or governor dimensions.  We re-resolve dataset
+        # searches now that we have a constraint data ID.
+        for dataset_type_name, dataset_search in tree.datasets.items():
+            resolved_dataset_search = self._resolve_dataset_search(
+                dataset_type_name,
+                dataset_search,
+                predicate_constraints.constraint_data_id,
+                collection_analysis.summaries_by_dataset_type[dataset_type_name],
+            )
+            if resolved_dataset_search.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
+                # This is really for server-side defensiveness; it's hard to
+                # imagine the query getting different dimensions for a dataset
+                # type in two calls to the same query driver.
+                raise InvalidQueryError(
+                    f"Incorrect dimensions {resolved_dataset_search.dimensions} for dataset "
+                    f"{dataset_type_name!r} in query "
+                    f"(vs. {self.get_dataset_type(dataset_type_name).dimensions})."
+                )
+            joins.datasets[dataset_type_name] = resolved_dataset_search
+            if not resolved_dataset_search.collection_records:
+                joins.messages.append(
+                    f"Search for dataset type {resolved_dataset_search.name!r} in "
+                    f"{list(dataset_search.collections)} is doomed to fail."
+                )
+                joins.messages.extend(resolved_dataset_search.messages)
+        # Process the special any_dataset search, if there is one. This entails
+        # making a modified copy of the plan for each distinct post-filtering
+        # collection search path.
+        if tree.any_dataset is None:
+            return QueryTreeAnalysis(
+                joins, union_datasets=[], initial_select_builder=select_builder, postprocessing=postprocessing
+            )
+        union_datasets = self._resolve_union_datasets(tree.any_dataset.dimensions, collection_analysis)
+        return QueryTreeAnalysis(
+            joins,
+            union_datasets=union_datasets,
+            initial_select_builder=select_builder,
+            postprocessing=postprocessing,
+        )
+
+    def _resolve_union_datasets(
+        self, dimensions: DimensionGroup, collection_analysis: QueryCollectionAnalysis
+    ) -> list[ResolvedDatasetSearch[list[str]]]:
+        """Resolve searches for union datasets.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimnensions of the union dataset types in this query.
+        collection_analysis : `CollectionAnalysis`
+            Information about the collections appearing in this collection.
+
+        Returns
+        -------
+        searches : `list` [ `ResolvedDatasetSearch` ]
+            Resolved dataset searches for all union dataset types with these
+            dimensions.  Each item in the list groups dataset types with the
+            same colletion search path.
+        """
+        # Gather the filtered collection search path for each union dataset
+        # type.
+        collections_by_dataset_type = defaultdict[str, list[str]](list)
+        for collection_record, collection_summary in collection_analysis.summaries_by_dataset_type[
+            qt.ANY_DATASET
+        ]:
+            for dataset_type in collection_summary.dataset_types:
+                if dataset_type.dimensions == dimensions:
+                    collections_by_dataset_type[dataset_type.name].append(collection_record.name)
+        # Reverse the lookup order on the mapping we just made to group
+        # dataset types by their collection search path.  Each such group
+        # yields a term in a union query builder
+        dataset_searches_by_collections: dict[tuple[str, ...], ResolvedDatasetSearch[list[str]]] = {}
+        for dataset_type_name, collection_path in collections_by_dataset_type.items():
+            key = tuple(collection_path)
+            if (resolved_search := dataset_searches_by_collections.get(key)) is None:
+                resolved_search = ResolvedDatasetSearch[list[str]](
+                    [],
+                    dimensions=dimensions,
+                    collection_records=[
+                        collection_analysis.collection_records[collection_name]
+                        for collection_name in collection_path
+                    ],
+                    messages=[],
+                )
+                resolved_search.is_calibration_search = any(
+                    r.type is CollectionType.CALIBRATION for r in resolved_search.collection_records
+                )
+                dataset_searches_by_collections[key] = resolved_search
+            resolved_search.name.append(dataset_type_name)
+        return list(dataset_searches_by_collections.values())
+
+    def apply_initial_query_joins(
+        self,
+        select_builder: SqlSelectBuilder,
+        joins_analysis: QueryJoinsAnalysis,
+        union_dataset_dimensions: DimensionGroup | None,
+    ) -> None:
+        """Apply most of the "joins" stage of query construction to a single
+        SELECT.
+
+        This method is expected to be invoked by `QueryBuilder.apply_joins`
+        implementations.  It handles all tables and subqueries in the FROM
+        clause, except:
+
+        - the `QueryTree.any_dataset` search (handled by `UnionQueryBuilder`
+          directly);
+        - joins of dimension tables needed only for their keys (handled by
+          `apply_missing_dimension_joins`).
+
+        Parameters
+        ----------
+        select_builder : `SqlSelectBuilder`
+            Low-level SQL builder for a single SELECT term, modified in place.
+        joins_analysis : `QueryJoinsAnalysis`
+            Information about the joins stage of query construction.
+        union_dataset_dimensions : `DimensionGroup` or `None`
+            Dimensions of the union dataset types, or `None` if this is not
+            a union dataset query.
         """
         # Process data coordinate upload joins.
-        for upload_key, upload_dimensions in plan.data_coordinate_uploads.items():
-            joiner.join(
-                QueryJoiner(self.db, self._upload_tables[upload_key]).extract_dimensions(
+        for upload_key, upload_dimensions in joins_analysis.data_coordinate_uploads.items():
+            select_builder.joins.join(
+                SqlJoinsBuilder(db=self.db, from_clause=self._upload_tables[upload_key]).extract_dimensions(
                     upload_dimensions.required
                 )
             )
@@ -602,62 +789,129 @@ class DirectQueryDriver(QueryDriver):
         # can be dropped if they are only present to provide a constraint on
         # data IDs, since that's already embedded in a materialization.
         materialized_datasets: set[str] = set()
-        for materialization_key, materialization_dimensions in plan.materializations.items():
+        for materialization_key, materialization_dimensions in joins_analysis.materializations.items():
             materialized_datasets.update(
-                self._join_materialization(joiner, materialization_key, materialization_dimensions)
+                self._join_materialization(
+                    select_builder.joins, materialization_key, materialization_dimensions
+                )
             )
-        # Process dataset joins.
-        for dataset_search in plan.datasets.values():
-            self._join_dataset_search(
-                joiner,
+        # Process dataset joins (not including any union dataset).
+        for dataset_search in joins_analysis.datasets.values():
+            self.join_dataset_search(
+                select_builder.joins,
                 dataset_search,
-                plan.columns.dataset_fields[dataset_search.name],
+                joins_analysis.columns.dataset_fields[dataset_search.name],
             )
         # Join in dimension element tables that we know we need relationships
         # or columns from.
-        for element in plan.iter_mandatory():
-            joiner.join(
-                self.managers.dimensions.make_query_joiner(
-                    element, plan.columns.dimension_fields[element.name]
+        for element in joins_analysis.iter_mandatory(union_dataset_dimensions):
+            select_builder.joins.join(
+                self.managers.dimensions.make_joins_builder(
+                    element, joins_analysis.columns.dimension_fields[element.name]
                 )
             )
-        # See if any dimension keys are still missing, and if so join in their
-        # tables.  Note that we know there are no fields needed from these.
-        while not (joiner.dimension_keys.keys() >= plan.columns.dimensions.names):
-            # Look for opportunities to join in multiple dimensions via single
-            # table, to reduce the total number of tables joined in.
-            missing_dimension_names = plan.columns.dimensions.names - joiner.dimension_keys.keys()
+
+    def apply_missing_dimension_joins(
+        self, select_builder: SqlSelectBuilder, joins_analysis: QueryJoinsAnalysis
+    ) -> None:
+        """Apply dimension-table joins to a single SQL SELECT builder to ensure
+        the full set of desired dimension keys is preset.
+
+        This method is expected to be invoked by `QueryBuilder.apply_joins`
+        implementations.
+
+        Parameters
+        ----------
+        select_builder : `SqlSelectBuilder`
+            Low-level SQL builder for a single SELECT term, modified in place.
+        joins_analysis : `QueryJoinsAnalysis`
+            Information about the joins stage of query construction.
+        """
+        # See if any dimension keys are still missing, and if so join in
+        # their tables. Note that we know there are no fields needed from
+        # these.
+        while not (select_builder.joins.dimension_keys.keys() >= joins_analysis.columns.dimensions.names):
+            # Look for opportunities to join in multiple dimensions via
+            # single table, to reduce the total number of tables joined in.
+            missing_dimension_names = (
+                joins_analysis.columns.dimensions.names - select_builder.joins.dimension_keys.keys()
+            )
             best = self._universe[
                 max(
                     missing_dimension_names,
                     key=lambda name: len(self._universe[name].dimensions.names & missing_dimension_names),
                 )
             ]
-            joiner.join(self.managers.dimensions.make_query_joiner(best, frozenset()))
-        # Add the WHERE clause to the joiner.
-        joiner.where(plan.predicate.visit(SqlColumnVisitor(joiner, self)))
+            to_join = self.managers.dimensions.make_joins_builder(best, frozenset())
+            select_builder.joins.join(to_join)
+        # Add the WHERE clause to the builder.
+        select_builder.joins.where(
+            joins_analysis.predicate.visit(SqlColumnVisitor(select_builder.joins, self))
+        )
 
     def apply_query_projection(
-        self, plan: QueryProjectionPlan, builder: QueryBuilder, order_by: Iterable[qt.OrderExpression]
+        self,
+        select_builder: SqlSelectBuilder,
+        postprocessing: Postprocessing,
+        *,
+        join_datasets: Mapping[str, ResolvedDatasetSearch[str]],
+        union_datasets: ResolvedDatasetSearch[list[str]] | None,
+        projection_columns: qt.ColumnSet,
+        needs_dimension_distinct: bool,
+        needs_dataset_distinct: bool,
+        needs_validity_match_count: bool,
+        find_first_dataset: str | qt.AnyDatasetType | None,
+        order_by: Iterable[qt.OrderExpression],
     ) -> None:
-        """Modify `QueryBuilder` to reflect the "projection" stage of query
-        construction, which can involve a GROUP BY or DISTINCT [ON] clause
-        that enforces uniqueness.
+        """Apply the "projection" stage of query construction to a single
+        SQL SELECT builder.
+
+        This method is expected to be invoked by
+        `QueryBuilder.apply_projection` implementations.
 
         Parameters
         ----------
-        plan : `QueryProjectionPlan`
-            Component of a `QueryPlan` relevant for the "projection" stage.
-        builder : `QueryBuilder`
-            Builder object that will be modified in place.  Expected to be
-            initialized by `analyze_query` and further modified by
-            `apply_query_joins`.
+        select_builder : `SqlSelectBuilder`
+            Low-level SQL builder for a single SELECT term, modified in place.
+        postprocessing : `Postprocessing`
+            Description of query processing that happens in Python after the
+            query is executed by the database.
+        join_datasets : `~collections.abc.Mapping` [ `str`, \
+                `ResolvedDatasetSearch` [ `str` ] ]
+            Information about regular (non-union) dataset searches joined into
+            the query.
+        union_datasets : `ResolvedDatasetSearch [ `list` [ `str` ] ] or `None`
+            Information about a search for dataset of multiple types with the
+            same dimensions and the same post-filtering collection search path.
+        projection_columns : `.queries.tree.ColumnSet`
+            Columns to include in this projection stage of the query.
+        needs_dimension_distinct : `bool`
+            Whether this query needs a GROUP BY or DISTINCT to filter out rows
+            where the only differences are dimension values that are not being
+            returned to the user.
+        needs_dataset_distinct : `bool`
+            Whether this query needs a GROUP BY or DISTINCT to filter out rows
+            that correspond to entries for different collections.
+        needs_validity_match_count : `bool`
+            Whether this query needs a COUNT column to track the number of
+            datasets for each data ID and dataset type.  If this is `False` but
+            ``postprocessing.check_valdity_match_count`` is `True`, a dummy
+            count column that is just "1" should be added, because the check
+            is needed only for some other SELECT term in a UNION ALL.
+        find_first_dataset : `str` or ``ANY_DATASET`` or `None`
+            Name of the dataset type that will need a find-first stage.
+            ``ANY_DATASET`` is used when the union datasets need a find-first
+            search, while `None` is used to represent both ``find_first=False``
+            and the case when ``find_first=True`` but only only collection has
+            survived filtering.
         order_by : `~collections.abc.Iterable` [ \
               `.queries.tree.OrderExpression` ]
             Order by clause associated with the query.
         """
-        builder.columns = plan.columns
-        if not plan and not builder.postprocessing.check_validity_match_count:
+        select_builder.columns = projection_columns
+        if not needs_dimension_distinct and not needs_dataset_distinct and not needs_validity_match_count:
+            if postprocessing.check_validity_match_count:
+                select_builder.joins.special[postprocessing.VALIDITY_MATCH_COUNT] = sqlalchemy.literal(1)
             # Rows are already unique; nothing else to do in this method.
             return
         # This method generates  either a SELECT DISTINCT [ON] or a SELECT with
@@ -666,14 +920,15 @@ class DirectQueryDriver(QueryDriver):
         # Dimension key columns form at least most of our GROUP BY or DISTINCT
         # ON clause.
         unique_keys: list[sqlalchemy.ColumnElement[Any]] = [
-            builder.joiner.dimension_keys[k][0] for k in plan.columns.dimensions.data_coordinate_keys
+            select_builder.joins.dimension_keys[k][0]
+            for k in projection_columns.dimensions.data_coordinate_keys
         ]
 
         # Many of our fields derive their uniqueness from the unique_key
         # fields: if rows are uniqe over the 'unique_key' fields, then they're
         # automatically unique over these 'derived_fields'.  We just remember
         # these as pairs of (logical_table, field) for now.
-        derived_fields: list[tuple[str, str]] = []
+        derived_fields: list[tuple[str | qt.AnyDatasetType, str]] = []
 
         # There are two reasons we might need an aggregate function:
         # - to make sure temporal constraints and joins have resulted in at
@@ -685,14 +940,17 @@ class DirectQueryDriver(QueryDriver):
         #   visit_detector_region.region, but the output rows don't have
         #   detector, just visit - so we compute the union of the
         #   visit_detector region over all matched detectors).
-        if builder.postprocessing.check_validity_match_count:
-            builder.joiner.special[builder.postprocessing.VALIDITY_MATCH_COUNT] = (
-                sqlalchemy.func.count().label(builder.postprocessing.VALIDITY_MATCH_COUNT)
-            )
-            have_aggregates = True
+        if postprocessing.check_validity_match_count:
+            if needs_validity_match_count:
+                select_builder.joins.special[postprocessing.VALIDITY_MATCH_COUNT] = (
+                    sqlalchemy.func.count().label(postprocessing.VALIDITY_MATCH_COUNT)
+                )
+                have_aggregates = True
+            else:
+                select_builder.joins.special[postprocessing.VALIDITY_MATCH_COUNT] = sqlalchemy.literal(1)
 
-        for element in builder.postprocessing.iter_missing(plan.columns):
-            if element.name in plan.columns.dimensions.elements:
+        for element in postprocessing.iter_missing(projection_columns):
+            if element.name in projection_columns.dimensions.elements:
                 # The region associated with dimension keys returned by the
                 # query are derived fields, since there is only one region
                 # associated with each dimension key value.
@@ -703,33 +961,37 @@ class DirectQueryDriver(QueryDriver):
                 # regions.  When that happens, we want to apply an aggregate
                 # function to them that computes the union of the regions that
                 # are grouped together.
-                builder.joiner.fields[element.name]["region"] = ddl.Base64Region.union_aggregate(
-                    builder.joiner.fields[element.name]["region"]
+                select_builder.joins.fields[element.name]["region"] = ddl.Base64Region.union_aggregate(
+                    select_builder.joins.fields[element.name]["region"]
                 )
                 have_aggregates = True
 
         # All dimension record fields are derived fields.
-        for element_name, fields_for_element in plan.columns.dimension_fields.items():
+        for element_name, fields_for_element in projection_columns.dimension_fields.items():
             for element_field in fields_for_element:
                 derived_fields.append((element_name, element_field))
         # Some dataset fields are derived fields and some are unique keys, and
         # it depends on the kinds of collection(s) we're searching and whether
         # it's a find-first query.
-        for dataset_type, fields_for_dataset in plan.columns.dataset_fields.items():
+        for dataset_type, fields_for_dataset in projection_columns.dataset_fields.items():
+            dataset_search: ResolvedDatasetSearch[Any]
+            if dataset_type is qt.ANY_DATASET:
+                assert union_datasets is not None
+                dataset_search = union_datasets
+            else:
+                dataset_search = join_datasets[dataset_type]
             for dataset_field in fields_for_dataset:
                 if dataset_field == "collection_key":
                     # If the collection_key field is present, it's needed for
                     # uniqueness if we're looking in more than one collection.
                     # If not, it's a derived field.
-                    if len(plan.datasets[dataset_type].collection_records) > 1:
-                        unique_keys.append(builder.joiner.fields[dataset_type]["collection_key"])
+                    if len(dataset_search.collection_records) > 1:
+                        unique_keys.append(select_builder.joins.fields[dataset_type]["collection_key"])
                     else:
                         derived_fields.append((dataset_type, "collection_key"))
-                elif dataset_field == "timespan" and plan.datasets[dataset_type].is_calibration_search:
-                    # If we're doing a non-find-first query against a
-                    # CALIBRATION collection, the timespan is also a unique
-                    # key...
-                    if dataset_type == plan.find_first_dataset:
+                elif dataset_field == "timespan" and dataset_search.is_calibration_search:
+                    # The timespan is also a unique key...
+                    if dataset_type == find_first_dataset:
                         # ...unless we're doing a find-first search on this
                         # dataset, in which case we need to use ANY_VALUE on
                         # the timespan and check that _VALIDITY_MATCH_COUNT
@@ -739,22 +1001,22 @@ class DirectQueryDriver(QueryDriver):
                         # clauses and JOINs.
                         if not self.db.has_any_aggregate:
                             raise NotImplementedError(
-                                f"Cannot generate query that returns {dataset_type}.timespan after a "
-                                "find-first search, because this a database does not support the ANY_VALUE "
+                                f"Cannot generate query that returns timespan for {dataset_type!r} after a "
+                                "find-first search, because this database does not support the ANY_VALUE "
                                 "aggregate function (or equivalent)."
                             )
-                        builder.joiner.timespans[dataset_type] = builder.joiner.timespans[
+                        select_builder.joins.timespans[dataset_type] = select_builder.joins.timespans[
                             dataset_type
                         ].apply_any_aggregate(self.db.apply_any_aggregate)
                     else:
-                        unique_keys.extend(builder.joiner.timespans[dataset_type].flatten())
+                        unique_keys.extend(select_builder.joins.timespans[dataset_type].flatten())
                 else:
                     # Other dataset fields derive their uniqueness from key
                     # fields.
                     derived_fields.append((dataset_type, dataset_field))
         if not have_aggregates and not derived_fields:
             # SELECT DISTINCT is sufficient.
-            builder.distinct = True
+            select_builder.distinct = True
         # With DISTINCT ON, Postgres requires that the leftmost parts of the
         # ORDER BY match the DISTINCT ON expressions.  It's somewhat tricky to
         # enforce that, so instead we just don't use DISTINCT ON if ORDER BY is
@@ -762,56 +1024,63 @@ class DirectQueryDriver(QueryDriver):
         # restriction.
         elif not have_aggregates and self.db.has_distinct_on and len(list(order_by)) == 0:
             # SELECT DISTINCT ON is sufficient and supported by this database.
-            builder.distinct = unique_keys
+            select_builder.distinct = tuple(unique_keys)
         else:
             # GROUP BY is the only option.
             if derived_fields:
                 if self.db.has_any_aggregate:
                     for logical_table, field in derived_fields:
                         if field == "timespan":
-                            builder.joiner.timespans[logical_table] = builder.joiner.timespans[
+                            select_builder.joins.timespans[logical_table] = select_builder.joins.timespans[
                                 logical_table
                             ].apply_any_aggregate(self.db.apply_any_aggregate)
                         else:
-                            builder.joiner.fields[logical_table][field] = self.db.apply_any_aggregate(
-                                builder.joiner.fields[logical_table][field]
+                            select_builder.joins.fields[logical_table][field] = self.db.apply_any_aggregate(
+                                select_builder.joins.fields[logical_table][field]
                             )
                 else:
                     _LOG.warning(
                         "Adding %d fields to GROUP BY because this database backend does not support the "
                         "ANY_VALUE aggregate function (or equivalent).  This may result in a poor query "
-                        "plan.  Materializing the query first sometimes avoids this problem.",
+                        "plan.  Materializing the query first sometimes avoids this problem.  This warning "
+                        "can be ignored unless query performance is a problem.",
                         len(derived_fields),
                     )
                     for logical_table, field in derived_fields:
                         if field == "timespan":
-                            unique_keys.extend(builder.joiner.timespans[logical_table].flatten())
+                            unique_keys.extend(select_builder.joins.timespans[logical_table].flatten())
                         else:
-                            unique_keys.append(builder.joiner.fields[logical_table][field])
-            builder.group_by = unique_keys
+                            unique_keys.append(select_builder.joins.fields[logical_table][field])
+            select_builder.group_by = tuple(unique_keys)
 
-    def apply_query_find_first(self, plan: QueryFindFirstPlan | None, builder: QueryBuilder) -> QueryBuilder:
-        """Modify an under-construction SQL query to return only one row for
-        each data ID, searching collections in order.
+    def apply_query_find_first(
+        self,
+        select_builder: SqlSelectBuilder,
+        postprocessing: Postprocessing,
+        find_first_analysis: QueryFindFirstAnalysis,
+    ) -> SqlSelectBuilder:
+        """Apply the "find first" stage of query construction to a single
+        SQL SELECT builder.
+
+        This method is expected to be invoked by
+        `QueryBuilder.apply_find_first` implementations.
 
         Parameters
         ----------
-        plan : `QueryFindFirstPlan` or `None`
-            Component of a `QueryPlan` relevant for the "find first" stage.
-        builder : `QueryBuilder`
-            Builder object as produced by `apply_query_projection`.  This
-            object should be considered to be consumed by this method - the
-            same instance may or may not be returned, and if it is not
-            returned, its state is not defined.
+        select_builder : `SqlSelectBuilder`
+            Low-level SQL builder for a single SELECT term, consumed on return.
+        postprocessing : `Postprocessing`
+            Description of query processing that happens in Python after the
+            query is executed by the database.
+        find_first_analysis : `QueryFindFirstAnalysis`
+            Information about the find-first stage gathered during the analysis
+            phase of query construction.
 
         Returns
         -------
-        builder : `QueryBuilder`
-            Modified query builder that includes the find-first resolution, if
-            one was needed.
+        select_builder : `SqlSelectBuilder`
+            Low-level SQL builder that includes the find-first logic.
         """
-        if not plan:
-            return builder
         # The query we're building looks like this:
         #
         # WITH {dst}_base AS (
@@ -831,9 +1100,9 @@ class DirectQueryDriver(QueryDriver):
         # WHERE
         #     {dst}_window.rownum = 1;
         #
-        # The outermost SELECT will be represented by the QueryBuilder we
-        # return. The QueryBuilder we're given corresponds to the Common Table
-        # Expression (CTE) at the top.
+        # The outermost SELECT will be represented by the SqlSelectBuilder we
+        # return. The SqlSelectBuilder we're given corresponds to the Common
+        # Table Expression (CTE) at the top.
         #
         # For SQLite only, we could use a much simpler GROUP BY instead,
         # because it extends the standard to do exactly what we want when MIN
@@ -841,32 +1110,34 @@ class DirectQueryDriver(QueryDriver):
         # (https://www.sqlite.org/quirks.html).  But since that doesn't work
         # with PostgreSQL it doesn't help us.
         #
-        builder = builder.nested(cte=True, force=True)
+        select_builder = select_builder.nested(cte=True, force=True, postprocessing=postprocessing)
         # We start by filling out the "window" SELECT statement...
-        partition_by = [builder.joiner.dimension_keys[d][0] for d in builder.columns.dimensions.required]
+        partition_by = [
+            select_builder.joins.dimension_keys[d][0] for d in select_builder.columns.dimensions.required
+        ]
         rank_sql_column = sqlalchemy.case(
-            {record.key: n for n, record in enumerate(plan.search.collection_records)},
-            value=builder.joiner.fields[plan.dataset_type]["collection_key"],
+            {record.key: n for n, record in enumerate(find_first_analysis.search.collection_records)},
+            value=select_builder.joins.fields[find_first_analysis.dataset_type]["collection_key"],
         )
         if partition_by:
-            builder.joiner.special["_ROWNUM"] = sqlalchemy.sql.func.row_number().over(
+            select_builder.joins.special["_ROWNUM"] = sqlalchemy.sql.func.row_number().over(
                 partition_by=partition_by, order_by=rank_sql_column
             )
         else:
-            builder.joiner.special["_ROWNUM"] = sqlalchemy.sql.func.row_number().over(
+            select_builder.joins.special["_ROWNUM"] = sqlalchemy.sql.func.row_number().over(
                 order_by=rank_sql_column
             )
         # ... and then turn that into a subquery with a constraint on rownum.
-        builder = builder.nested(force=True)
+        select_builder = select_builder.nested(force=True, postprocessing=postprocessing)
         # We can now add the WHERE constraint on rownum into the outer query.
-        builder.joiner.where(builder.joiner.special["_ROWNUM"] == 1)
+        select_builder.joins.where(select_builder.joins.special["_ROWNUM"] == 1)
         # Don't propagate _ROWNUM into downstream queries.
-        del builder.joiner.special["_ROWNUM"]
-        return builder
+        del select_builder.joins.special["_ROWNUM"]
+        return select_builder
 
-    def _analyze_query_tree(self, tree: qt.QueryTree) -> tuple[QueryJoinsPlan, QueryBuilder]:
-        """Start constructing a plan for building a query from a
-        `.queries.tree.QueryTree`.
+    def _analyze_collections(self, tree: qt.QueryTree) -> QueryCollectionAnalysis:
+        """Fetch and organize information about all collections appearing in a
+        query.
 
         Parameters
         ----------
@@ -875,14 +1146,9 @@ class DirectQueryDriver(QueryDriver):
 
         Returns
         -------
-        plan : `QueryJoinsPlan`
-            Initial component of the plan relevant for the "joins" stage,
-            including all joins and columns needed by ``tree``.  Additional
-            columns will be added to this plan later.
-        builder : `QueryBuilder`
-            Builder object initialized with overlap joins and constraints
-            potentially included, with the remainder still present in
-            `QueryJoinPlans.predicate`.
+        collection_analysis : `QueryCollectionAnalysis`
+            Struct containing collection records and summaries, organized
+            for later access by dataset type.
         """
         # Retrieve collection information for all collections in a tree.
         collection_names = set(
@@ -890,6 +1156,8 @@ class DirectQueryDriver(QueryDriver):
                 dataset_search.collections for dataset_search in tree.datasets.values()
             )
         )
+        if tree.any_dataset is not None:
+            collection_names.update(tree.any_dataset.collections)
         collection_records = {
             record.name: record
             for record in self.managers.collections.resolve_wildcard(
@@ -900,87 +1168,25 @@ class DirectQueryDriver(QueryDriver):
             record for record in collection_records.values() if record.type is not CollectionType.CHAINED
         ]
         # Fetch summaries for a subset of dataset types.
-        dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
-        summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
+        if tree.any_dataset is not None:
+            summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types=None)
+        else:
+            dataset_types = [self.get_dataset_type(dataset_type_name) for dataset_type_name in tree.datasets]
+            summaries = self.managers.datasets.fetch_summaries(non_chain_records, dataset_types)
+        result = QueryCollectionAnalysis(collection_records=collection_records)
         # Do a preliminary resolution for dataset searches to identify any
         # calibration lookups that might participate in temporal joins.
-        calibration_dataset_types: set[str] = set()
-        summaries_by_dataset_type: dict[str, list[tuple[CollectionRecord, CollectionSummary]]] = {}
-        for dataset_type_name, dataset_search in tree.datasets.items():
+        for dataset_type_name, dataset_search in tree.iter_all_dataset_searches():
             collection_summaries = self._filter_collections(
                 dataset_search.collections, collection_records, summaries
             )
-            summaries_by_dataset_type[dataset_type_name] = collection_summaries
+            result.summaries_by_dataset_type[dataset_type_name] = collection_summaries
             resolved_dataset_search = self._resolve_dataset_search(
                 dataset_type_name, dataset_search, {}, collection_summaries
             )
             if resolved_dataset_search.is_calibration_search:
-                calibration_dataset_types.add(dataset_type_name)
-        # Delegate to the dimensions manager to rewrite the predicate and start
-        # a QueryBuilder to cover any spatial overlap joins or constraints.
-        # We'll return that QueryBuilder at the end.
-        (
-            predicate,
-            builder,
-        ) = self.managers.dimensions.process_query_overlaps(
-            tree.dimensions,
-            tree.predicate,
-            tree.get_joined_dimension_groups(),
-            calibration_dataset_types,
-        )
-
-        # Extract the data ID implied by the predicate; we can use the governor
-        # dimensions in that to constrain the collections we search for
-        # datasets later.
-        predicate_constraints = PredicateConstraintsSummary(predicate)
-        # Use the default data ID to apply additional constraints where needed.
-        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
-        predicate = predicate_constraints.predicate
-
-        result = QueryJoinsPlan(
-            predicate=predicate,
-            columns=builder.columns,
-            messages=predicate_constraints.messages,
-        )
-
-        # Add columns required by postprocessing.
-        builder.postprocessing.gather_columns_required(result.columns)
-
-        # Add materializations, which can also bring in more postprocessing.
-        for m_key, m_dimensions in tree.materializations.items():
-            m_state = self._materializations[m_key]
-            result.materializations[m_key] = m_dimensions
-            # When a query is materialized, the new tree has an empty
-            # (trivially true) predicate because the original was used to make
-            # the materialized rows.  But the original postprocessing isn't
-            # executed when the materialization happens, so we have to include
-            # it here.
-            builder.postprocessing.spatial_join_filtering.extend(
-                m_state.postprocessing.spatial_join_filtering
-            )
-            builder.postprocessing.spatial_where_filtering.extend(
-                m_state.postprocessing.spatial_where_filtering
-            )
-        # Add data coordinate uploads.
-        result.data_coordinate_uploads.update(tree.data_coordinate_uploads)
-        # Add dataset_searches and filter out collections that don't have the
-        # right dataset type or governor dimensions.  We re-resolve dataset
-        # searches now that we have a constraint data ID.
-        for dataset_type_name, dataset_search in tree.datasets.items():
-            resolved_dataset_search = self._resolve_dataset_search(
-                dataset_type_name,
-                dataset_search,
-                predicate_constraints.constraint_data_id,
-                summaries_by_dataset_type[dataset_type_name],
-            )
-            result.datasets[dataset_type_name] = resolved_dataset_search
-            if not resolved_dataset_search.collection_records:
-                result.messages.append(
-                    f"Search for dataset type {dataset_type_name!r} in "
-                    f"{list(dataset_search.collections)} is doomed to fail."
-                )
-                result.messages.extend(resolved_dataset_search.messages)
-        return result, builder
+                result.calibration_dataset_types.add(dataset_type_name)
+        return result
 
     def _filter_collections(
         self,
@@ -1026,17 +1232,17 @@ class DirectQueryDriver(QueryDriver):
 
     def _resolve_dataset_search(
         self,
-        dataset_type_name: str,
+        dataset_type_name: _T,
         dataset_search: qt.DatasetSearch,
         constraint_data_id: Mapping[str, DataIdValue],
         collections: list[tuple[CollectionRecord, CollectionSummary]],
-    ) -> ResolvedDatasetSearch:
+    ) -> ResolvedDatasetSearch[_T]:
         """Resolve the collections that should actually be searched for
         datasets of a particular type.
 
         Parameters
         ----------
-        dataset_type_name : `str`
+        dataset_type_name : `str` or ``ANY_DATASET``
             Name of the dataset being searched for.
         dataset_search : `.queries.tree.DatasetSearch`
             Struct holding the dimensions and original collection search path.
@@ -1059,7 +1265,10 @@ class DirectQueryDriver(QueryDriver):
             result.messages.append("No datasets can be found because collection list is empty.")
         for collection_record, collection_summary in collections:
             rejected: bool = False
-            if result.name not in collection_summary.dataset_types.names:
+            if (
+                result.name is not qt.ANY_DATASET
+                and result.name not in collection_summary.dataset_types.names
+            ):
                 result.messages.append(
                     f"No datasets of type {result.name!r} in collection {collection_record.name!r}."
                 )
@@ -1075,19 +1284,11 @@ class DirectQueryDriver(QueryDriver):
                 if collection_record.type is CollectionType.CALIBRATION:
                     result.is_calibration_search = True
                 result.collection_records.append(collection_record)
-        if result.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
-            # This is really for server-side defensiveness; it's hard to
-            # imagine the query getting different dimensions for a dataset
-            # type in two calls to the same query driver.
-            raise InvalidQueryError(
-                f"Incorrect dimensions {result.dimensions} for dataset {dataset_type_name} "
-                f"in query (vs. {self.get_dataset_type(dataset_type_name).dimensions})."
-            )
         return result
 
     def _join_materialization(
         self,
-        joiner: QueryJoiner,
+        joins_builder: SqlJoinsBuilder,
         key: qt.MaterializationKey,
         dimensions: DimensionGroup,
     ) -> frozenset[str]:
@@ -1095,8 +1296,8 @@ class DirectQueryDriver(QueryDriver):
 
         Parameters
         ----------
-        joiner : `QueryJoiner`
-            Component of a `QueryBuilder` that holds the FROM and WHERE
+        joins_builder : `SqlJoinsBuilder`
+            Component of a `SqlSelectBuilder` that holds the FROM and WHERE
             clauses.  This will be modified in-place on return.
         key : `.queries.tree.MaterializationKey`
             Unique identifier created for this materialization when it was
@@ -1112,38 +1313,77 @@ class DirectQueryDriver(QueryDriver):
         """
         columns = qt.ColumnSet(dimensions)
         m_state = self._materializations[key]
-        joiner.join(QueryJoiner(self.db, m_state.table).extract_columns(columns, m_state.postprocessing))
+        joins_builder.join(
+            SqlJoinsBuilder(db=self.db, from_clause=m_state.table).extract_columns(
+                columns, m_state.postprocessing
+            )
+        )
         return m_state.datasets
 
-    def _join_dataset_search(
+    @overload
+    def join_dataset_search(
         self,
-        joiner: QueryJoiner,
-        resolved_search: ResolvedDatasetSearch,
+        joins_builder: SqlJoinsBuilder,
+        resolved_search: ResolvedDatasetSearch[list[str]],
         fields: Set[str],
+        union_dataset_type_name: str,
+    ) -> None: ...
+
+    @overload
+    def join_dataset_search(
+        self,
+        joins_builder: SqlJoinsBuilder,
+        resolved_search: ResolvedDatasetSearch[str],
+        fields: Set[str],
+    ) -> None: ...
+
+    def join_dataset_search(
+        self,
+        joins_builder: SqlJoinsBuilder,
+        resolved_search: ResolvedDatasetSearch[Any],
+        fields: Set[str],
+        union_dataset_type_name: str | None = None,
     ) -> None:
         """Join a dataset search into an under-construction query.
 
         Parameters
         ----------
-        joiner : `QueryJoiner`
-            Component of a `QueryBuilder` that holds the FROM and WHERE
+        joins_builder : `SqlJoinsBuilder`
+            Component of a `SqlSelectBuilder` that holds the FROM and WHERE
             clauses.  This will be modified in-place on return.
         resolved_search : `ResolvedDatasetSearch`
             Struct that describes the dataset type and collections.
         fields : `~collections.abc.Set` [ `str` ]
             Dataset fields to include.
+        union_dataset_type_name : `str`, optional
+            Dataset type name to use when `resolved_search` represents multiple
+            union datasets.
         """
-        # The next two asserts will need to be dropped (and the implications
+        # The asserts below will need to be dropped (and the implications
         # dealt with instead) if materializations start having dataset fields.
-        assert (
-            resolved_search.name not in joiner.fields
-        ), "Dataset fields have unexpectedly already been joined in."
-        assert (
-            resolved_search.name not in joiner.timespans
-        ), "Dataset timespan has unexpectedly already been joined in."
-        joiner.join(
-            self.managers.datasets.make_query_joiner(
-                self.get_dataset_type(resolved_search.name), resolved_search.collection_records, fields
+        if union_dataset_type_name is None:
+            dataset_type = self.get_dataset_type(cast(str, resolved_search.name))
+            assert (
+                dataset_type.name not in joins_builder.fields
+            ), "Dataset fields have unexpectedly already been joined in."
+            assert (
+                dataset_type.name not in joins_builder.timespans
+            ), "Dataset timespan has unexpectedly already been joined in."
+        else:
+            dataset_type = self.get_dataset_type(union_dataset_type_name)
+            assert (
+                qt.ANY_DATASET not in joins_builder.fields
+            ), "Union dataset fields have unexpectedly already been joined in."
+            assert (
+                qt.ANY_DATASET not in joins_builder.timespans
+            ), "Union dataset timespan has unexpectedly already been joined in."
+
+        joins_builder.join(
+            self.managers.datasets.make_joins_builder(
+                dataset_type,
+                resolved_search.collection_records,
+                fields,
+                is_union=(union_dataset_type_name is not None),
             )
         )
 

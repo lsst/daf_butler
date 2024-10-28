@@ -46,8 +46,12 @@ from ...dimensions.record_cache import DimensionRecordCache
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...direct_query_driver import QueryBuilder, QueryJoiner  # Future query system (direct,server).
-    from ...queries.tree import Predicate  # Future query system (direct,client,server).
+    from ...direct_query_driver import (  # Future query system (direct,server).
+        Postprocessing,
+        SqlJoinsBuilder,
+        SqlSelectBuilder,
+    )
+    from ...queries.tree import AnyDatasetType, Predicate  # Future query system (direct,client,server).
     from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
 
@@ -363,8 +367,8 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_query_joiner(self, element: DimensionElement, fields: Set[str]) -> QueryJoiner:
-        """Make a `..direct_query_driver.QueryJoiner` that represents a
+    def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
+        """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
         dimension element table.
 
         Parameters
@@ -372,14 +376,14 @@ class DimensionRecordStorageManager(VersionedExtension):
         element : `DimensionElement`
             Dimension element the table corresponds to.
         fields : `~collections.abc.Set` [ `str` ]
-            Names of fields to make available in the joiner.  These can be any
+            Names of fields to make available in the builder.  These can be any
             metadata or alternate key field in the element's schema, including
             the special ``region`` and ``timespan`` fields. Dimension keys in
             the element's schema are always included.
 
         Returns
         -------
-        joiner : `..direct_query_driver.QueryJoiner`
+        builder : `..direct_query_driver.SqlJoinsBuilder`
             A query-construction object representing a table or subquery.  This
             is guaranteed to have rows that are unique over dimension keys and
             all possible key values for this dimension, so joining in a
@@ -397,8 +401,8 @@ class DimensionRecordStorageManager(VersionedExtension):
         dimensions: DimensionGroup,
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
-        calibration_dataset_types: Set[str],
-    ) -> tuple[Predicate, QueryBuilder]:
+        calibration_dataset_types: Set[str | AnyDatasetType],
+    ) -> tuple[Predicate, SqlSelectBuilder, Postprocessing]:
         """Process a query's WHERE predicate and dimensions to handle spatial
         and temporal overlaps.
 
@@ -416,7 +420,8 @@ class DimensionRecordStorageManager(VersionedExtension):
             joined into the query that may establish their own spatial or
             temporal relationships (e.g. a dataset search with both ``visit``
             and ``patch`` dimensions).
-        calibration_dataset_types : `~collections.abc.Set` [ `str` ]
+        calibration_dataset_types : `~collections.abc.Set` [ `str` or \
+                `..queries.tree.AnyDatasetType` ]
             The names of dataset types that have been joined into the query via
             a search that includes at least one calibration collection.
 
@@ -427,10 +432,12 @@ class DimensionRecordStorageManager(VersionedExtension):
             behavior of the filter while possibly rewriting overlap expressions
             that have been partially moved into ``builder`` as some combination
             of new nested predicates, joins, and postprocessing.
-        builder : `..direct_query_driver.QueryBuilder`
+        builder : `..direct_query_driver.SqlSelectBuilder`
             A query-construction helper object that includes any initial joins
             and postprocessing needed to handle overlap expression extracted
             from the original predicate.
+        postprocessing : `Postprocessing`
+            Struct representing post-query processing to be done in Python.
 
         Notes
         -----

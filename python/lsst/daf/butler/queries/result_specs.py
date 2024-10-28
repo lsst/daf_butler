@@ -43,7 +43,7 @@ import pydantic
 from .._exceptions import InvalidQueryError
 from ..dimensions import DimensionElement, DimensionGroup, DimensionUniverse
 from ..pydantic_utils import DeferredValidation
-from .tree import ColumnSet, DatasetFieldName, OrderExpression, QueryTree
+from .tree import AnyDatasetType, ColumnSet, DatasetFieldName, OrderExpression, QueryTree
 
 
 class ResultSpecBase(pydantic.BaseModel, ABC):
@@ -96,7 +96,7 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
                 )
 
     @property
-    def find_first_dataset(self) -> str | None:
+    def find_first_dataset(self) -> str | AnyDatasetType | None:
         """The dataset type for which find-first resolution is required, if
         any.
         """

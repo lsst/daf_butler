@@ -33,8 +33,11 @@ __all__ = (
     "DatasetFieldName",
     "DATASET_FIELD_NAMES",
     "is_dataset_field",
+    "AnyDatasetType",
+    "ANY_DATASET",
 )
 
+import enum
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeGuard, TypeVar, cast, get_args
 
@@ -62,6 +65,30 @@ _T = TypeVar("_T")
 _L = TypeVar("_L")
 _A = TypeVar("_A")
 _O = TypeVar("_O")
+
+
+class AnyDatasetType(enum.Enum):
+    """A single-element enum that provides a typed sentinal dataset type name
+    for queries over multiple dataset types.
+    """
+
+    # Since we often use a type-union of ANY_DATASET and str, it's critical
+    # the enum value (which is what Pydantic uses for serialization) not be
+    # a str.
+    ANY_DATASET = -1
+
+    def __str__(self) -> str:
+        # This string appears in both human-read error messages and the aliases
+        # used for columns in SQL (with quotes, of course). This is a
+        # convenient value because it sorts before and cannot clash with any
+        # regular alphabetical name, while still being human readable.
+        return "[any]"
+
+    def __repr__(self) -> str:
+        return "ANY_DATASET"
+
+
+ANY_DATASET: AnyDatasetType = AnyDatasetType.ANY_DATASET
 
 
 def is_dataset_field(s: str) -> TypeGuard[DatasetFieldName]:

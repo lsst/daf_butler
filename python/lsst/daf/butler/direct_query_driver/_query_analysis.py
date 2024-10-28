@@ -28,29 +28,36 @@
 from __future__ import annotations
 
 __all__ = (
-    "QueryPlan",
-    "QueryJoinsPlan",
-    "QueryProjectionPlan",
-    "QueryFindFirstPlan",
+    "QueryJoinsAnalysis",
+    "QueryFindFirstAnalysis",
     "ResolvedDatasetSearch",
+    "QueryCollectionAnalysis",
 )
 
 import dataclasses
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from ..dimensions import DimensionElement, DimensionGroup
 from ..queries import tree as qt
+from ..registry import CollectionSummary
 from ..registry.interfaces import CollectionRecord
+
+if TYPE_CHECKING:
+    from ._postprocessing import Postprocessing
+    from ._sql_builders import SqlSelectBuilder
+
+_T = TypeVar("_T")
 
 
 @dataclasses.dataclass
-class ResolvedDatasetSearch:
+class ResolvedDatasetSearch(Generic[_T]):
     """A struct describing a dataset search joined into a query, after
     resolving its collection search path.
     """
 
-    name: str
-    """Name of the dataset type."""
+    name: _T
+    """Name or names of the dataset type(s)."""
 
     dimensions: DimensionGroup
     """Dimensions of the dataset type."""
@@ -71,15 +78,17 @@ class ResolvedDatasetSearch:
     `~CollectionType.CALIBRATION` collection, `False` otherwise.
 
     Since only calibration datasets can be present in
-    `~CollectionType.CALIBRATION` collections, this also
+    `~CollectionType.CALIBRATION` collections, this also indicates that the
+    dataset type is a calibration.
     """
 
 
 @dataclasses.dataclass
-class QueryJoinsPlan:
+class QueryJoinsAnalysis:
     """A struct describing the "joins" section of a butler query.
 
-    See `QueryPlan` and `QueryPlan.joins` for additional information.
+    See `DirectQueryDriver.build_query` for an overview of how queries are
+    transformed into SQL, and the role this object plays in that.
     """
 
     predicate: qt.Predicate
@@ -95,7 +104,7 @@ class QueryJoinsPlan:
     materializations: dict[qt.MaterializationKey, DimensionGroup] = dataclasses.field(default_factory=dict)
     """Materializations to join into the query."""
 
-    datasets: dict[str, ResolvedDatasetSearch] = dataclasses.field(default_factory=dict)
+    datasets: dict[str, ResolvedDatasetSearch[str]] = dataclasses.field(default_factory=dict)
     """Dataset searches to join into the query."""
 
     data_coordinate_uploads: dict[qt.DataCoordinateUploadKey, DimensionGroup] = dataclasses.field(
@@ -111,7 +120,7 @@ class QueryJoinsPlan:
     def __post_init__(self) -> None:
         self.predicate.gather_required_columns(self.columns)
 
-    def iter_mandatory(self) -> Iterator[DimensionElement]:
+    def iter_mandatory(self, union_dataset_dimensions: DimensionGroup | None) -> Iterator[DimensionElement]:
         """Return an iterator over the dimension elements that must be joined
         into the query.
 
@@ -119,6 +128,12 @@ class QueryJoinsPlan:
         relationships that result rows must be consistent with.  They do not
         necessarily include all dimension keys in `columns`, since each of
         those can typically be included in a query in multiple different ways.
+
+        Parameters
+        ----------
+        union_dataset_dimensions : `DimensionGroup` or `None`
+            Dimensions of the union dataset types, or `None` if this is not
+            a union dataset query.
         """
         for element_name in self.columns.dimensions.elements:
             element = self.columns.dimensions.universe[element_name]
@@ -143,6 +158,11 @@ class QueryJoinsPlan:
                     for dataset_spec in self.datasets.values()
                 ):
                     continue
+                if (
+                    union_dataset_dimensions is not None
+                    and element.minimal_group.names <= union_dataset_dimensions.required
+                ):
+                    continue
                 # Materializations have all key columns for their dimensions.
                 if any(
                     element in materialization_dimensions.names
@@ -153,63 +173,19 @@ class QueryJoinsPlan:
 
 
 @dataclasses.dataclass
-class QueryProjectionPlan:
-    """A struct describing the "projection" stage of a butler query.
-
-    This struct evaluates to `True` in boolean contexts if either
-    `needs_dimension_distinct` or `needs_dataset_distinct` are `True`.  In
-    other cases the projection is effectively a no-op, because the
-    "joins"-stage rows are already unique.
-
-    See `QueryPlan` and `QueryPlan.projection` for additional information.
-    """
-
-    columns: qt.ColumnSet
-    """The columns present in the query after the projection is applied.
-
-    This is always a subset of `QueryJoinsPlan.columns`.
-    """
-
-    datasets: dict[str, ResolvedDatasetSearch]
-    """Dataset searches to join into the query."""
-
-    needs_dimension_distinct: bool = False
-    """If `True`, the projection's dimensions do not include all dimensions in
-    the "joins" stage, and hence a SELECT DISTINCT [ON] or GROUP BY must be
-    used to make post-projection rows unique.
-    """
-
-    needs_dataset_distinct: bool = False
-    """If `True`, the projection columns do not include collection-specific
-    dataset fields that were present in the "joins" stage, and hence a SELECT
-    DISTINCT [ON] or GROUP BY must be added to make post-projection rows
-    unique.
-    """
-
-    def __bool__(self) -> bool:
-        return self.needs_dimension_distinct or self.needs_dataset_distinct
-
-    find_first_dataset: str | None = None
-    """If not `None`, this is a find-first query for this dataset.
-
-    This is set even if the find-first search is trivial because there is only
-    one resolved collection.
-    """
-
-
-@dataclasses.dataclass
-class QueryFindFirstPlan:
+class QueryFindFirstAnalysis(Generic[_T]):
     """A struct describing the "find-first" stage of a butler query.
 
-    See `QueryPlan` and `QueryPlan.find_first` for additional information.
+    See `DirectQueryDriver.build_query` for an overview of how queries are
+    transformed into SQL, and the role this object plays in that.
     """
 
-    search: ResolvedDatasetSearch
-    """Information about the dataset being searched for."""
+    search: ResolvedDatasetSearch[_T]
+    """Information about the dataset type or types being searched for."""
 
     @property
-    def dataset_type(self) -> str:
-        """Name of the dataset type."""
+    def dataset_type(self) -> _T:
+        """Name(s) of the dataset type(s)."""
         return self.search.name
 
     def __bool__(self) -> bool:
@@ -217,64 +193,57 @@ class QueryFindFirstPlan:
 
 
 @dataclasses.dataclass
-class QueryPlan:
-    """A struct that aggregates information about a complete butler query.
-
-    Notes
-    -----
-    Butler queries are transformed into a combination of SQL and Python-side
-    postprocessing in three stages, with each corresponding to an attributes of
-    this class and a method of `DirectQueryDriver`
-
-    - In the `joins` stage (`~DirectQueryDriver.apply_query_joins`), we define
-      the main SQL FROM and WHERE clauses, by joining all tables needed to
-      bring in any columns, or constrain the keys of its rows.
-
-    - In the `projection` stage (`~DirectQueryDriver.apply_query_projection`),
-      we select only the columns needed for the query's result rows (including
-      columns needed only by postprocessing and ORDER BY, as well those needed
-      by the objects returned to users).  If the result rows are not naturally
-      unique given what went into the query in the "joins" stage, the
-      projection involves a SELECT DISTINCT [ON] or GROUP BY to make them
-      unique, and in a few rare cases uses aggregate functions with GROUP BY.
-
-    - In the `find_first` stage (`~DirectQueryDriver.apply_query_find_first`),
-      we use a window function (PARTITION BY) subquery to find only the first
-      dataset in the collection search path for each data ID.  This stage does
-      nothing if there is no find-first dataset search, or if the search is
-      trivial because there is only one collection.
-
-    In `DirectQueryDriver.build_query`, a `QueryPlan` instance is constructed
-    via `DirectQueryDriver.analyze_query`, which also returns an initial
-    `QueryBuilder`.  After this point the plans are considered frozen, and the
-    nested plan attributes are then passed to each of the corresponding
-    `DirectQueryDriver` methods along with the builder, which is mutated (and
-    occasionally replaced) into the complete SQL/postprocessing form of the
-    query.
+class QueryCollectionAnalysis:
+    """A struct containing information about all of the collections that appear
+    in a butler query.
     """
 
-    joins: QueryJoinsPlan
-    """Description of the "joins" stage of query construction."""
+    collection_records: Mapping[str, CollectionRecord]
+    """All collection records, keyed by collection name.
 
-    projection: QueryProjectionPlan
-    """Description of the "projection" stage of query construction."""
-
-    find_first: QueryFindFirstPlan | None
-    """Description of the "find_first" stage of query construction.
-
-    This attribute is `None` if there is no find-first search at all, and
-    `False` in boolean contexts if the search is trivial because there is only
-    one collection after the collections have been resolved.
+    This includes CHAINED collections.
     """
 
-    final_columns: qt.ColumnSet
-    """The columns included in the SELECT clause of the complete SQL query
-    that is actually executed.
+    calibration_dataset_types: set[str | qt.AnyDatasetType] = dataclasses.field(default_factory=set)
+    """A set of the anmes of all calibration dataset types.
 
-    This is a subset of `QueryProjectionPlan.columns` that differs only in
-    columns used by the `find_first` stage or an ORDER BY expression.
-
-    Like all other `.queries.tree.ColumnSet` attributes, it does not include
-    fields added directly to `QueryBuilder.special`, which may also be added
-    to the SELECT clause.
+    If ``ANY_DATASET`` appears in the set, the dataset type union includes at
+    least one calibration dataset type.
     """
+
+    summaries_by_dataset_type: dict[
+        str | qt.AnyDatasetType, list[tuple[CollectionRecord, CollectionSummary]]
+    ] = dataclasses.field(default_factory=dict)
+    """Collection records and summaries, in search order, keyed by dataset type
+    name.
+
+    CHAINED collections are flattened out in the nested lists.  Lists have been
+    filtered to be consistent with the dataset types in the summaries, but not
+    necessarily the governor dimensions in the summaries.
+    """
+
+
+@dataclasses.dataclass
+class QueryTreeAnalysis:
+    """A struct aggregating all analysis results derived from the query tree.
+
+    See `DirectQueryDriver.build_query` for an overview of how queries are
+    transformed into SQL, and the role this object plays in that.
+    """
+
+    joins: QueryJoinsAnalysis
+    """Analysis of the "joins" stage, including all joins and columns needed by
+    ``tree``.  Additional columns will be added to this plan later.
+    """
+
+    union_datasets: list[ResolvedDatasetSearch[list[str]]]
+    """Resolved dataset searches that expand `QueryTree.any_dataset` out
+    into groups of dataset types with the same collection search path.
+    """
+
+    initial_select_builder: SqlSelectBuilder
+    """In-progress SQL query builder, initialized with just spatial and
+    temporal overlaps."""
+
+    postprocessing: Postprocessing
+    """Struct representing post-query processing to be done in Python."""

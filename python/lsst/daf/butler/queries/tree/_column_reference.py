@@ -36,7 +36,7 @@ import pydantic
 from ..._exceptions import InvalidQueryError
 from ...column_spec import ColumnType
 from ...dimensions import Dimension, DimensionElement
-from ._base import ColumnExpressionBase, DatasetFieldName
+from ._base import ANY_DATASET, AnyDatasetType, ColumnExpressionBase, DatasetFieldName
 
 if TYPE_CHECKING:
     from ..visitors import ColumnExpressionVisitor
@@ -141,8 +141,9 @@ class DatasetFieldReference(ColumnExpressionBase):
 
     is_column_reference: ClassVar[bool] = True
 
-    dataset_type: str
-    """Name of the dataset type."""
+    dataset_type: AnyDatasetType | str
+    """Name of the dataset type, or ``ANY_DATSET`` to match any dataset type.
+    """
 
     field: DatasetFieldName
     """Name of the field (i.e. column) in the dataset's logical table."""
@@ -173,7 +174,10 @@ class DatasetFieldReference(ColumnExpressionBase):
         raise AssertionError(f"Invalid field {self.field!r} for dataset.")
 
     def __str__(self) -> str:
-        return f"{self.dataset_type}.{self.field}"
+        if self.dataset_type is ANY_DATASET:
+            return self.field
+        else:
+            return f"{self.dataset_type}.{self.field}"
 
     def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
         # Docstring inherited.
