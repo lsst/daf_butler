@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("determine_destination_for_retrieved_artifact", "retrieve_and_zip", "ZipIndex")
+__all__ = ("determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips", "ZipIndex")
 
 import logging
 import tempfile
@@ -209,6 +209,29 @@ class ArtifactIndexInfo(BaseModel):
         """
         return cls(info=info, ids=[id_])
 
+    def subset(self, ids: Iterable[uuid.UUID]) -> Self:
+        """Replace the IDs with a subset of the IDs and return a new instance.
+
+        Parameters
+        ----------
+        ids : `~collections.abc.Iterable` [ `uuid.UUID` ]
+            Subset of IDs to keep.
+
+        Returns
+        -------
+        subsetted : `ArtifactIndexInfo`
+            New instance with the requested subset.
+
+        Raises
+        ------
+        ValueError
+            Raised if the given IDs is not a subset of the current IDs.
+        """
+        subset = set(ids)
+        if subset - self.ids:
+            raise ValueError(f"Given subset of {subset} is not a subset of {self.ids}")
+        return type(self)(ids=subset, info=self.info.model_copy())
+
 
 class ZipIndex(BaseModel):
     """Index of a Zip file of Butler datasets.
@@ -263,6 +286,18 @@ class ZipIndex(BaseModel):
             Name of the zip file based on index.
         """
         return f"{self.generate_uuid5()}.zip"
+
+    def calculate_zip_file_path_in_store(self) -> str:
+        """Calculate the relative path inside a datastore that should be
+        used for this Zip file.
+
+        Returns
+        -------
+        path_in_store : `str`
+            Relative path to use for Zip file in datastore.
+        """
+        zip_name = self.calculate_zip_file_name()
+        return f"zips/{zip_name[:4]}/{zip_name}"
 
     def write_index(self, dir: ResourcePath) -> ResourcePath:
         """Write the index to the specified directory.
@@ -478,3 +513,63 @@ def retrieve_and_zip(
                 zip.write(path.ospath, name)
 
     return zip_path
+
+
+def unpack_zips(
+    zips_to_transfer: Iterable[ResourcePath],
+    allowed_ids: set[uuid.UUID],
+    destination: ResourcePath,
+    preserve_path: bool,
+) -> dict[ResourcePath, ArtifactIndexInfo]:
+    """Transfer the Zip files and unpack them in the destination directory.
+
+    Parameters
+    ----------
+    zips_to_transfer : `~collections.abc.Iterable` \
+            [ `~lsst.resources.ResourcePath` ]
+        Paths to Zip files to unpack. These must be Zip files that include
+        the index information and were created by the Butler.
+    allowed_ids : `set` [ `uuid.UUID` ]
+        All the possible dataset IDs for which artifacts should be extracted
+        from the Zip file. If an ID in the Zip file is not present in this
+        list the artifact will not be extracted from the Zip.
+    destination : `~lsst.resources.ResourcePath`
+        Output destination for the Zip contents.
+    preserve_path : `bool`
+        Whether to include subdirectories during extraction. If `True` a
+        directory will be made per Zip.
+
+    Returns
+    -------
+    artifact_map : `dict` \
+            [ `~lsst.resources.ResourcePath`, `ArtifactIndexInfo` ]
+        Path linking Zip contents location to associated artifact information.
+    """
+    artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
+    for source_uri in zips_to_transfer:
+        _LOG.debug("Unpacking zip file %s", source_uri)
+        # Assume that downloading to temporary location is more efficient
+        # than trying to read the contents remotely.
+        with ResourcePath.temporary_uri(suffix=".zip") as temp:
+            temp.transfer_from(source_uri, transfer="auto")
+            index = ZipIndex.from_zip_file(temp)
+
+            if preserve_path:
+                subdir = ResourcePath(
+                    index.calculate_zip_file_path_in_store(), forceDirectory=False, forceAbsolute=False
+                ).dirname()
+                outdir = destination.join(subdir)
+            else:
+                outdir = destination
+            outdir.mkdir()
+            with temp.open("rb") as fd, zipfile.ZipFile(fd) as zf:
+                for path_in_zip, artifact_info in index.artifact_map.items():
+                    # Skip if this specific dataset ref is not requested.
+                    included_ids = artifact_info.ids & allowed_ids
+                    if included_ids:
+                        # Do not apply a new prefix since the zip file
+                        # should already have a prefix.
+                        zf.extract(path_in_zip, path=outdir.ospath)
+                        output_path = outdir.join(path_in_zip, forceDirectory=False)
+                        artifact_map[output_path] = artifact_info.subset(included_ids)
+    return artifact_map

@@ -84,6 +84,7 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     ArtifactIndexInfo,
     ZipIndex,
     determine_destination_for_retrieved_artifact,
+    unpack_zips,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
@@ -2100,6 +2101,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # This also helps filter out duplicate DatasetRef in the request
         # that will map to the same underlying file transfer.
         to_transfer: dict[ResourcePath, ResourcePath] = {}
+        zips_to_transfer: set[ResourcePath] = set()
 
         # Retrieve all the records in bulk indexed by ref.id.
         records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
@@ -2125,10 +2127,16 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 location = info.file_location(self.locationFactory)
                 source_uri = location.uri
                 # For DECam/zip we only want to copy once.
+                # For zip files we need to unpack so that they can be
+                # zipped up again if needed.
+                is_zip = source_uri.getExtension() == ".zip" and "zip-path" in source_uri.fragment
                 # We need to remove fragments for consistency.
-                # TODO: Unzip zip files on retrieval and merge indexes.
                 cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
-                if cleaned_source_uri not in to_transfer:
+                if is_zip:
+                    # Assume the DatasetRef definitions are within the Zip
+                    # file itself and so can be dropped from loop.
+                    zips_to_transfer.add(cleaned_source_uri)
+                elif cleaned_source_uri not in to_transfer:
                     target_uri = determine_destination_for_retrieved_artifact(
                         destination, location.pathInStore, preserve_path, prefix
                     )
@@ -2143,11 +2151,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         for source_uri, target_uri in to_transfer.items():
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
+        # Transfer the Zip files and unpack them.
+        zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path)
+        artifact_map.update(zipped_artifacts)
+
         if write_index:
             index = ZipIndex.from_artifact_map(refs, artifact_map, destination)
             index.write_index(destination)
 
-        return list(to_transfer.values()), artifact_map
+        return list(artifact_map.keys()), artifact_map
 
     def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
         """Ingest an indexed Zip file and contents.
@@ -2203,10 +2215,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # Reference in original location.
             tgtLocation = None
         else:
-            zip_name = index.calculate_zip_file_name()
-            # Zip name is UUID so add subdir of first few characters of UUID
-            # to spread things out if there are many Zip files.
-            tgtLocation = self.locationFactory.fromPath(f"zips/{zip_name[:4]}/{zip_name}")
+            # Name the zip file based on index contents.
+            tgtLocation = self.locationFactory.fromPath(index.calculate_zip_file_path_in_store())
             if not tgtLocation.uri.dirname().exists():
                 log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
                 tgtLocation.uri.dirname().mkdir()

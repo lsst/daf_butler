@@ -42,6 +42,7 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     ZipIndex,
     determine_destination_for_retrieved_artifact,
     retrieve_and_zip,
+    unpack_zips,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
@@ -434,6 +435,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if transfer not in ("auto", "copy"):
             raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
 
+        requested_ids = {ref.id for ref in refs}
         output_uris: list[ResourcePath] = []
         have_copied: dict[ResourcePath, ResourcePath] = {}
         artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
@@ -442,10 +444,20 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
             for file in file_info:
                 source_uri = ResourcePath(str(file.url))
-                # For decam/zip situation we only want to copy once.
-                # TODO: Unzip zip files on retrieval and merge indexes.
+                # For DECam/zip we only want to copy once.
+                # For zip files we need to unpack so that they can be
+                # zipped up again if needed.
+                is_zip = source_uri.getExtension() == ".zip" and "zip-path" in source_uri.fragment
                 cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
-                if cleaned_source_uri not in have_copied:
+                if is_zip:
+                    if cleaned_source_uri not in have_copied:
+                        zipped_artifacts = unpack_zips(
+                            [cleaned_source_uri], requested_ids, destination, preserve_path
+                        )
+                        artifact_map.update(zipped_artifacts)
+                        have_copied[cleaned_source_uri] = cleaned_source_uri
+                        output_uris.extend(artifact_map.keys())
+                elif cleaned_source_uri not in have_copied:
                     relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
                     target_uri = determine_destination_for_retrieved_artifact(
                         destination, relative_path, preserve_path, prefix
