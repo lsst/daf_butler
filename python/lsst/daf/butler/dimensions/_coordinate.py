@@ -709,7 +709,7 @@ class DataCoordinate:
         else:
             records = None
 
-        return SerializedDataCoordinate(dataId=dict(self.mapping), records=records)
+        return SerializedDataCoordinate(dataId=dict(self.required), records=records)
 
     @classmethod
     def from_simple(
