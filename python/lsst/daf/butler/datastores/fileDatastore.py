@@ -2118,7 +2118,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # One artifact can be used by multiple DatasetRef.
         # e.g. DECam.
         artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
-        for ref in refs:
+        # Sort to ensure that in many refs to one file situation the same
+        # ref is used for any prefix that might be added.
+        for ref in sorted(refs):
             prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             for info in records[ref.id]:
                 location = info.file_location(self.locationFactory)

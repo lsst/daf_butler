@@ -438,7 +438,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         requested_ids = {ref.id for ref in refs}
         have_copied: dict[ResourcePath, ResourcePath] = {}
         artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
-        for ref in refs:
+        # Sort to ensure that in many refs to one file situation the same
+        # ref is used for any prefix that might be added.
+        for ref in sorted(refs):
             prefix = str(ref.id)[:8] + "-" if add_prefix else ""
             file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
             for file in file_info:
