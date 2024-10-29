@@ -1,0 +1,3 @@
+The ``DAF_BUTLER_PLUGINS`` environment variable should no longer be set if packages use ``pip install`` and have been upgraded to use entry points.
+Butler can now read the subcommands from ``pipe_base`` and ``daf_butler_migrate`` automatically.
+Setting the environment variable for these packages will result in an error.
