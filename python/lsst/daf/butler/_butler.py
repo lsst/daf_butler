@@ -992,6 +992,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
+        overwrite: bool = True,
     ) -> ResourcePath:
         """Retrieve artifacts from a Butler and place in ZIP file.
 
@@ -1003,6 +1004,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Directory to write the new ZIP file. This directory will
             also be used as a staging area for the datasets being downloaded
             from the datastore.
+        overwrite : `bool`, optional
+            If `False` the output Zip will not be written if a file of the
+            same name is already present in ``destination``.
 
         Returns
         -------

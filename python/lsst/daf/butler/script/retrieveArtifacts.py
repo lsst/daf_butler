@@ -126,7 +126,7 @@ def retrieveArtifacts(
             refs, destination=destination, transfer=transfer, preserve_path=preserve_path, overwrite=clobber
         )
     else:
-        zip_file = butler.retrieve_artifacts_zip(refs, destination=destination)
+        zip_file = butler.retrieve_artifacts_zip(refs, destination=destination, overwrite=clobber)
         transferred = [zip_file]
 
     return transferred

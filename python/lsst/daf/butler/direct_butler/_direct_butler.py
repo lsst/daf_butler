@@ -1296,8 +1296,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
+        overwrite: bool = True,
     ) -> ResourcePath:
-        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts)
+        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts, overwrite)
 
     def retrieveArtifacts(
         self,

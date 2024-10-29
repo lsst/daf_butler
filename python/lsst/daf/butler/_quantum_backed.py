@@ -503,6 +503,7 @@ class QuantumBackedButler(LimitedButler):
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
+        overwrite: bool = True,
     ) -> ResourcePath:
         """Retrieve artifacts from the graph and place in ZIP file.
 
@@ -514,6 +515,9 @@ class QuantumBackedButler(LimitedButler):
             Directory to write the new ZIP file. This directory will
             also be used as a staging area for the datasets being downloaded
             from the datastore.
+        overwrite : `bool`, optional
+            If `False` the output Zip will not be written if a file of the
+            same name is already present in ``destination``.
 
         Returns
         -------
@@ -525,7 +529,7 @@ class QuantumBackedButler(LimitedButler):
         ValueError
             Raised if there are no refs to retrieve.
         """
-        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts)
+        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts, overwrite)
 
     def extract_provenance_data(self) -> QuantumProvenanceData:
         """Extract provenance information and datastore records from this

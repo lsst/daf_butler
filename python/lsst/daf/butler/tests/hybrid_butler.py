@@ -210,8 +210,9 @@ class HybridButler(Butler):
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
+        overwrite: bool = True,
     ) -> ResourcePath:
-        return self._remote_butler.retrieve_artifacts_zip(refs, destination)
+        return self._remote_butler.retrieve_artifacts_zip(refs, destination, overwrite)
 
     def retrieveArtifacts(
         self,

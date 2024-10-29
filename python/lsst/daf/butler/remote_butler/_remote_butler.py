@@ -479,8 +479,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self,
         refs: Iterable[DatasetRef],
         destination: ResourcePathExpression,
+        overwrite: bool = True,
     ) -> ResourcePath:
-        return retrieve_and_zip(refs, destination, self._retrieve_artifacts)
+        return retrieve_and_zip(refs, destination, self._retrieve_artifacts, overwrite)
 
     def retrieveArtifacts(
         self,

@@ -485,6 +485,7 @@ def retrieve_and_zip(
     refs: Iterable[DatasetRef],
     destination: ResourcePathExpression,
     retrieval_callback: RetrievalCallable,
+    overwrite: bool = True,
 ) -> ResourcePath:
     """Retrieve artifacts from a Butler and place in ZIP file.
 
@@ -501,6 +502,9 @@ def retrieve_and_zip(
         Bound method for a function that can retrieve the artifacts and
         return the metadata necessary for creating the zip index. For example
         `lsst.daf.butler.datastore.Datastore.retrieveArtifacts`.
+    overwrite : `bool`, optional
+        If `False` the output Zip will not be written if a file of the
+        same name is already present in ``destination``.
 
     Returns
     -------
@@ -550,6 +554,8 @@ def retrieve_and_zip(
         # Use unique name based on files in Zip.
         zip_file_name = index.calculate_zip_file_name()
         zip_path = outdir.join(zip_file_name, forceDirectory=False)
+        if not overwrite and zip_path.exists():
+            raise FileExistsError(f"Output Zip at {zip_path} already exists but cannot overwrite.")
         with zipfile.ZipFile(zip_path.ospath, "w") as zip:
             zip.write(index_path.ospath, index_path.basename())
             for path, name in index.calc_relative_paths(tmpdir_path, list(artifact_map)).items():
@@ -616,12 +622,12 @@ def unpack_zips(
                     if included_ids:
                         # Do not apply a new prefix since the zip file
                         # should already have a prefix.
-                        zf.extract(path_in_zip, path=outdir.ospath)
                         output_path = outdir.join(path_in_zip, forceDirectory=False)
                         if not overwrite and output_path.exists():
                             raise FileExistsError(
                                 f"Destination path '{output_path}' already exists. "
                                 "Extraction from Zip cannot be completed."
                             )
+                        zf.extract(path_in_zip, path=outdir.ospath)
                         artifact_map[output_path] = artifact_info.subset(included_ids)
     return artifact_map
