@@ -34,12 +34,12 @@ import tempfile
 import uuid
 import zipfile
 from collections.abc import Callable, Iterable
-from typing import ClassVar, Self
+from typing import Annotated, ClassVar, Literal, Self, TypeAlias
 
 from lsst.daf.butler import DatasetIdFactory, DatasetRef
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..._dataset_type import DatasetType, SerializedDatasetType
 from ...dimensions import DataCoordinate, DimensionUniverse, SerializedDataCoordinate, SerializedDataId
@@ -53,6 +53,8 @@ class MinimalistDatasetRef(BaseModel):
     The ID is not included and is presumed to be the key to a mapping
     to this information.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     dataset_type_name: str
     """Name of the dataset type."""
@@ -69,6 +71,18 @@ class SerializedDatasetRefContainer(BaseModel):
 
     Dimension records are not included.
     """
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+    container_version: str
+
+
+class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
+    """Serializable model for a collection of DatasetRef.
+
+    Dimension records are not included.
+    """
+
+    container_version: Literal["V1"] = "V1"
 
     universe_version: int
     """Dimension universe version."""
@@ -177,6 +191,12 @@ class SerializedDatasetRefContainer(BaseModel):
         return refs
 
 
+SerializedDatasetRefContainers: TypeAlias = Annotated[
+    SerializedDatasetRefContainerV1,
+    Field(discriminator="container_version"),
+]
+
+
 class ArtifactIndexInfo(BaseModel):
     """Information related to an artifact in an index."""
 
@@ -242,7 +262,9 @@ class ZipIndex(BaseModel):
     file datastore.
     """
 
-    refs: SerializedDatasetRefContainer
+    index_version: Literal["V1"] = "V1"
+
+    refs: SerializedDatasetRefContainers
     """Deduplicated information for all the `DatasetRef` in the index."""
 
     artifact_map: dict[str, ArtifactIndexInfo]
@@ -314,7 +336,10 @@ class ZipIndex(BaseModel):
         """
         index_path = dir.join(self.index_name, forceDirectory=False)
         with index_path.open("w") as fd:
-            print(self.model_dump_json(exclude_defaults=True, exclude_unset=True), file=fd)
+            # Need to include unset/default values so that the version
+            # discriminator field for refs container appears in the
+            # serialization.
+            print(self.model_dump_json(), file=fd)
         return index_path
 
     @classmethod
@@ -367,7 +392,7 @@ class ZipIndex(BaseModel):
         """
         if not refs:
             return cls(
-                refs=SerializedDatasetRefContainer.from_refs(refs),
+                refs=SerializedDatasetRefContainerV1.from_refs(refs),
                 artifact_map={},
             )
 
@@ -375,7 +400,7 @@ class ZipIndex(BaseModel):
         # uses relative paths.
         file_to_relative = cls.calc_relative_paths(root, artifact_map.keys())
 
-        simplified_refs = SerializedDatasetRefContainer.from_refs(refs)
+        simplified_refs = SerializedDatasetRefContainerV1.from_refs(refs)
 
         # Convert the artifact mapping to relative path.
         relative_artifact_map = {file_to_relative[path]: info for path, info in artifact_map.items()}
