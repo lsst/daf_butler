@@ -129,14 +129,66 @@ def query_all_datasets(
         dataset type.
     """
     if collections is None:
-        collections = butler.collections.defaults
+        collections = list(butler.collections.defaults)
     else:
         collections = list(ensure_iterable(collections))
     if find_first and has_globs(collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
 
-    missing_types: list[str] = []
     dataset_type_query = list(ensure_iterable(name))
+    dataset_type_collections = _filter_collections_and_dataset_types(butler, collections, dataset_type_query)
+
+    for dt, filtered_collections in sorted(dataset_type_collections.items()):
+        _LOG.debug("Querying dataset type %s", dt)
+        results = butler.query_datasets(
+            dt,
+            collections=filtered_collections,
+            find_first=find_first,
+            with_dimension_records=with_dimension_records,
+            data_id=data_id,
+            order_by=order_by,
+            explain=False,
+            where=where,
+            bind=bind,
+            limit=limit,
+            **kwargs,
+        )
+
+        yield DatasetsPage(dataset_type=dt, data=results)
+
+        if limit is not None:
+            # Track how much of the limit has been used up by each query.
+            limit -= len(results)
+            if limit <= 0:
+                break
+
+
+def _filter_collections_and_dataset_types(
+    butler: Butler, collections: list[str], dataset_type_query: list[str]
+) -> Mapping[str, list[str]]:
+    """For each dataset type matching the query, filter down the given
+    collections to only those that might actually contain datasets of the given
+    type.
+
+    Parameters
+    ----------
+    collections
+        List of collection names or collection search globs.
+    dataset_type_query
+        List of dataset type names or search globs.
+
+    Returns
+    -------
+    mapping
+        Mapping from dataset type name to list of collections that contain that
+        dataset type.
+
+    Notes
+    -----
+    Because collection summaries are an approximation, some of the returned
+    collections may not actually contain datasets of the expected type.
+    """
+    missing_types: list[str] = []
     dataset_types = set(butler.registry.queryDatasetTypes(dataset_type_query, missing=missing_types))
     if len(dataset_types) == 0:
         raise MissingDatasetTypeError(f"No dataset types found for query {dataset_type_query}")
@@ -163,26 +215,4 @@ def query_all_datasets(
     else:
         _LOG.debug("Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s")
 
-    for dt, filtered_collections in sorted(dataset_type_collections.items()):
-        _LOG.debug("Querying dataset type %s", dt)
-        results = butler.query_datasets(
-            dt,
-            collections=filtered_collections,
-            find_first=find_first,
-            with_dimension_records=with_dimension_records,
-            data_id=data_id,
-            order_by=order_by,
-            explain=False,
-            where=where,
-            bind=bind,
-            limit=limit,
-            **kwargs,
-        )
-
-        yield DatasetsPage(dataset_type=dt, data=results)
-
-        if limit is not None:
-            # Track how much of the limit has been used up by each query.
-            limit -= len(results)
-            if limit <= 0:
-                break
+    return dataset_type_collections
