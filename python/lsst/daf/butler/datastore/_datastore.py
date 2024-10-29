@@ -1026,7 +1026,7 @@ class Datastore(metaclass=ABCMeta):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1058,9 +1058,6 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
         artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
                 `ArtifactIndexInfo` ]
             Mapping of retrieved file to associated index information.
@@ -1491,7 +1488,7 @@ class NullDatastore(Datastore):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def remove(self, datasetRef: DatasetRef) -> None:

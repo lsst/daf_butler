@@ -427,7 +427,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         destination = ResourcePath(destination).abspath()
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}.")
@@ -436,7 +436,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
 
         requested_ids = {ref.id for ref in refs}
-        output_uris: list[ResourcePath] = []
         have_copied: dict[ResourcePath, ResourcePath] = {}
         artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
         for ref in refs:
@@ -456,7 +455,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                         )
                         artifact_map.update(zipped_artifacts)
                         have_copied[cleaned_source_uri] = cleaned_source_uri
-                        output_uris.extend(artifact_map.keys())
                 elif cleaned_source_uri not in have_copied:
                     relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
                     target_uri = determine_destination_for_retrieved_artifact(
@@ -465,7 +463,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                     # Because signed URLs expire, we want to do the transfer
                     # soon after retrieving the URL.
                     target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
-                    output_uris.append(target_uri)
                     have_copied[cleaned_source_uri] = target_uri
                     artifact_map[target_uri] = ArtifactIndexInfo.from_single(file.datastoreRecords, ref.id)
                 else:
@@ -476,7 +473,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             index = ZipIndex.from_artifact_map(refs, artifact_map, destination)
             index.write_index(destination)
 
-        return output_uris, artifact_map
+        return artifact_map
 
     def retrieve_artifacts_zip(
         self,
@@ -493,14 +490,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        paths, _ = self._retrieve_artifacts(
+        artifact_map = self._retrieve_artifacts(
             refs,
             destination,
             transfer,
             preserve_path,
             overwrite,
         )
-        return paths
+        return list(artifact_map)
 
     def exists(
         self,

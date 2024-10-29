@@ -529,7 +529,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         overwrite: bool | None = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters

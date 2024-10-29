@@ -2052,7 +2052,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -2084,9 +2084,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
         artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
                 `ArtifactIndexInfo` ]
             Mapping of retrieved file to associated index information.
@@ -2159,7 +2156,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             index = ZipIndex.from_artifact_map(refs, artifact_map, destination)
             index.write_index(destination)
 
-        return list(artifact_map.keys()), artifact_map
+        return artifact_map
 
     def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
         """Ingest an indexed Zip file and contents.

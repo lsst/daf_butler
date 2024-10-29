@@ -478,7 +478,7 @@ class RetrievalCallable(Protocol):
         overwrite: bool,
         write_index: bool,
         add_prefix: bool,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]: ...
+    ) -> dict[ResourcePath, ArtifactIndexInfo]: ...
 
 
 def retrieve_and_zip(
@@ -532,7 +532,7 @@ def retrieve_and_zip(
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
         # Retrieve the artifacts and write the index file. Strip paths.
-        paths, _ = retrieval_callback(
+        artifact_map = retrieval_callback(
             refs=refs,
             destination=tmpdir_path,
             transfer="auto",
@@ -552,7 +552,7 @@ def retrieve_and_zip(
         zip_path = outdir.join(zip_file_name, forceDirectory=False)
         with zipfile.ZipFile(zip_path.ospath, "w") as zip:
             zip.write(index_path.ospath, index_path.basename())
-            for path, name in index.calc_relative_paths(tmpdir_path, paths).items():
+            for path, name in index.calc_relative_paths(tmpdir_path, list(artifact_map)).items():
                 zip.write(path.ospath, name)
 
     return zip_path

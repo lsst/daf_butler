@@ -1309,7 +1309,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> list[ResourcePath]:
         # Docstring inherited.
         outdir = ResourcePath(destination)
-        paths, _ = self._datastore.retrieveArtifacts(
+        artifact_map = self._datastore.retrieveArtifacts(
             refs,
             outdir,
             transfer=transfer,
@@ -1317,7 +1317,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             overwrite=overwrite,
             write_index=True,
         )
-        return paths
+        return list(artifact_map)
 
     def exists(
         self,

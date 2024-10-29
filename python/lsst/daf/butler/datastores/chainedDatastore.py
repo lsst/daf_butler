@@ -812,7 +812,7 @@ class ChainedDatastore(Datastore):
         overwrite: bool = False,
         write_index: bool = True,
         add_prefix: bool = False,
-    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]:
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -843,9 +843,6 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
         artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
                 `ArtifactIndexInfo` ]
             Mapping of retrieved file to associated index information.
@@ -893,10 +890,9 @@ class ChainedDatastore(Datastore):
             raise RuntimeError(f"Some datasets were not found in any datastores: {pending}")
 
         # Now do the transfer.
-        targets: list[ResourcePath] = []
         merged_artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
         for number, datastore_refs in grouped_by_datastore.items():
-            retrieved, artifact_map = self.datastores[number].retrieveArtifacts(
+            artifact_map = self.datastores[number].retrieveArtifacts(
                 datastore_refs,
                 destination,
                 transfer=transfer,
@@ -905,14 +901,13 @@ class ChainedDatastore(Datastore):
                 write_index=False,  # Disable index writing regardless.
                 add_prefix=add_prefix,
             )
-            targets.extend(retrieved)
             merged_artifact_map.update(artifact_map)
 
         if write_index:
             index = ZipIndex.from_artifact_map(refs, merged_artifact_map, destination)
             index.write_index(destination)
 
-        return targets, merged_artifact_map
+        return merged_artifact_map
 
     def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
         """Ingest an indexed Zip file and contents.
