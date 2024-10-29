@@ -461,6 +461,8 @@ class ButlerCollections(ABC, Sequence):
             Mapping of the dataset type name to its corresponding list of
             collection names.
         """
+        # Although this is marked as private, it is called from outside this
+        # class by other functions internal to daf_butler.
         dataset_type_collections: dict[str, list[str]] = defaultdict(list)
         for info in collection_infos:
             if info.dataset_types is None:
