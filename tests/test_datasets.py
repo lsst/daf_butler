@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import copy
+import os
 import pickle
 import unittest
 import uuid
@@ -34,12 +35,17 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetRef,
     DatasetType,
+    DimensionConfig,
     DimensionUniverse,
     FileDataset,
     StorageClass,
     StorageClassFactory,
 )
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
+from lsst.resources import ResourcePath
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 """Tests for datasets module.
 """
@@ -737,6 +743,31 @@ class DatasetRefTestCase(unittest.TestCase):
         ref2 = DatasetRef(self.datasetType, self.dataId, run="somerun2")
         with self.assertRaises(ValueError):
             FileDataset(path="other.yaml", refs=[ref, ref2])
+
+
+class ZipIndexTestCase(unittest.TestCase):
+    """Test that a ZipIndex can be read."""
+
+    def test_v1(self):
+        """Read a v1 serialization."""
+        path = os.path.join(TESTDIR, "data", "zip_index.json")
+        with open(path) as fd:
+            index = ZipIndex.model_validate_json(fd.read())
+
+        self.assertEqual(index.index_version, "V1")
+        self.assertEqual(len(index), 17)
+        self.assertEqual(len(index.refs), 4)
+
+        # Reconstruct the refs using the required universe.
+        universe_version = index.refs.universe_version
+        namespace = index.refs.universe_namespace
+        universe_path = ResourcePath(
+            f"resource://lsst.daf.butler/configs/old_dimensions/{namespace}_universe{universe_version}.yaml"
+        )
+        dimension_config = DimensionConfig(universe_path)
+        universe = DimensionUniverse(dimension_config)
+        refs = index.refs.to_refs(universe=universe)
+        self.assertEqual(len(refs), 4)
 
 
 if __name__ == "__main__":

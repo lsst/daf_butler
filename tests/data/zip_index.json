@@ -1,0 +1,305 @@
+{
+  "index_version": "V1",
+  "refs": {
+    "container_version": "V1",
+    "universe_version": 7,
+    "universe_namespace": "daf_butler",
+    "dataset_types": {
+      "raw": {
+        "name": "raw",
+        "storageClass": "Exposure",
+        "dimensions": [
+          "instrument",
+          "detector",
+          "exposure"
+        ],
+        "parentStorageClass": null,
+        "isCalibration": false
+      },
+      "calexp": {
+        "name": "calexp",
+        "storageClass": "ExposureF",
+        "dimensions": [
+          "instrument",
+          "detector",
+          "visit"
+        ],
+        "parentStorageClass": null,
+        "isCalibration": false
+      },
+      "isr_metadata": {
+        "name": "isr_metadata",
+        "storageClass": "TaskMetadata",
+        "dimensions": [
+          "instrument",
+          "detector",
+          "exposure"
+        ],
+        "parentStorageClass": null,
+        "isCalibration": false
+      }
+    },
+    "compact_refs": {
+      "3f452f1d-b8a5-5202-8190-4e723004a6ba": {
+        "dataset_type_name": "raw",
+        "run": "DECam/raw/all",
+        "data_id": {
+          "instrument": "DECam",
+          "detector": 56,
+          "exposure": 411371
+        }
+      },
+      "5d32ede2-f2ca-5d3b-b900-bba4a00c3bf9": {
+        "dataset_type_name": "raw",
+        "run": "DECam/raw/all",
+        "data_id": {
+          "instrument": "DECam",
+          "detector": 60,
+          "exposure": 411371
+        }
+      },
+      "d24d9a3c-1004-42e7-88bb-a38ebf364084": {
+        "dataset_type_name": "calexp",
+        "run": "demo_collection",
+        "data_id": {
+          "instrument": "HSC",
+          "detector": 10,
+          "visit": 903342
+        }
+      },
+      "ac08556d-d6ab-43c5-9307-3bb7132548fd": {
+        "dataset_type_name": "isr_metadata",
+        "run": "demo_collection",
+        "data_id": {
+          "instrument": "HSC",
+          "detector": 10,
+          "exposure": 903342
+        }
+      }
+    }
+  },
+  "artifact_map": {
+    "Users/timj/work/lsstsw/build/testdata_decam/hits2015-zeroed/c4d_150218_052850_ori.fits.fz": {
+      "info": {
+        "formatter": "lsst.obs.decam.rawFormatter.DarkEnergyCameraRawFormatter",
+        "path": "file:///Users/timj/work/lsstsw/build/testdata_decam/hits2015-zeroed/c4d_150218_052850_ori.fits.fz",
+        "storage_class": "Exposure",
+        "component": null,
+        "checksum": null,
+        "file_size": 198720
+      },
+      "ids": [
+        "3f452f1d-b8a5-5202-8190-4e723004a6ba",
+        "5d32ede2-f2ca-5d3b-b900-bba4a00c3bf9"
+      ]
+    },
+    "demo_collection/calexp.apCorrMap/20130617/r/HSC-R/903342/calexp_apCorrMap_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.apCorrMap/20130617/r/HSC-R/903342/calexp_apCorrMap_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "ApCorr",
+        "component": "apCorrMap",
+        "checksum": null,
+        "file_size": 46080
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.detector/20130617/r/HSC-R/903342/calexp_detector_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.detector/20130617/r/HSC-R/903342/calexp_detector_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "Detector",
+        "component": "detector",
+        "checksum": null,
+        "file_size": 1725120
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.filter/20130617/r/HSC-R/903342/calexp_filter_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.filter/20130617/r/HSC-R/903342/calexp_filter_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "FilterLabel",
+        "component": "filter",
+        "checksum": null,
+        "file_size": 17280
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.id/20130617/r/HSC-R/903342/calexp_id_HSC_r_HSC-R_903342_1_36_demo_collection.json": {
+      "info": {
+        "formatter": "lsst.daf.butler.formatters.json.JsonFormatter",
+        "path": "demo_collection/calexp.id/20130617/r/HSC-R/903342/calexp_id_HSC_r_HSC-R_903342_1_36_demo_collection.json",
+        "storage_class": "int",
+        "component": "id",
+        "checksum": null,
+        "file_size": 9
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.image/20130617/r/HSC-R/903342/calexp_image_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsExposure.FitsImageFormatter",
+        "path": "demo_collection/calexp.image/20130617/r/HSC-R/903342/calexp_image_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "ImageF",
+        "component": "image",
+        "checksum": null,
+        "file_size": 31271040
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.mask/20130617/r/HSC-R/903342/calexp_mask_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter",
+        "path": "demo_collection/calexp.mask/20130617/r/HSC-R/903342/calexp_mask_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "MaskX",
+        "component": "mask",
+        "checksum": null,
+        "file_size": 627840
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.metadata/20130617/r/HSC-R/903342/calexp_metadata_HSC_r_HSC-R_903342_1_36_demo_collection.yaml": {
+      "info": {
+        "formatter": "lsst.daf.butler.formatters.yaml.YamlFormatter",
+        "path": "demo_collection/calexp.metadata/20130617/r/HSC-R/903342/calexp_metadata_HSC_r_HSC-R_903342_1_36_demo_collection.yaml",
+        "storage_class": "PropertyList",
+        "component": "metadata",
+        "checksum": null,
+        "file_size": 14887
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.photoCalib/20130617/r/HSC-R/903342/calexp_photoCalib_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.photoCalib/20130617/r/HSC-R/903342/calexp_photoCalib_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "PhotoCalib",
+        "component": "photoCalib",
+        "checksum": null,
+        "file_size": 28800
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.psf/20130617/r/HSC-R/903342/calexp_psf_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.psf/20130617/r/HSC-R/903342/calexp_psf_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "Psf",
+        "component": "psf",
+        "checksum": null,
+        "file_size": 192960
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.summaryStats/20130617/r/HSC-R/903342/calexp_summaryStats_HSC_r_HSC-R_903342_1_36_demo_collection.yaml": {
+      "info": {
+        "formatter": "lsst.daf.butler.formatters.yaml.YamlFormatter",
+        "path": "demo_collection/calexp.summaryStats/20130617/r/HSC-R/903342/calexp_summaryStats_HSC_r_HSC-R_903342_1_36_demo_collection.yaml",
+        "storage_class": "ExposureSummaryStats",
+        "component": "summaryStats",
+        "checksum": null,
+        "file_size": 1332
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.transmissionCurve/20130617/r/HSC-R/903342/calexp_transmissionCurve_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.transmissionCurve/20130617/r/HSC-R/903342/calexp_transmissionCurve_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "TransmissionCurve",
+        "component": "transmissionCurve",
+        "checksum": null,
+        "file_size": 201600
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.validPolygon/20130617/r/HSC-R/903342/calexp_validPolygon_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.validPolygon/20130617/r/HSC-R/903342/calexp_validPolygon_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "Polygon",
+        "component": "validPolygon",
+        "checksum": null,
+        "file_size": 17280
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.variance/20130617/r/HSC-R/903342/calexp_variance_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsExposure.FitsImageFormatter",
+        "path": "demo_collection/calexp.variance/20130617/r/HSC-R/903342/calexp_variance_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "ImageF",
+        "component": "variance",
+        "checksum": null,
+        "file_size": 24782400
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.visitInfo/20130617/r/HSC-R/903342/calexp_visitInfo_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.visitInfo/20130617/r/HSC-R/903342/calexp_visitInfo_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "VisitInfo",
+        "component": "visitInfo",
+        "checksum": null,
+        "file_size": 28800
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/calexp.wcs/20130617/r/HSC-R/903342/calexp_wcs_HSC_r_HSC-R_903342_1_36_demo_collection.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter",
+        "path": "demo_collection/calexp.wcs/20130617/r/HSC-R/903342/calexp_wcs_HSC_r_HSC-R_903342_1_36_demo_collection.fits",
+        "storage_class": "Wcs",
+        "component": "wcs",
+        "checksum": null,
+        "file_size": 25920
+      },
+      "ids": [
+        "d24d9a3c-1004-42e7-88bb-a38ebf364084"
+      ]
+    },
+    "demo_collection/isr_metadata/20130617/HSCA90334200/isr_metadata_HSC_HSC-R_HSCA90334200_1_36_demo_collection.json": {
+      "info": {
+        "formatter": "lsst.daf.butler.formatters.json.JsonFormatter",
+        "path": "demo_collection/isr_metadata/20130617/HSCA90334200/isr_metadata_HSC_HSC-R_HSCA90334200_1_36_demo_collection.json",
+        "storage_class": "TaskMetadata",
+        "component": null,
+        "checksum": null,
+        "file_size": 7686
+      },
+      "ids": [
+        "ac08556d-d6ab-43c5-9307-3bb7132548fd"
+      ]
+    }
+  }
+}
