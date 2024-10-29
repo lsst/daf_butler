@@ -33,8 +33,8 @@ import logging
 import tempfile
 import uuid
 import zipfile
-from collections.abc import Callable, Iterable
-from typing import Annotated, ClassVar, Literal, Self, TypeAlias
+from collections.abc import Iterable
+from typing import Annotated, ClassVar, Literal, Protocol, Self, TypeAlias
 
 from lsst.daf.butler import DatasetIdFactory, DatasetRef
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo
@@ -468,13 +468,23 @@ def determine_destination_for_retrieved_artifact(
     return target_uri
 
 
+class RetrievalCallable(Protocol):
+    def __call__(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePath,
+        transfer: str,
+        preserve_path: bool,
+        overwrite: bool,
+        write_index: bool,
+        add_prefix: bool,
+    ) -> tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]]: ...
+
+
 def retrieve_and_zip(
     refs: Iterable[DatasetRef],
     destination: ResourcePathExpression,
-    retrieval_callback: Callable[
-        [Iterable[DatasetRef], ResourcePath, str, bool, bool, bool, bool],
-        tuple[list[ResourcePath], dict[ResourcePath, ArtifactIndexInfo]],
-    ],
+    retrieval_callback: RetrievalCallable,
 ) -> ResourcePath:
     """Retrieve artifacts from a Butler and place in ZIP file.
 
@@ -522,7 +532,15 @@ def retrieve_and_zip(
     with tempfile.TemporaryDirectory(dir=outdir.ospath, ignore_cleanup_errors=True) as tmpdir:
         tmpdir_path = ResourcePath(tmpdir, forceDirectory=True)
         # Retrieve the artifacts and write the index file. Strip paths.
-        paths, _ = retrieval_callback(refs, tmpdir_path, "auto", False, False, True, True)
+        paths, _ = retrieval_callback(
+            refs=refs,
+            destination=tmpdir_path,
+            transfer="auto",
+            preserve_path=False,
+            overwrite=False,
+            write_index=True,
+            add_prefix=True,
+        )
 
         # Read the index to construct file name.
         index_path = tmpdir_path.join(ZipIndex.index_name, forceDirectory=False)
