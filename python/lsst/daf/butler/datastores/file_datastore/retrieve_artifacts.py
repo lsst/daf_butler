@@ -365,7 +365,8 @@ class ZipIndex(BaseModel):
         for p in paths:
             # It is an error if there is no relative path.
             rel = p.relative_to(root)
-            assert rel is not None
+            if rel is None:
+                raise RuntimeError(f"Unexepectedly unable to calculate relative path of {p} to {root}.")
             file_to_relative[p] = rel
         return file_to_relative
 
