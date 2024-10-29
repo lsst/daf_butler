@@ -38,6 +38,7 @@ from lsst.daf.butler import (
     DimensionConfig,
     DimensionUniverse,
     FileDataset,
+    SerializedDatasetRefContainerV1,
     StorageClass,
     StorageClassFactory,
 )
@@ -743,6 +744,16 @@ class DatasetRefTestCase(unittest.TestCase):
         ref2 = DatasetRef(self.datasetType, self.dataId, run="somerun2")
         with self.assertRaises(ValueError):
             FileDataset(path="other.yaml", refs=[ref, ref2])
+
+    def test_container(self) -> None:
+        ref1 = DatasetRef(self.datasetType, self.dataId, run="somerun")
+        ref2 = ref1.replace(run="somerun2")
+
+        container = SerializedDatasetRefContainerV1.from_refs([ref1, ref2])
+        self.assertEqual(len(container), 2)
+
+        new_refs = container.to_refs(universe=self.universe)
+        self.assertEqual(new_refs, [ref1, ref2])
 
 
 class ZipIndexTestCase(unittest.TestCase):
