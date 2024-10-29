@@ -558,7 +558,7 @@ def retrieve_and_zip(
         if not overwrite and zip_path.exists():
             raise FileExistsError(f"Output Zip at {zip_path} already exists but cannot overwrite.")
         with zipfile.ZipFile(zip_path.ospath, "w") as zip:
-            zip.write(index_path.ospath, index_path.basename())
+            zip.write(index_path.ospath, index_path.basename(), compress_type=zipfile.ZIP_DEFLATED)
             for path, name in index.calc_relative_paths(tmpdir_path, list(artifact_map)).items():
                 zip.write(path.ospath, name)
 
