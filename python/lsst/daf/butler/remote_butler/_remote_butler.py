@@ -452,7 +452,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 if is_zip:
                     if cleaned_source_uri not in have_copied:
                         zipped_artifacts = unpack_zips(
-                            [cleaned_source_uri], requested_ids, destination, preserve_path
+                            [cleaned_source_uri], requested_ids, destination, preserve_path, overwrite
                         )
                         artifact_map.update(zipped_artifacts)
                         have_copied[cleaned_source_uri] = cleaned_source_uri

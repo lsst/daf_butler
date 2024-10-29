@@ -545,6 +545,7 @@ def unpack_zips(
     allowed_ids: set[uuid.UUID],
     destination: ResourcePath,
     preserve_path: bool,
+    overwrite: bool,
 ) -> dict[ResourcePath, ArtifactIndexInfo]:
     """Transfer the Zip files and unpack them in the destination directory.
 
@@ -563,6 +564,9 @@ def unpack_zips(
     preserve_path : `bool`
         Whether to include subdirectories during extraction. If `True` a
         directory will be made per Zip.
+    overwrite : `bool`, optional
+        If `True` allow transfers to overwrite existing files at the
+        destination.
 
     Returns
     -------
@@ -596,5 +600,10 @@ def unpack_zips(
                         # should already have a prefix.
                         zf.extract(path_in_zip, path=outdir.ospath)
                         output_path = outdir.join(path_in_zip, forceDirectory=False)
+                        if not overwrite and output_path.exists():
+                            raise FileExistsError(
+                                f"Destination path '{output_path}' already exists. "
+                                "Extraction from Zip cannot be completed."
+                            )
                         artifact_map[output_path] = artifact_info.subset(included_ids)
     return artifact_map

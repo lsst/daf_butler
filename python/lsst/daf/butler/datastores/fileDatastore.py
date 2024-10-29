@@ -2152,7 +2152,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
         # Transfer the Zip files and unpack them.
-        zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path)
+        zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path, overwrite)
         artifact_map.update(zipped_artifacts)
 
         if write_index:
