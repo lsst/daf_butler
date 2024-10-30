@@ -602,17 +602,28 @@ def query_dimension_records(**kwargs: Any) -> None:
     default=False,
     help="If clobber, overwrite files if they exist locally.",
 )
+@click.option(
+    "--zip/--no-zip",
+    is_flag=True,
+    default=False,
+    help="Retrieve artifacts and place in a Zip file.",
+)
 @options_file_option()
 def retrieve_artifacts(**kwargs: Any) -> None:
     """Retrieve file artifacts associated with datasets in a repository."""
     verbose = kwargs.pop("verbose")
     transferred = script.retrieveArtifacts(**kwargs)
-    if verbose and transferred:
-        print(f"Transferred the following to {kwargs['destination']}:")
-        for uri in transferred:
-            print(uri)
-        print()
-    print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")
+    if not transferred:
+        print("No datasets matched query.")
+    elif kwargs["zip"]:
+        print(f"Zip file written to {transferred[0]}")
+    else:
+        if verbose:
+            print(f"Transferred the following to {kwargs['destination']}:")
+            for uri in transferred:
+                print(uri)
+            print()
+        print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")
 
 
 @click.command(cls=ButlerCommand)
@@ -804,3 +815,18 @@ def export_calibs(*args: Any, **kwargs: Any) -> None:
     table = script.exportCalibs(*args, **kwargs)
     if table:
         table.pprint_all(align="<")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@click.argument("zip", required=True)
+@transfer_option()
+def ingest_zip(**kwargs: Any) -> None:
+    """Ingest a Zip file created by retrieve-artifacts.
+
+    ZIP is the URI to the Zip file that should be ingested.
+
+    This command does not create dimension records and so any records must
+    be created by other means.
+    """
+    script.ingest_zip(**kwargs)

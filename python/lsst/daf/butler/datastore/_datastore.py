@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
+    from ..datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .record_data import DatastoreRecordData
     from .stored_file_info import StoredDatastoreItemInfo
@@ -1023,7 +1024,9 @@ class Datastore(metaclass=ABCMeta):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1045,19 +1048,41 @@ class Datastore(metaclass=ABCMeta):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level containing a serialization
+            of a `ZipIndex` for the downloaded datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
 
         Notes
         -----
         For non-file datastores the artifacts written to the destination
         may not match the representation inside the datastore. For example
-        a hierarchichal data structure in a NoSQL database may well be stored
+        a hierarchical data structure in a NoSQL database may well be stored
         as a JSON file.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        """Ingest an indexed Zip file and contents.
+
+        The Zip file must have an index file as created by `retrieveArtifacts`.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        transfer : `str`
+            Method to use for transferring the Zip file into the datastore.
         """
         raise NotImplementedError()
 
@@ -1451,6 +1476,9 @@ class NullDatastore(Datastore):
     def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ResourcePath:
         raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        raise NotImplementedError("Can only ingest a Zip into a real datastore.")
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1458,7 +1486,9 @@ class NullDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def remove(self, datasetRef: DatasetRef) -> None:

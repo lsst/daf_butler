@@ -206,6 +206,14 @@ class HybridButler(Butler):
             **kwargs,
         )
 
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        overwrite: bool = True,
+    ) -> ResourcePath:
+        return self._remote_butler.retrieve_artifacts_zip(refs, destination, overwrite)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -241,6 +249,10 @@ class HybridButler(Butler):
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         return self._direct_butler.removeRuns(names, unstore)
+
+    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+        # Docstring inherited.
+        return self._direct_butler.ingest_zip(zip_file, transfer=transfer)
 
     def ingest(
         self,

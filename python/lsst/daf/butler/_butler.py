@@ -988,6 +988,39 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        overwrite: bool = True,
+    ) -> ResourcePath:
+        """Retrieve artifacts from a Butler and place in ZIP file.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            The datasets to be included in the zip file.
+        destination : `lsst.resources.ResourcePathExpression`
+            Directory to write the new ZIP file. This directory will
+            also be used as a staging area for the datasets being downloaded
+            from the datastore.
+        overwrite : `bool`, optional
+            If `False` the output Zip will not be written if a file of the
+            same name is already present in ``destination``.
+
+        Returns
+        -------
+        zip_file : `lsst.resources.ResourcePath`
+            The path to the new ZIP file.
+
+        Raises
+        ------
+        ValueError
+            Raised if there are no refs to retrieve.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1199,6 +1232,25 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         transactions correctly.  It will attempt to be atomic in terms of
         filesystem operations as well, but this cannot be implemented
         rigorously for most datastores.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+        """Ingest a Zip file into this butler.
+
+        The Zip file must have been created by `retrieve_artifacts_zip`.
+
+        Parameters
+        ----------
+        zip_file : `lsst.resources.ResourcePathExpression`
+            Path to the Zip file.
+        transfer : `str`, optional
+            Method to use to transfer the Zip into the datastore.
+
+        Notes
+        -----
+        Run collections are created as needed.
         """
         raise NotImplementedError()
 

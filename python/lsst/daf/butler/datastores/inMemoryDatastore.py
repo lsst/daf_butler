@@ -50,6 +50,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey
     from lsst.daf.butler.datastore import DatastoreOpaqueTable
+    from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -516,6 +517,9 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
         return primary
 
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        raise NotImplementedError("Can only ingest a Zip into a file datastore.")
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -523,7 +527,9 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool | None = False,
-    ) -> list[ResourcePath]:
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -545,6 +551,13 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level containing a serialization
+            of a `ZipIndex` for the downloaded datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Notes
         -----

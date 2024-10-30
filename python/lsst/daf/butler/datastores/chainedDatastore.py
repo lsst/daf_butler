@@ -38,7 +38,7 @@ import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
+from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, DimensionUniverse, FileDataset
 from lsst.daf.butler.datastore import (
     DatasetRefURIs,
     Datastore,
@@ -48,6 +48,7 @@ from lsst.daf.butler.datastore import (
 )
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 
@@ -112,6 +113,9 @@ class ChainedDatastore(Datastore):
 
     datastoreConstraints: Sequence[Constraints | None]
     """Constraints to be applied to each of the child datastores."""
+
+    universe: DimensionUniverse
+    """Dimension universe associated with the butler."""
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
@@ -221,6 +225,8 @@ class ChainedDatastore(Datastore):
 
         else:
             self.datastoreConstraints = (None,) * len(self.datastores)
+
+        self.universe = bridgeManager.universe
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
@@ -804,7 +810,9 @@ class ChainedDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -826,12 +834,18 @@ class ChainedDatastore(Datastore):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level containing a serialization
+            of a `ZipIndex` for the downloaded datasets.
+        add_prefix : `bool`, optional
+            Add a prefix based on the DatasetId. Only used if ``preserve_path``
+            is `False`.
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
         """
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}")
@@ -855,7 +869,12 @@ class ChainedDatastore(Datastore):
                 # cache is exactly what we should be doing.
                 continue
             try:
-                datastore_refs = {ref for ref in pending if datastore.exists(ref)}
+                # Checking file existence is expensive. Have the option
+                # of checking whether the datastore knows of these datasets
+                # instead, which is fast but can potentially lead to
+                # retrieveArtifacts failing.
+                knows = datastore.knows_these(pending)
+                datastore_refs = {ref for ref, exists in knows.items() if exists}
             except NotImplementedError:
                 # Some datastores may not support retrieving artifacts
                 continue
@@ -871,19 +890,92 @@ class ChainedDatastore(Datastore):
             raise RuntimeError(f"Some datasets were not found in any datastores: {pending}")
 
         # Now do the transfer.
-        targets: list[ResourcePath] = []
+        merged_artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
         for number, datastore_refs in grouped_by_datastore.items():
-            targets.extend(
-                self.datastores[number].retrieveArtifacts(
-                    datastore_refs,
-                    destination,
-                    transfer=transfer,
-                    preserve_path=preserve_path,
-                    overwrite=overwrite,
-                )
+            artifact_map = self.datastores[number].retrieveArtifacts(
+                datastore_refs,
+                destination,
+                transfer=transfer,
+                preserve_path=preserve_path,
+                overwrite=overwrite,
+                write_index=False,  # Disable index writing regardless.
+                add_prefix=add_prefix,
+            )
+            merged_artifact_map.update(artifact_map)
+
+        if write_index:
+            index = ZipIndex.from_artifact_map(refs, merged_artifact_map, destination)
+            index.write_index(destination)
+
+        return merged_artifact_map
+
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        """Ingest an indexed Zip file and contents.
+
+        The Zip file must have an index file as created by `retrieveArtifacts`.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        transfer : `str`
+            Method to use for transferring the Zip file into the datastore.
+
+        Notes
+        -----
+        Datastore constraints are bypassed with Zip ingest. A zip file can
+        contain multiple dataset types. Should the entire Zip be rejected
+        if one dataset type is in the constraints list? If configured to
+        reject everything, ingest should not be attempted.
+
+        The Zip file is given to each datastore in turn, ignoring datastores
+        where it is not supported. Is deemed successful if any of the
+        datastores accept the file.
+        """
+        index = ZipIndex.from_zip_file(zip_path)
+        refs = index.refs.to_refs(self.universe)
+
+        # For now raise if any refs are not supported.
+        # Being selective will require that we return the ingested refs
+        # to the caller so that registry can be modified to remove the
+        # entries.
+        if any(not self.constraints.isAcceptable(ref) for ref in refs):
+            raise DatasetTypeNotSupportedError(
+                "Some of the refs in the given Zip file are not acceptable to this datastore."
             )
 
-        return targets
+        n_success = 0
+        final_exception: Exception | None = None
+        for number, (datastore, constraints) in enumerate(
+            zip(self.datastores, self.datastoreConstraints, strict=True)
+        ):
+            if datastore.isEphemeral:
+                continue
+
+            # There can be constraints for the datastore in the configuration
+            # of the chaining, or constraints in the configuration of the
+            # datastore itself.
+            if any(
+                (constraints is not None and not constraints.isAcceptable(ref))
+                or not datastore.constraints.isAcceptable(ref)
+                for ref in refs
+            ):
+                log.debug("Datastore %s skipping zip ingest due to constraints", datastore.name)
+                continue
+            try:
+                datastore.ingest_zip(zip_path, transfer=transfer)
+            except NotImplementedError:
+                continue
+            except Exception as e:
+                final_exception = e
+            else:
+                n_success += 1
+
+        if n_success:
+            return
+        if final_exception:
+            raise final_exception
+        raise RuntimeError("Ingest was not successful in any datastores.")
 
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.

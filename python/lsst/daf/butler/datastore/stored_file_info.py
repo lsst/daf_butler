@@ -365,6 +365,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     def __reduce__(self) -> str | tuple[Any, ...]:
         return (self.from_record, (self.to_record(),))
 
+    @property
+    def artifact_path(self) -> str:
+        """Path to dataset as stored in Datastore with fragments removed."""
+        if "#" in self.path:
+            return self.path[: self.path.rfind("#")]
+        return self.path
+
 
 class SerializedStoredFileInfo(pydantic.BaseModel):
     """Serialized representation of `StoredFileInfo` properties."""
@@ -378,11 +385,11 @@ class SerializedStoredFileInfo(pydantic.BaseModel):
     storage_class: str
     """Name of the StorageClass associated with Dataset."""
 
-    component: str | None
+    component: str | None = None
     """Component associated with this file. Can be `None` if the file does
     not refer to a component of a composite."""
 
-    checksum: str | None
+    checksum: str | None = None
     """Checksum of the serialized dataset."""
 
     file_size: int

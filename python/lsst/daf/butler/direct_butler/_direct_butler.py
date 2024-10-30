@@ -41,6 +41,7 @@ import itertools
 import logging
 import numbers
 import os
+import uuid
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, MutableMapping, Sequence
@@ -62,11 +63,13 @@ from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError, DimensionValueError, EmptyQueryResultError, ValidationError
+from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
 from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
 from ..datastore import Datastore, NullDatastore
+from ..datastores.file_datastore.retrieve_artifacts import ZipIndex, retrieve_and_zip
 from ..dimensions import DataCoordinate, Dimension
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
@@ -87,7 +90,6 @@ if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
     from .._dataset_ref import DatasetId
-    from .._file_dataset import FileDataset
     from ..datastore import DatasetRefURIs
     from ..dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
     from ..registry import CollectionArgType, Registry
@@ -1290,6 +1292,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return ref
 
+    def retrieve_artifacts_zip(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        overwrite: bool = True,
+    ) -> ResourcePath:
+        return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts, overwrite)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1299,13 +1309,16 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         overwrite: bool = False,
     ) -> list[ResourcePath]:
         # Docstring inherited.
-        return self._datastore.retrieveArtifacts(
+        outdir = ResourcePath(destination)
+        artifact_map = self._datastore.retrieveArtifacts(
             refs,
-            ResourcePath(destination),
+            outdir,
             transfer=transfer,
             preserve_path=preserve_path,
             overwrite=overwrite,
+            write_index=True,
         )
+        return list(artifact_map)
 
     def exists(
         self,
@@ -1501,17 +1514,68 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             self._datastore.emptyTrash()
 
     @transactional
-    def ingest(
-        self,
-        *datasets: FileDataset,
-        transfer: str | None = "auto",
-        record_validation_info: bool = True,
-    ) -> None:
-        # Docstring inherited.
+    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+        """Ingest a Zip file into this butler.
+
+        The Zip file must have been created by `retrieve_artifacts_zip`.
+
+        Parameters
+        ----------
+        zip_file : `lsst.resources.ResourcePathExpression`
+            Path to the Zip file.
+        transfer : `str`, optional
+            Method to use to transfer the Zip into the datastore.
+
+        Notes
+        -----
+        Run collections are created as needed.
+        """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
-        _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+        zip_path = ResourcePath(zip_file)
+        index = ZipIndex.from_zip_file(zip_path)
+        _LOG.verbose(
+            "Ingesting %s containing %d datasets and %d files.", zip_path, len(index.refs), len(index)
+        )
+
+        # Need to ingest the refs into registry. Re-use the standard ingest
+        # code by reconstructing FileDataset from the index.
+        refs = index.refs.to_refs(universe=self.dimensions)
+        id_to_ref = {ref.id: ref for ref in refs}
+        datasets: list[FileDataset] = []
+        processed_ids: set[uuid.UUID] = set()
+        for path_in_zip, index_info in index.artifact_map.items():
+            # Disassembled composites need to check this ref isn't already
+            # included.
+            unprocessed = {id_ for id_ in index_info.ids if id_ not in processed_ids}
+            if not unprocessed:
+                continue
+            dataset = FileDataset(refs=[id_to_ref[id_] for id_ in unprocessed], path=path_in_zip)
+            datasets.append(dataset)
+            processed_ids.update(unprocessed)
+
+        # Ingest doesn't create the RUN collections so we have to do that
+        # here.
+        runs = {ref.run for ref in refs}
+        for run in runs:
+            registered = self.collections.register(run)
+            if registered:
+                _LOG.verbose("Created RUN collection %s as part of zip ingest", run)
+
+        # Do not need expanded dataset refs so can ignore the return value.
+        self._ingest_file_datasets(datasets)
+
+        try:
+            self._datastore.ingest_zip(zip_path, transfer=transfer)
+        except IntegrityError as e:
+            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}") from e
+
+    def _ingest_file_datasets(
+        self,
+        datasets: Sequence[FileDataset],
+    ) -> None:
+        # Docstring inherited.
         if not datasets:
             return
 
@@ -1583,7 +1647,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # guarantee that they are expanded and Datastore will need
             # the records.
             imported_refs = self._registry._importDatasets(refs_to_import, expand=True)
-            assert set(imported_refs) == set(refs_to_import)
+
+            # Since refs can come from an external butler, there is no
+            # guarantee that the DatasetType values match. Compare IDs.
+            assert {ref.id for ref in imported_refs} == {ref.id for ref in refs_to_import}
 
             # Replace all the refs in the FileDataset with expanded versions.
             # Pull them off in the order we put them on the list.
@@ -1591,6 +1658,22 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 n_dataset_refs = len(dataset.refs)
                 dataset.refs = imported_refs[:n_dataset_refs]
                 del imported_refs[:n_dataset_refs]
+
+    @transactional
+    def ingest(
+        self,
+        *datasets: FileDataset,
+        transfer: str | None = "auto",
+        record_validation_info: bool = True,
+    ) -> None:
+        # Docstring inherited.
+        if not datasets:
+            return
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+
+        self._ingest_file_datasets(datasets)
 
         # Bulk-insert everything into Datastore.
         # We do not know if any of the registry entries already existed

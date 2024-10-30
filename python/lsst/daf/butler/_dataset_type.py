@@ -676,7 +676,7 @@ class DatasetType:
                 "name": self.name,
                 "storageClass": self._storageClassName,
                 "isCalibration": self._isCalibration,
-                "dimensions": list(self._dimensions.names),
+                "dimensions": list(self._dimensions.required),
             }
 
             if self._parentStorageClassName is not None:

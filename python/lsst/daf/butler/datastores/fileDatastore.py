@@ -81,7 +81,10 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     get_dataset_as_python_object_from_get_info,
 )
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    ArtifactIndexInfo,
+    ZipIndex,
     determine_destination_for_retrieved_artifact,
+    unpack_zips,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
@@ -295,6 +298,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             self.cacheManager = DatastoreCacheManager(self.config["cached"], universe=bridgeManager.universe)
         else:
             self.cacheManager = DatastoreDisabledCacheManager("", universe=bridgeManager.universe)
+
+        self.universe = bridgeManager.universe
 
     @classmethod
     def _create_from_config(
@@ -566,23 +571,50 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
 
-    def _refs_associated_with_artifacts(self, paths: list[str | ResourcePath]) -> dict[str, set[DatasetId]]:
+    def _refs_associated_with_artifacts(
+        self, paths: Iterable[str | ResourcePath]
+    ) -> dict[str, set[DatasetId]]:
         """Return paths and associated dataset refs.
 
         Parameters
         ----------
         paths : `list` of `str` or `lsst.resources.ResourcePath`
-            All the paths to include in search.
+            All the paths to include in search. These are exact matches
+            to the entries in the records table and can include fragments.
 
         Returns
         -------
         mapping : `dict` of [`str`, `set` [`DatasetId`]]
             Mapping of each path to a set of associated database IDs.
+            These are artifacts and so any fragments are stripped from the
+            keys.
         """
-        records = self._table.fetch(path=[str(path) for path in paths])
-        result = defaultdict(set)
-        for row in records:
-            result[row["path"]].add(row["dataset_id"])
+        # Group paths by those that have fragments and those that do not.
+        with_fragment = set()
+        without_fragment = set()
+        for rpath in paths:
+            spath = str(rpath)  # Typing says can be ResourcePath so must force to string.
+            if "#" in spath:
+                spath, fragment = spath.rsplit("#", 1)
+                with_fragment.add(spath)
+            else:
+                without_fragment.add(spath)
+
+        result: dict[str, set[DatasetId]] = defaultdict(set)
+        if without_fragment:
+            records = self._table.fetch(path=without_fragment)
+            for row in records:
+                path = row["path"]
+                result[path].add(row["dataset_id"])
+        if with_fragment:
+            # Do a query per prefix.
+            for path in with_fragment:
+                records = self._table.fetch(path=f"{path}#%")
+                for row in records:
+                    # Need to strip fragments before adding to dict.
+                    row_path = row["path"]
+                    artifact_path = row_path[: row_path.rfind("#")]
+                    result[artifact_path].add(row["dataset_id"])
         return result
 
     def _registered_refs_per_artifact(self, pathInStore: ResourcePath) -> set[DatasetId]:
@@ -1946,6 +1978,71 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         return uris
 
+    @staticmethod
+    def _find_missing_records(
+        datastore: FileDatastore,
+        refs: Iterable[DatasetRef],
+        missing_ids: set[DatasetId],
+        artifact_existence: dict[ResourcePath, bool] | None = None,
+    ) -> dict[DatasetId, list[StoredFileInfo]]:
+        if not missing_ids:
+            return {}
+
+        if artifact_existence is None:
+            artifact_existence = {}
+
+        found_records: dict[DatasetId, list[StoredFileInfo]] = defaultdict(list)
+        id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
+
+        # This should be chunked in case we end up having to check
+        # the file store since we need some log output to show
+        # progress.
+        for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=10_000):
+            records = {}
+            for missing in missing_ids_chunk:
+                # Ask the source datastore where the missing artifacts
+                # should be.  An execution butler might not know about the
+                # artifacts even if they are there.
+                expected = datastore._get_expected_dataset_locations_info(id_to_ref[missing])
+                records[missing] = [info for _, info in expected]
+
+            # Call the mexist helper method in case we have not already
+            # checked these artifacts such that artifact_existence is
+            # empty. This allows us to benefit from parallelism.
+            # datastore.mexists() itself does not give us access to the
+            # derived datastore record.
+            log.verbose("Checking existence of %d datasets unknown to datastore", len(records))
+            ref_exists = datastore._process_mexists_records(
+                id_to_ref, records, False, artifact_existence=artifact_existence
+            )
+
+            # Now go through the records and propagate the ones that exist.
+            location_factory = datastore.locationFactory
+            for missing, record_list in records.items():
+                # Skip completely if the ref does not exist.
+                ref = id_to_ref[missing]
+                if not ref_exists[ref]:
+                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
+                    continue
+                # Check for file artifact to decide which parts of a
+                # disassembled composite do exist. If there is only a
+                # single record we don't even need to look because it can't
+                # be a composite and must exist.
+                if len(record_list) == 1:
+                    dataset_records = record_list
+                else:
+                    dataset_records = [
+                        record
+                        for record in record_list
+                        if artifact_existence[record.file_location(location_factory).uri]
+                    ]
+                    assert len(dataset_records) > 0, "Disassembled composite should have had some files."
+
+                # Rely on source_records being a defaultdict.
+                found_records[missing].extend(dataset_records)
+        log.verbose("Completed scan for missing data files")
+        return found_records
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1953,7 +2050,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> list[ResourcePath]:
+        write_index: bool = True,
+        add_prefix: bool = False,
+    ) -> dict[ResourcePath, ArtifactIndexInfo]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -1975,12 +2074,19 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         overwrite : `bool`, optional
             If `True` allow transfers to overwrite existing files at the
             destination.
+        write_index : `bool`, optional
+            If `True` write a file at the top level containing a serialization
+            of a `ZipIndex` for the downloaded datasets.
+        add_prefix : `bool`, optional
+            If `True` and if ``preserve_path`` is `False`, apply a prefix to
+            the filenames corresponding to some part of the dataset ref ID.
+            This can be used to guarantee uniqueness.
 
         Returns
         -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
+            Mapping of retrieved file to associated index information.
         """
         if not destination.isdir():
             raise ValueError(f"Destination location must refer to a directory. Given {destination}")
@@ -1992,22 +2098,150 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # This also helps filter out duplicate DatasetRef in the request
         # that will map to the same underlying file transfer.
         to_transfer: dict[ResourcePath, ResourcePath] = {}
+        zips_to_transfer: set[ResourcePath] = set()
 
-        for ref in refs:
-            locations = self._get_dataset_locations_info(ref)
-            for location, _ in locations:
+        # Retrieve all the records in bulk indexed by ref.id.
+        records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
+
+        # Check for missing records.
+        known_ids = set(records)
+        log.debug("Number of datastore records found in database: %d", len(known_ids))
+        requested_ids = {ref.id for ref in refs}
+        missing_ids = requested_ids - known_ids
+
+        if missing_ids and not self.trustGetRequest:
+            raise ValueError(f"Number of datasets missing from this datastore: {len(missing_ids)}")
+
+        missing_records = self._find_missing_records(self, refs, missing_ids)
+        records.update(missing_records)
+
+        # One artifact can be used by multiple DatasetRef.
+        # e.g. DECam.
+        artifact_map: dict[ResourcePath, ArtifactIndexInfo] = {}
+        # Sort to ensure that in many refs to one file situation the same
+        # ref is used for any prefix that might be added.
+        for ref in sorted(refs):
+            prefix = str(ref.id)[:8] + "-" if add_prefix else ""
+            for info in records[ref.id]:
+                location = info.file_location(self.locationFactory)
                 source_uri = location.uri
-                target_uri = determine_destination_for_retrieved_artifact(
-                    destination, location.pathInStore, preserve_path
-                )
-                to_transfer[source_uri] = target_uri
+                # For DECam/zip we only want to copy once.
+                # For zip files we need to unpack so that they can be
+                # zipped up again if needed.
+                is_zip = source_uri.getExtension() == ".zip" and "zip-path" in source_uri.fragment
+                # We need to remove fragments for consistency.
+                cleaned_source_uri = source_uri.replace(fragment="", query="", params="")
+                if is_zip:
+                    # Assume the DatasetRef definitions are within the Zip
+                    # file itself and so can be dropped from loop.
+                    zips_to_transfer.add(cleaned_source_uri)
+                elif cleaned_source_uri not in to_transfer:
+                    target_uri = determine_destination_for_retrieved_artifact(
+                        destination, location.pathInStore, preserve_path, prefix
+                    )
+                    to_transfer[cleaned_source_uri] = target_uri
+                    artifact_map[target_uri] = ArtifactIndexInfo.from_single(info.to_simple(), ref.id)
+                else:
+                    target_uri = to_transfer[cleaned_source_uri]
+                    artifact_map[target_uri].append(ref.id)
 
         # In theory can now parallelize the transfer
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
         for source_uri, target_uri in to_transfer.items():
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
-        return list(to_transfer.values())
+        # Transfer the Zip files and unpack them.
+        zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path, overwrite)
+        artifact_map.update(zipped_artifacts)
+
+        if write_index:
+            index = ZipIndex.from_artifact_map(refs, artifact_map, destination)
+            index.write_index(destination)
+
+        return artifact_map
+
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+        """Ingest an indexed Zip file and contents.
+
+        The Zip file must have an index file as created by `retrieveArtifacts`.
+
+        Parameters
+        ----------
+        zip_path : `lsst.resources.ResourcePath`
+            Path to the Zip file.
+        transfer : `str`
+            Method to use for transferring the Zip file into the datastore.
+
+        Notes
+        -----
+        Datastore constraints are bypassed with Zip ingest. A zip file can
+        contain multiple dataset types. Should the entire Zip be rejected
+        if one dataset type is in the constraints list?
+
+        If any dataset is already present in the datastore the entire ingest
+        will fail.
+        """
+        index = ZipIndex.from_zip_file(zip_path)
+
+        # Refs indexed by UUID.
+        refs = index.refs.to_refs(universe=self.universe)
+        id_to_ref = {ref.id: ref for ref in refs}
+
+        # Any failing constraints trigger entire failure.
+        if any(not self.constraints.isAcceptable(ref) for ref in refs):
+            raise DatasetTypeNotSupportedError(
+                "Some refs in the Zip file are not supported by this datastore"
+            )
+
+        # Transfer the Zip file into the datastore file system.
+        # There is no RUN as such to use for naming.
+        # Potentially could use the RUN from the first ref in the index
+        # There is no requirement that the contents of the Zip files share
+        # the same RUN.
+        # Could use the Zip UUID from the index + special "zips/" prefix.
+        if transfer is None:
+            # Indicated that the zip file is already in the right place.
+            if not zip_path.isabs():
+                tgtLocation = self.locationFactory.fromPath(zip_path.ospath, trusted_path=False)
+            else:
+                pathInStore = zip_path.relative_to(self.root)
+                if pathInStore is None:
+                    raise RuntimeError(
+                        f"Unexpectedly learned that {zip_path} is not within datastore {self.root}"
+                    )
+                tgtLocation = self.locationFactory.fromPath(pathInStore, trusted_path=True)
+        elif transfer == "direct":
+            # Reference in original location.
+            tgtLocation = None
+        else:
+            # Name the zip file based on index contents.
+            tgtLocation = self.locationFactory.fromPath(index.calculate_zip_file_path_in_store())
+            if not tgtLocation.uri.dirname().exists():
+                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
+                tgtLocation.uri.dirname().mkdir()
+
+            # Transfer the Zip file into the datastore.
+            tgtLocation.uri.transfer_from(
+                zip_path, transfer=transfer, transaction=self._transaction, overwrite=True
+            )
+
+        if tgtLocation is None:
+            path_in_store = str(zip_path)
+        else:
+            path_in_store = tgtLocation.pathInStore.path
+
+        # Associate each file with a (DatasetRef, StoredFileInfo) tuple.
+        artifacts: list[tuple[DatasetRef, StoredFileInfo]] = []
+        for path_in_zip, index_info in index.artifact_map.items():
+            # Need to modify the info to include the path to the Zip file
+            # that was previously written to the datastore.
+            index_info.info.path = f"{path_in_store}#zip-path={path_in_zip}"
+
+            info = StoredFileInfo.from_simple(index_info.info)
+            for id_ in index_info.ids:
+                artifacts.append((id_to_ref[id_], info))
+
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     def get(
         self,
@@ -2299,36 +2533,49 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # This requires multiple copies of the trashed items
             trashed, artifacts_to_keep = trash_data
 
-            if artifacts_to_keep is None:
+            # Assume that # in path means there are fragments involved. The
+            # fragments can not be handled by the emptyTrash bridge call
+            # so need to be processed independently.
+            # The generator has to be converted to a list for multiple
+            # iterations. Clean up the typing so that multiple isinstance
+            # tests aren't needed later.
+            trashed_list = [(ref, ninfo) for ref, ninfo in trashed if isinstance(ninfo, StoredFileInfo)]
+
+            if artifacts_to_keep is None or any("#" in info[1].path for info in trashed_list):
                 # The bridge is not helping us so have to work it out
                 # ourselves. This is not going to be as efficient.
-                trashed = list(trashed)
+                # This mapping does not include the fragments.
+                if artifacts_to_keep is not None:
+                    # This means we have already checked for non-fragment
+                    # examples so can filter.
+                    paths_to_check = {info.path for _, info in trashed_list if "#" in info.path}
+                else:
+                    paths_to_check = {info.path for _, info in trashed_list}
 
-                # The instance check is for mypy since up to this point it
-                # does not know the type of info.
-                path_map = self._refs_associated_with_artifacts(
-                    [info.path for _, info in trashed if isinstance(info, StoredFileInfo)]
-                )
+                path_map = self._refs_associated_with_artifacts(paths_to_check)
 
-                for ref, info in trashed:
-                    # Mypy needs to know this is not the base class
-                    assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
+                for ref, info in trashed_list:
+                    path = info.artifact_path
+                    # For disassembled composites in a Zip it is possible
+                    # for the same path to correspond to the same dataset ref
+                    # multiple times so trap for that.
+                    if ref.id in path_map[path]:
+                        path_map[path].remove(ref.id)
+                    if not path_map[path]:
+                        del path_map[path]
 
-                    path_map[info.path].remove(ref.id)
-                    if not path_map[info.path]:
-                        del path_map[info.path]
+                slow_artifacts_to_keep = set(path_map)
+                if artifacts_to_keep is not None:
+                    artifacts_to_keep.update(slow_artifacts_to_keep)
+                else:
+                    artifacts_to_keep = slow_artifacts_to_keep
 
-                artifacts_to_keep = set(path_map)
-
-            for ref, info in trashed:
+            for ref, info in trashed_list:
                 # Should not happen for this implementation but need
                 # to keep mypy happy.
                 assert info is not None, f"Internal logic error in emptyTrash with ref {ref}."
 
-                # Mypy needs to know this is not the base class
-                assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
-
-                if info.path in artifacts_to_keep:
+                if info.artifact_path in artifacts_to_keep:
                     # This is a multi-dataset artifact and we are not
                     # removing all associated refs.
                     continue
@@ -2453,55 +2700,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 len(missing_ids),
                 len(requested_ids),
             )
-            id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
-
-            # This should be chunked in case we end up having to check
-            # the file store since we need some log output to show
-            # progress.
-            for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=10_000):
-                records = {}
-                for missing in missing_ids_chunk:
-                    # Ask the source datastore where the missing artifacts
-                    # should be.  An execution butler might not know about the
-                    # artifacts even if they are there.
-                    expected = source_datastore._get_expected_dataset_locations_info(id_to_ref[missing])
-                    records[missing] = [info for _, info in expected]
-
-                # Call the mexist helper method in case we have not already
-                # checked these artifacts such that artifact_existence is
-                # empty. This allows us to benefit from parallelism.
-                # datastore.mexists() itself does not give us access to the
-                # derived datastore record.
-                log.verbose("Checking existence of %d datasets unknown to datastore", len(records))
-                ref_exists = source_datastore._process_mexists_records(
-                    id_to_ref, records, False, artifact_existence=artifact_existence
-                )
-
-                # Now go through the records and propagate the ones that exist.
-                location_factory = source_datastore.locationFactory
-                for missing, record_list in records.items():
-                    # Skip completely if the ref does not exist.
-                    ref = id_to_ref[missing]
-                    if not ref_exists[ref]:
-                        log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
-                        continue
-                    # Check for file artifact to decide which parts of a
-                    # disassembled composite do exist. If there is only a
-                    # single record we don't even need to look because it can't
-                    # be a composite and must exist.
-                    if len(record_list) == 1:
-                        dataset_records = record_list
-                    else:
-                        dataset_records = [
-                            record
-                            for record in record_list
-                            if artifact_existence[record.file_location(location_factory).uri]
-                        ]
-                        assert len(dataset_records) > 0, "Disassembled composite should have had some files."
-
-                    # Rely on source_records being a defaultdict.
-                    source_records[missing].extend(dataset_records)
-            log.verbose("Completed scan for missing data files")
+            found_records = self._find_missing_records(
+                source_datastore, refs, missing_ids, artifact_existence
+            )
+            source_records.update(found_records)
 
         # See if we already have these records
         target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)

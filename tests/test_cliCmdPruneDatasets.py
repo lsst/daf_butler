@@ -80,6 +80,9 @@ def getRefs():
 
 def makeQueryDatasets(*args, **kwargs):
     """Return a query datasets object."""
+    if not kwargs.get("glob"):
+        # Use all dataset types if not specified.
+        kwargs["glob"] = ("*",)
     return QueryDatasets(*args, **kwargs)
 
 
@@ -98,7 +101,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
     @staticmethod
     def makeQueryDatasetsArgs(*, repo, **kwargs):
         expectedArgs = dict(
-            repo=repo, collections=(), where="", find_first=True, show_uri=False, glob=tuple()
+            repo=repo, collections=("*",), where="", find_first=True, show_uri=False, glob=tuple()
         )
         expectedArgs.update(kwargs)
         return expectedArgs

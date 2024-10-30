@@ -27,6 +27,7 @@
 
 import json
 import os
+import tempfile
 import unittest
 import unittest.mock
 from typing import cast
@@ -43,6 +44,7 @@ from lsst.daf.butler import (
     RegistryConfig,
     StorageClass,
 )
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -217,6 +219,16 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             self.assertEqual(data, {"data": cast(int, ref.dataId["detector"]) ** 2})
 
         self.assertEqual(qbb._actual_output_refs, set(self.output_refs))
+
+        # Retrieve them as a Zip artifact.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip = qbb.retrieve_artifacts_zip(self.output_refs, destination=tmpdir)
+
+            index = ZipIndex.from_zip_file(zip)
+        zip_refs = index.refs.to_refs(universe=qbb.dimensions)
+        self.assertEqual(len(zip_refs), 4)
+        self.assertEqual(set(zip_refs), set(self.output_refs))
+        self.assertEqual(len(index.artifact_map), 4)  # Count number of artifacts in Zip.
 
     def test_getDeferred(self) -> None:
         """Test for getDeferred method"""
