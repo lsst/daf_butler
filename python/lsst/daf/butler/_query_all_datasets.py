@@ -52,7 +52,7 @@ class DatasetsPage(NamedTuple):
 def query_all_datasets(
     butler: Butler,
     *,
-    collections: str | Iterable[str] | None = None,
+    collections: list[str],
     name: str | Iterable[str] = "*",
     find_first: bool = True,
     data_id: DataId | None = None,
@@ -69,8 +69,8 @@ def query_all_datasets(
     ----------
     butler : `Butler`
         Butler instance to use for executing queries.
-    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
-        The collection or collections to search, in order.  If not provided
+    collections :  `list` [ `str` ]
+        The collections to search, in order.  If not provided
         or `None`, the default collection search path for this butler is
         used.
     name : `str` or `~collections.abc.Iterable` [ `str` ], optional
@@ -128,10 +128,6 @@ def query_all_datasets(
         `DatasetRef` results matching the given query criteria, grouped by
         dataset type.
     """
-    if collections is None:
-        collections = list(butler.collections.defaults)
-    else:
-        collections = list(ensure_iterable(collections))
     if find_first and has_globs(collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
 

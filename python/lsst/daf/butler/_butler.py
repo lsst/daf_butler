@@ -1729,13 +1729,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             collection wildcard is passed when ``find_first`` is `True`, or
             when ``collections`` is `None` and default butler collections are
             not defined.
-
-        Notes
-        -----
-        When multiple dataset types are queried in a single call, the results
-        of this operation are equivalent to querying for each dataset type
-        separately in turn, and no information about the relationships between
-        datasets of different types is included.
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
@@ -1877,6 +1870,115 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         if explain and (limit is None or limit != 0) and not dimension_records:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
+
+    def _query_all_datasets(
+        self,
+        collections: str | Iterable[str] | None = None,
+        *,
+        name: str | Iterable[str] = "*",
+        find_first: bool = True,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        limit: int | None = -20_000,
+        **kwargs: Any,
+    ) -> list[DatasetRef]:
+        """Query for datasets of potentially multiple types.
+
+        Parameters
+        ----------
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            The collection or collections to search, in order.  If not provided
+            or `None`, the default collection search path for this butler is
+            used.
+        name : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            Names or name patterns (glob-style) that returned dataset type
+            names must match.  If an iterable, items are OR'd together.  The
+            default is to include all dataset types in the given collections.
+        find_first : `bool`, optional
+            If `True` (default), for each result data ID, only yield one
+            `DatasetRef` of each `DatasetType`, from the first collection in
+            which a dataset of that dataset type appears (according to the
+            order of ``collections`` passed in).
+        data_id : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints in
+            the query.
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  May involve any
+            column of a dimension table or (as a shortcut for the primary key
+            column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
+        bind : `~collections.abc.Mapping`, optional
+            Mapping containing literal values that should be injected into the
+            ``where`` expression, keyed by the identifiers they replace. Values
+            of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records. `None` can be used
+            if no limit is wanted. A limit of ``0`` means that the query will
+            be executed and validated but no results will be returned.
+            If a negative value is given a warning will be issued if the number
+            of results is capped by that limit. If no limit is provided, by
+            default a maximum of 20,000 records will be returned.
+        **kwargs
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``data_id``
+            argument (and may be used to provide a constraining data ID even
+            when the ``data_id`` argument is `None`).
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            When no dataset types match ``name``, or an explicit (non-glob)
+            dataset type in ``name`` does not exist.
+        InvalidQueryError
+            If the parameters to the query are inconsistent or malformed.
+        MissingCollectionError
+            If a given collection is not found.
+
+        Returns
+        -------
+        refs : `list` [ `DatasetRef` ]
+            Dataset references matching the given query criteria.  Nested data
+            IDs are guaranteed to include values for all implied dimensions
+            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
+            include dimension records (`DataCoordinate.hasRecords` will be
+            `False`).
+        """
+        from ._query_all_datasets import query_all_datasets
+
+        if collections is None:
+            collections = list(self.collections.defaults)
+        else:
+            collections = list(ensure_iterable(collections))
+
+        warn_limit = False
+        if limit is not None and limit < 0:
+            # Add one to the limit so we can detect if we have exceeded it.
+            limit = abs(limit) + 1
+            warn_limit = True
+
+        result = []
+        for page in query_all_datasets(
+            self,
+            collections=collections,
+            name=name,
+            find_first=find_first,
+            data_id=data_id,
+            where=where,
+            limit=limit,
+            bind=bind,
+            **kwargs,
+        ):
+            result.extend(page.data)
+
+        if warn_limit and limit is not None and len(result) >= limit:
+            # Remove the extra dataset we added for the limit check.
+            result.pop()
+            _LOG.warning("More datasets are available than the requested limit of %d.", limit - 1)
+
+        return result
 
     def clone(
         self,

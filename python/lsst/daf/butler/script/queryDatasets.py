@@ -259,7 +259,7 @@ class QueryDatasets:
             Dataset references matching the given query criteria grouped
             by dataset type.
         """
-        query_collections: Iterable[str] = self._collections_wildcard or ["*"]
+        query_collections = self._collections_wildcard or ["*"]
 
         warn_limit = False
         if self._limit < 0:
