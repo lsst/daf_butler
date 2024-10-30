@@ -232,6 +232,7 @@ exclude = [
     '^parserLex\.',  # Docstrings are not numpydoc
     '^parserYacc\.',  # Docstrings are not numpydoc
     '^commands\.',  # Click docstrings, not numpydoc
+    'butler.cli$',  # This is the main click command
     '^__init__$',
     '\._[a-zA-Z_]+$',  # Private methods.
 ]
