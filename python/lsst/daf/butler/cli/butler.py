@@ -440,25 +440,9 @@ class UncachedButlerCLI(ButlerCLI):
 @log_label_option()
 @ClickProgressHandler.option
 def cli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str, progress: bool) -> None:
-    """Command line interface for butler.
+    """Butler command-line tools.
 
-    Parameters
-    ----------
-    log_level : `str`
-        The log level to use by default. ``log_level`` is handled by
-        ``get_command`` and ``list_commands``, and is called in
-        one of those functions before this is called.
-    long_log : `bool`
-        Enable extended log output. ``long_log`` is handled by
-        ``setup_logging``.
-    log_file : `str`
-        The log file name.
-    log_tty : `bool`
-        Whether to send logs to standard output.
-    log_label : `str`
-        Log labels.
-    progress : `bool`
-        Whether to use progress bar.
+    Log options apply to all subcommands.
     """
     pass
 
