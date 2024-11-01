@@ -127,6 +127,12 @@ class QueryTree(QueryTreeBase):
     datasets: Mapping[str, DatasetSearch] = pydantic.Field(default_factory=dict)
     """Dataset searches that have been joined into the query."""
 
+    any_dataset: None = pydantic.Field(default=None)
+    """This field is added in weekly 44, but will always be `None` for the
+    moment.  The weekly 43 server is rejecting queries from weekly 44 due to
+    this unknown property, so work around this problem by adding it here.
+    """
+
     data_coordinate_uploads: Mapping[DataCoordinateUploadKey, DimensionGroup] = pydantic.Field(
         default_factory=dict
     )
