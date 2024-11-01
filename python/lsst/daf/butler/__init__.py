@@ -38,6 +38,7 @@ from . import ddl, time_utils
 from ._butler import *
 from ._butler_collections import *
 from ._butler_config import *
+from ._butler_dataset_types import *
 from ._butler_repo_index import *
 from ._collection_type import CollectionType
 from ._column_categorization import *

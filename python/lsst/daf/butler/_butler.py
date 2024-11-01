@@ -42,6 +42,7 @@ from lsst.utils.logging import getLogger
 
 from ._butler_collections import ButlerCollections
 from ._butler_config import ButlerConfig, ButlerType
+from ._butler_dataset_types import ButlerDatasetTypes
 from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
@@ -841,6 +842,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             )
         return primary
 
+    # TODO: RFC deprecating this in favor of butler.dataset_types.get.
     @abstractmethod
     def get_dataset_type(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
@@ -1505,6 +1507,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         raise NotImplementedError()
 
+    # TODO: make this abstract and implement in derived classes.
+    @property
+    def dataset_types(self) -> ButlerDatasetTypes:
+        """Object with methods for modifying and querying dataset types
+        (`~lsst.daf.butler.ButlerDatasetTypes`).
+
+        Use of this object is preferred over `registry` wherever possible.
+        """
+        raise NotImplementedError()
+
     @property
     @abstractmethod
     def registry(self) -> Registry:
@@ -1648,7 +1660,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DatasetRef]:
-        """Query for dataset references matching user-provided criteria.
+        """Query for dataset references of a single dataset type.
 
         Parameters
         ----------
@@ -1659,7 +1671,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             provided, the default collections are used. Can be a wildcard if
             ``find_first`` is `False` (if find first is requested the order
             of collections matters and wildcards make the order indeterminate).
-             See :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
@@ -1707,7 +1718,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        refs : `.queries.DatasetRefQueryResults`
+        refs : `list` [`DatasetRef`]
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
             (i.e. `DataCoordinate.hasFull` will return `True`).
@@ -1729,13 +1740,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             collection wildcard is passed when ``find_first`` is `True`, or
             when ``collections`` is `None` and default butler collections are
             not defined.
-
-        Notes
-        -----
-        When multiple dataset types are queried in a single call, the results
-        of this operation are equivalent to querying for each dataset type
-        separately in turn, and no information about the relationships between
-        datasets of different types is included.
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
@@ -1878,6 +1882,89 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
 
+    def _query_all_datasets(
+        self,
+        collections: str | Iterable[str] | None = None,
+        *,
+        name: str | Iterable[str] = "*",
+        at_least_dimensions: Iterable[str] | DimensionGroup | None = None,
+        exact_dimensions: Iterable[str] | DimensionGroup | None = None,
+        storage_class: str | Iterable[str] | StorageClass | Iterable[StorageClass] | None = None,
+        is_calibration: bool | None = None,
+        find_first: bool = True,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DatasetRef]:
+        """Query for datasets of potentially multiple types.
+
+        Parameters
+        ----------
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            The collection or collections to search, in order.  If not provided
+            or `None`, the default collection search path for this butler is
+            used.
+        name : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            Names or name patterns (glob-style) that returned dataset type
+            names must match.  If an iterable, items are OR'd together.  The
+            default is to include all dataset types in the given collections.
+        at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
+                optional
+            Dimensions that returned dataset types must have as a subset.
+        exact_dimensions : `Iterable` [ `str` ] or `DimensionGroup`, optional
+            Dimensions that returned dataset types must have exactly.
+        storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
+                or `StorageClass` or \
+                `~collections.abc.Iterable` [ `StorageClass` ], optional
+            Storage classes or storage class names that returned dataset types
+            must have.  If an iterable, items are OR'd together.
+        is_calibration : `bool` or `None`, optional
+            If `None`, constrain returned dataset types to be or not be
+            calibrations.
+        find_first : `bool`, optional
+            If `True` (default), for each result data ID, only yield one
+            `DatasetRef` of each `DatasetType`, from the first collection in
+            which a dataset of that dataset type appears (according to the
+            order of ``collections`` passed in).
+        data_id : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints in
+            the query.
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  May involve any
+            column of a dimension table or (as a shortcut for the primary key
+            column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
+        bind : `~collections.abc.Mapping`, optional
+            Mapping containing literal values that should be injected into the
+            ``where`` expression, keyed by the identifiers they replace. Values
+            of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
+        explain : `bool`, optional
+            If `True` (default) then `EmptyQueryResultError` exception is
+            raised when resulting list is empty. The exception contains
+            non-empty list of strings explaining possible causes for empty
+            result.
+        **kwargs
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``data_id``
+            argument (and may be used to provide a constraining data ID even
+            when the ``data_id`` argument is `None`).
+
+        Returns
+        -------
+        refs : `list` [ `DatasetRef` ]
+            Dataset references matching the given query criteria.  Nested data
+            IDs are guaranteed to include values for all implied dimensions
+            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
+            include dimension records (`DataCoordinate.hasRecords` will be
+            `False`).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def clone(
         self,
         *,

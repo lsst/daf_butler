@@ -27,6 +27,9 @@
 
 from __future__ import annotations
 
+from lsst.daf.butler.queries._dataset_type_results import DatasetTypeQueryResults
+from lsst.daf.butler.queries._heterogeneous_dataset_results import HeterogeneousDatasetRefQueryResults
+
 __all__ = ("Query",)
 
 from collections.abc import Iterable, Mapping, Set
@@ -37,7 +40,7 @@ from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
 from .._exceptions import DimensionNameError, InvalidQueryError
-from .._storage_class import StorageClassFactory
+from .._storage_class import StorageClass, StorageClassFactory
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError
 from ._base import QueryBase
@@ -228,7 +231,8 @@ class Query(QueryBase):
         *,
         find_first: bool = True,
     ) -> DatasetRefQueryResults:
-        """Return a result object that is a `DatasetRef` iterable.
+        """Return a result object that is a `DatasetRef` iterable with a single
+        dataset type.
 
         Parameters
         ----------
@@ -242,8 +246,7 @@ class Query(QueryBase):
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
             which a dataset of that dataset type appears (according to the
-            order of ``collections`` passed in).  If `True`, ``collections``
-            must not be ``...``.
+            order of ``collections`` passed in).
 
         Returns
         -------
@@ -447,6 +450,84 @@ class Query(QueryBase):
             find_first=find_first,
         )
         return GeneralQueryResults(self._driver, tree=tree, spec=result_spec)
+
+    def all_datasets(
+        self,
+        collections: str | Iterable[str] | None = None,
+        *,
+        name: str | Iterable[str] = "*",
+        at_least_dimensions: Iterable[str] | DimensionGroup | None = None,
+        exact_dimensions: Iterable[str] | DimensionGroup | None = None,
+        storage_class: str | Iterable[str] | StorageClass | Iterable[StorageClass] | None = None,
+        is_calibration: bool | None = None,
+        find_first: bool = True,
+    ) -> HeterogeneousDatasetRefQueryResults:
+        """Return a result object that is a `DatasetRef` iterable whose entries
+        may have different dataset types.
+
+        Parameters
+        ----------
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            The collection or collections to search, in order.  If not provided
+            or `None`, the default collection search path for this butler is
+            used.
+        name : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            Names or name patterns (glob-style) that returned dataset type
+            names must match.  If an iterable, items are OR'd together.  The
+            default is to include all dataset types in the given collections.
+        at_least_dimensions : `Iterable` [ `str` ] or `DimensionGroup`,\
+                optional
+            Dimensions that returned dataset types must have as a subset.
+        exact_dimensions : `Iterable` [ `str` ] or `DimensionGroup`, optional
+            Dimensions that returned dataset types must have exactly.
+        storage_class : `str` or `~collections.abc.Iterable` [ `str` ],\
+                or `StorageClass` or \
+                `~collections.abc.Iterable` [ `StorageClass` ], optional
+            Storage classes or storage class names that returned dataset types
+            must have.  If an iterable, items are OR'd together.
+        is_calibration : `bool` or `None`, optional
+            If `None`, constrain returned dataset types to be or not be
+            calibrations.
+        find_first : `bool`, optional
+            If `True` (default), for each result data ID, only yield one
+            `DatasetRef` of each `DatasetType`, from the first collection in
+            which a dataset of that dataset type appears (according to the
+            order of ``collections`` passed in).
+
+        Returns
+        -------
+        refs : `.queries.HeterogeneousDatasetRefQueryResults`
+            Dataset references matching the given query criteria.  Nested data
+            IDs are guaranteed to include values for all implied dimensions
+            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
+            include dimension records (`DataCoordinate.hasRecords` will be
+            `False`).
+        """
+        raise NotImplementedError()
+
+    def dataset_types(  # numpydoc ignore=PR01
+        self,
+        collections: str | Iterable[str] | None = None,
+        *,
+        name: str | Iterable[str] = "*",
+        at_least_dimensions: Iterable[str] | DimensionGroup | None = None,
+        exact_dimensions: Iterable[str] | DimensionGroup | None = None,
+        storage_class: str | Iterable[str] | StorageClass | Iterable[StorageClass] | None = None,
+        is_calibration: bool | None = None,
+    ) -> DatasetTypeQueryResults:
+        """Return a result object that groups dataset queries by their dataset
+        type.
+
+        See `all_datasets` for parameter descriptions.
+
+        Returns
+        -------
+        types : `DatasetTypeQueryResults`
+            A result object that iterates over `DatasetType` objects and
+            provides methods for grouping further by collection and/or counting
+            the number of datasets of each type.
+        """
+        raise NotImplementedError()
 
     def materialize(
         self,
