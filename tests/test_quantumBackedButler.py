@@ -230,6 +230,15 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(set(zip_refs), set(self.output_refs))
         self.assertEqual(len(index.artifact_map), 4)  # Count number of artifacts in Zip.
 
+        # Retrieve them to a directory.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            retrieved = qbb.retrieve_artifacts(self.output_refs, destination=tmpdir, preserve_path=False)
+            self.assertEqual(len(retrieved), 4)
+            self.assertTrue(retrieved[0].exists())
+            with open(os.path.join(tmpdir, ZipIndex.index_name)) as zf:
+                index = ZipIndex.model_validate_json(zf.read())
+            self.assertEqual(len(index.artifact_map), len(retrieved))
+
     def test_getDeferred(self) -> None:
         """Test for getDeferred method"""
         quantum = self.make_quantum()

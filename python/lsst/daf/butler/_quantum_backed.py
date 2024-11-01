@@ -531,6 +531,53 @@ class QuantumBackedButler(LimitedButler):
         """
         return retrieve_and_zip(refs, destination, self._datastore.retrieveArtifacts, overwrite)
 
+    def retrieve_artifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePathExpression,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+    ) -> list[ResourcePath]:
+        """Retrieve the artifacts associated with the supplied refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which artifacts are to be retrieved.
+            A single ref can result in multiple artifacts. The refs must
+            be resolved.
+        destination : `lsst.resources.ResourcePath` or `str`
+            Location to write the artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `~lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
+
+        Returns
+        -------
+        targets : `list` of `lsst.resources.ResourcePath`
+            URIs of file artifacts in destination location. Order is not
+            preserved.
+        """
+        outdir = ResourcePath(destination)
+        artifact_map = self._datastore.retrieveArtifacts(
+            refs,
+            outdir,
+            transfer=transfer,
+            preserve_path=preserve_path,
+            overwrite=overwrite,
+            write_index=True,
+        )
+        return list(artifact_map)
+
     def extract_provenance_data(self) -> QuantumProvenanceData:
         """Extract provenance information and datastore records from this
         butler.
