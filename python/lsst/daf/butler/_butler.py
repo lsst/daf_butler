@@ -29,6 +29,9 @@ from __future__ import annotations
 
 __all__ = ["Butler"]
 
+import os
+import urllib.parse
+import uuid
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
@@ -525,6 +528,83 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         information is discovered.
         """
         return ButlerRepoIndex.get_known_repos()
+
+    @classmethod
+    def parse_dataset_uri(cls, uri: str) -> tuple[str, DatasetId]:
+        """Extract the butler label and dataset ID from a dataset URI.
+
+        Parameters
+        ----------
+        uri : `str`
+            The dataset URI to parse.
+
+        Returns
+        -------
+        label : `str`
+            The label associated with the butler repository from which this
+            dataset originates.
+        dataset_id : `DatasetId`
+            The ID of the dataset.
+
+        Notes
+        -----
+        Supports dataset URIs of the forms ``ivo://rubin/butler_label/UUID``
+        and ``butler://butler_label/UUID``. In ``ivo`` URIs the butler label
+        can include ``/`` and the leading ``/`` is always stripped. If the
+        repository label starts with ``/`` then it must be doubled up. e.g.,
+
+            ivo://rubin//repo/main/82d79caa-0823-4300-9874-67b737367ee0
+
+        will return a label of ``/repo/main``.
+
+        This method does not attempt to check that the dataset exists in the
+        labeled butler.
+        """
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme == "ivo":
+            # TODO: Validate netloc component.
+            label, id_ = os.path.split(parsed.path)
+            # Strip the leading /.
+            label = label[1:]
+        elif parsed.scheme == "butler":
+            label = parsed.netloc
+            # Need to strip the leading /.
+            id_ = parsed.path[1:]
+        else:
+            raise ValueError(f"Unrecognized URI scheme: {uri!r}")
+        if not label:
+            raise ValueError(f"No butler repository label found in uri {uri!r}")
+        try:
+            dataset_id = uuid.UUID(hex=id_)
+        except Exception as e:
+            e.add_note(f"Error extracting dataset ID from uri {uri!r} with dataset ID string {id_!r}")
+            raise
+
+        return label, dataset_id
+
+    @classmethod
+    def get_dataset_from_uri(cls, uri: str) -> DatasetRef | None:
+        """Get the dataset associated with the given dataset URI.
+
+        Parameters
+        ----------
+        uri : `str`
+            The URI associated with a dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef` or `None`
+            The dataset associated with that URI, or `None` if the UUID
+            is valid but the dataset is not known to this butler.
+
+        Notes
+        -----
+        It might be possible to pass in an optional ``LabeledButlerFactory``
+        but how would a caller know the right access token to supply?
+        """
+        label, dataset_id = cls.parse_dataset_uri(uri)
+        butler = cls.from_config(label)
+        return butler.get_dataset(dataset_id)
 
     @abstractmethod
     def _caching_context(self) -> AbstractContextManager[None]:

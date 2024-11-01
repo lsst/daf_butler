@@ -54,7 +54,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
-from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, mock_env, removeTestTempDir
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
@@ -882,9 +882,54 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         registryConfig = RegistryConfig(config.get("registry"))
         _RegistryFactory(registryConfig).create_from_config()
 
+        # Write the YAML file so that some tests can recreate butler from it.
+        config.dumpToUri(os.path.join(self.root, "butler.yaml"))
         butler = Butler.from_config(config, writeable=writeable)
         DatastoreMock.apply(butler)
         return butler
+
+    def test_dataset_uris(self):
+        """Test that dataset URIs can be parsed and retrieved."""
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
+        ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
+        self.assertIsInstance(ref, DatasetRef)
+
+        # Get the butler root for the URI.
+        config_dir = butler._config["root"]
+
+        # Read it via a repo label and a path.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as index_file:
+            label = "test_repo"
+            index_file.write(f"{label}: {config_dir}\n")
+            index_file.flush()
+            with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
+                for dataset_uri in (
+                    f"ivo://rubin/{config_dir}/{ref.id}",
+                    f"ivo://rubin/{config_dir}/butler.yaml/{ref.id}",
+                    f"butler://{label}/{ref.id}",
+                    f"ivo://rubin/{label}/{ref.id}",
+                ):
+                    ref2 = Butler.get_dataset_from_uri(dataset_uri)
+                    self.assertEqual(ref, ref2)
+
+                # Non existent dataset.
+                missing_id = str(ref.id).replace("2", "3")
+                no_ref = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                self.assertIsNone(no_ref)
+
+        # Test some failure modes.
+        with self.assertRaises(ValueError):
+            Butler.parse_dataset_uri("ivo://rubin/1234")
+        with self.assertRaises(ValueError):
+            Butler.parse_dataset_uri("butler://label/1234")
+        with self.assertRaises(ValueError):
+            Butler.parse_dataset_uri("butler://1234")
+        with self.assertRaises(ValueError):
+            Butler.parse_dataset_uri("https://something.edu/1234")
 
 
 class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):
