@@ -72,8 +72,17 @@ class DatasetRefQueryResults(QueryResultsBase):
         self._spec = spec
 
     def __iter__(self) -> Iterator[DatasetRef]:
+        for page in self._iter_pages():
+            yield from page
+
+    def _iter_pages(self) -> Iterator[list[DatasetRef]]:
+        """Return the results from the query in batches as they are returned
+        from the database.
+        """
+        # This method is used outside this class in other daf_butler-internal
+        # functions.
         for page in self._driver.execute(self._spec, self._tree):
-            yield from page.rows
+            yield page.rows
 
     @property
     def dimensions(self) -> DimensionGroup:

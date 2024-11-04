@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple
 
 from lsst.utils.iteration import ensure_iterable
@@ -37,6 +37,7 @@ from ._butler import Butler
 from ._dataset_ref import DatasetRef
 from ._exceptions import InvalidQueryError, MissingDatasetTypeError
 from .dimensions import DataId
+from .queries import Query
 from .utils import has_globs
 
 _LOG = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class DatasetsPage(NamedTuple):
 
 def query_all_datasets(
     butler: Butler,
+    query: Query,
     *,
     collections: list[str],
     name: str | Iterable[str] = "*",
@@ -60,7 +62,7 @@ def query_all_datasets(
     bind: Mapping[str, Any] | None = None,
     with_dimension_records: bool = False,
     limit: int | None = None,
-    order_by: Iterable[str] | str | None = None,
+    order_by: Sequence[str] | None = None,
     **kwargs: Any,
 ) -> Iterator[DatasetsPage]:
     """Query for dataset refs from multiple types simultaneously.
@@ -69,6 +71,8 @@ def query_all_datasets(
     ----------
     butler : `Butler`
         Butler instance to use for executing queries.
+    query : `Query`
+        Query context object to use for executing queries.
     collections :  `list` [ `str` ]
         The collections to search, in order.  If not provided
         or `None`, the default collection search path for this butler is
@@ -130,31 +134,31 @@ def query_all_datasets(
     """
     if find_first and has_globs(collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
+    if order_by is None:
+        order_by = []
+    if data_id is None:
+        data_id = {}
 
     dataset_type_query = list(ensure_iterable(name))
     dataset_type_collections = _filter_collections_and_dataset_types(butler, collections, dataset_type_query)
 
     for dt, filtered_collections in sorted(dataset_type_collections.items()):
         _LOG.debug("Querying dataset type %s", dt)
-        results = butler.query_datasets(
-            dt,
-            collections=filtered_collections,
-            find_first=find_first,
-            with_dimension_records=with_dimension_records,
-            data_id=data_id,
-            order_by=order_by,
-            explain=False,
-            where=where,
-            bind=bind,
-            limit=limit,
-            **kwargs,
+        results = (
+            query.datasets(dt, filtered_collections, find_first=find_first)
+            .where(data_id, where, kwargs, bind=bind)
+            .limit(limit)
+            .order_by(*order_by)
         )
+        if with_dimension_records:
+            results = results.with_dimension_records()
 
-        # Track how much of the limit has been used up by each query.
-        if limit is not None:
-            limit -= len(results)
+        for page in results._iter_pages():
+            if limit is not None:
+                # Track how much of the limit has been used up by each query.
+                limit -= len(page)
 
-        yield DatasetsPage(dataset_type=dt, data=results)
+            yield DatasetsPage(dataset_type=dt, data=page)
 
         if limit is not None and limit <= 0:
             break

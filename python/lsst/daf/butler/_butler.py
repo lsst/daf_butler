@@ -1960,18 +1960,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             warn_limit = True
 
         result = []
-        for page in query_all_datasets(
-            self,
-            collections=collections,
-            name=name,
-            find_first=find_first,
-            data_id=data_id,
-            where=where,
-            limit=limit,
-            bind=bind,
-            **kwargs,
-        ):
-            result.extend(page.data)
+        with self.query() as query:
+            for page in query_all_datasets(
+                self,
+                query,
+                collections=collections,
+                name=name,
+                find_first=find_first,
+                data_id=data_id,
+                where=where,
+                limit=limit,
+                bind=bind,
+                **kwargs,
+            ):
+                result.extend(page.data)
 
         if warn_limit and limit is not None and len(result) >= limit:
             # Remove the extra dataset we added for the limit check.

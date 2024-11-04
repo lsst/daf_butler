@@ -344,7 +344,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=-1, order_by=("visit"), collections="*", glob="*"
+                repo=testRepo.butler, limit=-1, order_by=("visit",), collections="*", glob="*"
             )
 
         self.assertIn("increase this limit", cm.output[0])
@@ -361,13 +361,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # issued.
         with self.assertNoLogs("lsst.daf.butler.script.queryDatasets", level="WARNING"):
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=1, order_by=("visit"), collections="*", glob="*"
+                repo=testRepo.butler, limit=1, order_by=("visit",), collections="*", glob="*"
             )
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=-1, order_by=("-visit"), collections="*", glob="*"
+                repo=testRepo.butler, limit=-1, order_by=("-visit",), collections="*", glob="*"
             )
         self.assertIn("increase this limit", cm.output[0])
 

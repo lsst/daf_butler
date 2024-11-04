@@ -30,6 +30,7 @@ import logging
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from itertools import groupby
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -37,7 +38,7 @@ from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
 from .._exceptions import MissingDatasetTypeError
-from .._query_all_datasets import query_all_datasets
+from .._query_all_datasets import DatasetsPage, query_all_datasets
 from ..cli.utils import sortAstropyTable
 
 if TYPE_CHECKING:
@@ -275,28 +276,30 @@ class QueryDatasets:
             limit = self._limit
 
         try:
-            pages = query_all_datasets(
-                self.butler,
-                collections=query_collections,
-                find_first=self._find_first,
-                name=self._dataset_type_glob,
-                with_dimension_records=True,
-                where=self._where,
-                limit=limit,
-                order_by=self._order_by,
-            )
-            datasets_found = 0
-            for dataset_type, refs in pages:
-                datasets_found += len(refs)
-                if warn_limit and limit is not None and datasets_found >= limit:
-                    # We asked for one too many so must remove that from
-                    # the list.
-                    refs = refs[0:-1]
-                    limit_reached = True
+            with self.butler.query() as query:
+                pages = query_all_datasets(
+                    self.butler,
+                    query,
+                    collections=query_collections,
+                    find_first=self._find_first,
+                    name=self._dataset_type_glob,
+                    with_dimension_records=True,
+                    where=self._where,
+                    limit=limit,
+                    order_by=self._order_by,
+                )
+                datasets_found = 0
+                for dataset_type, refs in _chunk_by_dataset_type(pages):
+                    datasets_found += len(refs)
+                    if warn_limit and limit is not None and datasets_found >= limit:
+                        # We asked for one too many so must remove that from
+                        # the list.
+                        refs = refs[0:-1]
+                        limit_reached = True
 
-                yield refs
+                    yield refs
 
-                _LOG.debug("Got %d results for dataset type %s", len(refs), dataset_type)
+                    _LOG.debug("Got %d results for dataset type %s", len(refs), dataset_type)
         except MissingDatasetTypeError as e:
             _LOG.info(str(e))
             return
@@ -307,3 +310,14 @@ class QueryDatasets:
                 "Use --limit to increase this limit.",
                 limit - 1,
             )
+
+
+def _chunk_by_dataset_type(pages: Iterator[DatasetsPage]) -> Iterator[DatasetsPage]:
+    # For each dataset type in the results, collect all the refs into a
+    # single page.  This assumes that in the original iterator, the pages
+    # for each dataset type are contiguous.
+    for dataset_type, chunk in groupby(pages, lambda page: page.dataset_type):
+        refs = []
+        for page in chunk:
+            refs.extend(page.data)
+        yield DatasetsPage(dataset_type, refs)
