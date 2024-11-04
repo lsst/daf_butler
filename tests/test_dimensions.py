@@ -42,6 +42,7 @@ from lsst.daf.butler import (
     DataCoordinate,
     DataCoordinateSequence,
     DataCoordinateSet,
+    DatasetType,
     Dimension,
     DimensionConfig,
     DimensionElement,
@@ -410,6 +411,19 @@ class DimensionTestCase(unittest.TestCase):
             group1 = element1.minimal_group
             group2 = pickle.loads(pickle.dumps(group1))
             self.assertIs(group1, group2)
+
+    def testSerialization(self):
+        # Check that dataset types round-trip correctly through serialization.
+        dataset_type = DatasetType(
+            "flat",
+            dimensions=["instrument", "detector", "physical_filter", "band"],
+            isCalibration=True,
+            universe=self.universe,
+            storageClass="int",
+        )
+        roundtripped = DatasetType.from_simple(dataset_type.to_simple(), universe=self.universe)
+
+        self.assertEqual(dataset_type, roundtripped)
 
 
 @dataclass

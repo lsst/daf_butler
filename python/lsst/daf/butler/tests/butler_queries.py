@@ -303,6 +303,24 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             butler.query_datasets("bias", "*", detector=100, instrument="Unknown", find_first=False)
         self.assertIn("doomed", str(cm2.exception))
 
+        # Test for a regression of an issue where "band" was not being included
+        # in the data ID, despite being one of the dimensions in the "flat"
+        # dataset type.
+        #
+        # "band" is implied by "physical_filter", so it's technically not a
+        # 'required' dimension.  However, the contract of query_datasets is
+        # that hasFull() should be true, so implied dimensions must be
+        # included.
+        refs = butler.query_datasets("flat", "imported_r", where="detector = 2", instrument="Cam1")
+        self.assertEqual(len(refs), 1)
+        flat = refs[0]
+        self.assertTrue(flat.dataId.hasFull())
+        self.assertEqual(flat.datasetType.name, "flat")
+        self.assertEqual(flat.dataId["instrument"], "Cam1")
+        self.assertEqual(flat.dataId["detector"], 2)
+        self.assertEqual(flat.dataId["physical_filter"], "Cam1-R1")
+        self.assertEqual(flat.dataId["band"], "r")
+
     def test_general_query(self) -> None:
         """Test Query.general and its result."""
         butler = self.make_butler("base.yaml", "datasets.yaml")
