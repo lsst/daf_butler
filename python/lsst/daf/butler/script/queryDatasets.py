@@ -40,6 +40,7 @@ from .._butler import Butler
 from .._exceptions import MissingDatasetTypeError
 from .._query_all_datasets import DatasetsPage, query_all_datasets
 from ..cli.utils import sortAstropyTable
+from ..utils import has_globs
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -204,6 +205,9 @@ class QueryDatasets:
                 stacklevel=2,
             )
             glob = ["*"]
+
+        if order_by and (len(glob) > 1 or has_globs(glob)):
+            raise NotImplementedError("--order-by is only supported for queries with a single dataset type.")
 
         # show_uri requires a datastore.
         without_datastore = not show_uri

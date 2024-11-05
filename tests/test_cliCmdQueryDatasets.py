@@ -344,7 +344,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=-1, order_by=("visit",), collections="*", glob="*"
+                repo=testRepo.butler,
+                limit=-1,
+                order_by=("visit",),
+                collections="*",
+                glob=("test_metric_comp",),
             )
 
         self.assertIn("increase this limit", cm.output[0])
@@ -361,13 +365,21 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # issued.
         with self.assertNoLogs("lsst.daf.butler.script.queryDatasets", level="WARNING"):
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=1, order_by=("visit",), collections="*", glob="*"
+                repo=testRepo.butler,
+                limit=1,
+                order_by=("visit",),
+                collections="*",
+                glob=("test_metric_comp",),
             )
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
             tables = self._queryDatasets(
-                repo=testRepo.butler, limit=-1, order_by=("-visit",), collections="*", glob="*"
+                repo=testRepo.butler,
+                limit=-1,
+                order_by=("-visit",),
+                collections="*",
+                glob=("test_metric_comp",),
             )
         self.assertIn("increase this limit", cm.output[0])
 
@@ -378,6 +390,22 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             ),
         ]
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        # --order-by is not supported by the query backend for multiple dataset
+        # types, so we can only provide it for queries with a single dataset
+        # type.
+        with self.assertRaisesRegex(NotImplementedError, "--order-by"):
+            self._queryDatasets(
+                repo=testRepo.butler, limit=1, order_by=("visit",), collections="*", glob=["*"]
+            )
+        with self.assertRaisesRegex(NotImplementedError, "--order-by"):
+            self._queryDatasets(
+                repo=testRepo.butler,
+                limit=1,
+                order_by=("visit",),
+                collections="*",
+                glob=["test_metric_comp", "raw"],
+            )
 
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
