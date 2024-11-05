@@ -202,6 +202,7 @@ class QueryDatasets:
                 FutureWarning,
                 stacklevel=2,
             )
+            glob = ["*"]
 
         # show_uri requires a datastore.
         without_datastore = not show_uri
