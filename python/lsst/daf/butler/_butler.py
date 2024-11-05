@@ -45,7 +45,7 @@ from ._butler_config import ButlerConfig, ButlerType
 from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
-from ._exceptions import EmptyQueryResultError
+from ._exceptions import EmptyQueryResultError, InvalidQueryError
 from ._limited_butler import LimitedButler
 from .datastore import Datastore
 from .dimensions import DataCoordinate, DimensionConfig
@@ -1741,7 +1741,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             # collections when we do not have wildcards is expensive so only
             # do it if we need it.
             if find_first:
-                raise RuntimeError(
+                raise InvalidQueryError(
                     f"Can not use wildcards in collections when find_first=True (given {collections})"
                 )
             collections = self.collections.query(collections)

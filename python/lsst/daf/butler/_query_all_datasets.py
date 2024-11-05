@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping
 from typing import Any, NamedTuple
 
 from lsst.utils.iteration import ensure_iterable
@@ -61,7 +61,6 @@ def query_all_datasets(
     where: str = "",
     bind: Mapping[str, Any] | None = None,
     limit: int | None = None,
-    order_by: Sequence[str] | None = None,
     **kwargs: Any,
 ) -> Iterator[DatasetsPage]:
     """Query for dataset refs from multiple types simultaneously.
@@ -103,11 +102,6 @@ def query_all_datasets(
         Upper limit on the number of returned records. `None` can be used
         if no limit is wanted. A limit of ``0`` means that the query will
         be executed and validated but no results will be returned.
-    order_by : `~collections.abc.Iterable` [`str`] or `str`, optional
-        Names of the columns/dimensions to use for ordering returned data
-        IDs. Column name can be prefixed with minus (``-``) to use
-        descending ordering.  Results are ordered only within each dataset
-        type, they are not globally ordered across all results.
     **kwargs
         Additional keyword arguments are forwarded to
         `DataCoordinate.standardize` when processing the ``data_id``
@@ -130,8 +124,6 @@ def query_all_datasets(
     """
     if find_first and has_globs(collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
-    if order_by is None:
-        order_by = []
     if data_id is None:
         data_id = {}
 
@@ -144,7 +136,6 @@ def query_all_datasets(
             query.datasets(dt, filtered_collections, find_first=find_first)
             .where(data_id, where, kwargs, bind=bind)
             .limit(limit)
-            .order_by(*order_by)
         )
 
         for page in results._iter_pages():

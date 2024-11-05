@@ -30,6 +30,7 @@ import logging
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from itertools import groupby
 from typing import TYPE_CHECKING
 
@@ -206,7 +207,8 @@ class QueryDatasets:
             )
             glob = ["*"]
 
-        if order_by and (len(glob) > 1 or has_globs(glob)):
+        searches_multiple_dataset_types = len(glob) > 1 or has_globs(glob)
+        if order_by and searches_multiple_dataset_types:
             raise NotImplementedError("--order-by is only supported for queries with a single dataset type.")
 
         # show_uri requires a datastore.
@@ -219,6 +221,7 @@ class QueryDatasets:
         self._find_first = find_first
         self._limit = limit
         self._order_by = order_by
+        self._searches_multiple_dataset_types = searches_multiple_dataset_types
 
     def getTables(self) -> Iterator[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -279,18 +282,17 @@ class QueryDatasets:
         else:
             limit = self._limit
 
+        # We want to allow --order-by, but the query backend only supports
+        # it when there is a single dataset type.
+        # So we have to select different backends for single vs multiple
+        # dataset type queries.
+        if self._searches_multiple_dataset_types:
+            query_func = self._query_multiple_dataset_types
+        else:
+            query_func = self._query_single_dataset_type
+
         try:
-            with self.butler.query() as query:
-                pages = query_all_datasets(
-                    self.butler,
-                    query,
-                    collections=query_collections,
-                    find_first=self._find_first,
-                    name=self._dataset_type_glob,
-                    where=self._where,
-                    limit=limit,
-                    order_by=self._order_by,
-                )
+            with query_func(query_collections, limit) as pages:
                 datasets_found = 0
                 for dataset_type, refs in _chunk_by_dataset_type(pages):
                     datasets_found += len(refs)
@@ -313,6 +315,39 @@ class QueryDatasets:
                 "Use --limit to increase this limit.",
                 limit - 1,
             )
+
+    @contextmanager
+    def _query_multiple_dataset_types(
+        self, collections: list[str], limit: int | None
+    ) -> Iterator[Iterator[DatasetsPage]]:
+        with self.butler.query() as query:
+            yield query_all_datasets(
+                self.butler,
+                query,
+                collections=collections,
+                find_first=self._find_first,
+                name=self._dataset_type_glob,
+                where=self._where,
+                limit=limit,
+            )
+
+    @contextmanager
+    def _query_single_dataset_type(
+        self, collections: list[str], limit: int | None
+    ) -> Iterator[Iterator[DatasetsPage]]:
+        assert len(self._dataset_type_glob) == 1
+        dataset_type = self._dataset_type_glob[0]
+
+        refs = self.butler.query_datasets(
+            dataset_type,
+            collections=collections,
+            find_first=self._find_first,
+            where=self._where,
+            limit=limit,
+            order_by=self._order_by,
+        )
+
+        yield iter([DatasetsPage(dataset_type=dataset_type, data=refs)])
 
 
 def _chunk_by_dataset_type(pages: Iterator[DatasetsPage]) -> Iterator[DatasetsPage]:

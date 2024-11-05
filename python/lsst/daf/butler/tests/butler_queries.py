@@ -302,7 +302,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(len(refs_simple), 4)
         self.assertIn("More datasets are available", lcm.output[0])
 
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(InvalidQueryError) as cm:
             butler.query_datasets("bias", "*", detector=100, instrument="Unknown", find_first=True)
         self.assertIn("Can not use wildcards", str(cm.exception))
         with self.assertRaises(EmptyQueryResultError) as cm2:

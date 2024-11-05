@@ -274,21 +274,26 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
-        tables = self._queryDatasets(
-            repo=testRepo.butler, where="instrument='DummyCamComp' AND visit=423", collections="*", glob="*"
-        )
+        for glob in (("*",), ("test_metric_comp",)):
+            with self.subTest(glob=glob):
+                tables = self._queryDatasets(
+                    repo=testRepo.butler,
+                    where="instrument='DummyCamComp' AND visit=423",
+                    collections="*",
+                    glob=glob,
+                )
 
-        expectedTables = (
-            AstropyTable(
-                array(("test_metric_comp", "ingest/run", "DummyCamComp", "423", "R", "d-r")),
-                names=("type", "run", "instrument", "visit", "band", "physical_filter"),
-            ),
-        )
+                expectedTables = (
+                    AstropyTable(
+                        array(("test_metric_comp", "ingest/run", "DummyCamComp", "423", "R", "d-r")),
+                        names=("type", "run", "instrument", "visit", "band", "physical_filter"),
+                    ),
+                )
 
-        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+                self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
-        with self.assertRaises(InvalidQueryError):
-            self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True, glob="*")
+                with self.assertRaises(InvalidQueryError):
+                    self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True, glob=glob)
 
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
