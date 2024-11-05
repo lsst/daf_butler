@@ -1,0 +1,45 @@
+# Skymap definition from ci_hsc_gen3, for our tests we only need tracts,
+# dimension records for patches are not included.
+description: Butler Data Repository Export
+version: 1.0.2
+universe_version: 7
+universe_namespace: daf_butler
+data:
+- type: dimension
+  element: skymap
+  records:
+  - name: discrete/ci_hsc
+    hash: !!binary |
+      Kt7swQ9e5zUif7fo1Onj3ezH+Ts=
+    tract_max: 1
+    patch_nx_max: 16
+    patch_ny_max: 16
+- type: dimension
+  element: tract
+  records:
+  - skymap: discrete/ci_hsc
+    id: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70cb48dd838019e83fe79b0e4ace0ae5bfcae4291ac61395bf4884794db329e93f68b2ba9327c2e3bfa603a921c61395bf0e047a6ce727e93fc46da7b1aac0e3bf8779dd59c921a03f513c3fa3b417e83f6ffa86675109e5bf06a12054c921a03f
+- type: collection
+  collection_type: RUN
+  name: skymaps
+  host: null
+  timespan_begin: null
+  timespan_end: null
+- type: dataset_type
+  name: skyMap
+  dimensions:
+  - skymap
+  storage_class: SkyMap
+  is_calibration: false
+- type: dataset
+  dataset_type: skyMap
+  run: skymaps
+  records:
+  - dataset_id:
+    - !uuid '557e15c6-0529-4fc9-998b-b90a4750315e'
+    data_id:
+    - skymap: discrete/ci_hsc
+    path: skymaps/skyMap/skyMap_discrete_ci_hsc_skymaps.pickle
+    formatter: lsst.daf.butler.formatters.pickle.PickleFormatter

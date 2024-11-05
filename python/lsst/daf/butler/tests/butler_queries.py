@@ -1228,6 +1228,43 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [1, 2, 3],
             )
 
+    def test_materialization_find_first(self) -> None:
+        """Test querying for datasets with find_first against a materialized
+        query.
+        """
+        butler = self.make_butler("ci_hsc-subset.yaml", "ci_hsc-subset-skymap.yaml")
+
+        run = "HSC/runs/ci_hsc/20240806T180642Z"
+        extra_run = "HSC/runs/ci_hsc/20240806T180642Z-extra"
+
+        # Find few datasets to duplicate.
+        refs = butler.query_datasets("calexp", run, limit=3)
+        data_ids = [ref.dataId for ref in refs]
+
+        butler.collections.register(extra_run)
+        butler.registry.insertDatasets("calexp", data_ids, extra_run)
+
+        collections = [run, extra_run, "skymaps"]
+        with butler.query() as query:
+            query = query.join_dimensions(
+                [
+                    "instrument",
+                    "physical_filter",
+                    "band",
+                    "visit",
+                    "detector",
+                    "day_obs",
+                    "skymap",
+                    "tract",
+                ]
+            )
+            query = query.join_dataset_search("skyMap", collections)
+            query = query.join_dataset_search("calexp", collections)
+            query = query.where({}, "instrument='HSC' AND skymap='discrete/ci_hsc'", bind=None)
+            m_query = query.materialize()
+            _ = list(m_query.datasets("skyMap", collections))
+            _ = list(m_query.datasets("calexp", collections))
+
     def test_timespan_results(self) -> None:
         """Test returning dimension records that include timespans."""
         butler = self.make_butler("base.yaml", "spatial.yaml")

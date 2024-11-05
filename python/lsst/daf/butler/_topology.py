@@ -76,7 +76,7 @@ class TopologicalFamily(ABC):
     another's in a predefined way.
 
     This hierarchy means that endpoints in the same family do not generally
-    have to be have to be related using (e.g.) overlaps; instead, the regions
+    have to be related using (e.g.) overlaps; instead, the regions
     from one "best" endpoint from each family are related to the best endpoint
     from each other family in a query.
 
