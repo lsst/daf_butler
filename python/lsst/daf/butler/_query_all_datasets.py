@@ -60,7 +60,6 @@ def query_all_datasets(
     data_id: DataId | None = None,
     where: str = "",
     bind: Mapping[str, Any] | None = None,
-    with_dimension_records: bool = False,
     limit: int | None = None,
     order_by: Sequence[str] | None = None,
     **kwargs: Any,
@@ -100,9 +99,6 @@ def query_all_datasets(
         of collection type can be expanded in some cases; see
         :ref:`daf_butler_dimension_expressions_identifiers` for more
         information.
-    with_dimension_records : `bool`, optional
-        If `True` (default is `False`) then returned data IDs will have
-        dimension records.
     limit : `int` or `None`, optional
         Upper limit on the number of returned records. `None` can be used
         if no limit is wanted. A limit of ``0`` means that the query will
@@ -150,8 +146,6 @@ def query_all_datasets(
             .limit(limit)
             .order_by(*order_by)
         )
-        if with_dimension_records:
-            results = results.with_dimension_records()
 
         for page in results._iter_pages():
             if limit is not None:

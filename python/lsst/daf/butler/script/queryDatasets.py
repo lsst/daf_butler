@@ -283,7 +283,6 @@ class QueryDatasets:
                     collections=query_collections,
                     find_first=self._find_first,
                     name=self._dataset_type_glob,
-                    with_dimension_records=True,
                     where=self._where,
                     limit=limit,
                     order_by=self._order_by,
