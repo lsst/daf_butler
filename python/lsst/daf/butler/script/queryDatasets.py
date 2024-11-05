@@ -263,6 +263,7 @@ class QueryDatasets:
         query_collections = self._collections_wildcard or ["*"]
 
         warn_limit = False
+        limit_reached = False
         if self._limit < 0:
             # Negative limit means we should warn if the limit is exceeded.
             warn_limit = True
@@ -290,12 +291,8 @@ class QueryDatasets:
                 if warn_limit and limit is not None and datasets_found >= limit:
                     # We asked for one too many so must remove that from
                     # the list.
-                    refs.pop(-1)
-                    _LOG.warning(
-                        "Requested limit of %d hit for number of datasets returned. "
-                        "Use --limit to increase this limit.",
-                        limit,
-                    )
+                    refs = refs[0:-1]
+                    limit_reached = True
 
                 yield refs
 
@@ -303,3 +300,10 @@ class QueryDatasets:
         except MissingDatasetTypeError as e:
             _LOG.info(str(e))
             return
+
+        if limit is not None and limit_reached:
+            _LOG.warning(
+                "Requested limit of %d hit for number of datasets returned. "
+                "Use --limit to increase this limit.",
+                limit - 1,
+            )

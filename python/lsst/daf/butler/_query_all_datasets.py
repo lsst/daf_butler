@@ -150,13 +150,14 @@ def query_all_datasets(
             **kwargs,
         )
 
+        # Track how much of the limit has been used up by each query.
+        if limit is not None:
+            limit -= len(results)
+
         yield DatasetsPage(dataset_type=dt, data=results)
 
-        if limit is not None:
-            # Track how much of the limit has been used up by each query.
-            limit -= len(results)
-            if limit <= 0:
-                break
+        if limit is not None and limit <= 0:
+            break
 
 
 def _filter_collections_and_dataset_types(
