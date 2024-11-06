@@ -31,8 +31,8 @@ __all__ = ("query_router",)
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from contextlib import contextmanager
-from typing import NamedTuple
+from contextlib import AbstractContextManager, contextmanager
+from typing import NamedTuple, Protocol, TypeVar
 
 from fastapi import APIRouter, Depends
 from fastapi.concurrency import contextmanager_in_threadpool, iterate_in_threadpool
@@ -53,7 +53,7 @@ from lsst.daf.butler.remote_butler.server_models import (
 )
 
 from ...._exceptions import ButlerUserError
-from ....queries.driver import QueryDriver, QueryTree, ResultSpec
+from ....queries.driver import QueryDriver, QueryTree
 from ..._errors import serialize_butler_user_error
 from .._dependencies import factory_dependency
 from .._factory import Factory
@@ -64,16 +64,60 @@ query_router = APIRouter()
 # Alias this function so we can mock it during unit tests.
 _timeout = asyncio.timeout
 
+_TContext = TypeVar("_TContext")
+
+
+class StreamingQuery(Protocol[_TContext]):
+    """Interface for queries that can return streaming results."""
+
+    def setup(self) -> AbstractContextManager[_TContext]:
+        """Context manager that sets up any resources used to execute the
+        query.
+        """
+
+    def execute(self, context: _TContext) -> Iterator[QueryExecuteResultData]:
+        """Execute the database query and and return pages of results.
+
+        Parameters
+        ----------
+        context : generic
+            Value returned by the call to ``setup()``.
+        """
+
+
+class _StreamQueryDriverExecute(StreamingQuery):
+    """Wrapper to call `QueryDriver.execute` from async stream handler."""
+
+    def __init__(self, request: QueryExecuteRequestModel, factory: Factory) -> None:
+        self._request = request
+        self._factory = factory
+
+    @contextmanager
+    def setup(self) -> Iterator[_QueryContext]:
+        with _get_query_context(self._factory, self._request.query) as context:
+            yield context
+
+    def execute(self, ctx: _QueryContext) -> Iterator[QueryExecuteResultData]:
+        spec = self._request.result_spec.to_result_spec(ctx.driver.universe)
+        pages = ctx.driver.execute(spec, ctx.tree)
+        for page in pages:
+            yield convert_query_page(spec, page)
+
 
 @query_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
 async def query_execute(
     request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
 ) -> StreamingResponse:
+    query = _StreamQueryDriverExecute(request, factory)
+    return _execute_streaming_query(query)
+
+
+def _execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
     # We write the response incrementally, one page at a time, as
     # newline-separated chunks of JSON.  This allows clients to start
     # reading results earlier and prevents the server from exhausting
     # all its memory buffering rows from large queries.
-    output_generator = _stream_query_pages(request, factory)
+    output_generator = _stream_query_pages(query)
     return StreamingResponse(
         output_generator,
         media_type="application/jsonlines",
@@ -85,7 +129,7 @@ async def query_execute(
     )
 
 
-async def _stream_query_pages(request: QueryExecuteRequestModel, factory: Factory) -> AsyncIterator[str]:
+async def _stream_query_pages(query: StreamingQuery) -> AsyncIterator[str]:
     """Stream the query output with one page object per line, as
     newline-delimited JSON records in the "JSON Lines" format
     (https://jsonlines.org/).
@@ -98,7 +142,7 @@ async def _stream_query_pages(request: QueryExecuteRequestModel, factory: Factor
     async with asyncio.TaskGroup() as tg:
         # Run a background task to read from the DB and insert the result pages
         # into a queue.
-        tg.create_task(_enqueue_query_pages(queue, request, factory))
+        tg.create_task(_enqueue_query_pages(queue, query))
         # Read the result pages from the queue and send them to the client,
         # inserting a keep-alive message every 15 seconds if we are waiting a
         # long time for the database.
@@ -107,15 +151,14 @@ async def _stream_query_pages(request: QueryExecuteRequestModel, factory: Factor
 
 
 async def _enqueue_query_pages(
-    queue: asyncio.Queue[QueryExecuteResultData | None], request: QueryExecuteRequestModel, factory: Factory
+    queue: asyncio.Queue[QueryExecuteResultData | None], query: StreamingQuery
 ) -> None:
     """Set up a QueryDriver to run the query, and copy the results into a
     queue.  Send `None` to the queue when there is no more data to read.
     """
     try:
-        async with contextmanager_in_threadpool(_get_query_context(factory, request.query)) as ctx:
-            spec = request.result_spec.to_result_spec(ctx.driver.universe)
-            async for page in iterate_in_threadpool(_retrieve_query_pages(ctx, spec)):
+        async with contextmanager_in_threadpool(query.setup()) as ctx:
+            async for page in iterate_in_threadpool(query.execute(ctx)):
                 await queue.put(page)
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
@@ -124,13 +167,6 @@ async def _enqueue_query_pages(
 
     # Signal that there is no more data to read.
     await queue.put(None)
-
-
-def _retrieve_query_pages(ctx: _QueryContext, spec: ResultSpec) -> Iterator[QueryExecuteResultData]:
-    """Execute the database query and and return pages of results."""
-    pages = ctx.driver.execute(spec, ctx.tree)
-    for page in pages:
-        yield convert_query_page(spec, page)
 
 
 async def _dequeue_query_pages_with_keepalive(
