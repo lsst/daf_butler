@@ -86,8 +86,12 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
         for term in spec.order_by:
             term.gather_required_columns(order_by_columns)
         if not (order_by_columns.dimensions <= spec.dimensions):
+            allowed_columns = spec.dimensions.names
+            invalid_columns = order_by_columns.dimensions.names - allowed_columns
             raise InvalidQueryError(
-                "Order-by expression may not reference columns that are not in the result dimensions."
+                "Order-by expression may not reference columns that are not in the result dimensions.\n"
+                f"Invalid columns: {invalid_columns}\n"
+                f"Available columns: {allowed_columns}"
             )
         for dataset_type in order_by_columns.dataset_fields.keys():
             if dataset_type not in tree.datasets:
