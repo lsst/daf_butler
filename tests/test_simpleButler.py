@@ -48,6 +48,7 @@ from lsst.daf.butler import (
     DatasetId,
     DatasetRef,
     DatasetType,
+    LabeledButlerFactory,
     StorageClass,
     Timespan,
 )
@@ -907,6 +908,9 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
             index_file.write(f"{label}: {config_dir}\n")
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
+                butler_factory = LabeledButlerFactory()
+                factory = butler_factory.bind(access_token=None)
+
                 for dataset_uri in (
                     f"ivo://rubin/{config_dir}/{ref.id}",
                     f"ivo://rubin/{config_dir}/butler.yaml/{ref.id}",
@@ -914,6 +918,9 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     f"ivo://rubin/{label}/{ref.id}",
                 ):
                     ref2 = Butler.get_dataset_from_uri(dataset_uri)
+                    self.assertEqual(ref, ref2)
+
+                    ref2 = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
                     self.assertEqual(ref, ref2)
 
                 # Non existent dataset.

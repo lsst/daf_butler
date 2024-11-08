@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from ._dataset_type import DatasetType
     from ._deferredDatasetHandle import DeferredDatasetHandle
     from ._file_dataset import FileDataset
+    from ._labeled_butler_factory import LabeledButlerFactoryProtocol
     from ._storage_class import StorageClass
     from ._timespan import Timespan
     from .datastore import DatasetRefURIs
@@ -583,27 +584,35 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         return label, dataset_id
 
     @classmethod
-    def get_dataset_from_uri(cls, uri: str) -> DatasetRef | None:
+    def get_dataset_from_uri(
+        cls, uri: str, factory: LabeledButlerFactoryProtocol | None = None
+    ) -> DatasetRef | None:
         """Get the dataset associated with the given dataset URI.
 
         Parameters
         ----------
         uri : `str`
             The URI associated with a dataset.
+        factory : `LabeledButlerFactoryProtocol` or `None`, optional
+            Bound factory function that will be given the butler label
+            and receive a `Butler`.
 
         Returns
         -------
         ref : `DatasetRef` or `None`
             The dataset associated with that URI, or `None` if the UUID
             is valid but the dataset is not known to this butler.
-
-        Notes
-        -----
-        It might be possible to pass in an optional ``LabeledButlerFactory``
-        but how would a caller know the right access token to supply?
         """
         label, dataset_id = cls.parse_dataset_uri(uri)
-        butler = cls.from_config(label)
+        butler: Butler | None = None
+        if factory is not None:
+            # If the label is not recognized, it might be a path.
+            try:
+                butler = factory(label)
+            except KeyError:
+                pass
+        if butler is None:
+            butler = cls.from_config(label)
         return butler.get_dataset(dataset_id)
 
     @abstractmethod

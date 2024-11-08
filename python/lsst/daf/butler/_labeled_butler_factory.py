@@ -25,9 +25,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("LabeledButlerFactory",)
+__all__ = ("LabeledButlerFactory", "LabeledButlerFactoryProtocol")
 
 from collections.abc import Callable, Mapping
+from typing import Protocol
 
 from lsst.resources import ResourcePathExpression
 
@@ -40,6 +41,12 @@ from ._utilities.thread_safe_cache import ThreadSafeCache
 _FactoryFunction = Callable[[str | None], Butler]
 """Function that takes an access token string or `None`, and returns a Butler
 instance."""
+
+
+class LabeledButlerFactoryProtocol(Protocol):
+    """Callable to retrieve a butler from a label."""
+
+    def __call__(self, label: str) -> Butler: ...
 
 
 class LabeledButlerFactory:
@@ -82,6 +89,12 @@ class LabeledButlerFactory:
 
         # This may be overridden by unit tests.
         self._preload_direct_butler_cache = True
+
+    def bind(self, access_token: str | None) -> LabeledButlerFactoryProtocol:
+        def create(label: str) -> Butler:
+            return self.create_butler(label=label, access_token=access_token)
+
+        return create
 
     def create_butler(self, *, label: str, access_token: str | None) -> Butler:
         """Create a Butler instance.
