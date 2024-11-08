@@ -30,14 +30,15 @@ import logging
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
+from .._exceptions import MissingDatasetTypeError
+from .._query_all_datasets import query_all_datasets
 from ..cli.utils import sortAstropyTable
-from ..utils import has_globs
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -201,6 +202,7 @@ class QueryDatasets:
                 FutureWarning,
                 stacklevel=2,
             )
+            glob = ["*"]
 
         # show_uri requires a datastore.
         without_datastore = not show_uri
@@ -258,83 +260,50 @@ class QueryDatasets:
             Dataset references matching the given query criteria grouped
             by dataset type.
         """
-        datasetTypes = self._dataset_type_glob
-        query_collections: Iterable[str] = self._collections_wildcard or ["*"]
+        query_collections = self._collections_wildcard or ["*"]
 
-        # Currently need to use old interface to get all the matching
-        # dataset types and loop over the dataset types executing a new
-        # query each time.
-        dataset_types = set(self.butler.registry.queryDatasetTypes(datasetTypes or ...))
-        n_dataset_types = len(dataset_types)
-        if n_dataset_types == 0:
-            _LOG.info("The given dataset type, %s, is not known to this butler.", datasetTypes)
-            return
-
-        # Expand the collections query and include summary information.
-        query_collections_info = self.butler.collections.query_info(
-            query_collections,
-            include_summary=True,
-            flatten_chains=True,
-            include_chains=False,
-            summary_datasets=dataset_types,
-        )
-        expanded_query_collections = [c.name for c in query_collections_info]
-        if self._find_first and has_globs(query_collections):
-            raise RuntimeError("Can not use wildcards in collections when find_first=True")
-        query_collections = expanded_query_collections
-
-        # Only iterate over dataset types that are relevant for the query.
-        dataset_type_names = {dataset_type.name for dataset_type in dataset_types}
-        dataset_type_collections = self.butler.collections._group_by_dataset_type(
-            dataset_type_names, query_collections_info
-        )
-
-        if (n_filtered := len(dataset_type_collections)) != n_dataset_types:
-            _LOG.info("Filtered %d dataset types down to %d", n_dataset_types, n_filtered)
-        else:
-            _LOG.info("Processing %d dataset type%s", n_dataset_types, "" if n_dataset_types == 1 else "s")
-
-        # Accumulate over dataset types.
-        limit = self._limit
         warn_limit = False
-        unlimited = True if limit == 0 else False
-        if limit < 0:
-            # Must track this limit in the loop rather than relying on
-            # butler.query_datasets() because this loop knows there are more
-            # possible dataset types to query.
+        limit_reached = False
+        if self._limit < 0:
+            # Negative limit means we should warn if the limit is exceeded.
             warn_limit = True
-            limit = abs(limit) + 1  # +1 to tell us we hit the limit.
-        for dt, collections in sorted(dataset_type_collections.items()):
-            kwargs: dict[str, Any] = {}
-            if self._where:
-                kwargs["where"] = self._where
-            # API uses 0 to mean "check query but return nothing" and None
-            # to mean "unlimited".
-            kwargs["limit"] = None if unlimited else limit
-            _LOG.debug("Querying dataset type %s with %s", dt, kwargs)
-            results = self.butler.query_datasets(
-                dt,
-                collections=collections,
+            limit = abs(self._limit) + 1  # +1 to tell us we hit the limit.
+        elif self._limit == 0:
+            # 0 means 'unlimited' in the CLI.
+            limit = None
+        else:
+            limit = self._limit
+
+        try:
+            pages = query_all_datasets(
+                self.butler,
+                collections=query_collections,
                 find_first=self._find_first,
+                name=self._dataset_type_glob,
                 with_dimension_records=True,
+                where=self._where,
+                limit=limit,
                 order_by=self._order_by,
-                explain=False,
-                **kwargs,
             )
-            if not unlimited:
-                limit -= len(results)
-                if warn_limit and limit == 0 and results:
+            datasets_found = 0
+            for dataset_type, refs in pages:
+                datasets_found += len(refs)
+                if warn_limit and limit is not None and datasets_found >= limit:
                     # We asked for one too many so must remove that from
                     # the list.
-                    results.pop(-1)
-            _LOG.debug("Got %d results for dataset type %s", len(results), dt)
-            yield results
+                    refs = refs[0:-1]
+                    limit_reached = True
 
-            if not unlimited and limit == 0:
-                if warn_limit:
-                    _LOG.warning(
-                        "Requested limit of %d hit for number of datasets returned. "
-                        "Use --limit to increase this limit.",
-                        self._limit,
-                    )
-                break
+                yield refs
+
+                _LOG.debug("Got %d results for dataset type %s", len(refs), dataset_type)
+        except MissingDatasetTypeError as e:
+            _LOG.info(str(e))
+            return
+
+        if limit is not None and limit_reached:
+            _LOG.warning(
+                "Requested limit of %d hit for number of datasets returned. "
+                "Use --limit to increase this limit.",
+                limit - 1,
+            )

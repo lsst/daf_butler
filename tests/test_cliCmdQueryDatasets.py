@@ -32,7 +32,7 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
-from lsst.daf.butler import CollectionType, StorageClassFactory, script
+from lsst.daf.butler import CollectionType, InvalidQueryError, StorageClassFactory, script
 from lsst.daf.butler.tests import addDatasetType
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from lsst.resources import ResourcePath
@@ -287,7 +287,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(InvalidQueryError):
             self._queryDatasets(repo=testRepo.butler, collections="*", find_first=True, glob="*")
 
     def testGlobDatasetType(self):
@@ -355,6 +355,14 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=("type", "run", "instrument", "visit", "band", "physical_filter"),
             ),
         ]
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
+
+        # Same as previous test, but with positive limit so no warning is
+        # issued.
+        with self.assertNoLogs("lsst.daf.butler.script.queryDatasets", level="WARNING"):
+            tables = self._queryDatasets(
+                repo=testRepo.butler, limit=1, order_by=("visit"), collections="*", glob="*"
+            )
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
@@ -630,7 +638,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         # Verify that globs are not supported with find_first=True.
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(InvalidQueryError):
             self._queryDatasets(
                 repo=testRepo.butler, collections=["*"], show_uri=True, find_first=True, glob="*"
             )
