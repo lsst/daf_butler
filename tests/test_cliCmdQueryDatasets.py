@@ -359,9 +359,10 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         # Same as previous test, but with positive limit so no warning is
         # issued.
-        tables = self._queryDatasets(
-            repo=testRepo.butler, limit=1, order_by=("visit"), collections="*", glob="*"
-        )
+        with self.assertNoLogs("lsst.daf.butler.script.queryDatasets", level="WARNING"):
+            tables = self._queryDatasets(
+                repo=testRepo.butler, limit=1, order_by=("visit"), collections="*", glob="*"
+            )
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
