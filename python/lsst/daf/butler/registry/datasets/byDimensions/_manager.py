@@ -1666,6 +1666,6 @@ def _create_case_expression_for_collections(
         # cases, e.g.  we start with a list of valid collections but they are
         # all filtered out by higher-level code on the basis of collection
         # summaries.
-        return sqlalchemy.null()
+        return sqlalchemy.cast(sqlalchemy.null(), sqlalchemy.String)
 
     return sqlalchemy.case(mapping, value=id_column)
