@@ -231,7 +231,7 @@ class SqlSelectBuilder:
                 self.select(postprocessing).cte() if cte else self.select(postprocessing).subquery()
             )
             return SqlJoinsBuilder(db=self.joins.db, from_clause=sql_from_clause).extract_columns(
-                self.columns, special=self.joins.special.keys()
+                self.columns, postprocessing, special=self.joins.special.keys()
             )
         return self.joins
 
