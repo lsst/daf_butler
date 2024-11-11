@@ -1334,6 +1334,43 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             _ = list(m_query.datasets("skyMap", collections))
             _ = list(m_query.datasets("calexp", collections))
 
+    def test_materialization_no_results(self) -> None:
+        """Test querying for datasets when materialized table is empty."""
+        butler = self.make_butler("ci_hsc-subset.yaml", "ci_hsc-subset-skymap.yaml")
+
+        run = "HSC/runs/ci_hsc/20240806T180642Z"
+
+        # Register a dataset type but do not add any datasets.
+        butler.registry.registerDatasetType(
+            DatasetType("nothing", ["visit", "detector"], "int", universe=butler.dimensions)
+        )
+
+        collections = [run]
+        with butler.query() as query:
+            query = query.join_dimensions(
+                [
+                    "instrument",
+                    "physical_filter",
+                    "band",
+                    "visit",
+                    "detector",
+                    "day_obs",
+                    "skymap",
+                    "tract",
+                ]
+            )
+            query = query.join_dataset_search("calexp", collections)
+            query = query.join_dataset_search("nothing", collections)
+            query = query.where({}, "instrument='HSC' AND skymap='discrete/ci_hsc'", bind=None)
+            no_results = "\n".join(query.explain_no_results())
+            self.assertIn("No datasets of type 'nothing'", no_results)
+
+            m_query = query.materialize()
+            result = m_query.datasets("nothing")
+            self.assertFalse(result.any())
+            no_results = "\n".join(result.explain_no_results())
+            self.assertIn("No datasets of type 'nothing'", no_results)
+
     def test_timespan_results(self) -> None:
         """Test returning dimension records that include timespans."""
         butler = self.make_butler("base.yaml", "spatial.yaml")

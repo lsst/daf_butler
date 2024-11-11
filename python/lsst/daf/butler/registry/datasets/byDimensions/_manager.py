@@ -1635,7 +1635,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
 def _create_case_expression_for_collections(
     collections: Iterable[CollectionRecord], id_column: sqlalchemy.ColumnElement
-) -> sqlalchemy.Case | sqlalchemy.Null:
+) -> sqlalchemy.ColumnElement:
     """Return a SQLAlchemy Case expression that converts collection IDs to
     collection names for the given set of collections.
 
@@ -1661,6 +1661,6 @@ def _create_case_expression_for_collections(
         # cases, e.g.  we start with a list of valid collections but they are
         # all filtered out by higher-level code on the basis of collection
         # summaries.
-        return sqlalchemy.null()
+        return sqlalchemy.cast(sqlalchemy.null(), sqlalchemy.String)
 
     return sqlalchemy.case(mapping, value=id_column)
