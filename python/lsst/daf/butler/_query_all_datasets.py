@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections.abc import Iterable, Iterator, Mapping
 from typing import Any, NamedTuple
@@ -36,7 +37,7 @@ from lsst.utils.iteration import ensure_iterable
 from ._butler import Butler
 from ._dataset_ref import DatasetRef
 from ._exceptions import InvalidQueryError, MissingDatasetTypeError
-from .dimensions import DataId
+from .dimensions import DataId, DataIdValue
 from .queries import Query
 from .utils import has_globs
 
@@ -50,18 +51,32 @@ class DatasetsPage(NamedTuple):
     data: list[DatasetRef]
 
 
+@dataclasses.dataclass(frozen=True)
+class QueryAllDatasetsParameters:
+    """These are the parameters passed to `Butler.query_all_datasets` and have
+    the same meaning as that function unless noted below.
+    """
+
+    collections: list[str]
+    name: str | Iterable[str]
+    find_first: bool
+    data_id: DataId | None
+    where: str
+    bind: Mapping[str, Any] | None
+    limit: int | None
+    """
+    Upper limit on the number of returned records. `None` can be used
+    if no limit is wanted. A limit of ``0`` means that the query will
+    be executed and validated but no results will be returned.
+
+    (This cannot be negative, contrary to the `Butler.query_all_datasets`
+    equivalent.)
+    """
+    kwargs: dict[str, DataIdValue] = dataclasses.field(default_factory=dict)
+
+
 def query_all_datasets(
-    butler: Butler,
-    query: Query,
-    *,
-    collections: list[str],
-    name: str | Iterable[str] = "*",
-    find_first: bool = True,
-    data_id: DataId | None = None,
-    where: str = "",
-    bind: Mapping[str, Any] | None = None,
-    limit: int | None = None,
-    **kwargs: Any,
+    butler: Butler, query: Query, args: QueryAllDatasetsParameters
 ) -> Iterator[DatasetsPage]:
     """Query for dataset refs from multiple types simultaneously.
 
@@ -71,42 +86,8 @@ def query_all_datasets(
         Butler instance to use for executing queries.
     query : `Query`
         Query context object to use for executing queries.
-    collections :  `list` [ `str` ]
-        The collections to search, in order.  If not provided
-        or `None`, the default collection search path for this butler is
-        used.
-    name : `str` or `~collections.abc.Iterable` [ `str` ], optional
-        Names or name patterns (glob-style) that returned dataset type
-        names must match.  If an iterable, items are OR'd together.  The
-        default is to include all dataset types in the given collections.
-    find_first : `bool`, optional
-        If `True` (default), for each result data ID, only yield one
-        `DatasetRef` of each `DatasetType`, from the first collection in
-        which a dataset of that dataset type appears (according to the
-        order of ``collections`` passed in).
-    data_id : `dict` or `DataCoordinate`, optional
-        A data ID whose key-value pairs are used as equality constraints in
-        the query.
-    where : `str`, optional
-        A string expression similar to a SQL WHERE clause.  May involve any
-        column of a dimension table or (as a shortcut for the primary key
-        column of a dimension table) dimension name.  See
-        :ref:`daf_butler_dimension_expressions` for more information.
-    bind : `~collections.abc.Mapping`, optional
-        Mapping containing literal values that should be injected into the
-        ``where`` expression, keyed by the identifiers they replace. Values
-        of collection type can be expanded in some cases; see
-        :ref:`daf_butler_dimension_expressions_identifiers` for more
-        information.
-    limit : `int` or `None`, optional
-        Upper limit on the number of returned records. `None` can be used
-        if no limit is wanted. A limit of ``0`` means that the query will
-        be executed and validated but no results will be returned.
-    **kwargs
-        Additional keyword arguments are forwarded to
-        `DataCoordinate.standardize` when processing the ``data_id``
-        argument (and may be used to provide a constraining data ID even
-        when the ``data_id`` argument is `None`).
+    args : `QueryAllDatasetsParameters`
+        Arguments describing the query to be performed.
 
     Raises
     ------
@@ -115,6 +96,8 @@ def query_all_datasets(
         dataset type in ``name`` does not exist.
     InvalidQueryError
         If the parameters to the query are inconsistent or malformed.
+    MissingCollectionError
+        If a given collection is not found.
 
     Returns
     -------
@@ -122,19 +105,23 @@ def query_all_datasets(
         `DatasetRef` results matching the given query criteria, grouped by
         dataset type.
     """
-    if find_first and has_globs(collections):
+    if args.find_first and has_globs(args.collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
+    data_id = args.data_id
     if data_id is None:
         data_id = {}
 
-    dataset_type_query = list(ensure_iterable(name))
-    dataset_type_collections = _filter_collections_and_dataset_types(butler, collections, dataset_type_query)
+    dataset_type_query = list(ensure_iterable(args.name))
+    dataset_type_collections = _filter_collections_and_dataset_types(
+        butler, args.collections, dataset_type_query
+    )
 
+    limit = args.limit
     for dt, filtered_collections in sorted(dataset_type_collections.items()):
         _LOG.debug("Querying dataset type %s", dt)
         results = (
-            query.datasets(dt, filtered_collections, find_first=find_first)
-            .where(data_id, where, kwargs, bind=bind)
+            query.datasets(dt, filtered_collections, find_first=args.find_first)
+            .where(data_id, args.where, args.kwargs, bind=args.bind)
             .limit(limit)
         )
 

@@ -1946,7 +1946,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             include dimension records (`DataCoordinate.hasRecords` will be
             `False`).
         """
-        from ._query_all_datasets import query_all_datasets
+        from ._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
 
         if collections is None:
             collections = list(self.collections.defaults)
@@ -1961,9 +1961,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         result = []
         with self.query() as query:
-            for page in query_all_datasets(
-                self,
-                query,
+            args = QueryAllDatasetsParameters(
                 collections=collections,
                 name=name,
                 find_first=find_first,
@@ -1971,8 +1969,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 where=where,
                 limit=limit,
                 bind=bind,
-                **kwargs,
-            ):
+                kwargs=kwargs,
+            )
+            for page in query_all_datasets(self, query, args):
                 result.extend(page.data)
 
         if warn_limit and limit is not None and len(result) >= limit:

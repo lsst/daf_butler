@@ -39,7 +39,7 @@ from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
 from .._exceptions import MissingDatasetTypeError
-from .._query_all_datasets import DatasetsPage, query_all_datasets
+from .._query_all_datasets import DatasetsPage, QueryAllDatasetsParameters, query_all_datasets
 from ..cli.utils import sortAstropyTable
 from ..utils import has_globs
 
@@ -321,15 +321,16 @@ class QueryDatasets:
         self, collections: list[str], limit: int | None
     ) -> Iterator[Iterator[DatasetsPage]]:
         with self.butler.query() as query:
-            yield query_all_datasets(
-                self.butler,
-                query,
+            args = QueryAllDatasetsParameters(
                 collections=collections,
                 find_first=self._find_first,
                 name=self._dataset_type_glob,
                 where=self._where,
                 limit=limit,
+                data_id=None,
+                bind=None,
             )
+            yield query_all_datasets(self.butler, query, args)
 
     @contextmanager
     def _query_single_dataset_type(
