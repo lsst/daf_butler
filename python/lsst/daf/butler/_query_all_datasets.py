@@ -29,17 +29,20 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from collections.abc import Iterable, Iterator, Mapping
-from typing import Any, NamedTuple
+from collections.abc import Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from lsst.utils.iteration import ensure_iterable
 
-from ._butler import Butler
 from ._dataset_ref import DatasetRef
 from ._exceptions import InvalidQueryError, MissingDatasetTypeError
 from .dimensions import DataId, DataIdValue
 from .queries import Query
 from .utils import has_globs
+
+if TYPE_CHECKING:
+    from ._butler import Butler
+
 
 _LOG = logging.getLogger(__name__)
 
@@ -57,12 +60,12 @@ class QueryAllDatasetsParameters:
     the same meaning as that function unless noted below.
     """
 
-    collections: list[str]
-    name: str | Iterable[str]
+    collections: Sequence[str]
+    name: Sequence[str]
     find_first: bool
-    data_id: DataId | None
+    data_id: DataId
     where: str
-    bind: Mapping[str, Any] | None
+    bind: Mapping[str, Any]
     limit: int | None
     """
     Upper limit on the number of returned records. `None` can be used
@@ -107,9 +110,6 @@ def query_all_datasets(
     """
     if args.find_first and has_globs(args.collections):
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
-    data_id = args.data_id
-    if data_id is None:
-        data_id = {}
 
     dataset_type_query = list(ensure_iterable(args.name))
     dataset_type_collections = _filter_collections_and_dataset_types(
@@ -121,7 +121,7 @@ def query_all_datasets(
         _LOG.debug("Querying dataset type %s", dt)
         results = (
             query.datasets(dt, filtered_collections, find_first=args.find_first)
-            .where(data_id, args.where, args.kwargs, bind=args.bind)
+            .where(args.data_id, args.where, args.kwargs, bind=args.bind)
             .limit(limit)
         )
 
@@ -137,7 +137,7 @@ def query_all_datasets(
 
 
 def _filter_collections_and_dataset_types(
-    butler: Butler, collections: list[str], dataset_type_query: list[str]
+    butler: Butler, collections: Sequence[str], dataset_type_query: Sequence[str]
 ) -> Mapping[str, list[str]]:
     """For each dataset type matching the query, filter down the given
     collections to only those that might actually contain datasets of the given

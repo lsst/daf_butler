@@ -327,8 +327,8 @@ class QueryDatasets:
                 name=self._dataset_type_glob,
                 where=self._where,
                 limit=limit,
-                data_id=None,
-                bind=None,
+                data_id={},
+                bind={},
             )
             yield query_all_datasets(self.butler, query, args)
 

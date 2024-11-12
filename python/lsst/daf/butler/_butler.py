@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ["Butler"]
 
 from abc import abstractmethod
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO
@@ -47,6 +47,7 @@ from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._exceptions import EmptyQueryResultError, InvalidQueryError
 from ._limited_butler import LimitedButler
+from ._query_all_datasets import QueryAllDatasetsParameters
 from .datastore import Datastore
 from .dimensions import DataCoordinate, DimensionConfig
 from .registry import RegistryConfig, _RegistryFactory
@@ -1946,12 +1947,15 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             include dimension records (`DataCoordinate.hasRecords` will be
             `False`).
         """
-        from ._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
-
         if collections is None:
             collections = list(self.collections.defaults)
         else:
             collections = list(ensure_iterable(collections))
+
+        if bind is None:
+            bind = {}
+        if data_id is None:
+            data_id = {}
 
         warn_limit = False
         if limit is not None and limit < 0:
@@ -1959,20 +1963,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             limit = abs(limit) + 1
             warn_limit = True
 
-        result = []
-        with self.query() as query:
-            args = QueryAllDatasetsParameters(
-                collections=collections,
-                name=name,
-                find_first=find_first,
-                data_id=data_id,
-                where=where,
-                limit=limit,
-                bind=bind,
-                kwargs=kwargs,
-            )
-            for page in query_all_datasets(self, query, args):
-                result.extend(page.data)
+        args = QueryAllDatasetsParameters(
+            collections=collections,
+            name=list(ensure_iterable(name)),
+            find_first=find_first,
+            data_id=data_id,
+            where=where,
+            limit=limit,
+            bind=bind,
+            kwargs=kwargs,
+        )
+        with self._query_all_datasets_by_page(args) as pages:
+            result = []
+            for page in pages:
+                result.extend(page)
 
         if warn_limit and limit is not None and len(result) >= limit:
             # Remove the extra dataset we added for the limit check.
@@ -1980,6 +1984,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             _LOG.warning("More datasets are available than the requested limit of %d.", limit - 1)
 
         return result
+
+    @abstractmethod
+    def _query_all_datasets_by_page(
+        self, args: QueryAllDatasetsParameters
+    ) -> AbstractContextManager[Iterator[list[DatasetRef]]]:
+        raise NotImplementedError()
 
     def clone(
         self,

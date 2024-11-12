@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from lsst.daf.butler.remote_butler.server.handlers._utils import set_default_data_id
+
 __all__ = ()
 
 import uuid
@@ -55,8 +57,6 @@ from lsst.daf.butler.remote_butler.server_models import (
 )
 
 from ...._exceptions import DatasetNotFoundError
-from ....dimensions import DataCoordinate, SerializedDataId
-from ....registry import RegistryDefaults
 from .._dependencies import factory_dependency
 from .._factory import Factory
 
@@ -134,7 +134,7 @@ def find_dataset(
     factory: Factory = Depends(factory_dependency),
 ) -> FindDatasetResponseModel:
     butler = factory.create_butler()
-    _set_default_data_id(butler, query.default_data_id)
+    set_default_data_id(butler, query.default_data_id)
     ref = butler.find_dataset(
         query.dataset_type,
         query.data_id,
@@ -182,7 +182,7 @@ def get_file_by_data_id(
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
-    _set_default_data_id(butler, request.default_data_id)
+    set_default_data_id(butler, request.default_data_id)
     ref = butler._findDatasetRef(
         datasetRefOrType=request.dataset_type,
         dataId=request.data_id,
@@ -284,11 +284,4 @@ def query_dataset_types(
     dataset_types = butler.registry.queryDatasetTypes(expression=request.search, missing=missing)
     return QueryDatasetTypesResponseModel(
         dataset_types=[dt.to_simple() for dt in dataset_types], missing=missing
-    )
-
-
-def _set_default_data_id(butler: Butler, data_id: SerializedDataId) -> None:
-    """Set the default data ID values used for lookups in the given Butler."""
-    butler.registry.defaults = RegistryDefaults.from_data_id(
-        DataCoordinate.standardize(data_id, universe=butler.dimensions)
     )
