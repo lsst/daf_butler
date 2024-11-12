@@ -117,6 +117,7 @@ class _StreamQueryAllDatasets(StreamingQuery):
             where=request.where,
             bind=bind,
             limit=request.limit,
+            with_dimension_records=request.with_dimension_records,
         )
         pages = query_all_datasets(ctx.butler, ctx.query, args)
         for page in pages:

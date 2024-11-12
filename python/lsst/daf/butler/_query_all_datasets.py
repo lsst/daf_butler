@@ -75,6 +75,7 @@ class QueryAllDatasetsParameters:
     (This cannot be negative, contrary to the `Butler.query_all_datasets`
     equivalent.)
     """
+    with_dimension_records: bool
     kwargs: dict[str, DataIdValue] = dataclasses.field(default_factory=dict)
 
 
@@ -124,6 +125,8 @@ def query_all_datasets(
             .where(args.data_id, args.where, args.kwargs, bind=args.bind)
             .limit(limit)
         )
+        if args.with_dimension_records:
+            results = results.with_dimension_records()
 
         for page in results._iter_pages():
             if limit is not None:

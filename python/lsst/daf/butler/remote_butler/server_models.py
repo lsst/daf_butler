@@ -409,3 +409,4 @@ class QueryAllDatasetsRequestModel(pydantic.BaseModel):
     where: str
     bind: dict[str, ColumnLiteral]
     limit: int | None
+    with_dimension_records: bool

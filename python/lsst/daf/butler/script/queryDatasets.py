@@ -174,6 +174,9 @@ class QueryDatasets:
     butler : `lsst.daf.butler.Butler` or `None`
         The butler to use to query. One of `repo` and `butler` must be `None`
         and the other must not be `None`.
+    with_dimension_records : `bool`, optional
+        If `True` (default is `False`) then returned data IDs will have
+        dimension records.
     """
 
     def __init__(
@@ -187,6 +190,7 @@ class QueryDatasets:
         order_by: tuple[str, ...] = (),
         repo: str | None = None,
         butler: Butler | None = None,
+        with_dimension_records: bool = False,
     ):
         if (repo and butler) or (not repo and not butler):
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
@@ -222,6 +226,7 @@ class QueryDatasets:
         self._limit = limit
         self._order_by = order_by
         self._searches_multiple_dataset_types = searches_multiple_dataset_types
+        self._with_dimension_records = with_dimension_records
 
     def getTables(self) -> Iterator[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -329,6 +334,7 @@ class QueryDatasets:
                 limit=limit,
                 data_id={},
                 bind={},
+                with_dimension_records=self._with_dimension_records,
             )
             yield query_all_datasets(self.butler, query, args)
 
@@ -346,6 +352,7 @@ class QueryDatasets:
             where=self._where,
             limit=limit,
             order_by=self._order_by,
+            with_dimension_records=self._with_dimension_records,
         )
 
         yield iter([DatasetsPage(dataset_type=dataset_type, data=refs)])

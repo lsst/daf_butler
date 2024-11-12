@@ -1972,6 +1972,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             limit=limit,
             bind=bind,
             kwargs=kwargs,
+            with_dimension_records=False,
         )
         with self._query_all_datasets_by_page(args) as pages:
             result = []

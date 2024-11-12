@@ -647,6 +647,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             where=args.where,
             bind={k: make_column_literal(v) for k, v in args.bind.items()},
             limit=args.limit,
+            with_dimension_records=args.with_dimension_records,
         )
         with self._connection.post_with_stream_response("query/all_datasets", request) as response:
             pages = read_query_results(response)

@@ -100,6 +100,7 @@ def transferDatasets(
         limit=limit,
         order_by=order_by,
         show_uri=False,
+        with_dimension_records=True,
     )
     # Place results in a set to remove duplicates (which should not exist
     # in new query system)
