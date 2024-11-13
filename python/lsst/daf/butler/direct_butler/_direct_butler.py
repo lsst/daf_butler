@@ -46,7 +46,7 @@ import warnings
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, MutableMapping, Sequence
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -1557,8 +1557,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Ingest doesn't create the RUN collections so we have to do that
         # here.
+        #
+        # Sort by run collection name to ensure Postgres takes locks in the
+        # same order between different processes, to mitigate an issue
+        # where Postgres can deadlock due to the unique index on collection
+        # name. (See DM-47543).
         runs = {ref.run for ref in refs}
-        for run in runs:
+        for run in sorted(runs):
             registered = self.collections.register(run)
             if registered:
                 _LOG.verbose("Created RUN collection %s as part of zip ingest", run)
@@ -1967,9 +1972,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
         source_dataset_types = set()
-        grouped_refs = defaultdict(list)
+        grouped_refs: defaultdict[_RefGroup, list[DatasetRef]] = defaultdict(list)
         for ref in source_refs:
-            grouped_refs[ref.datasetType, ref.run].append(ref)
+            grouped_refs[_RefGroup(ref.datasetType.name, ref.run)].append(ref)
             source_dataset_types.add(ref.datasetType)
 
         # Check to see if the dataset type in the source butler has
@@ -2079,8 +2084,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     self._registry.insertDimensionData(element, *records, skip_existing=True)
 
             n_imported = 0
+
+            # Sort by run collection name to ensure Postgres takes locks in the
+            # same order between different processes, to mitigate an issue
+            # where Postgres can deadlock due to the unique index on collection
+            # name. (See DM-47543).
+            groups = sorted(grouped_refs.items(), key=lambda item: item[0].run)
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(
-                grouped_refs.items(), desc="Importing to registry by run and dataset type"
+                groups, desc="Importing to registry by run and dataset type"
             ):
                 if run not in handled_collections:
                     # May need to create output collection. If source butler
@@ -2101,7 +2112,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     "Importing %d ref%s of dataset type %s into run %s",
                     n_refs,
                     "" if n_refs == 1 else "s",
-                    datasetType.name,
+                    datasetType,
                     run,
                 )
 
@@ -2351,3 +2362,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     """Shim object to provide a legacy public interface for querying via the
     the ``registry`` property.
     """
+
+
+class _RefGroup(NamedTuple):
+    """Key identifying a batch of DatasetRefs to be inserted in
+    `Butler.transfer_from`.
+    """
+
+    dataset_type: str
+    run: str

@@ -390,8 +390,11 @@ class ButlerCollections(ABC, Sequence):
 
         Notes
         -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent
+        Avoid calling this method multiple times within a `Butler.transaction`.
+        If concurrent processes register the same collection names, they may
+        block each other until the end of the transaction and in some cases the
+        database will be required to abort one of the transactions to prevent
+        deadlock.
         """
         raise NotImplementedError()
 
