@@ -27,17 +27,19 @@
 
 from __future__ import annotations
 
-from lsst.daf.butler.remote_butler.server.handlers._utils import set_default_data_id
-
 __all__ = ()
 
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, CollectionType, DatasetRef
-from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
-from lsst.daf.butler.remote_butler.server_models import (
+
+from ...._butler import Butler
+from ...._collection_type import CollectionType
+from ...._dataset_ref import DatasetRef
+from ...._exceptions import DatasetNotFoundError
+from ....registry.interfaces import ChainedCollectionRecord
+from ...server_models import (
     ExpandDataIdRequestModel,
     ExpandDataIdResponseModel,
     FindDatasetRequestModel,
@@ -55,10 +57,9 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryDatasetTypesRequestModel,
     QueryDatasetTypesResponseModel,
 )
-
-from ...._exceptions import DatasetNotFoundError
 from .._dependencies import factory_dependency
 from .._factory import Factory
+from ._utils import set_default_data_id
 
 external_router = APIRouter()
 
