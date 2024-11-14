@@ -62,7 +62,12 @@ from ._utils import set_default_data_id
 query_router = APIRouter()
 
 
-class _StreamQueryDriverExecute(StreamingQuery):
+class _QueryContext(NamedTuple):
+    driver: QueryDriver
+    tree: QueryTree
+
+
+class _StreamQueryDriverExecute(StreamingQuery[_QueryContext]):
     """Wrapper to call `QueryDriver.execute` from async stream handler."""
 
     def __init__(self, request: QueryExecuteRequestModel, factory: Factory) -> None:
@@ -94,7 +99,7 @@ class _QueryAllDatasetsContext(NamedTuple):
     query: Query
 
 
-class _StreamQueryAllDatasets(StreamingQuery):
+class _StreamQueryAllDatasets(StreamingQuery[_QueryAllDatasetsContext]):
     def __init__(self, request: QueryAllDatasetsRequestModel, factory: Factory) -> None:
         self._request = request
         self._factory = factory
@@ -199,8 +204,3 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
                 ),
 
         yield _QueryContext(driver=driver, tree=tree)
-
-
-class _QueryContext(NamedTuple):
-    driver: QueryDriver
-    tree: QueryTree
