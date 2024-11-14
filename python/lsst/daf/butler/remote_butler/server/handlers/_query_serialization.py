@@ -69,7 +69,7 @@ def convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResult
             return DataCoordinateResultModel(rows=[coordinate.to_simple() for coordinate in page.rows])
         case "dataset_ref":
             assert isinstance(page, DatasetRefResultPage)
-            return DatasetRefResultModel(rows=[ref.to_simple() for ref in page.rows])
+            return DatasetRefResultModel.from_refs(page.rows)
         case "general":
             assert isinstance(page, GeneralResultPage)
             return _convert_general_result(page)

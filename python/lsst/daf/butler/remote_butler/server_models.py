@@ -37,7 +37,8 @@ __all__ = [
     "GetCollectionSummaryResponseModel",
 ]
 
-from typing import Annotated, Any, Literal, NewType, TypeAlias
+from collections.abc import Iterable
+from typing import Annotated, Any, Literal, NewType, Self, TypeAlias
 from uuid import UUID
 
 import pydantic
@@ -45,6 +46,7 @@ from lsst.daf.butler import (
     CollectionInfo,
     CollectionType,
     DataIdValue,
+    DatasetRef,
     SerializedDataCoordinate,
     SerializedDataId,
     SerializedDatasetRef,
@@ -57,7 +59,7 @@ from lsst.daf.butler.registry import SerializedCollectionSummary
 
 from ..dimensions import SerializedDimensionConfig, SerializedDimensionRecord
 from ..queries.result_specs import SerializedResultSpec
-from ..queries.tree import SerializedQueryTree
+from ..queries.tree import ColumnLiteral, SerializedQueryTree
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 ERROR_STATUS_CODE = 422
@@ -301,6 +303,10 @@ class DatasetRefResultModel(pydantic.BaseModel):
     type: Literal["dataset_ref"] = "dataset_ref"
     rows: list[SerializedDatasetRef]
 
+    @classmethod
+    def from_refs(cls, refs: Iterable[DatasetRef]) -> Self:
+        return cls(rows=[ref.to_simple() for ref in refs])
+
 
 class GeneralResultModel(pydantic.BaseModel):
     """Result model for /query/execute/ when user requested general results."""
@@ -387,3 +393,20 @@ class QueryExplainResponseModel(pydantic.BaseModel):
     """Response model for /query/explain/."""
 
     messages: list[str]
+
+
+class QueryAllDatasetsRequestModel(pydantic.BaseModel):
+    """Request model for /query/all_datasets/."""
+
+    collections: CollectionList
+    name: list[DatasetTypeName]
+    find_first: bool
+    data_id: SerializedDataId
+    default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
+    """Data ID values used as a fallback if required values are not specified
+    in ``data_id``.
+    """
+    where: str
+    bind: dict[str, ColumnLiteral]
+    limit: int | None
+    with_dimension_records: bool

@@ -34,8 +34,8 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
-    import lsst.daf.butler.remote_butler._query_driver
-    import lsst.daf.butler.remote_butler.server.handlers._external_query
+    import lsst.daf.butler.remote_butler._query_results
+    import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
@@ -413,12 +413,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Normally it takes 15 seconds for a timeout -- mock it to trigger
         # immediately instead.
         with patch.object(
-            lsst.daf.butler.remote_butler.server.handlers._external_query, "_timeout"
+            lsst.daf.butler.remote_butler.server.handlers._query_streaming, "_timeout"
         ) as mock_timeout:
             # Hook into QueryDriver to track the number of keep-alives we have
             # seen.
             with patch.object(
-                lsst.daf.butler.remote_butler._query_driver, "_received_keep_alive"
+                lsst.daf.butler.remote_butler._query_results, "_received_keep_alive"
             ) as mock_keep_alive:
                 mock_timeout.side_effect = _timeout_twice()
                 with self.butler.query() as query:

@@ -65,6 +65,7 @@ from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError, DimensionValueError, EmptyQueryResultError, ValidationError
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
+from .._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
 from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
@@ -2329,6 +2330,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         this is marked as a private method, it is also used by Butler server.
         """
         return self._registry._query_driver(default_collections, default_data_id)
+
+    @contextlib.contextmanager
+    def _query_all_datasets_by_page(
+        self, args: QueryAllDatasetsParameters
+    ) -> Iterator[Iterator[list[DatasetRef]]]:
+        with self.query() as query:
+            pages = query_all_datasets(self, query, args)
+            yield iter(page.data for page in pages)
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""

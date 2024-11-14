@@ -57,17 +57,20 @@ from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError
+from .._query_all_datasets import QueryAllDatasetsParameters
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs, DatastoreConfig
 from ..datastore.cache_manager import AbstractDatastoreCacheManager, DatastoreCacheManager
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
+from ..queries.tree import make_column_literal
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._defaults import DefaultsHolder
 from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 from ._query_driver import RemoteQueryDriver
+from ._query_results import convert_dataset_ref_results, read_query_results
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from ._registry import RemoteButlerRegistry
 from ._remote_butler_collections import RemoteButlerCollections
@@ -79,6 +82,7 @@ from .server_models import (
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
     GetUniverseResponseModel,
+    QueryAllDatasetsRequestModel,
 )
 
 if TYPE_CHECKING:
@@ -627,6 +631,27 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         with driver:
             query = Query(driver)
             yield query
+
+    @contextmanager
+    def _query_all_datasets_by_page(
+        self, args: QueryAllDatasetsParameters
+    ) -> Iterator[Iterator[list[DatasetRef]]]:
+        universe = self.dimensions
+
+        request = QueryAllDatasetsRequestModel(
+            collections=self._normalize_collections(args.collections),
+            name=[normalize_dataset_type_name(name) for name in args.name],
+            find_first=args.find_first,
+            data_id=simplify_dataId(args.data_id, args.kwargs),
+            default_data_id=self._serialize_default_data_id(),
+            where=args.where,
+            bind={k: make_column_literal(v) for k, v in args.bind.items()},
+            limit=args.limit,
+            with_dimension_records=args.with_dimension_records,
+        )
+        with self._connection.post_with_stream_response("query/all_datasets", request) as response:
+            pages = read_query_results(response)
+            yield (convert_dataset_ref_results(page, universe) for page in pages)
 
     def pruneDatasets(
         self,

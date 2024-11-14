@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from types import EllipsisType
 from typing import Any, TextIO, cast
@@ -42,6 +42,7 @@ from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
+from .._query_all_datasets import QueryAllDatasetsParameters
 from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
@@ -391,3 +392,8 @@ class HybridButler(Butler):
     @property
     def collections(self) -> ButlerCollections:
         return HybridButlerCollections(self)
+
+    def _query_all_datasets_by_page(
+        self, args: QueryAllDatasetsParameters
+    ) -> AbstractContextManager[Iterator[list[DatasetRef]]]:
+        return self._remote_butler._query_all_datasets_by_page(args)

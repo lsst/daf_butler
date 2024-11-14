@@ -37,10 +37,8 @@ from contextlib import ExitStack
 from typing import Any, Literal, overload
 
 import httpx
-from pydantic import TypeAdapter
 
 from ...butler import Butler
-from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..queries.driver import (
@@ -61,8 +59,8 @@ from ..queries.result_specs import (
 )
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
 from ..registry import NoDefaultCollectionError
-from ._errors import deserialize_butler_user_error
 from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._query_results import convert_dataset_ref_results, read_query_results
 from .server_models import (
     AdditionalQueryInput,
     DataCoordinateUpload,
@@ -78,8 +76,6 @@ from .server_models import (
     QueryExplainResponseModel,
     QueryInputs,
 )
-
-_QueryResultTypeAdapter = TypeAdapter[QueryExecuteResultData](QueryExecuteResultData)
 
 
 class RemoteQueryDriver(QueryDriver):
@@ -146,12 +142,8 @@ class RemoteQueryDriver(QueryDriver):
             try:
                 # There is one result page JSON object per line of the
                 # response.
-                for line in response.iter_lines():
-                    result_chunk: QueryExecuteResultData = _QueryResultTypeAdapter.validate_json(line)
-                    if result_chunk.type == "keep-alive":
-                        _received_keep_alive()
-                    else:
-                        yield _convert_query_result_page(result_spec, result_chunk, universe)
+                for result_chunk in read_query_results(response):
+                    yield _convert_query_result_page(result_spec, result_chunk, universe)
                     if self._closed:
                         raise RuntimeError(
                             "Cannot continue query result iteration: query context has been closed"
@@ -242,10 +234,6 @@ class RemoteQueryDriver(QueryDriver):
 def _convert_query_result_page(
     result_spec: ResultSpec, result: QueryExecuteResultData, universe: DimensionUniverse
 ) -> ResultPage:
-    if result.type == "error":
-        # A server-side exception occurred part-way through generating results.
-        raise deserialize_butler_user_error(result.error)
-
     if result_spec.result_type == "dimension_record":
         assert result.type == "dimension_record"
         return DimensionRecordResultPage(
@@ -259,11 +247,7 @@ def _convert_query_result_page(
             rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
         )
     elif result_spec.result_type == "dataset_ref":
-        assert result.type == "dataset_ref"
-        return DatasetRefResultPage(
-            spec=result_spec,
-            rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
-        )
+        return DatasetRefResultPage(spec=result_spec, rows=convert_dataset_ref_results(result, universe))
     elif result_spec.result_type == "general":
         assert result.type == "general"
         return _convert_general_result(result_spec, result)
@@ -282,10 +266,3 @@ def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) 
         for row in model.rows
     ]
     return GeneralResultPage(spec=spec, rows=rows)
-
-
-def _received_keep_alive() -> None:
-    """Do nothing.  Gives a place for unit tests to hook in for testing
-    keepalive behavior.
-    """
-    pass

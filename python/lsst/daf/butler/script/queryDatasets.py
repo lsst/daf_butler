@@ -30,6 +30,8 @@ import logging
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from itertools import groupby
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -37,8 +39,9 @@ from astropy.table import Table as AstropyTable
 
 from .._butler import Butler
 from .._exceptions import MissingDatasetTypeError
-from .._query_all_datasets import query_all_datasets
+from .._query_all_datasets import DatasetsPage, QueryAllDatasetsParameters, query_all_datasets
 from ..cli.utils import sortAstropyTable
+from ..utils import has_globs
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -171,6 +174,9 @@ class QueryDatasets:
     butler : `lsst.daf.butler.Butler` or `None`
         The butler to use to query. One of `repo` and `butler` must be `None`
         and the other must not be `None`.
+    with_dimension_records : `bool`, optional
+        If `True` (default is `False`) then returned data IDs will have
+        dimension records.
     """
 
     def __init__(
@@ -184,6 +190,7 @@ class QueryDatasets:
         order_by: tuple[str, ...] = (),
         repo: str | None = None,
         butler: Butler | None = None,
+        with_dimension_records: bool = False,
     ):
         if (repo and butler) or (not repo and not butler):
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
@@ -204,6 +211,10 @@ class QueryDatasets:
             )
             glob = ["*"]
 
+        searches_multiple_dataset_types = len(glob) > 1 or has_globs(glob)
+        if order_by and searches_multiple_dataset_types:
+            raise NotImplementedError("--order-by is only supported for queries with a single dataset type.")
+
         # show_uri requires a datastore.
         without_datastore = not show_uri
         self.butler = butler or Butler.from_config(repo, without_datastore=without_datastore)
@@ -214,6 +225,8 @@ class QueryDatasets:
         self._find_first = find_first
         self._limit = limit
         self._order_by = order_by
+        self._searches_multiple_dataset_types = searches_multiple_dataset_types
+        self._with_dimension_records = with_dimension_records
 
     def getTables(self) -> Iterator[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -274,29 +287,29 @@ class QueryDatasets:
         else:
             limit = self._limit
 
+        # We want to allow --order-by, but the query backend only supports
+        # it when there is a single dataset type.
+        # So we have to select different backends for single vs multiple
+        # dataset type queries.
+        if self._searches_multiple_dataset_types:
+            query_func = self._query_multiple_dataset_types
+        else:
+            query_func = self._query_single_dataset_type
+
         try:
-            pages = query_all_datasets(
-                self.butler,
-                collections=query_collections,
-                find_first=self._find_first,
-                name=self._dataset_type_glob,
-                with_dimension_records=True,
-                where=self._where,
-                limit=limit,
-                order_by=self._order_by,
-            )
-            datasets_found = 0
-            for dataset_type, refs in pages:
-                datasets_found += len(refs)
-                if warn_limit and limit is not None and datasets_found >= limit:
-                    # We asked for one too many so must remove that from
-                    # the list.
-                    refs = refs[0:-1]
-                    limit_reached = True
+            with query_func(query_collections, limit) as pages:
+                datasets_found = 0
+                for dataset_type, refs in _chunk_by_dataset_type(pages):
+                    datasets_found += len(refs)
+                    if warn_limit and limit is not None and datasets_found >= limit:
+                        # We asked for one too many so must remove that from
+                        # the list.
+                        refs = refs[0:-1]
+                        limit_reached = True
 
-                yield refs
+                    yield refs
 
-                _LOG.debug("Got %d results for dataset type %s", len(refs), dataset_type)
+                    _LOG.debug("Got %d results for dataset type %s", len(refs), dataset_type)
         except MissingDatasetTypeError as e:
             _LOG.info(str(e))
             return
@@ -307,3 +320,50 @@ class QueryDatasets:
                 "Use --limit to increase this limit.",
                 limit - 1,
             )
+
+    @contextmanager
+    def _query_multiple_dataset_types(
+        self, collections: list[str], limit: int | None
+    ) -> Iterator[Iterator[DatasetsPage]]:
+        with self.butler.query() as query:
+            args = QueryAllDatasetsParameters(
+                collections=collections,
+                find_first=self._find_first,
+                name=self._dataset_type_glob,
+                where=self._where,
+                limit=limit,
+                data_id={},
+                bind={},
+                with_dimension_records=self._with_dimension_records,
+            )
+            yield query_all_datasets(self.butler, query, args)
+
+    @contextmanager
+    def _query_single_dataset_type(
+        self, collections: list[str], limit: int | None
+    ) -> Iterator[Iterator[DatasetsPage]]:
+        assert len(self._dataset_type_glob) == 1
+        dataset_type = self._dataset_type_glob[0]
+
+        refs = self.butler.query_datasets(
+            dataset_type,
+            collections=collections,
+            find_first=self._find_first,
+            where=self._where,
+            limit=limit,
+            order_by=self._order_by,
+            with_dimension_records=self._with_dimension_records,
+        )
+
+        yield iter([DatasetsPage(dataset_type=dataset_type, data=refs)])
+
+
+def _chunk_by_dataset_type(pages: Iterator[DatasetsPage]) -> Iterator[DatasetsPage]:
+    # For each dataset type in the results, collect all the refs into a
+    # single page.  This assumes that in the original iterator, the pages
+    # for each dataset type are contiguous.
+    for dataset_type, chunk in groupby(pages, lambda page: page.dataset_type):
+        refs = []
+        for page in chunk:
+            refs.extend(page.data)
+        yield DatasetsPage(dataset_type, refs)
