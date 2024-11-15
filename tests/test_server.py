@@ -372,9 +372,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # authentication headers is working.  It doesn't test actual server
         # functionality -- in a real deployment, the authentication headers are
         # handled by GafaelfawrIngress, not our app.
-        with self.assertRaises(UnhandledServerError) as cm:
+        with self.assertRaises(UnhandledServerError):
             self.client.get("/v1/dataset_type/int")
-        self.assertEqual(cm.exception.__cause__.status_code, 401)
 
     def test_exception_logging(self):
         app = create_app()

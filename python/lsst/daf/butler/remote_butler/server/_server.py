@@ -40,12 +40,14 @@ from ..._exceptions import ButlerUserError
 from .._errors import serialize_butler_user_error
 from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 from ._config import load_config
+from ._telemetry import enable_telemetry
 from .handlers._external import external_router
 from .handlers._external_query import query_router
 from .handlers._internal import internal_router
 
 configure_logging(name="lsst.daf.butler.remote_butler.server")
 configure_uvicorn_logging()
+enable_telemetry()
 
 
 def create_app() -> FastAPI:

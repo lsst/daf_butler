@@ -10,3 +10,4 @@ lsst-daf-relation
 
 # Server-only dependencies
 uvicorn
+sentry-sdk[fastapi, sqlalchemy]
