@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Any
+
 
 def enable_telemetry() -> None:
     """Turn on upload of trace telemetry to Sentry, to allow performance
@@ -38,4 +40,14 @@ def enable_telemetry() -> None:
     # Configuration will be pulled from SENTRY_* environment variables
     # (see https://docs.sentry.io/platforms/python/configuration/options/).
     # If SENTRY_DSN is not present, telemetry is disabled.
-    sentry_sdk.init(enable_tracing=True)
+    sentry_sdk.init(enable_tracing=True, traces_sampler=_decide_whether_to_sample_trace)
+
+
+def _decide_whether_to_sample_trace(context: dict[str, Any]) -> float:
+    asgi_scope = context.get("asgi_scope")
+    if asgi_scope is not None:
+        # Do not log health check endpoint.
+        if asgi_scope.get("path") == "/":
+            return 0
+
+    return 1
