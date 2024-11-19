@@ -180,8 +180,7 @@ async def _enqueue_query_pages(
             async with contextmanager_in_threadpool(query.setup()) as ctx:
                 with telemetry.span("Read from DB and send results"):
                     async for page in iterate_in_threadpool(query.execute(ctx)):
-                        with telemetry.span("Wait for caller to read results"):
-                            await queue.put(page)
+                        await queue.put(page)
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
         # client.
