@@ -33,7 +33,7 @@ from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, ClassVar
 
 import sqlalchemy
-from lsst.sphgeom import DISJOINT, Region
+from lsst.sphgeom import Region
 
 from .._exceptions import CalibrationLookupError
 from ..queries import tree as qt
@@ -197,8 +197,9 @@ class Postprocessing:
 
         for row in rows:
             m = row._mapping
-            if any(m[a].relate(m[b]) & DISJOINT for a, b in joins) or any(
-                m[field].relate(region) & DISJOINT for field, region in where
+            # Skip rows where at least one couple of regions do not overlap.
+            if any(m[a].overlaps(m[b]) is False for a, b in joins) or any(
+                m[field].overlaps(region) is False for field, region in where
             ):
                 continue
             if self.check_validity_match_count and m[self.VALIDITY_MATCH_COUNT] > 1:
