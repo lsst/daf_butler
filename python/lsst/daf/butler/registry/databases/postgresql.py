@@ -163,37 +163,34 @@ class PostgresqlDatabase(Database):
             # multiple threads simultaneously.  So we need to configure
             # SQLAlchemy to pool connections for multi-threaded usage.
             #
-            # This is not the maximum number of active connections --
-            # SQLAlchemy allows some additional overflow configured via the
-            # max_overflow parameter.  pool_size is only the maximum number
-            # saved in the pool during periods of lower concurrency.
+            # This pool size was chosen to work well for services using
+            # FastAPI.  FastAPI uses a thread pool of 40 by default, so this
+            # gives us a connection for each thread in the pool. Because Butler
+            # is currently sync-only, we won't ever be executing more queries
+            # than we have threads.
             #
-            # This specific value for pool size was chosen somewhat arbitrarily
-            # -- there has not been any formal testing done to profile database
-            # concurrency. The value chosen may be somewhat lower than is
-            # optimal for service use cases.  Some considerations:
+            # Connections are only created as they are needed, so in typical
+            # single-threaded Butler use only one connection will ever be
+            # created. Services with low peak concurrency may never create this
+            # many connections.
             #
-            # 1. Connections are only created as they are needed, so in typical
-            #    single-threaded Butler use only one connection will ever be
-            #    created. Services with low peak concurrency may never create
-            #    this many connections.
-            # 2. Most services using the Butler (including Butler
-            #    server) are using FastAPI, which uses a thread pool of 40 by
-            #    default.  So when running at max concurrency we may have:
-            #      * 10 connections checked out from the pool
-            #      * 10 "overflow" connections re-created each time they are
-            #        used.
-            #      * 20 threads queued up, waiting for a connection, and
-            #        potentially timing out if the other threads don't release
-            #        their connections in a timely manner.
-            # 3. The main Butler databases at SLAC are run behind pgbouncer,
-            #    so we can support a larger number of simultaneous connections
-            #    than if we were connecting directly to Postgres.
+            # The main Butler databases at SLAC are run behind pgbouncer, so we
+            # can support a larger number of simultaneous connections than if
+            # we were connecting directly to Postgres.
             #
             # See
             # https://docs.sqlalchemy.org/en/20/core/pooling.html#sqlalchemy.pool.QueuePool.__init__
             # for more information on the behavior of this parameter.
-            pool_size=10,
+            pool_size=40,
+            # If we are experiencing heavy enough load that we overflow the
+            # connection pool, it will be harmful to start creating extra
+            # connections that we disconnect immediately after use.
+            # Connecting from scratch is fairly expensive, which is why we have
+            # a pool in the first place.
+            max_overflow=0,
+            # If the pool is full, this is the maximum number of seconds we
+            # will wait for a connection to become available before giving up.
+            pool_timeout=60,
             # In combination with pool_pre_ping, prevent SQLAlchemy from
             # unnecessarily reviving pooled connections that have gone stale.
             # Setting this to true makes it always re-use the most recent
