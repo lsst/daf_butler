@@ -44,6 +44,7 @@ from lsst.daf.butler.remote_butler.server_models import (
 
 from ...._exceptions import ButlerUserError
 from ..._errors import serialize_butler_user_error
+from .._telemetry import get_telemetry_context
 
 # Restrict the maximum number of streaming queries that can be running
 # simultaneously, to prevent the database connection pool and the thread pool
@@ -175,9 +176,12 @@ async def _enqueue_query_pages(
     queue.  Send `None` to the queue when there is no more data to read.
     """
     try:
-        async with contextmanager_in_threadpool(query.setup()) as ctx:
-            async for page in iterate_in_threadpool(query.execute(ctx)):
-                await queue.put(page)
+        telemetry = get_telemetry_context()
+        with telemetry.span("Execute query"):
+            async with contextmanager_in_threadpool(query.setup()) as ctx:
+                with telemetry.span("Read from DB and send results"):
+                    async for page in iterate_in_threadpool(query.execute(ctx)):
+                        await queue.put(page)
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
         # client.
