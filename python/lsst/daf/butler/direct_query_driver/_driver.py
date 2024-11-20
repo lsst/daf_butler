@@ -813,12 +813,18 @@ class DirectQueryDriver(QueryDriver):
                 )
         # Join in dimension element tables that we know we need relationships
         # or columns from.
+        joined_elements = set()
         for element in joins_analysis.iter_mandatory(union_dataset_dimensions):
             select_builder.joins.join(
                 self.managers.dimensions.make_joins_builder(
                     element, joins_analysis.columns.dimension_fields[element.name]
                 )
             )
+            joined_elements.add(element)
+        # Join additional required dimensions.
+        for element in select_builder.joins.extra_join_dimensions:
+            if element not in joined_elements:
+                select_builder.joins.join(self.managers.dimensions.make_joins_builder(element, frozenset()))
 
     def apply_missing_dimension_joins(
         self, select_builder: SqlSelectBuilder, joins_analysis: QueryJoinsAnalysis

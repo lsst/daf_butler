@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 import sqlalchemy
 
 from .. import ddl
+from ..dimensions import DimensionElement
 from ..nonempty_mapping import NonemptyMapping
 from ..queries import tree as qt
 from ._postprocessing import Postprocessing
@@ -453,6 +454,14 @@ class SqlJoinsBuilder(SqlColumns):
     where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
     """Sequence of WHERE clause terms to be combined with AND."""
 
+    extra_join_dimensions: set[DimensionElement] = dataclasses.field(default_factory=set)
+    """Dimension that will have to be joined into final query.
+
+    Overlaps visitor sets this to the dimensions that are needed in the query,
+    but which it cannot join itself. Dimensions in this set that are not
+    already joined, will be joined by driver, without any additional fields.
+    """
+
     def copy(self) -> SqlJoinsBuilder:
         """Return a copy that can be safely mutated without affecting the
         original.
@@ -460,6 +469,7 @@ class SqlJoinsBuilder(SqlColumns):
         return dataclasses.replace(
             self,
             where_terms=self.where_terms.copy(),
+            extra_join_dimensions=self.extra_join_dimensions.copy(),
             dimension_keys=self.dimension_keys.copy(),
             fields=self.fields.copy(),
             timespans=self.timespans.copy(),
@@ -579,6 +589,7 @@ class SqlJoinsBuilder(SqlColumns):
         self.timespans.update(other.timespans)
         self.special.update(other.special)
         self.where_terms += other.where_terms
+        self.extra_join_dimensions |= other.extra_join_dimensions
         return self
 
     def where(self, *args: sqlalchemy.ColumnElement[bool]) -> SqlJoinsBuilder:

@@ -489,7 +489,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
     ) -> tuple[qt.Predicate, SqlSelectBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
-            self._db, dimensions, calibration_dataset_types, self._overlap_tables
+            self._db, dimensions, calibration_dataset_types, self._overlap_tables, self
         )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.builder, overlaps_visitor.postprocessing
@@ -1025,12 +1025,14 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         dimensions: DimensionGroup,
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
+        manager: StaticDimensionRecordStorageManager,
     ):
         super().__init__(dimensions, calibration_dataset_types)
         self.builder: SqlSelectBuilder = SqlJoinsBuilder(db=db).to_select_builder(qt.ColumnSet(dimensions))
         self.postprocessing = Postprocessing()
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
+        self.manager = manager
         self.common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
 
     def visit_spatial_constraint(
@@ -1137,18 +1139,42 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 else:
                     # We do not want the common skypix system to appear in the
                     # query or cause duplicate rows, so we join the two overlap
-                    # tables in a subquery that projects out the common skypix
-                    # index column with SELECT DISTINCT.
+                    # tables in a subquery and pass that subquery to EXISTS()
+                    # expression in WHERE. Subquery needs to be correlated with
+                    # the tables in outer query so we want to join all needed
+                    # dimensions into it. We canot start joining dimension
+                    # tables here as they may be joined later (with extra
+                    # fields). Instead we remember the set of elements that
+                    # have to be joined, driver does actual joining later.
 
-                    self.builder.join(
-                        self._make_common_skypix_overlap_joins_builder(a)
-                        .join(self._make_common_skypix_overlap_joins_builder(b))
-                        .to_select_builder(
-                            qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
-                            distinct=True,
-                        )
-                        .into_from_builder(postprocessing=None)
+                    # Join for all dimension we will need in outer join, this
+                    # is only used temporarily.
+                    join_builder: SqlJoinsBuilder | None = None
+                    for element in a.required | b.required:
+                        if join_builder is None:
+                            join_builder = self.manager.make_joins_builder(element, set())
+                        else:
+                            join_builder.join(self.manager.make_joins_builder(element, set()))
+                        self.builder.joins.extra_join_dimensions.add(element)
+
+                    # Join for overlap tables.
+                    overlaps_join = self._make_common_skypix_overlap_joins_builder(a).join(
+                        self._make_common_skypix_overlap_joins_builder(b)
                     )
+
+                    # Correlate with outer query.
+                    correlated_where = []
+                    for dimension_name, columns1 in overlaps_join.dimension_keys.items():
+                        columns2 = join_builder.dimension_keys.get(dimension_name, [])
+                        for column1, column2 in itertools.product(columns1, columns2):
+                            correlated_where += [column1 == column2]
+                    where = sqlalchemy.exists(
+                        overlaps_join.where(*correlated_where)
+                        .to_select_builder(qt.ColumnSet(DimensionGroup(self.dimensions.universe)))
+                        .select(postprocessing=None)
+                    )
+                    self.builder.joins.where(where)
+
                 # In both cases we add postprocessing to check that the regions
                 # really do overlap, since overlapping the same common skypix
                 # tile is necessary but not sufficient for that.
@@ -1164,6 +1190,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
 
     def _make_common_skypix_overlap_joins_builder(self, element: DatabaseDimensionElement) -> SqlJoinsBuilder:
         _, overlap_table = self.overlap_tables[element.name]
+        overlap_table = overlap_table.alias()
         return (
             SqlJoinsBuilder(db=self.builder.joins.db, from_clause=overlap_table)
             .extract_dimensions(element.required.names, skypix_index=self.common_skypix.name)
