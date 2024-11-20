@@ -686,7 +686,7 @@ class DatabaseTests(ABC):
         )
 
     def test_replace_pkey_only(self):
-        """Test `Database.replace` on a table that only has primary key"""
+        """Test `Database.replace` on a table that only has primary key."""
         spec = ddl.TableSpec(
             [
                 ddl.FieldSpec("a1", dtype=sqlalchemy.BigInteger, primaryKey=True),
