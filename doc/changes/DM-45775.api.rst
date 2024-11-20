@@ -1,1 +1,0 @@
-Added ``DatastoreCacheManager.create_disabled()`` to create a cache manager which is disabled by default but can be enabled via the environment.

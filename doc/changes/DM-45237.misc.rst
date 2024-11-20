@@ -1,5 +1,0 @@
-File ingest no longer checks that every file exists.
-This can take a very long time if thousands of files are being ingested from an object store.
-Now at most 200 files will be checked.
-Whether all files are subsequently checked depends on the transfer mode and whether ``--no-track-file-attrs`` is enabled.
-For ``direct`` or in-place ingest coupled with ``--no-track-file-attrs`` the file existence might never be verified.

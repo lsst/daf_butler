@@ -1,1 +1,0 @@
-Added ``QPEnsemble`` and ``PZModel`` to ``datastores/formatters.yaml`` and ``storageClasses.yaml`` to enable storage of the machine learning models used by photo-z algorithms as well as the photo-z estimates produced by those algorithms.

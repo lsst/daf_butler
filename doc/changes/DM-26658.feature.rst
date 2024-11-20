@@ -1,3 +1,0 @@
-Added a new formatter class, ``lsst.daf.butler.FormatterV2`` that has been redesigned to be solely focused on file I/O with a much cleaner interface.
-This is now the recommended interface for writing a formatter.
-Butler continues to support the legacy ``Formatter`` but you should plan to migrate to the new simpler interface.

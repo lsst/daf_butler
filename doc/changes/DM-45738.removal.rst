@@ -1,2 +1,0 @@
-The ``Butler.collection_chains`` property is now deprecated.
-Please use ``Butler.collections`` instead.
