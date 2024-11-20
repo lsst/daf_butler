@@ -364,9 +364,9 @@ class CollectionSummaryManager:
         sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
         sql = sql.where(coll_col.in_([coll.key for coll in non_chains]))
         # For caching we need to fetch complete summaries.
-        if self._caching_context.collection_summaries is None:
-            if dataset_type_names is not None:
-                sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
+        # if self._caching_context.collection_summaries is None:
+        if dataset_type_names is not None:
+            sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
 
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
@@ -407,8 +407,8 @@ class CollectionSummaryManager:
         for chain, children in chains.items():
             summaries[chain.key] = CollectionSummary.union(*(summaries[child.key] for child in children))
 
-        if self._caching_context.collection_summaries is not None:
-            self._caching_context.collection_summaries.update(summaries)
+        # if self._caching_context.collection_summaries is not None:
+        #    self._caching_context.collection_summaries.update(summaries)
 
         return summaries
 
