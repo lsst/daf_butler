@@ -1,3 +1,140 @@
+Butler v28.0.0 2024-11-20
+=========================
+
+New Features
+------------
+
+- Added a new formatter class, ``lsst.daf.butler.FormatterV2`` that has been redesigned to be solely focused on file I/O with a much cleaner interface.
+  This is now the recommended interface for writing a formatter.
+  Butler continues to support the legacy ``Formatter`` but you should plan to migrate to the new simpler interface. (`DM-26658 <https://rubinobs.atlassian.net/browse/DM-26658>`_)
+- File templates are now allowed to define multiple alternate dimensions within a single field.
+  Use the ``|`` separator to specify alternatives.
+  For example rather than specifying the ``day_obs`` for both ``visit`` and ``exposure`` they can now be combined as ``{exposure.day_obs|visit.day_obs:?}``.
+  This can be useful if you want, say, a ``group`` dimension to be included but not if ``exposure`` is also in the dataId: ``{exposure.obs_id|group}`` would pick the ``exposure`` ``obs_id`` in preference to ``group`` but use ``group`` if no ``exposure`` is defined. (`DM-44147 <https://rubinobs.atlassian.net/browse/DM-44147>`_)
+- Added ``--no-track-file-attrs`` to ``butler import`` (and associated import API) and ``butler ingest-files`` commands to allow an import/ingest to disable the calculation of file sizes on ingest.
+  This can be useful if you are importing thousands of files from an object store where the file size determination can take a significant amount of time. (`DM-45237 <https://rubinobs.atlassian.net/browse/DM-45237>`_)
+- The ``ParquetFormatter`` now declares it can_accept Arrow tables, Astropy tables, Numpy tables, and pandas DataFrames.
+  This means that we have complete lossless storage of any parquet-compatible type into a datastore that has declared a different type; e.g., an astropy table with units can be persisted into a DataFrame storage class without those units being stripped.
+  Also added ``can_accept`` to the ``InMemoryDatastore`` delegates, and now one ``ArrowTableDelegate`` handles all the parquet-compatible datasets. (`DM-45431 <https://rubinobs.atlassian.net/browse/DM-45431>`_)
+- * Added ``--collections`` option to ``butler query-dataset-types`` to allow the resultant dataset types to be constrained by those that are used by specific collections.
+  * Changed the ``Butler.collections`` property to be a ``ButlerCollections`` instance.
+    This object can still act as a sequence equivalent to ``ButlerCollections.defaults`` but adds new APIs for querying and manipulating collections.
+    Any methods with names starting with ``x_`` are deemed to be an experimental API that may change in the future. (`DM-45738 <https://rubinobs.atlassian.net/browse/DM-45738>`_)
+- Region overlap queries can now use points as regions.  Points can be specified
+  as ``region OVERLAPS POINT(ra, dec)``, or by binding an ``lsst.sphgeom.LonLat`` or
+  ``astropy.coordinates.SkyCoord`` value.  (At the moment, this feature is only
+  available when using the new query system.) (`DM-45752 <https://rubinobs.atlassian.net/browse/DM-45752>`_)
+- Added an expiration mode of "disabled" to the datastore cache manager.
+  This allows an environment variable to be used to disable caching completely, or allows for a default configuration to be disabled and for environment variables to enable caching. (`DM-45775 <https://rubinobs.atlassian.net/browse/DM-45775>`_)
+- * A new query system and interface is now available using ``butler.query()`` as a context manager.
+    This new system is much more flexible and supports far more expressive queries, and no longer requires the results to be placed in a `set` to remove duplication.
+  * Added ``butler.query_datasets()``, ``butler.query_dimension_records()`` and ``butler.query_data_ids()`` as replacements for the ``butler.registry`` equivalents.
+    These use the new query system and are preferred over the old interfaces.
+  * The experimental collections querying interface is now public and called ``butler.collections.query_info`` and ``butler.collections.query``.
+  * The command line tools ``query-datasets``, ``associate``, ``retrieve-artifacts`` and ``transfer-datasets`` now support a ``--limit`` parameter.
+    The default for all except ``associate`` (which defaults to no limit) is to limit the number of results to 10,000.
+    A warning will be issued if the cap is hit.
+  * The command line tools ``query-datasets``, ``associate``, ``retrieve-artifacts`` and ``transfer-datasets`` now support ``--order-by`` to control the sorting in conjunction with ``--limit``.
+    For ``query-datasets`` this will also control the sorting of the reported tables. (`DM-45872 <https://rubinobs.atlassian.net/browse/DM-45872>`_)
+- Added ``Butler.clone()``, which lets you make a copy of a Butler instance, optionally overriding default collections/run/data ID. (`DM-46298 <https://rubinobs.atlassian.net/browse/DM-46298>`_)
+- Updated the parquet formatter to use ``fsspec``, which allows direct access to columns in S3, WebDAV, etc. (`DM-46575 <https://rubinobs.atlassian.net/browse/DM-46575>`_)
+
+
+API Changes
+-----------
+
+- Added ``DatastoreCacheManager.create_disabled()`` to create a cache manager which is disabled by default but can be enabled via the environment. (`DM-45775 <https://rubinobs.atlassian.net/browse/DM-45775>`_)
+- The internal import backend classes, such as ``YamlRepoImportBackend``, have been changed to use a butler rather than a registry.
+  These are used by ``butler.import_()`` but there should be no external impact from this change. (`DM-45791 <https://rubinobs.atlassian.net/browse/DM-45791>`_)
+- Added ``DimensionGroup.region_dimension`` and ``DimensionGroup.timespan_dimension`` properties to make it easy to ask which dimension in the group is the best one to use for region or time calculations. (`DM-45860 <https://rubinobs.atlassian.net/browse/DM-45860>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed an issue preventing dataset types with group dimensions from being put into a Butler repo. (`DM-43020 <https://rubinobs.atlassian.net/browse/DM-43020>`_)
+- Worked around ``pandas`` bugs when using non-floating-point masked columns. (`DM-43925 <https://rubinobs.atlassian.net/browse/DM-43925>`_)
+- Postgres database connections are now checked for liveness before they are used, significantly reducing the chance of exceptions being thrown due to stale connections. (`DM-44050 <https://rubinobs.atlassian.net/browse/DM-44050>`_)
+- Fixed handling of dataset types that use ``healpix11`` dimensions; previously they caused exception in many query operations. (`DM-45119 <https://rubinobs.atlassian.net/browse/DM-45119>`_)
+- We no longer try to create the datastore root at startup for non-POSIX
+  filesystems, to fix an issue where this would fail on read-only repositories
+  stored on S3/HTTP/GS. (`DM-45140 <https://rubinobs.atlassian.net/browse/DM-45140>`_)
+- Fixed bug where datetime columns would serialize to parquet from Pandas but not
+  from astropy or numpy. (`DM-45386 <https://rubinobs.atlassian.net/browse/DM-45386>`_)
+- Fixed an issue where boolean metadata columns (like ``exposure.can_see_sky`` and
+  ``exposure.has_simulated``) were not usable in ``where`` clauses for Registry query
+  functions.
+  These column names can now be used as a boolean expression, for
+  example ``where="exposure.can_see_sky`` or ``where="NOT exposure.can_see_sky"``. (`DM-45680 <https://rubinobs.atlassian.net/browse/DM-45680>`_)
+- Fixed a bug in ``butler query-datasets`` that incorrectly rejected a find-first query against a chain collection as having a glob. (`DM-46339 <https://rubinobs.atlassian.net/browse/DM-46339>`_)
+- Fixed an issue where default data IDs were not constraining query results in the new query system. (`DM-46347 <https://rubinobs.atlassian.net/browse/DM-46347>`_)
+- Fixed support for multiple-instrument (and multiple-skymap) ``where`` expressions in the new query system. (`DM-46401 <https://rubinobs.atlassian.net/browse/DM-46401>`_)
+- Fixed an issue where ``query_datasets`` would sometimes fail when searching in a single run collection. (`DM-46430 <https://rubinobs.atlassian.net/browse/DM-46430>`_)
+- Fixed the return type of ``arrow_to_numpy`` so that a masked record array is returned if any of the columns in the arrow table includes nulls.
+  Previously the masks were ignored and fill values were visible and used in calculations. (`DM-46563 <https://rubinobs.atlassian.net/browse/DM-46563>`_)
+- Fixed an issue where the new query system was rejecting numpy integers used in data IDs or bind values. (`DM-46711 <https://rubinobs.atlassian.net/browse/DM-46711>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- Increased the Postgres connection pool size, fixing an issue where multi-threaded services would re-create the database connection excessively. (`DM-44050 <https://rubinobs.atlassian.net/browse/DM-44050>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added ``QPEnsemble`` and ``PZModel`` to ``datastores/formatters.yaml`` and ``storageClasses.yaml`` to enable storage of the machine learning models used by photo-z algorithms as well as the photo-z estimates produced by those algorithms. (`DM-45541 <https://rubinobs.atlassian.net/browse/DM-45541>`_)
+- Added storage classes for ``lsst.daf.butler.Timespan`` and ``lsst.pipe.base.utils.RegionTimeInfo``. (`DM-43020 <https://rubinobs.atlassian.net/browse/DM-43020>`_)
+- ``Butler.transfer_from()`` has been modified to allow there to be a dataset type mismatch between the source butler and the target butler.
+  For this to work it is required that converters are registered for both directions such that the source python type can be converted to the target python type and the target python type can be converted to the source python type.
+  Without supporting bidirectional conversions there will be problems with inconsistencies in the behavior of ``butler.get()`` for transferred datasets and those that were stored natively. (`DM-44280 <https://rubinobs.atlassian.net/browse/DM-44280>`_)
+- Added helpful exception notes when Parquet serialization fails. (`DM-44399 <https://rubinobs.atlassian.net/browse/DM-44399>`_)
+- File ingest no longer checks that every file exists.
+  This can take a very long time if thousands of files are being ingested from an object store.
+  Now at most 200 files will be checked.
+  Whether all files are subsequently checked depends on the transfer mode and whether ``--no-track-file-attrs`` is enabled.
+  For ``direct`` or in-place ingest coupled with ``--no-track-file-attrs`` the file existence might never be verified. (`DM-45237 <https://rubinobs.atlassian.net/browse/DM-45237>`_)
+- The command-line tools have been modified to use the new query system and interface.
+  The only user visible changes are that the ``--no-check`` and ``--offset`` options are no longer used since they are not supported by the new system. (`DM-45556 <https://rubinobs.atlassian.net/browse/DM-45556>`_)
+- Moved ``CollectionType`` to the top level of the package hierarchy.
+  There should be no change visible to external users but if previously you were using the deprecated ``from lsst.daf.butler.registry import CollectionType`` please change to ``from lsst.daf.butler import CollectionType`` (which has always worked). (`DM-45767 <https://rubinobs.atlassian.net/browse/DM-45767>`_)
+- Enabled remote butler to utilize a datastore cache.
+  By default clients created using a factory method will use a disabled cache that can be enabled by an environment variable and clients created from ``Butler()`` will use a default cache configuration. (`DM-45775 <https://rubinobs.atlassian.net/browse/DM-45775>`_)
+- Updated default version of ``datasets`` manager; new Butler repositories will use TAI nanoseconds for ``ingest_date`` column instead of database-native timestamps. (`DM-46601 <https://rubinobs.atlassian.net/browse/DM-46601>`_)
+
+
+An API Removal or Deprecation
+-----------------------------
+
+- * Removed the ``components`` parameter from registry APIs.
+  * Dropped supported for regular expressions (`re.Pattern`) in dataset type expressions. Wildcard globs are still supported. (`DM-36457 <https://rubinobs.atlassian.net/browse/DM-36457>`_)
+- Removed ``DimensionGraph`` and the `~collections.abc.Mapping` interface to ``DataCoordinate``, along with most other public interfaces that utilize ``DimensionElement`` instances instead of just their string names.
+
+  See `RFC-834 <https://rubinobs.atlassian.net/browse/RFC-834>`_ for full details and rationale. (`DM-41326 <https://rubinobs.atlassian.net/browse/DM-41326>`_)
+- The ``Butler.collection_chains`` property is now deprecated.
+  Please use ``Butler.collections`` instead. (`DM-45738 <https://rubinobs.atlassian.net/browse/DM-45738>`_)
+- Regular expressions in collection and dataset type patterns are now deprecated. (Shell-like globs will continue to be supported.)
+
+  Materializing dataset queries into temporary tables is now deprecated.  (Materializing data ID queries will continue to be supported.)
+
+  The ``datasetTypes`` argument to ``Registry.queryCollections`` is now deprecated. (This parameter has never had any effect.)
+
+  We will soon stop raising ``DataIdValueError`` exceptions for typos and other bad values in query expressions like ``instrument='HsC'`` for typos and other bad values in query expressions.  Instead, these queries will return an empty iterable of results.
+
+  Using HTM and HEALPix spatial dimensions like ``htm11`` or ``healpix10`` in data ID constraints passed to queries is now deprecated. The exception is ``htm7``, which will continue to work.
+
+  The ``--no-check`` parameter to ``butler query-dimension-records`` is now deprecated.
+
+  The ``offset`` argument to ``limit()`` for ``Registry.queryDataIds`` and ``Registry.queryDimensionRecords`` result objects is now deprecated.
+
+  The ``--offset`` option for ``butler query-data-ids`` and ``butler-query-datasets`` is no longer supported, and will raise on exception if you attempt to use it.
+
+  It will soon become mandatory to explicitly provide ``--collections`` and a dataset type search when calling ``butler query-datasets``.
+
+  Using ``Butler.collections`` to get the list of default collections is now deprecated.  Use ``Butler.collections.defaults`` instead. (`DM-46599 <https://rubinobs.atlassian.net/browse/DM-46599>`_)
+
+
 Butler 27.0.0 2024-05-28
 ========================
 
