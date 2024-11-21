@@ -508,7 +508,7 @@ class Query(QueryBase):
                     "Expand the dimensions or drop this dataset type in the arguments to materialize to "
                     "avoid this error."
                 )
-            tree = tree.join_dataset(dataset_type_name, self._tree.datasets[dataset_type_name])
+            tree = tree.join_dataset(dataset_type_name, dataset_search)
         return Query(self._driver, tree)
 
     def join_dataset_search(
