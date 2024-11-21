@@ -799,13 +799,22 @@ class DirectQueryDriver(QueryDriver):
                     select_builder.joins, materialization_key, materialization_dimensions
                 )
             )
-        # Process dataset joins (not including any union dataset).
-        for dataset_search in joins_analysis.datasets.values():
-            self.join_dataset_search(
-                select_builder.joins,
-                dataset_search,
-                joins_analysis.columns.dataset_fields[dataset_search.name],
-            )
+        # Process dataset joins (not including any union dataset). Datasets
+        # searches included in materialization can be skipped unless we need
+        # something from their tables.
+        materialized_datasets = set()
+        for m_state in self._materializations.values():
+            materialized_datasets.update(m_state.datasets)
+        for dataset_type_name, dataset_search in joins_analysis.datasets.items():
+            if (
+                dataset_type_name not in materialized_datasets
+                or dataset_type_name in select_builder.columns.dataset_fields
+            ):
+                self.join_dataset_search(
+                    select_builder.joins,
+                    dataset_search,
+                    joins_analysis.columns.dataset_fields[dataset_search.name],
+                )
         # Join in dimension element tables that we know we need relationships
         # or columns from.
         for element in joins_analysis.iter_mandatory(union_dataset_dimensions):
