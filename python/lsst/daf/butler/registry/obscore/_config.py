@@ -116,7 +116,7 @@ class SpatialPluginConfig(pydantic.BaseModel):
     cls: str
     """Name of the class implementing plugin methods."""
 
-    config: dict[str, Any] = {}
+    config: dict[str, Any] = pydantic.Field(default_factory=dict)
     """Configuration object passed to plugin ``initialize()`` method."""
 
 
@@ -144,7 +144,13 @@ class ObsCoreConfig(pydantic.BaseModel):
     """
 
     facility_name: str
-    """Value for the ``facility_name`` column."""
+    """Default value for the ``facility_name`` column. If an instrument
+    is listed in ``facility_map`` that will be used in preference but this
+    value must always be set as a fallback."""
+
+    facility_map: dict[str, str] = pydantic.Field(default_factory=dict)
+    """Mapping of instrument name to facility name. Takes precedence over
+    the ``facility_name``."""
 
     extra_columns: None | (
         dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig]
