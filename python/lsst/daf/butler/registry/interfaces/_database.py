@@ -1567,12 +1567,7 @@ class Database(ABC):
             if not returnIds:
                 if select is not None:
                     if names is None:
-                        # columns() is deprecated since 1.4, but
-                        # selected_columns() method did not exist in 1.3.
-                        if hasattr(select, "selected_columns"):
-                            names = select.selected_columns.keys()
-                        else:
-                            names = select.columns.keys()
+                        names = select.selected_columns.keys()
                     connection.execute(table.insert().from_select(list(names), select))
                 else:
                     connection.execute(table.insert(), rows)
