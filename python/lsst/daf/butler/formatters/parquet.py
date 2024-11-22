@@ -78,6 +78,7 @@ if TYPE_CHECKING:
         AbstractFileSystem = type
 
 TARGET_ROW_GROUP_BYTES = 1_000_000_000
+MAX_SIZE_FOR_REMOTE_BYTES = 50_000_000
 
 
 class ParquetFormatter(FormatterV2):
@@ -95,6 +96,13 @@ class ParquetFormatter(FormatterV2):
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # Docstring inherited from Formatter.read.
+
+        # Check file size; if it is below a threshold then raise NotImplemented
+        # to force the full file to download.
+        file_size = expected_size if expected_size >= 0 else uri.size()
+        if file_size < MAX_SIZE_FOR_REMOTE_BYTES:
+            return NotImplemented
+
         try:
             fs, path = uri.to_fsspec()
         except ImportError:
