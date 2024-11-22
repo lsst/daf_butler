@@ -159,7 +159,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def ensure(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        self._db.ensure(self._tables.dataset_location, *self._refsToRows(refs))
+        self._db.insert(self._tables.dataset_location, *self._refsToRows(refs), on_conflict_do_nothing=True)
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge

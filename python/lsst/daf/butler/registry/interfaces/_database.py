@@ -35,6 +35,7 @@ __all__ = [
     "DatabaseInsertMode",
     "SchemaAlreadyDefinedError",
     "StaticTablesContext",
+    "SmartInsert",
 ]
 
 import enum
@@ -46,7 +47,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, cast, final
+from typing import Any, cast, final, overload
 
 import astropy.time
 import sqlalchemy
@@ -69,6 +70,101 @@ class DatabaseInsertMode(enum.Enum):
 
     ENSURE = enum.auto()
     """Insert records, skipping any that already exist."""
+
+
+class SmartInsert(ABC):
+    """An abstract interface for INSERT statements that may have
+    dialect-specific ON CONFLICT clauses.
+
+    Parameters
+    ----------
+    table : `sqlalchemy.Table`
+        Table to insert rows into.
+    primary_key_only : `bool`
+        If `True`, when resolving conflicts in favor of new or existing
+        records, only consider conflicts on the primary key (raising an
+        exception if a conflict occurs on some other constraint).  If `False`,
+        apply conflict resolution to any a conflict on any unique constraint.
+    """
+
+    def __init__(self, table: sqlalchemy.Table, primary_key_only: bool):
+        self._table = table
+        self.index = table.primary_key if primary_key_only else None
+
+    def _get_update_set(self, excluded: sqlalchemy.ColumnCollection) -> dict[str, sqlalchemy.Column]:
+        """Return a dictionary of columns that should be updated when using
+        `on_conflict_do_update`.
+
+        Parameters
+        ----------
+        excluded : `sqlalchemy.ColumnCollection`
+            A special collection of column objects that represents the
+            to-be-inserted row.
+
+        Returns
+        -------
+        update_set : `dict`
+            Dictionary mapping column name to a column from ``excluded``, for
+            all columns other than the primary key.
+        """
+        # In the SET clause assign all columns using special `excluded`
+        # pseudo-table.  If some column in the table does not appear in the
+        # INSERT list this will set it to NULL.
+        return {
+            column.name: getattr(excluded, column.name)
+            for column in self._table.columns
+            if column.name not in self._table.primary_key
+        }
+
+    def from_select(self, names: Iterable[str], select: sqlalchemy.SelectBase) -> SmartInsert:
+        """Return a `SmartInsert` that inserts from the given SELECT statement.
+
+        Parameters
+        ----------
+        names : `~collections.abc.Iterable` [ `str` ]
+            Names of columns to insert.
+        select : `sqlalchemy.SelectBase`
+            SELECT query.
+
+        Returns
+        -------
+        smart_insert : `SmartInsert`
+            An INSERT query that uses rows from the given SELECT query.  May
+            be a modified copy of ``self``.
+        """
+        raise NotImplementedError()
+
+    def on_conflict_raise(self) -> sqlalchemy.Insert:
+        """Return a SQLAlchemy INSERT statement with no conflict resolution.
+
+        Returns
+        -------
+        insert : `sqlalchemy.Insert`
+            SQLAlchemy representation of an INSERT query.
+        """
+        raise NotImplementedError()
+
+    def on_conflict_do_nothing(self) -> sqlalchemy.Insert:
+        """Return a SQLAlchemy INSERT statement that resolves conflicts in
+        favor of the rows already in the table.
+
+        Returns
+        -------
+        insert : `sqlalchemy.Insert`
+            SQLAlchemy representation of an INSERT query.
+        """
+        raise NotImplementedError()
+
+    def on_conflict_do_update(self) -> sqlalchemy.Insert:
+        """Return a SQLAlchemy INSERT statement  that resolves conflicts in
+        favor of the new rows being inserted.
+
+        Returns
+        -------
+        insert : `sqlalchemy.Insert`
+            SQLAlchemy representation of an INSERT query.
+        """
+        raise NotImplementedError()
 
 
 # TODO: method is called with list[ReflectedColumn] in SA 2, and
@@ -1297,6 +1393,30 @@ class Database(ABC):
         """
         return TimespanDatabaseRepresentation.Compound
 
+    @overload
+    def sync(
+        self,
+        table: sqlalchemy.schema.Table,
+        *,
+        keys: dict[str, Any],
+        compared: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+        returning: None = None,
+        update: bool = False,
+    ) -> tuple[None, bool | dict[str, Any]]: ...
+
+    @overload
+    def sync(
+        self,
+        table: sqlalchemy.schema.Table,
+        *,
+        keys: dict[str, Any],
+        compared: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+        returning: Sequence[str],
+        update: bool = False,
+    ) -> tuple[dict[str, Any], bool | dict[str, Any]]: ...
+
     def sync(
         self,
         table: sqlalchemy.schema.Table,
@@ -1434,7 +1554,7 @@ class Database(ABC):
             if extra is not None:
                 row.update(extra)
             with self.transaction():
-                inserted = bool(self.ensure(table, row))
+                inserted = bool(self.insert(table, row, on_conflict_do_nothing=True, primary_key_only=False))
                 inserted_or_updated: bool | dict[str, Any]
                 # Need to perform check() for this branch inside the
                 # transaction, so we roll back an insert that didn't do
@@ -1501,14 +1621,65 @@ class Database(ABC):
             assert result is not None
             return dict(zip(returning, result, strict=True)), inserted_or_updated
 
+    def insert_and_get_primary_key(self, table: sqlalchemy.Table, row: dict[str, Any]) -> sqlalchemy.Row:
+        """Insert a single row into a table and return its primary key.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table rows should be inserted into.
+        row : `dict`
+            Dictionary mapping column name to column value.
+
+        Returns
+        -------
+        primary_key : `sqlalchemy.Row`
+            Named tuple of primary key values.
+
+        Notes
+        -----
+        This method is specialized for the case where an autoincrement integer
+        primary key value must be returned for the caller.  For other cases,
+        use `insert`.
+        """
+        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
+        with self._transaction() as (_, connection):
+            result = connection.execute(table.insert(), row)
+            assert result.inserted_primary_key is not None, "primary key retrieval unexpectedly no supported"
+            return result.inserted_primary_key
+
+    @overload
     def insert(
         self,
         table: sqlalchemy.schema.Table,
         *rows: dict,
-        returnIds: bool = False,
+        on_conflict_do_update: bool = False,
+        on_conflict_do_nothing: bool = False,
+        primary_key_only: bool = True,
+    ) -> int: ...
+
+    @overload
+    def insert(
+        self,
+        table: sqlalchemy.schema.Table,
+        *,
+        select: sqlalchemy.sql.expression.SelectBase,
+        names: Iterable[str] | None = None,
+        on_conflict_do_update: bool = False,
+        on_conflict_do_nothing: bool = False,
+        primary_key_only: bool = True,
+    ) -> int: ...
+
+    def insert(
+        self,
+        table: sqlalchemy.schema.Table,
+        *rows: dict,
         select: sqlalchemy.sql.expression.SelectBase | None = None,
         names: Iterable[str] | None = None,
-    ) -> list[int] | None:
+        on_conflict_do_update: bool = False,
+        on_conflict_do_nothing: bool = False,
+        primary_key_only: bool = True,
+    ) -> int:
         """Insert one or more rows into a table, optionally returning
         autoincrement primary key values.
 
@@ -1520,113 +1691,24 @@ class Database(ABC):
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
             be the same.
-        returnIds : `bool`, optional
-            If `True` (`False` is default), return the values of the table's
-            autoincrement primary key field (which much exist).
         select : `sqlalchemy.sql.SelectBase`, optional
             A SELECT query expression to insert rows from.  Cannot be provided
-            with either ``rows`` or ``returnIds=True``.
+            with ``rows``.
         names : `~collections.abc.Iterable` [ `str` ], optional
             Names of columns in ``table`` to be populated, ordered to match the
             columns returned by ``select``.  Ignored if ``select`` is `None`.
             If not provided, the columns returned by ``select`` must be named
             to match the desired columns of ``table``.
-
-        Returns
-        -------
-        ids : `None`, or `list` of `int`
-            If ``returnIds`` is `True`, a `list` containing the inserted
-            values for the table's autoincrement primary key.
-
-        Raises
-        ------
-        ReadOnlyDatabaseError
-            Raised if `isWriteable` returns `False` when this method is called.
-
-        Notes
-        -----
-        The default implementation uses bulk insert syntax when ``returnIds``
-        is `False`, and a loop over single-row insert operations when it is
-        `True`.
-
-        Derived classes should reimplement when they can provide a more
-        efficient implementation (especially for the latter case).
-
-        May be used inside transaction contexts, so implementations may not
-        perform operations that interrupt transactions.
-        """
-        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
-        if select is not None and (rows or returnIds):
-            raise TypeError("'select' is incompatible with passing value rows or returnIds=True.")
-        if not rows and select is None:
-            if returnIds:
-                return []
-            else:
-                return None
-        with self._transaction() as (_, connection):
-            if not returnIds:
-                if select is not None:
-                    if names is None:
-                        names = select.selected_columns.keys()
-                    connection.execute(table.insert().from_select(list(names), select))
-                else:
-                    connection.execute(table.insert(), rows)
-                return None
-            else:
-                sql = table.insert()
-                return [connection.execute(sql, row).inserted_primary_key[0] for row in rows]
-
-    @abstractmethod
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        """Insert one or more rows into a table, replacing any existing rows
-        for which insertion of a new row would violate the primary key
-        constraint.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            Table rows should be inserted into.
-        *rows
-            Positional arguments are the rows to be inserted, as dictionaries
-            mapping column name to value.  The keys in all dictionaries must
-            be the same.
-
-        Raises
-        ------
-        ReadOnlyDatabaseError
-            Raised if `isWriteable` returns `False` when this method is called.
-
-        Notes
-        -----
-        May be used inside transaction contexts, so implementations may not
-        perform operations that interrupt transactions.
-
-        Implementations should raise a `sqlalchemy.exc.IntegrityError`
-        exception when a constraint other than the primary key would be
-        violated.
-
-        Implementations are not required to support `replace` on tables
-        with autoincrement keys.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
-        """Insert one or more rows into a table, skipping any rows for which
-        insertion would violate a unique constraint.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            Table rows should be inserted into.
-        *rows
-            Positional arguments are the rows to be inserted, as dictionaries
-            mapping column name to value.  The keys in all dictionaries must
-            be the same.
+        on_conflict_do_update : `bool`, optional
+            If `True`, resolve conflicts in favor of the new row.
+        on_conflict_do_nothing : `bool`, optional
+            If `True`, resolve conflicts in favor of the existing row.
         primary_key_only : `bool`, optional
-            If `True` (`False` is default), only skip rows that violate the
-            primary key constraint, and raise an exception (and rollback
-            transactions) for other constraint violations.
+            If `True` (default), only use ``on_conflict_*`` to resolve
+            conflicts on the primary key; consider other unique constraint
+            violations to be an error.  If `False`, use ``on_conflict_*`` to
+            resolve any unique constraint violation.  Ignored if no
+            ``on_conflict_*`` option is passed.
 
         Returns
         -------
@@ -1637,16 +1719,55 @@ class Database(ABC):
         ------
         ReadOnlyDatabaseError
             Raised if `isWriteable` returns `False` when this method is called.
-            This is raised even if the operation would do nothing even on a
-            writeable database.
+        sqlalchemy.IntegrityError
+            Raised if there is a conflict that is not handled by an
+            ``on_conflict_*`` option.
 
         Notes
         -----
+        Only one of ``on_conflict_do_update`` and ``on_conflict_do_nothing``
+        may be `True`.  Note that these options only resolve conflicts on the
+        primary key; conflicts on other constraints are always considered
+        errors.
+
         May be used inside transaction contexts, so implementations may not
         perform operations that interrupt transactions.
+        """
+        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
+        if not rows and select is None:
+            return 0
+        smart_insert = self._get_smart_insert(table, primary_key_only=primary_key_only)
+        if select is not None:
+            if names is None:
+                names = select.selected_columns.keys()
+            smart_insert = smart_insert.from_select(list(names), select)
+        if on_conflict_do_update:
+            query = smart_insert.on_conflict_do_update()
+        elif on_conflict_do_nothing:
+            query = smart_insert.on_conflict_do_nothing()
+        else:
+            query = smart_insert.on_conflict_raise()
+        with self._transaction() as (_, connection):
+            return connection.execute(query, rows).rowcount
 
-        Implementations are not required to support `ensure` on tables
-        with autoincrement keys.
+    @abstractmethod
+    def _get_smart_insert(self, table: sqlalchemy.Table, primary_key_only: bool) -> SmartInsert:
+        """Return an abstraction over INSERT statement extensions for
+        conflict resolution.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.Table`
+            Table to insert into.
+        rimary_key_only : `bool`, optional
+            If `True` (`False` is default), only ignore or replace rows that
+            violate the primary key constraint, and raise an exception (and
+            rollback transactions) for other constraint violations.
+
+        Returns
+        -------
+        smart_insert : `SmartInsert`
+            INSERT statement wrapper.
         """
         raise NotImplementedError()
 

@@ -943,7 +943,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # inserted there.
             self._summaries.update(collection, [storage.dataset_type_id], summary)
             # Update the tag table itself.
-            self._db.replace(storage.dynamic_tables.tags(self._db, type(self._collections)), *rows)
+            self._db.insert(
+                storage.dynamic_tables.tags(self._db, type(self._collections)),
+                *rows,
+                on_conflict_do_update=True,
+            )
 
     def disassociate(
         self, dataset_type: DatasetType, collection: CollectionRecord, datasets: Iterable[DatasetRef]

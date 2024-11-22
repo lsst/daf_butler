@@ -231,17 +231,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         db_rows = self._make_record_db_rows(element, records, replace=replace)
         table = self._tables[element.name]
         with self._db.transaction():
-            if replace:
-                self._db.replace(table, *db_rows.main_rows)
-            elif skip_existing:
-                self._db.ensure(table, *db_rows.main_rows, primary_key_only=True)
-            else:
-                self._db.insert(table, *db_rows.main_rows)
+            self._db.insert(
+                table, *db_rows.main_rows, on_conflict_do_nothing=skip_existing, on_conflict_do_update=replace
+            )
             self._insert_overlaps(
                 element, db_rows.overlap_insert_rows, db_rows.overlap_delete_rows, skip_existing=skip_existing
             )
             for related_element_name, summary_rows in db_rows.overlap_summary_rows.items():
-                self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
+                self._db.insert(
+                    self._overlap_tables[related_element_name][0], *summary_rows, on_conflict_do_nothing=True
+                )
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited.
@@ -278,7 +277,11 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                         record.definition, db_rows.overlap_insert_rows, db_rows.overlap_delete_rows
                     )
                 for related_element_name, summary_rows in db_rows.overlap_summary_rows.items():
-                    self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
+                    self._db.insert(
+                        self._overlap_tables[related_element_name][0],
+                        *summary_rows,
+                        on_conflict_do_nothing=True,
+                    )
         return inserted_or_updated
 
     def fetch_one(
@@ -765,8 +768,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         if overlap_insert_rows:
             _LOG.debug("Inserting %d new skypix overlap rows for %s.", len(overlap_insert_rows), element.name)
             if skip_existing:
-                self._db.ensure(
-                    self._overlap_tables[element.name][1], *overlap_insert_rows, primary_key_only=True
+                self._db.insert(
+                    self._overlap_tables[element.name][1], *overlap_insert_rows, on_conflict_do_nothing=True
                 )
             else:
                 self._db.insert(self._overlap_tables[element.name][1], *overlap_insert_rows)
@@ -987,7 +990,7 @@ class _DimensionGroupStorage:
             self.refresh()
             key = self._keysByGroup.get(group)
             if key is None:
-                (key,) = self._db.insert(self._idTable, {}, returnIds=True)  # type: ignore
+                (key,) = self._db.insert_and_get_primary_key(self._idTable, {})
                 self._db.insert(
                     self._definitionTable,
                     *[{"dimension_graph_id": key, "dimension_name": name} for name in group.required],

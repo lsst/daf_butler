@@ -111,12 +111,13 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         if not name or not value:
             raise ValueError("name and value cannot be empty")
         if force:
-            self._db.replace(
+            self._db.insert(
                 self._table,
                 {
                     "name": name,
                     "value": value,
                 },
+                on_conflict_do_update=True,
             )
         else:
             try:

@@ -35,7 +35,7 @@ import itertools
 import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any
@@ -95,7 +95,7 @@ TEMPORARY_TABLE_SPEC = ddl.TableSpec(
 
 
 @contextmanager
-def _patch_getExistingTable(db: Database) -> Database:
+def _patch_getExistingTable(db: Database) -> Iterator[Database]:
     """Patch getExistingTable method in a database instance to test concurrent
     creation of tables. This patch obviously depends on knowning internals of
     ``ensureTableExists()`` implementation.
@@ -202,7 +202,7 @@ class DatabaseTests(ABC):
         but just noise in tests.
         """
         with database.transaction(), database.query(executable) as result:
-            return result.fetchall()
+            return list(result.fetchall())
 
     def query_scalar(self, database: Database, executable: sqlalchemy.sql.expression.SelectBase) -> Any:
         """Run a SELECT query that yields a single column and row against the
@@ -363,13 +363,14 @@ class DatabaseTests(ABC):
         with newDatabase.declareStaticTables(create=True) as context:
             static = context.addTableTuple(STATIC_TABLE_SPECS)
         newDatabase.insert(static.a, {"name": "a1", "region": None}, {"name": "a2", "region": None})
-        bIds = newDatabase.insert(
-            static.b,
-            {"name": "b1", "value": 11},
-            {"name": "b2", "value": 12},
-            {"name": "b3", "value": 13},
-            returnIds=True,
-        )
+        bIds = [
+            newDatabase.insert_and_get_primary_key(static.b, row)[0]
+            for row in [
+                {"name": "b1", "value": 11},
+                {"name": "b2", "value": 12},
+                {"name": "b3", "value": 13},
+            ]
+        ]
         # Create the table.
         with newDatabase.session():
             with newDatabase.temporary_table(TEMPORARY_TABLE_SPEC, "e1") as table1:
@@ -474,7 +475,7 @@ class DatabaseTests(ABC):
         self.assertGreater(results[1]["id"], results[0]["id"])
         # Insert multiple autoincrement rows and get the IDs back from insert.
         rows = [{"name": "b3", "value": 30}, {"name": "b4", "value": 40}]
-        ids = db.insert(tables.b, *rows, returnIds=True)
+        ids = [db.insert_and_get_primary_key(tables.b, row)[0] for row in rows]
         results = [
             r._asdict()
             for r in self.query_list(db, tables.b.select().where(tables.b.columns.id > results[1]["id"]))
@@ -485,7 +486,7 @@ class DatabaseTests(ABC):
         # Insert multiple rows into a table with an autoincrement primary key,
         # then use the returned IDs to insert into a dynamic table.
         rows = [{"b_id": results[0]["id"]}, {"b_id": None}]
-        ids = db.insert(tables.c, *rows, returnIds=True)
+        ids = [db.insert_and_get_primary_key(tables.c, row)[0] for row in rows]
         results = [r._asdict() for r in self.query_list(db, tables.c.select())]
         expected = [dict(row, id=id) for row, id in zip(rows, ids, strict=True)]
         self.assertCountEqual(results, expected)
@@ -653,40 +654,40 @@ class DatabaseTests(ABC):
             [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
 
-    def testReplace(self):
-        """Tests for `Database.replace`."""
+    def test_insert_on_conflict_do_update(self):
+        """Tests for `Database.insert` with ``on_conflict_do_update=True``."""
         db = self.makeEmptyDatabase(origin=1)
         with db.declareStaticTables(create=True) as context:
             tables = context.addTableTuple(STATIC_TABLE_SPECS)
-        # Use 'replace' to insert a single row that contains a region and
-        # query to get it back.
+        # Insert a single row that contains a region and query to get it back.
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
-        db.replace(tables.a, row1)
+        self.assertEqual(db.insert(tables.a, row1, on_conflict_do_update=True), 1)
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
-        db.replace(tables.a, row2)
+        db.insert(tables.a, row2, on_conflict_do_update=True)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
-        # Use replace to re-insert both of those rows again, which should do
-        # nothing.
-        db.replace(tables.a, row1, row2)
+        # Re-insert both of those rows again, which should do nothing.
+        db.insert(tables.a, row1, row2, on_conflict_do_update=True)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Replace row1 with a row with no region, while reinserting row2.
         row1a = {"name": "a1", "region": None}
-        db.replace(tables.a, row1a, row2)
+        db.insert(tables.a, row1a, row2, on_conflict_do_update=True)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1a, row2])
         # Replace both rows, returning row1 to its original state, while adding
         # a new one.  Pass them in in a different order.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
-        db.replace(tables.a, row3, row2a, row1)
+        db.insert(tables.a, row3, row2a, row1, on_conflict_do_update=True)
         self.assertCountEqual(
             [r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2a, row3]
         )
 
-    def test_replace_pkey_only(self):
-        """Test `Database.replace` on a table that only has primary key."""
+    def test_insert_on_conflict_do_update_pkey_only(self):
+        """Test `Database.insert` with ``on_conflict_do_update=True`` on a
+        table that only has primary key.
+        """
         spec = ddl.TableSpec(
             [
                 ddl.FieldSpec("a1", dtype=sqlalchemy.BigInteger, primaryKey=True),
@@ -698,13 +699,13 @@ class DatabaseTests(ABC):
             table = context.addTable("a", spec)
         row1 = {"a1": 1, "a2": 2}
         row2 = {"a1": 1, "a2": 3}
-        db.replace(table, row1)
-        db.replace(table, row2)
-        db.replace(table, row1)
+        db.insert(table, row1, on_conflict_do_update=True)
+        db.insert(table, row2, on_conflict_do_update=True)
+        db.insert(table, row1, on_conflict_do_update=True)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, table.select())], [row1, row2])
 
-    def testEnsure(self):
-        """Tests for `Database.ensure`."""
+    def test_insert_on_conflict_do_nothing(self):
+        """Tests for `Database.insert` with ``on_conflict_do_nothing=True``."""
         db = self.makeEmptyDatabase(origin=1)
         with db.declareStaticTables(create=True) as context:
             tables = context.addTableTuple(STATIC_TABLE_SPECS)
@@ -712,27 +713,26 @@ class DatabaseTests(ABC):
         # query to get it back.
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
-        self.assertEqual(db.ensure(tables.a, row1), 1)
+        self.assertEqual(db.insert(tables.a, row1, on_conflict_do_nothing=True), 1)
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
-        self.assertEqual(db.ensure(tables.a, row2), 1)
+        self.assertEqual(db.insert(tables.a, row2, on_conflict_do_nothing=True), 1)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
-        # Use ensure to re-insert both of those rows again, which should do
-        # nothing.
-        self.assertEqual(db.ensure(tables.a, row1, row2), 0)
+        # Re-insert both of those rows again, which should do nothing.
+        self.assertEqual(db.insert(tables.a, row1, row2, on_conflict_do_nothing=True), 0)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Attempt to insert row1's key with no region, while
         # reinserting row2.  This should also do nothing.
         row1a = {"name": "a1", "region": None}
-        self.assertEqual(db.ensure(tables.a, row1a, row2), 0)
+        self.assertEqual(db.insert(tables.a, row1a, row2, on_conflict_do_nothing=True), 0)
         self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Attempt to insert new rows for both existing keys, this time also
         # adding a new row.  Pass them in in a different order.  Only the new
         # row should be added.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
-        self.assertEqual(db.ensure(tables.a, row3, row2a, row1a), 1)
+        self.assertEqual(db.insert(tables.a, row3, row2a, row1a, on_conflict_do_nothing=True), 1)
         self.assertCountEqual(
             [r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2, row3]
         )
@@ -742,18 +742,29 @@ class DatabaseTests(ABC):
         db.insert(tables.b, row_b)
         # Attempt ensure with primary_key_only=False and a conflict for the
         # non-PK constraint.  This should do nothing.
-        db.ensure(tables.b, {"id": 10, "name": "five", "value": 200})
+        db.insert(
+            tables.b,
+            {"id": 10, "name": "five", "value": 200},
+            on_conflict_do_nothing=True,
+            primary_key_only=False,
+        )
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
-        # Now use primary_key_only=True with conflict in only the non-PK field.
-        # This should be an integrity error and nothing should change.
+        # With conflict in only the non-PK field and `primary_key_only=True`
+        # (by default) this should be an integrity error and nothing should
+        # change.
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
-            db.ensure(tables.b, {"id": 10, "name": "five", "value": 200}, primary_key_only=True)
+            db.insert(
+                tables.b,
+                {"id": 10, "name": "five", "value": 200},
+                on_conflict_do_nothing=True,
+                primary_key_only=True,
+            )
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
         # With primary_key_only=True a conflict in the primary key is ignored
         # regardless of whether there is a conflict elsewhere.
-        db.ensure(tables.b, {"id": 5, "name": "ten", "value": 100}, primary_key_only=True)
+        db.insert(tables.b, {"id": 5, "name": "ten", "value": 100}, on_conflict_do_nothing=True)
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
-        db.ensure(tables.b, {"id": 5, "name": "five", "value": 100}, primary_key_only=True)
+        db.insert(tables.b, {"id": 5, "name": "five", "value": 100}, on_conflict_do_nothing=True)
         self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
 
     def testTransactionNesting(self):
@@ -1221,13 +1232,10 @@ class DatabaseTests(ABC):
         new_db = self.makeEmptyDatabase()
         with new_db.declareStaticTables(create=True) as context:
             static = context.addTableTuple(STATIC_TABLE_SPECS)
-        b_ids = new_db.insert(
-            static.b,
-            {"name": "b1", "value": 11},
-            {"name": "b2", "value": 12},
-            {"name": "b3", "value": 13},
-            returnIds=True,
-        )
+        b_ids = [
+            new_db.insert_and_get_primary_key(static.b, row)[0]
+            for row in [{"name": "b1", "value": 11}, {"name": "b2", "value": 12}, {"name": "b3", "value": 13}]
+        ]
         values_spec = ddl.TableSpec(
             [
                 ddl.FieldSpec(name="b", dtype=sqlalchemy.BigInteger),

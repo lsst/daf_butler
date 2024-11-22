@@ -90,13 +90,13 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # Docstring inherited from OpaqueTableStorage.
         # The provided transaction object can be ignored since we rely on
         # the database itself providing any rollback functionality.
-        self._db.ensure(self._table, *data)
+        self._db.insert(self._table, *data, on_conflict_do_nothing=True)
 
     def replace(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
         # The provided transaction object can be ignored since we rely on
         # the database itself providing any rollback functionality.
-        self._db.replace(self._table, *data)
+        self._db.insert(self._table, *data, on_conflict_do_update=True)
 
     def fetch(
         self,

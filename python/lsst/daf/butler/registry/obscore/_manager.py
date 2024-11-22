@@ -337,7 +337,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
         if records:
             # Ignore potential conflicts with existing datasets.
-            return self.db.ensure(self.table, *records, primary_key_only=True)
+            return self.db.insert(self.table, *records, on_conflict_do_nothing=True)
         else:
             return 0
 

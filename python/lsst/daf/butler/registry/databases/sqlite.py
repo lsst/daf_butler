@@ -42,7 +42,7 @@ import sqlalchemy.ext.compiler
 
 from ... import ddl
 from ..._named import NamedValueAbstractSet
-from ..interfaces import Database, StaticTablesContext
+from ..interfaces import Database, SmartInsert, StaticTablesContext
 
 
 def _onSqlite3Connect(
@@ -55,6 +55,29 @@ def _onSqlite3Connect(
     with closing(dbapiConnection.cursor()) as cursor:
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.execute("PRAGMA busy_timeout = 300000;")  # in ms, so 5min (way longer than should be needed)
+
+
+class SmartInsertSqlite(SmartInsert):
+
+    def __init__(self, table: sqlalchemy.Table, primary_key_only: bool):
+        super().__init__(table, primary_key_only)
+        self._query = sqlalchemy.dialects.sqlite.insert(table)
+
+    def from_select(self, names: Iterable[str], select: sqlalchemy.SelectBase) -> SmartInsert:
+        self._query = self._query.from_select(list(names), select)
+        return self
+
+    def on_conflict_raise(self) -> sqlalchemy.Insert:
+        return self._query
+
+    def on_conflict_do_nothing(self) -> sqlalchemy.Insert:
+        return self._query.on_conflict_do_nothing(index_elements=self.index)
+
+    def on_conflict_do_update(self) -> sqlalchemy.Insert:
+        if update_set := self._get_update_set(self._query.excluded):
+            return self._query.on_conflict_do_update(index_elements=self.index, set_=update_set)
+        else:
+            return self._query.on_conflict_do_nothing(index_elements=self.index)
 
 
 class SqliteDatabase(Database):
@@ -344,35 +367,8 @@ class SqliteDatabase(Database):
             kwargs = dict(kwargs, sqlite_autoincrement=True)
         return super()._convertTableSpec(name, spec, metadata, **kwargs)
 
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
-        if not rows:
-            return
-        query = sqlalchemy.dialects.sqlite.insert(table)
-        excluded = query.excluded
-        data = {
-            column.name: getattr(excluded, column.name)
-            for column in table.columns
-            if column.name not in table.primary_key
-        }
-        if not data:
-            self.ensure(table, *rows)
-            return
-        query = query.on_conflict_do_update(index_elements=table.primary_key, set_=data)
-        with self._transaction() as (_, connection):
-            connection.execute(query, rows)
-
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
-        self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
-        if not rows:
-            return 0
-        query = sqlalchemy.dialects.sqlite.insert(table)
-        if primary_key_only:
-            query = query.on_conflict_do_nothing(index_elements=table.primary_key)
-        else:
-            query = query.on_conflict_do_nothing()
-        with self._transaction() as (_, connection):
-            return connection.execute(query, rows).rowcount
+    def _get_smart_insert(self, table: sqlalchemy.Table, primary_key_only: bool) -> SmartInsert:
+        return SmartInsertSqlite(table, primary_key_only)
 
     def constant_rows(
         self,

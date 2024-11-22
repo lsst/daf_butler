@@ -271,7 +271,7 @@ class CollectionSummaryManager:
         This method should only be called inside the transaction context of
         another operation that inserts or associates datasets.
         """
-        self._db.ensure(
+        self._db.insert(
             self._tables.datasetType,
             *[
                 {
@@ -280,12 +280,14 @@ class CollectionSummaryManager:
                 }
                 for dataset_type_id in dataset_type_ids
             ],
+            on_conflict_do_nothing=True,
         )
         for dimension, values in summary.governors.items():
             if values:
-                self._db.ensure(
+                self._db.insert(
                     self._tables.dimensions[dimension],
                     *[{self._collectionKeyName: collection.key, dimension: v} for v in values],
+                    on_conflict_do_nothing=True,
                 )
 
     def fetch_summaries(
