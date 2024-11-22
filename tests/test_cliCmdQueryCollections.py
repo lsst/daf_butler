@@ -277,6 +277,24 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             )
             self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
+            result = self.runner.invoke(cli, ["query-collections", "here", "--chains", "NO-CHILDREN"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table(
+                array(
+                    (
+                        ("calibration1", "CALIBRATION"),
+                        ("chain1", "CHAINED"),
+                        ("chain2", "CHAINED"),
+                        ("imported_g", "RUN"),
+                        ("imported_r", "RUN"),
+                        ("run1", "RUN"),
+                        ("tag1", "TAGGED"),
+                    )
+                ),
+                names=("Name", "Type"),
+            )
+            self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
+
             # Add a couple more run collections for chain testing
             registry1.registerRun("run2")
             registry1.registerRun("run3")

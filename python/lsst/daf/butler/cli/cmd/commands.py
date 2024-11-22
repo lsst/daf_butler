@@ -409,13 +409,16 @@ def prune_datasets(**kwargs: Any) -> None:
 
         FLATTEN lists all datasets, including child datasets, in one list.
 
+        NO-CHILDREN lists all collections in one list.  CHAINED collections are
+        included, but they are not expanded to include their children.
+
         [default: TREE]""",
     # above, the default value is included, instead of using show_default, so
     # that the default is printed on its own line instead of coming right after
     # the FLATTEN text.
     callback=to_upper,
     type=click.Choice(
-        choices=("TABLE", "INVERSE-TABLE", "TREE", "INVERSE-TREE", "FLATTEN"),
+        choices=("TABLE", "INVERSE-TABLE", "TREE", "INVERSE-TREE", "FLATTEN", "NO-CHILDREN"),
         case_sensitive=False,
     ),
 )
