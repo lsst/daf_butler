@@ -394,20 +394,22 @@ def prune_datasets(**kwargs: Any) -> None:
     default="TREE",
     help="""Affects how results are presented:
 
-        TABLE lists each dataset in table form, with columns for dataset name
-        and type, and a column that lists children of CHAINED datasets (if any
-        CHAINED datasets are found).
+        TABLE lists each collection in table form, with columns for collection
+        name and type, and a column that lists children of CHAINED collections
+        (if any CHAINED collections are found).
 
         INVERSE-TABLE is like TABLE but instead of a column listing CHAINED
-        dataset children, it lists the parents of the dataset if it is contained
-        in any CHAINED collections.
+        collection children, it lists the parents of the collection if it is
+        contained in any CHAINED collections.
 
-        TREE recursively lists children below each CHAINED dataset in tree form.
+        TREE recursively lists children below each CHAINED collection in tree
+        form.
 
-        INVERSE-TREE recursively lists parent datasets below each dataset in
-        tree form.
+        INVERSE-TREE recursively lists parent collections below each collection
+        in tree form.
 
-        FLATTEN lists all datasets, including child datasets, in one list.
+        FLATTEN lists all collections, including children of CHAINED
+        collections, in one list.
 
         NO-CHILDREN lists all collections in one list.  CHAINED collections are
         included, but they are not expanded to include their children.
