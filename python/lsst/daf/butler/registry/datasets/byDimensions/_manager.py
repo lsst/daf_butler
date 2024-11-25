@@ -4,6 +4,7 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 
 import dataclasses
 import datetime
+import itertools
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -1459,6 +1460,66 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # In calibration collections, we need timespan as well as data ID
             # to ensure unique rows.
             calibs_builder.distinct = calibs_builder.distinct and "timespan" not in fields
+
+        if not fields:
+            # Instead of doing jois of the DISTINCT subqueries, which are bad
+            # for query planner, we convert those into EXISTS() with equvalent
+            # subqueries.
+            if (tags_builder is None or tags_builder.distinct) and (
+                calibs_builder is None or calibs_builder.distinct
+            ):
+                # Subqueries in EXISTS need to be correlated with outer query.
+                # Join for all dimension we will need in outer join, this
+                # is only used temporarily.
+                outer_join: SqlJoinsBuilder | None = None
+                extra_join_dimensions = set()
+                for element_name in dataset_type.dimensions.required:
+                    element = dataset_type.dimensions.universe[element_name]
+                    if outer_join is None:
+                        outer_join = self._dimensions.make_joins_builder(element, set())
+                    else:
+                        outer_join.join(self._dimensions.make_joins_builder(element, set()))
+                    extra_join_dimensions.add(element)
+
+                where = []
+                if tags_builder is not None:
+                    # Correlate with outer query.
+                    correlated_where = []
+                    for dimension_name, columns1 in tags_builder.joins.dimension_keys.items():
+                        columns2 = outer_join.dimension_keys.get(dimension_name, [])
+                        for column1, column2 in itertools.product(columns1, columns2):
+                            correlated_where += [column1 == column2]
+
+                    where.append(
+                        sqlalchemy.exists(
+                            tags_builder.joins.where(*correlated_where)
+                            .to_select_builder(qt.ColumnSet(DimensionGroup(dataset_type.dimensions.universe)))
+                            .select(postprocessing=None)
+                        )
+                    )
+
+                if calibs_builder is not None:
+                    correlated_where = []
+                    for dimension_name, columns1 in calibs_builder.joins.dimension_keys.items():
+                        columns2 = outer_join.dimension_keys.get(dimension_name, [])
+                        for column1, column2 in itertools.product(columns1, columns2):
+                            correlated_where += [column1 == column2]
+
+                    where.append(
+                        sqlalchemy.exists(
+                            calibs_builder.joins.where(*correlated_where)
+                            .to_select_builder(qt.ColumnSet(DimensionGroup(dataset_type.dimensions.universe)))
+                            .select(postprocessing=None)
+                        )
+                    )
+
+                return SqlJoinsBuilder(
+                    db=self._db,
+                    from_clause=None,
+                    where_terms=[sqlalchemy.or_(*where)],
+                    extra_join_dimensions=extra_join_dimensions,
+                )
+
         if tags_builder is not None:
             if calibs_builder is not None:
                 # Need a UNION subquery.
