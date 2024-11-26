@@ -549,12 +549,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Notes
         -----
-        Supports dataset URIs of the forms ``ivo://rubin/butler_label/UUID``
+        Supports dataset URIs of the forms
+        ``ivo://rubin.lsst/datasets?butler_label/UUID``
         and ``butler://butler_label/UUID``. In ``ivo`` URIs the butler label
-        can include ``/`` and the leading ``/`` is always stripped. If the
-        repository label starts with ``/`` then it must be doubled up. e.g.,
+        can include ``/`` and the trailing ``/`` before the UUID is always
+        stripped.
 
-            ivo://rubin//repo/main/82d79caa-0823-4300-9874-67b737367ee0
+            ivo://rubin.lsst/datasets?/repo/main/UUID
 
         will return a label of ``/repo/main``.
 
@@ -564,9 +565,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         parsed = urllib.parse.urlparse(uri)
         if parsed.scheme == "ivo":
             # TODO: Validate netloc component.
-            label, id_ = os.path.split(parsed.path)
-            # Strip the leading /.
-            label = label[1:]
+            if parsed.path != "/datasets":
+                raise ValueError(f"Unrecognized path in IVOID {uri}. Expected 'datasets' got {parsed.path!r}")
+            label, id_ = os.path.split(parsed.query)
         elif parsed.scheme == "butler":
             label = parsed.netloc
             # Need to strip the leading /.

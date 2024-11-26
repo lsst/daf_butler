@@ -912,10 +912,10 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 factory = butler_factory.bind(access_token=None)
 
                 for dataset_uri in (
-                    f"ivo://rubin/{config_dir}/{ref.id}",
-                    f"ivo://rubin/{config_dir}/butler.yaml/{ref.id}",
+                    f"ivo://rubin.lsst/datasets?{config_dir}/{ref.id}",
+                    f"ivo://rubin.lsst/datasets?{config_dir}/butler.yaml/{ref.id}",
                     f"butler://{label}/{ref.id}",
-                    f"ivo://rubin/{label}/{ref.id}",
+                    f"ivo://rubin.lsst/datasets?{label}/{ref.id}",
                 ):
                     ref2 = Butler.get_dataset_from_uri(dataset_uri)
                     self.assertEqual(ref, ref2)
@@ -929,14 +929,17 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 self.assertIsNone(no_ref)
 
         # Test some failure modes.
-        with self.assertRaises(ValueError):
-            Butler.parse_dataset_uri("ivo://rubin/1234")
-        with self.assertRaises(ValueError):
-            Butler.parse_dataset_uri("butler://label/1234")
-        with self.assertRaises(ValueError):
-            Butler.parse_dataset_uri("butler://1234")
-        with self.assertRaises(ValueError):
-            Butler.parse_dataset_uri("https://something.edu/1234")
+        for dataset_uri in (
+            "butler://label/1234",  # Bad UUID.
+            "butler://1234",  # No label.
+            "ivo://rubin/1234",  # No query part and bad UUID and no label.
+            "ivo://rubin/datasets/dr1/82d79caa-0823-4300-9874-67b737367ee0",  # No query part.
+            "ivo://rubin/datasets?dr1/1234",  # Bad UUID.
+            "ivo://rubin.lsst/butler?dr1/82d79caa-0823-4300-9874-67b737367ee0",  # Not datasets.
+            "https://something.edu/1234",  # Wrong scheme.
+        ):
+            with self.assertRaises(ValueError):
+                Butler.parse_dataset_uri(dataset_uri)
 
 
 class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):
