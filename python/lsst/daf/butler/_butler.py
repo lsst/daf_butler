@@ -587,7 +587,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @classmethod
     def get_dataset_from_uri(
         cls, uri: str, factory: LabeledButlerFactoryProtocol | None = None
-    ) -> DatasetRef | None:
+    ) -> tuple[Butler, DatasetRef | None]:
         """Get the dataset associated with the given dataset URI.
 
         Parameters
@@ -596,10 +596,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             The URI associated with a dataset.
         factory : `LabeledButlerFactoryProtocol` or `None`, optional
             Bound factory function that will be given the butler label
-            and receive a `Butler`.
+            and receive a `Butler`. If this is not provided the label
+            will be tried directly.
 
         Returns
         -------
+        butler : `Butler`
+            Butler object associated with this URI.
         ref : `DatasetRef` or `None`
             The dataset associated with that URI, or `None` if the UUID
             is valid but the dataset is not known to this butler.
@@ -614,7 +617,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 pass
         if butler is None:
             butler = cls.from_config(label)
-        return butler.get_dataset(dataset_id)
+        return butler, butler.get_dataset(dataset_id)
 
     @abstractmethod
     def _caching_context(self) -> AbstractContextManager[None]:

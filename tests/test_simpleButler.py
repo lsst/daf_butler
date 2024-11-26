@@ -917,15 +917,23 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     f"butler://{label}/{ref.id}",
                     f"ivo://rubin.lsst/datasets?{label}/{ref.id}",
                 ):
-                    ref2 = Butler.get_dataset_from_uri(dataset_uri)
+                    new_butler, ref2 = Butler.get_dataset_from_uri(dataset_uri)
                     self.assertEqual(ref, ref2)
+                    # The returned butler needs to have the datastore mocked.
+                    DatastoreMock.apply(new_butler)
+                    dataset_id, _ = butler.get(ref2)
+                    self.assertEqual(dataset_id, ref.id)
 
-                    ref2 = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
+                    factory_butler, ref2 = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
                     self.assertEqual(ref, ref2)
+                    # The returned butler needs to have the datastore mocked.
+                    DatastoreMock.apply(factory_butler)
+                    dataset_id, _ = factory_butler.get(ref2)
+                    self.assertEqual(dataset_id, ref.id)
 
                 # Non existent dataset.
                 missing_id = str(ref.id).replace("2", "3")
-                no_ref = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                _, no_ref = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
                 self.assertIsNone(no_ref)
 
         # Test some failure modes.
