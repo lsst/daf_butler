@@ -15,7 +15,7 @@ config.log
 ups/*.cfgc
 pytest_session.txt
 bin/*
-.coverage
+.coverage*
 .pytest_cache/
 .mypy_cache/
 .idea/
@@ -25,3 +25,4 @@ mypy.log
 build/*
 dist/*
 python/lsst/utils/*
+python/*.dist-info/
