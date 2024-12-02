@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 from astropy.table import Table
 
@@ -166,15 +167,16 @@ def _getTree(
     return table
 
 
-def _getFlatten(
-    repo: str,
-    glob: Iterable[str],
-    collection_type: Iterable[CollectionType],
+def _getList(
+    repo: str, glob: Iterable[str], collection_type: Iterable[CollectionType], flatten_chains: bool
 ) -> Table:
+    """Return collection results as a table representing a flat list of
+    collections.
+    """
     butler = Butler.from_config(repo)
     collections = list(
         butler.collections.query_info(
-            glob or "*", collection_types=frozenset(collection_type), flatten_chains=True
+            glob or "*", collection_types=frozenset(collection_type), flatten_chains=flatten_chains
         )
     )
     names = [c.name for c in collections]
@@ -186,7 +188,7 @@ def queryCollections(
     repo: str,
     glob: Iterable[str],
     collection_type: Iterable[CollectionType],
-    chains: str,
+    chains: Literal["INVERSE-TABLE", "TABLE", "TREE", "INVERSE-TREE", "FLATTEN", "NO-CHILDREN"],
 ) -> Table:
     """Get the collections whose names match an expression.
 
@@ -202,7 +204,6 @@ def queryCollections(
             optional
         If provided, only return collections of these types.
     chains : `str`
-        Must be one of "FLATTEN", "TABLE", or "TREE" (case sensitive).
         Affects contents and formatting of results, see
         ``cli.commands.query_collections``.
 
@@ -215,6 +216,7 @@ def queryCollections(
         return _getTable(repo, glob, collection_type, inverse)
     elif (inverse := chains == "INVERSE-TREE") or chains == "TREE":
         return _getTree(repo, glob, collection_type, inverse)
-    elif chains == "FLATTEN":
-        return _getFlatten(repo, glob, collection_type)
+    elif chains == "FLATTEN" or chains == "NO-CHILDREN":
+        flatten = chains == "FLATTEN"
+        return _getList(repo, glob, collection_type, flatten)
     raise RuntimeError(f"Value for --chains not recognized: {chains}")
