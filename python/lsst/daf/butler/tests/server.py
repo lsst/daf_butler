@@ -122,26 +122,29 @@ def create_test_server(
                 server_butler_factory._preload_direct_butler_cache = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
 
-                client = TestClient(app)
-                client_without_error_propagation = TestClient(app, raise_server_exceptions=False)
+                # Using TestClient in a context manager ensures that it uses
+                # the same async event loop for all requests -- otherwise it
+                # starts a new one on each request.
+                with TestClient(app) as client:
+                    remote_butler = _make_remote_butler(client)
 
-                remote_butler = _make_remote_butler(client)
-                remote_butler_without_error_propagation = _make_remote_butler(
-                    client_without_error_propagation
-                )
+                    direct_butler = Butler.from_config(config_file_path, writeable=True)
+                    assert isinstance(direct_butler, DirectButler)
+                    hybrid_butler = HybridButler(remote_butler, direct_butler)
 
-                direct_butler = Butler.from_config(config_file_path, writeable=True)
-                assert isinstance(direct_butler, DirectButler)
-                hybrid_butler = HybridButler(remote_butler, direct_butler)
+                    client_without_error_propagation = TestClient(app, raise_server_exceptions=False)
+                    remote_butler_without_error_propagation = _make_remote_butler(
+                        client_without_error_propagation
+                    )
 
-                yield TestServerInstance(
-                    config_file_path=config_file_path,
-                    client=client,
-                    direct_butler=direct_butler,
-                    remote_butler=remote_butler,
-                    remote_butler_without_error_propagation=remote_butler_without_error_propagation,
-                    hybrid_butler=hybrid_butler,
-                )
+                    yield TestServerInstance(
+                        config_file_path=config_file_path,
+                        client=client,
+                        direct_butler=direct_butler,
+                        remote_butler=remote_butler,
+                        remote_butler_without_error_propagation=remote_butler_without_error_propagation,
+                        hybrid_butler=hybrid_butler,
+                    )
 
 
 def _make_remote_butler(client: TestClient) -> RemoteButler:

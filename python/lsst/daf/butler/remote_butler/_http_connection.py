@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButlerHttpConnection", "parse_model")
 
+import time
 import urllib.parse
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -210,7 +211,7 @@ class RemoteButlerHttpConnection:
         with the message as a subclass of ButlerUserError.
         """
         try:
-            response = self._client.send(request.request)
+            response = self._send_with_retries(request, stream=False)
             self._handle_http_status(response, request.request_id)
             return response
         except httpx.HTTPError as e:
@@ -219,7 +220,7 @@ class RemoteButlerHttpConnection:
     @contextmanager
     def _send_request_with_stream_response(self, request: _Request) -> Iterator[httpx.Response]:
         try:
-            response = self._client.send(request.request, stream=True)
+            response = self._send_with_retries(request, stream=True)
             try:
                 self._handle_http_status(response, request.request_id)
                 yield response
@@ -227,6 +228,17 @@ class RemoteButlerHttpConnection:
                 response.close()
         except httpx.HTTPError as e:
             raise ButlerServerError(request.request_id) from e
+
+    def _send_with_retries(self, request: _Request, stream: bool) -> httpx.Response:
+        while True:
+            response = self._client.send(request.request, stream=stream)
+            retry = _needs_retry(response)
+            if retry.retry:
+                if stream:
+                    response.close()
+                time.sleep(retry.delay_seconds)
+            else:
+                return response
 
     def _handle_http_status(self, response: httpx.Response, request_id: str) -> None:
         if response.status_code == ERROR_STATUS_CODE:
@@ -243,6 +255,32 @@ class RemoteButlerHttpConnection:
             # misbehaving.
 
         response.raise_for_status()
+
+
+@dataclass(frozen=True)
+class _Retry:
+    retry: bool
+    delay_seconds: int
+
+
+def _needs_retry(response: httpx.Response) -> _Retry:
+    # Handle a 503 Service Unavailable, sent by the server if it is
+    # overloaded, or a 429, sent by the server if the client
+    # triggers a rate limit.
+    if response.status_code == 503 or response.status_code == 429:
+        # Only retry if the server has instructed us to do so by sending a
+        # Retry-After header.
+        retry_after = response.headers.get("retry-after")
+        if retry_after is not None:
+            try:
+                # The HTTP standard also allows a date string here, but the
+                # Butler server only sends integer seconds.
+                delay_seconds = int(retry_after)
+                return _Retry(True, delay_seconds)
+            except ValueError:
+                pass
+
+    return _Retry(False, 0)
 
 
 def parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:

@@ -25,10 +25,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import asyncio
 import os.path
 import tempfile
+import threading
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import DEFAULT, AsyncMock, NonCallableMock, patch
 
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
@@ -50,7 +54,6 @@ except ImportError as e:
     create_test_server = None
     reason_text = str(e)
 
-from unittest.mock import DEFAULT, NonCallableMock, patch
 
 from lsst.daf.butler import (
     Butler,
@@ -426,6 +429,79 @@ class ButlerClientServerTestCase(unittest.TestCase):
                 self.assertEqual(len(datasets), 3)
                 self.assertGreaterEqual(mock_timeout.call_count, 3)
                 self.assertGreaterEqual(mock_keep_alive.call_count, 2)
+
+    def test_query_retries(self):
+        """Test that the server will send HTTP status 503 to put backpressure
+        on clients if it is overloaded, and that the client will retry if this
+        happens.
+        """
+        query_event = threading.Event()
+        retry_event = asyncio.Event()
+
+        async def block_first_request() -> None:
+            # Signal the unit tests that we have reached the critical section
+            # in the server, where the first client has reserved the query
+            # slot.
+            query_event.set()
+            # Block inside the query, until the 2nd client has been forced to
+            # retry.
+            await retry_event.wait()
+
+        async def block_second_request() -> None:
+            # Release the first client, so it can finish its query and prevent
+            # this client from being blocked on the next go-round.
+            retry_event.set()
+
+        def do_query(butler: Butler) -> list[DatasetRef]:
+            return butler.query_datasets("bias", "imported_g")
+
+        with (
+            patch.object(
+                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                "_MAXIMUM_CONCURRENT_STREAMING_QUERIES",
+                new=1,
+            ),
+            patch.object(
+                lsst.daf.butler.remote_butler.server.handlers._query_streaming, "_QUERY_RETRY_SECONDS", new=1
+            ),
+            patch.object(
+                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                "_block_query_for_unit_test",
+                new=AsyncMock(wraps=block_first_request),
+            ) as mock_first_client,
+            patch.object(
+                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                "_block_retry_for_unit_test",
+                new=AsyncMock(wraps=block_second_request),
+            ) as mock_second_client,
+            ThreadPoolExecutor(max_workers=1) as exec1,
+            ThreadPoolExecutor(max_workers=1) as exec2,
+        ):
+            first_butler = self.butler
+            second_butler = self.butler.clone()
+
+            # Run the first client up until the server starts executing its
+            # query.
+            future1 = exec1.submit(do_query, first_butler)
+            event_reached = query_event.wait(60)
+            if not event_reached:
+                raise TimeoutError("Server did not execute query logic as expected.")
+
+            # Start the second client, which will trigger the retry logic and
+            # release the first client to finish its query.
+            future2 = exec2.submit(do_query, second_butler)
+
+            result1 = future1.result(60)
+            result2 = future2.result(60)
+            self.assertEqual(len(result1), 3)
+            self.assertEqual(len(result2), 3)
+            # The original thread should have gone through this section, and
+            # then the 2nd thread after it retries.
+            self.assertEqual(mock_first_client.await_count, 2)
+            # We should have triggered the retry logic at least once, but it
+            # might occur multiple times depending how long the first client
+            # takes to finish.
+            self.assertGreaterEqual(mock_second_client.await_count, 1)
 
     # TODO DM-46204: This can be removed once the RSP recommended image has
     # been upgraded to a version that contains DM-46129.

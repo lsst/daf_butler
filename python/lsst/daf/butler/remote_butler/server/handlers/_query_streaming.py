@@ -32,6 +32,7 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import AbstractContextManager
 from typing import Protocol, TypeVar
 
+from fastapi import HTTPException
 from fastapi.concurrency import contextmanager_in_threadpool, iterate_in_threadpool
 from fastapi.responses import StreamingResponse
 from lsst.daf.butler.remote_butler.server_models import (
@@ -43,10 +44,25 @@ from lsst.daf.butler.remote_butler.server_models import (
 from ...._exceptions import ButlerUserError
 from ..._errors import serialize_butler_user_error
 
+# Restrict the maximum number of streaming queries that can be running
+# simultaneously, to prevent the database connection pool and the thread pool
+# from being tied up indefinitely.  Beyond this number, the server will return
+# an HTTP 503 Service Unavailable with a Retry-After header.  We are currently
+# using the default FastAPI thread pool size of 40 (total) and have 40 maximum
+# database connections (per Butler repository.)
+_MAXIMUM_CONCURRENT_STREAMING_QUERIES = 25
+# How long we ask callers to wait before trying their query again.
+# The hope is that they will bounce to a less busy replica, so we don't want
+# them to wait too long.
+_QUERY_RETRY_SECONDS = 5
+
 # Alias this function so we can mock it during unit tests.
 _timeout = asyncio.timeout
 
 _TContext = TypeVar("_TContext")
+
+# Count of active streaming queries.
+_current_streaming_queries = 0
 
 
 class StreamingQuery(Protocol[_TContext]):
@@ -67,7 +83,7 @@ class StreamingQuery(Protocol[_TContext]):
         """
 
 
-def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
+async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
     """Run a query, streaming the response incrementally, one page at a time,
     as newline-separated chunks of JSON.
 
@@ -95,6 +111,23 @@ def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
       read -- ``StreamingQuery.execute()`` cannot be interrupted while it is
       in the middle of reading a page.
     """
+    # Prevent an excessive number of streaming queries from jamming up the
+    # thread pool and database connection pool.  We can't change the response
+    # code after starting the StreamingResponse, so we enforce this here.
+    #
+    # This creates a small chance that more than the expected number of
+    # streaming queries will be started, but there is no guarantee that the
+    # StreamingResponse generator function will ever be called, so we can't
+    # guarantee that we release the slot if we reserve one here.
+    if _current_streaming_queries >= _MAXIMUM_CONCURRENT_STREAMING_QUERIES:
+        await _block_retry_for_unit_test()
+        raise HTTPException(
+            status_code=503,  # service temporarily unavailable
+            detail="The Butler Server is currently overloaded with requests."
+            f" Try again in {_QUERY_RETRY_SECONDS} seconds.",
+            headers={"retry-after": str(_QUERY_RETRY_SECONDS)},
+        )
+
     output_generator = _stream_query_pages(query)
     return StreamingResponse(
         output_generator,
@@ -115,17 +148,24 @@ async def _stream_query_pages(query: StreamingQuery) -> AsyncIterator[str]:
     When it takes longer than 15 seconds to get a response from the DB,
     sends a keep-alive message to prevent clients from timing out.
     """
-    # `None` signals that there is no more data to send.
-    queue = asyncio.Queue[QueryExecuteResultData | None](1)
-    async with asyncio.TaskGroup() as tg:
-        # Run a background task to read from the DB and insert the result pages
-        # into a queue.
-        tg.create_task(_enqueue_query_pages(queue, query))
-        # Read the result pages from the queue and send them to the client,
-        # inserting a keep-alive message every 15 seconds if we are waiting a
-        # long time for the database.
-        async for message in _dequeue_query_pages_with_keepalive(queue):
-            yield message.model_dump_json() + "\n"
+    global _current_streaming_queries
+    try:
+        _current_streaming_queries += 1
+        await _block_query_for_unit_test()
+
+        # `None` signals that there is no more data to send.
+        queue = asyncio.Queue[QueryExecuteResultData | None](1)
+        async with asyncio.TaskGroup() as tg:
+            # Run a background task to read from the DB and insert the result
+            # pages into a queue.
+            tg.create_task(_enqueue_query_pages(queue, query))
+            # Read the result pages from the queue and send them to the client,
+            # inserting a keep-alive message every 15 seconds if we are waiting
+            # a long time for the database.
+            async for message in _dequeue_query_pages_with_keepalive(queue):
+                yield message.model_dump_json() + "\n"
+    finally:
+        _current_streaming_queries -= 1
 
 
 async def _enqueue_query_pages(
@@ -163,3 +203,17 @@ async def _dequeue_query_pages_with_keepalive(
                 yield message
         except TimeoutError:
             yield QueryKeepAliveModel()
+
+
+async def _block_retry_for_unit_test() -> None:
+    """Will be overridden during unit tests to block the server,
+    in order to verify retry logic.
+    """
+    pass
+
+
+async def _block_query_for_unit_test() -> None:
+    """Will be overridden during unit tests to block the server,
+    in order to verify maximum concurrency logic.
+    """
+    pass

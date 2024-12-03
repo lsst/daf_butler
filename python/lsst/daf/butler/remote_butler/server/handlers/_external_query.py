@@ -91,7 +91,7 @@ async def query_execute(
     request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
 ) -> StreamingResponse:
     query = _StreamQueryDriverExecute(request, factory)
-    return execute_streaming_query(query)
+    return await execute_streaming_query(query)
 
 
 class _QueryAllDatasetsContext(NamedTuple):
@@ -136,7 +136,7 @@ async def query_all_datasets_execute(
     request: QueryAllDatasetsRequestModel, factory: Factory = Depends(factory_dependency)
 ) -> StreamingResponse:
     query = _StreamQueryAllDatasets(request, factory)
-    return execute_streaming_query(query)
+    return await execute_streaming_query(query)
 
 
 @query_router.post(
