@@ -912,10 +912,10 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 factory = butler_factory.bind(access_token=None)
 
                 for dataset_uri in (
-                    f"ivo://rubin.lsst/datasets?{config_dir}/{ref.id}",
-                    f"ivo://rubin.lsst/datasets?{config_dir}/butler.yaml/{ref.id}",
+                    f"ivo://org.rubinobs/usdac/test?repo={config_dir}&id={ref.id}",
+                    f"ivo://org.rubinobs/ukdac/lsst-dr1?repo={config_dir}/butler.yaml&id={ref.id}",
                     f"butler://{label}/{ref.id}",
-                    f"ivo://rubin.lsst/datasets?{label}/{ref.id}",
+                    f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
                 ):
                     new_butler, ref2 = Butler.get_dataset_from_uri(dataset_uri)
                     self.assertEqual(ref, ref2)
@@ -939,11 +939,14 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         # Test some failure modes.
         for dataset_uri in (
             "butler://label/1234",  # Bad UUID.
-            "butler://1234",  # No label.
+            "butler://1234",  # No UUID.
+            "butler:///1234",  # No label.
             "ivo://rubin/1234",  # No query part and bad UUID and no label.
             "ivo://rubin/datasets/dr1/82d79caa-0823-4300-9874-67b737367ee0",  # No query part.
-            "ivo://rubin/datasets?dr1/1234",  # Bad UUID.
-            "ivo://rubin.lsst/butler?dr1/82d79caa-0823-4300-9874-67b737367ee0",  # Not datasets.
+            "ivo://org.rubinobs/datasets?repo=dr1&id=1234",  # Bad UUID.
+            "ivo://org.rubinobs/butler?release=dr1&id=82d79caa-0823-4300-9874-67b737367ee0",  # No repo key.
+            "ivo://org.rubinobs/butler?repo=dr1&repo=dr2&id=82d79caa-0823-4300-9874-67b737367ee0",  # 2 vals.
+            "ivo://org.rubinobs/something?repo=%20&id=82d79caa-0823-4300-9874-67b737367ee0",  # no repo.
             "https://something.edu/1234",  # Wrong scheme.
         ):
             with self.assertRaises(ValueError):

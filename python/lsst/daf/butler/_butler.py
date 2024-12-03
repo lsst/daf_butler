@@ -29,7 +29,6 @@ from __future__ import annotations
 
 __all__ = ["Butler"]
 
-import os
 import urllib.parse
 import uuid
 from abc import abstractmethod
@@ -550,30 +549,42 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         Notes
         -----
         Supports dataset URIs of the forms
-        ``ivo://rubin.lsst/datasets?butler_label/UUID``
-        and ``butler://butler_label/UUID``. In ``ivo`` URIs the butler label
-        can include ``/`` and the trailing ``/`` before the UUID is always
-        stripped.
+        ``ivo://org.rubinobs/usdac/dr1?repo=butler_label&id=UUID`` (see
+        DMTN-302) and ``butler://butler_label/UUID``. The ``butler`` URI is
+        deprecated and can not include ``/`` in the label string. ``ivo`` URIs
+        can include anything supported by the `Butler` constructor, including
+        paths to repositories and alias labels.
 
-            ivo://rubin.lsst/datasets?/repo/main/UUID
+            ivo://org.rubinobs/dr1?repo=/repo/main&id=UUID
 
         will return a label of ``/repo/main``.
 
         This method does not attempt to check that the dataset exists in the
         labeled butler.
+
+        Since the IVOID can be issued by any publisher to represent a Butler
+        dataset there is no validation of the path or netloc component of the
+        URI. The only requirement is that there are ``id`` and ``repo`` keys
+        in the ``ivo`` URI query component.
         """
         parsed = urllib.parse.urlparse(uri)
         if parsed.scheme == "ivo":
-            # TODO: Validate netloc component.
-            if parsed.path != "/datasets":
-                raise ValueError(f"Unrecognized path in IVOID {uri}. Expected 'datasets' got {parsed.path!r}")
-            label, id_ = os.path.split(parsed.query)
+            # Do not validate the netloc or the path values.
+            qs = urllib.parse.parse_qs(parsed.query)
+            if "repo" not in qs or "id" not in qs:
+                raise ValueError(f"Missing 'repo' and/or 'id' query parameters in IVOID {uri}.")
+            if len(qs["repo"]) != 1 or len(qs["id"]) != 1:
+                raise ValueError(f"Butler IVOID only supports a single value of repo and id, got {uri}")
+            label = qs["repo"][0]
+            id_ = qs["id"][0]
         elif parsed.scheme == "butler":
             label = parsed.netloc
             # Need to strip the leading /.
             id_ = parsed.path[1:]
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri!r}")
+        # Strip trailing/leading whitespace from label.
+        label = label.strip()
         if not label:
             raise ValueError(f"No butler repository label found in uri {uri!r}")
         try:
