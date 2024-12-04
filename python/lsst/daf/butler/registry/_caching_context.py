@@ -31,7 +31,6 @@ __all__ = ["CachingContext"]
 
 from ._collection_record_cache import CollectionRecordCache
 from ._collection_summary_cache import CollectionSummaryCache
-from ._dataset_type_cache import DatasetTypeCache
 
 
 class CachingContext:
@@ -46,13 +45,9 @@ class CachingContext:
     instances which will be `None` when caching is disabled. Instance of this
     class is passed to the relevant managers that can use it to query or
     populate caches when caching is enabled.
-
-    Dataset type cache is always enabled for now, this avoids the need for
-    explicitly enabling caching in pipetask executors.
     """
 
     def __init__(self) -> None:
-        self._dataset_types: DatasetTypeCache = DatasetTypeCache()
         self._collection_records: CollectionRecordCache | None = None
         self._collection_summaries: CollectionSummaryCache | None = None
         self._depth = 0
@@ -96,8 +91,3 @@ class CachingContext:
     def collection_summaries(self) -> CollectionSummaryCache | None:
         """Cache for collection summary records (`CollectionSummaryCache`)."""
         return self._collection_summaries
-
-    @property
-    def dataset_types(self) -> DatasetTypeCache:
-        """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
-        return self._dataset_types
