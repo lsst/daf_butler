@@ -30,13 +30,10 @@ from __future__ import annotations
 __all__ = ("DatasetTypeCache",)
 
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING
 
-from .._dataset_type import DatasetType
-from ..dimensions import DimensionGroup
-
-if TYPE_CHECKING:
-    from .datasets.byDimensions.tables import DynamicTables
+from ...._dataset_type import DatasetType
+from ....dimensions import DimensionGroup
+from .tables import DynamicTables, DynamicTablesCache
 
 
 class DatasetTypeCache:
@@ -57,8 +54,6 @@ class DatasetTypeCache:
     """
 
     def __init__(self) -> None:
-        from .datasets.byDimensions.tables import DynamicTablesCache
-
         self.tables = DynamicTablesCache()
         self._by_name_cache: dict[str, tuple[DatasetType, int]] = {}
         self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
