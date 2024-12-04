@@ -79,7 +79,7 @@ class _DatasetTypeRecord:
             else:
                 # Some previously-cached dataset type had the same dimensions
                 # but was not a calibration.
-                current.calibs_name = self.calib_table_name
+                current = current.copy(calibs_name=self.calib_table_name)
             # If some previously-cached dataset type was a calibration but this
             # one isn't, we don't want to forget the calibs table.
         return current
@@ -326,9 +326,13 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 dynamic_tables = DynamicTables.from_dimensions_key(
                     dataset_type.dimensions, dimensions_key, dataset_type.isCalibration()
                 )
-                dynamic_tables.create(self._db, type(self._collections))
+                dynamic_tables.create(
+                    self._db, type(self._collections), self._caching_context.dataset_types.tables
+                )
             elif dataset_type.isCalibration() and dynamic_tables.calibs_name is None:
-                dynamic_tables.add_calibs(self._db, type(self._collections))
+                dynamic_tables = dynamic_tables.add_calibs(
+                    self._db, type(self._collections), self._caching_context.dataset_types.tables
+                )
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": dataset_type.name},
@@ -454,7 +458,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # This query could return multiple rows (one for each tagged
             # collection the dataset is in, plus one for its run collection),
             # and we don't care which of those we get.
-            tags_table = dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(dynamic_tables)
             data_id_sql = (
                 tags_table.select()
                 .where(
@@ -553,9 +557,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             for record in records:
                 cache_data.append((record.dataset_type, record.dataset_type_id))
                 if (dynamic_tables := cache_dimensions_data.get(record.dataset_type.dimensions)) is None:
-                    cache_dimensions_data[record.dataset_type.dimensions] = record.make_dynamic_tables()
+                    tables = record.make_dynamic_tables()
                 else:
-                    record.update_dynamic_tables(dynamic_tables)
+                    tables = record.update_dynamic_tables(dynamic_tables)
+                cache_dimensions_data[record.dataset_type.dimensions] = tables
             self._caching_context.dataset_types.set(
                 cache_data, full=True, dimensions_data=cache_dimensions_data.items(), dimensions_full=True
             )
@@ -684,7 +689,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 for dataId, row in zip(data_id_list, rows, strict=True)
             ]
             # Insert those rows into the tags table.
-            self._db.insert(storage.dynamic_tables.tags(self._db, type(self._collections)), *tagsRows)
+            self._db.insert(self._get_tags_table(storage.dynamic_tables), *tagsRows)
 
         return [
             DatasetRef(
@@ -767,9 +772,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             summary.add_datasets(refs)
             self._summaries.update(run, [storage.dataset_type_id], summary)
             # Copy from temp table into tags table.
-            self._db.insert(
-                storage.dynamic_tables.tags(self._db, type(self._collections)), select=tmp_tags.select()
-            )
+            self._db.insert(self._get_tags_table(storage.dynamic_tables), select=tmp_tags.select())
         return refs
 
     def _validate_import(
@@ -793,7 +796,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             Raise if new datasets conflict with existing ones.
         """
         dataset = self._static.dataset
-        tags = storage.dynamic_tables.tags(self._db, type(self._collections))
+        tags = self._get_tags_table(storage.dynamic_tables)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
 
         # Check that existing datasets have the same dataset type and
@@ -943,7 +946,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # inserted there.
             self._summaries.update(collection, [storage.dataset_type_id], summary)
             # Update the tag table itself.
-            self._db.replace(storage.dynamic_tables.tags(self._db, type(self._collections)), *rows)
+            self._db.replace(self._get_tags_table(storage.dynamic_tables), *rows)
 
     def disassociate(
         self, dataset_type: DatasetType, collection: CollectionRecord, datasets: Iterable[DatasetRef]
@@ -964,7 +967,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             for dataset in datasets
         ]
         self._db.delete(
-            storage.dynamic_tables.tags(self._db, type(self._collections)),
+            self._get_tags_table(storage.dynamic_tables),
             ["dataset_id", self._collections.getCollectionForeignKeyName()],
             *rows,
         )
@@ -1015,7 +1018,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # inserted there.
         self._summaries.update(collection, [storage.dataset_type_id], summary)
         # Update the association table itself.
-        calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+        calibs_table = self._get_calibs_table(storage.dynamic_tables)
         if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
             # reraise the exception for consistency across DB engines.
@@ -1099,7 +1102,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         rows_to_insert = []
         # Acquire a table lock to ensure there are no concurrent writes
         # between the SELECT and the DELETE and INSERT queries based on it.
-        calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+        calibs_table = self._get_calibs_table(storage.dynamic_tables)
         with self._db.transaction(lock=[calibs_table], savepoint=True):
             # Enter SqlQueryContext in case we need to use a temporary table to
             # include the give data IDs in the query (see similar block in
@@ -1186,7 +1189,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         tag_relation: Relation | None = None
         calib_relation: Relation | None = None
         if collection_types != {CollectionType.CALIBRATION}:
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(storage.dynamic_tables)
             # We'll need a subquery for the tags table if any of the given
             # collections are not a CALIBRATION collection.  This intentionally
             # also fires when the list of collections is empty as a way to
@@ -1214,7 +1217,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
-            calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+            calibs_table = self._get_calibs_table(storage.dynamic_tables)
             calibs_parts = sql.Payload[LogicalColumn](calibs_table.alias(f"{dataset_type.name}_calibs"))
             if "timespan" in columns:
                 calibs_parts.columns_available[DatasetColumnTag(dataset_type.name, "timespan")] = (
@@ -1422,7 +1425,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # create a dummy subquery that we know will fail.
             # We give the table an alias because it might appear multiple times
             # in the same query, for different dataset types.
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections)).alias(
+            tags_table = self._get_tags_table(storage.dynamic_tables).alias(
                 f"{dataset_type.name}_tags{'_union' if is_union else ''}"
             )
             tags_builder = self._finish_query_builder(
@@ -1441,7 +1444,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
-            calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections)).alias(
+            calibs_table = self._get_calibs_table(storage.dynamic_tables).alias(
                 f"{dataset_type.name}_calibs{'_union' if is_union else ''}"
             )
             calibs_builder = self._finish_query_builder(
@@ -1616,14 +1619,14 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
             # Query datasets tables for associated collections.
             column_name = self._collections.getCollectionForeignKeyName()
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(storage.dynamic_tables)
             query: sqlalchemy.sql.expression.SelectBase = (
                 sqlalchemy.select(tags_table.columns[column_name])
                 .where(tags_table.columns.dataset_type_id == storage.dataset_type_id)
                 .distinct()
             )
             if dataset_type.isCalibration():
-                calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+                calibs_table = self._get_calibs_table(storage.dynamic_tables)
                 query2 = (
                     sqlalchemy.select(calibs_table.columns[column_name])
                     .where(calibs_table.columns.dataset_type_id == storage.dataset_type_id)
@@ -1636,6 +1639,12 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
             collections_to_delete = summary_collection_ids - collection_ids
             self._summaries.delete_collections(storage.dataset_type_id, collections_to_delete)
+
+    def _get_tags_table(self, table: DynamicTables) -> sqlalchemy.Table:
+        return table.tags(self._db, type(self._collections), self._caching_context.dataset_types.tables)
+
+    def _get_calibs_table(self, table: DynamicTables) -> sqlalchemy.Table:
+        return table.calibs(self._db, type(self._collections), self._caching_context.dataset_types.tables)
 
 
 def _create_case_expression_for_collections(
