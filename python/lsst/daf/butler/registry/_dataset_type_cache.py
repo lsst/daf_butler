@@ -57,6 +57,9 @@ class DatasetTypeCache:
     """
 
     def __init__(self) -> None:
+        from .datasets.byDimensions.tables import DynamicTablesCache
+
+        self.tables = DynamicTablesCache()
         self._by_name_cache: dict[str, tuple[DatasetType, int]] = {}
         self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
         self._full = False

@@ -38,11 +38,13 @@ __all__ = (
 )
 
 from collections import namedtuple
-from typing import Any
+from typing import Any, TypeAlias
 
 import sqlalchemy
+from lsst.utils.classes import immutable
 
 from .... import ddl
+from ...._utilities.thread_safe_cache import ThreadSafeCache
 from ....dimensions import DimensionGroup, DimensionUniverse, GovernorDimension, addDimensionForeignKey
 from ....timespan_database_representation import TimespanDatabaseRepresentation
 from ...interfaces import CollectionManager, Database, VersionTuple
@@ -449,9 +451,16 @@ def makeCalibTableSpec(
     return tableSpec
 
 
+DynamicTablesCache: TypeAlias = ThreadSafeCache[str, sqlalchemy.Table]
+
+
+@immutable
 class DynamicTables:
     """A struct that holds the "dynamic" tables common to dataset types that
     share the same dimensions.
+
+    Objects of this class may be shared between multiple threads, so it must be
+    immutable to prevent concurrency issues.
 
     Parameters
     ----------
@@ -477,8 +486,9 @@ class DynamicTables:
         self.dimensions_key = dimensions_key
         self.tags_name = tags_name
         self.calibs_name = calibs_name
-        self._tags_table: sqlalchemy.Table | None = None
-        self._calibs_table: sqlalchemy.Table | None = None
+
+    def copy(self, calibs_name: str) -> DynamicTables:
+        return DynamicTables(self._dimensions, self.dimensions_key, self.tags_name, calibs_name)
 
     @classmethod
     def from_dimensions_key(
@@ -509,7 +519,7 @@ class DynamicTables:
             calibs_name=makeCalibTableName(dimensions_key) if is_calibration else None,
         )
 
-    def create(self, db: Database, collections: type[CollectionManager]) -> None:
+    def create(self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache) -> None:
         """Create the tables if they don't already exist.
 
         Parameters
@@ -519,19 +529,30 @@ class DynamicTables:
         collections : `type` [ `CollectionManager` ]
             Manager class for collections; used to create foreign key columns
             for collections.
+        cache : `DynamicTablesCache`
+            Cache used to store sqlalchemy Table objects.
         """
-        if self._tags_table is None:
-            self._tags_table = db.ensureTableExists(
+        if cache.get(self.tags_name) is None:
+            cache.set_or_get(
                 self.tags_name,
-                makeTagTableSpec(self._dimensions, collections),
-            )
-        if self.calibs_name is not None and self._calibs_table is None:
-            self._calibs_table = db.ensureTableExists(
-                self.calibs_name,
-                makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+                db.ensureTableExists(
+                    self.tags_name,
+                    makeTagTableSpec(self._dimensions, collections),
+                ),
             )
 
-    def add_calibs(self, db: Database, collections: type[CollectionManager]) -> None:
+        if self.calibs_name is not None and cache.get(self.calibs_name) is None:
+            cache.set_or_get(
+                self.calibs_name,
+                db.ensureTableExists(
+                    self.calibs_name,
+                    makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+                ),
+            )
+
+    def add_calibs(
+        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
+    ) -> DynamicTables:
         """Create a calibs table for a dataset type whose dimensions already
         have a tags table.
 
@@ -542,14 +563,23 @@ class DynamicTables:
         collections : `type` [ `CollectionManager` ]
             Manager class for collections; used to create foreign key columns
             for collections.
+        cache : `DynamicTablesCache`
+            Cache used to store sqlalchemy Table objects.
         """
-        self.calibs_name = makeCalibTableName(self.dimensions_key)
-        self._calibs_table = db.ensureTableExists(
-            self.calibs_name,
-            makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+        calibs_name = makeCalibTableName(self.dimensions_key)
+        cache.set_or_get(
+            calibs_name,
+            db.ensureTableExists(
+                calibs_name,
+                makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation()),
+            ),
         )
 
-    def tags(self, db: Database, collections: type[CollectionManager]) -> sqlalchemy.Table:
+        return self.copy(calibs_name=calibs_name)
+
+    def tags(
+        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
+    ) -> sqlalchemy.Table:
         """Return the "tags" table that associates datasets with data IDs in
         TAGGED and RUN collections.
 
@@ -563,21 +593,27 @@ class DynamicTables:
         collections : `type` [ `CollectionManager` ]
             Manager class for collections; used to create foreign key columns
             for collections.
+        cache : `DynamicTablesCache`
+            Cache used to store sqlalchemy Table objects.
 
         Returns
         -------
         table : `sqlalchemy.Table`
             SQLAlchemy table object.
         """
-        if self._tags_table is None:
-            spec = makeTagTableSpec(self._dimensions, collections)
-            table = db.getExistingTable(self.tags_name, spec)
-            if table is None:
-                raise MissingDatabaseTableError(f"Table {self.tags_name!r} is missing from database schema.")
-            self._tags_table = table
-        return self._tags_table
+        table = cache.get(self.tags_name)
+        if table is not None:
+            return table
 
-    def calibs(self, db: Database, collections: type[CollectionManager]) -> sqlalchemy.Table:
+        spec = makeTagTableSpec(self._dimensions, collections)
+        table = db.getExistingTable(self.tags_name, spec)
+        if table is None:
+            raise MissingDatabaseTableError(f"Table {self.tags_name!r} is missing from database schema.")
+        return cache.set_or_get(self.tags_name, table)
+
+    def calibs(
+        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
+    ) -> sqlalchemy.Table:
         """Return the "calibs" table that associates datasets with data IDs and
         timespans in CALIBRATION collections.
 
@@ -592,6 +628,8 @@ class DynamicTables:
         collections : `type` [ `CollectionManager` ]
             Manager class for collections; used to create foreign key columns
             for collections.
+        cache : `DynamicTablesCache`
+            Cache used to store sqlalchemy Table objects.
 
         Returns
         -------
@@ -601,12 +639,12 @@ class DynamicTables:
         assert (
             self.calibs_name is not None
         ), "Dataset type should be checked to be calibration by calling code."
-        if self._calibs_table is None:
-            spec = makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation())
-            table = db.getExistingTable(self.calibs_name, spec)
-            if table is None:
-                raise MissingDatabaseTableError(
-                    f"Table {self.calibs_name!r} is missing from database schema."
-                )
-            self._calibs_table = table
-        return self._calibs_table
+        table = cache.get(self.calibs_name)
+        if table is not None:
+            return table
+
+        spec = makeCalibTableSpec(self._dimensions, collections, db.getTimespanRepresentation())
+        table = db.getExistingTable(self.calibs_name, spec)
+        if table is None:
+            raise MissingDatabaseTableError(f"Table {self.calibs_name!r} is missing from database schema.")
+        return cache.set_or_get(self.calibs_name, table)
