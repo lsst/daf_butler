@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
 import sqlalchemy
@@ -24,7 +24,7 @@ from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
 from ....direct_query_driver import SqlJoinsBuilder, SqlSelectBuilder  # new query system, server+direct only
 from ....queries import tree as qt  # new query system, both clients + server
-from ..._caching_context import CachingContext, GenericCachingContext
+from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
@@ -155,7 +155,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
-        self._caching_context = cast(GenericCachingContext[int, DynamicTables], caching_context)
+        self._caching_context = caching_context
         self._use_astropy_ingest_date = self.ingest_date_dtype() is ddl.AstropyTimeNsecTai
         self._run_key_column = collections.getRunForeignKeyName()
 
