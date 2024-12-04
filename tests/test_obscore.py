@@ -479,7 +479,7 @@ class ObsCoreTests(TestCaseMixin):
         )
         self.assertEqual(count, 2)
 
-        with obscore.query(["s_ra", "s_dec", "s_region", "lsst_detector"]) as result:
+        with obscore.query(["s_ra", "s_dec", "s_region", "lsst_detector", "facility_name"]) as result:
             rows = list(result)
             self.assertEqual(len(rows), 4)
             for row in rows:
@@ -491,6 +491,7 @@ class ObsCoreTests(TestCaseMixin):
                     self.assertIsNone(row.s_ra)
                     self.assertIsNone(row.s_dec)
                     self.assertIsNone(row.s_region)
+                self.assertEqual(row.facility_name, "derived_facility")
 
 
 class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):

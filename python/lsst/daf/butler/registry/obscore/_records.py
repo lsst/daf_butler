@@ -163,7 +163,6 @@ class RecordFactory:
         record["dataproduct_type"] = dataset_config.dataproduct_type
         record["dataproduct_subtype"] = dataset_config.dataproduct_subtype
         record["o_ucd"] = dataset_config.o_ucd
-        record["facility_name"] = self.config.facility_name
         record["calib_level"] = dataset_config.calib_level
         if dataset_config.obs_collection is not None:
             record["obs_collection"] = dataset_config.obs_collection
@@ -171,9 +170,12 @@ class RecordFactory:
             record["obs_collection"] = self.config.obs_collection
         record["access_format"] = dataset_config.access_format
 
-        record["instrument_name"] = dataId.get("instrument")
+        instrument_name = cast(str, dataId.get("instrument"))
+        record["instrument_name"] = instrument_name
         if self.schema.dataset_fk is not None:
             record[self.schema.dataset_fk.name] = ref.id
+
+        record["facility_name"] = self.config.facility_map.get(instrument_name, self.config.facility_name)
 
         timespan = dataId.timespan
         if timespan is not None:

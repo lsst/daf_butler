@@ -1,0 +1,2 @@
+Modified ObsCore configuration to support ``facility_map`` lookup table to allow the facility to be associated with a specific instrument.
+This is important for butler repositories containing data from multiple instruments and facilities.
