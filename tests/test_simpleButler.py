@@ -913,7 +913,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
 
                 for dataset_uri in (
                     f"ivo://org.rubinobs/usdac/test?repo={config_dir}&id={ref.id}",
-                    f"ivo://org.rubinobs/ukdac/lsst-dr1?repo={config_dir}/butler.yaml&id={ref.id}",
+                    f"ivo://org.rubinobs/ukdac/lsst-dr1?repo={config_dir}%2Fbutler.yaml&id={ref.id}",
                     f"butler://{label}/{ref.id}",
                     f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
                 ):
