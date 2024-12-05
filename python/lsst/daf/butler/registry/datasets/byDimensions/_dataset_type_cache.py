@@ -60,6 +60,35 @@ class DatasetTypeCache:
         self._full = False
         self._dimensions_full = False
 
+    def clone(self) -> DatasetTypeCache:
+        """Make a copy of the caches that are safe to use in another thread.
+
+        Notes
+        -----
+        After cloning, the ``tables`` cache will be shared between the new
+        instance and the current instance. It is safe to read and update
+        ``tables`` from multiple threads simultaneously -- the cached values
+        are immutable table schemas, and they are looked up one at a time by
+        name.
+
+        The other caches are copied, because their access patterns are more
+        complex.
+
+        ``full`` and ``dimensions_full`` will initially return `False` in the
+        new instance.  This preserves the invariant that a Butler is able to
+        see any changes to the database made before the Butler is instantiated.
+        The downside is that the cloned cache will have to be re-fetched before
+        it can be used for glob searches.
+        """
+        clone = DatasetTypeCache()
+        # Share DynamicTablesCache between instances.
+        clone.tables = self.tables
+        # The inner key/value objects are immutable in both of these caches, so
+        # we can shallow-copy the dicts.
+        clone._by_name_cache = self._by_name_cache.copy()
+        clone._by_dimensions_cache = self._by_dimensions_cache.copy()
+        return clone
+
     @property
     def full(self) -> bool:
         """`True` if cache holds all known dataset types (`bool`)."""

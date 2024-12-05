@@ -135,6 +135,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         Structure containing tables that summarize the contents of collections.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
+    _cache : `None`, optional
+        For internal use only.
     """
 
     def __init__(
@@ -146,6 +148,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
         registry_schema_version: VersionTuple | None = None,
+        _cache: DatasetTypeCache | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
@@ -153,7 +156,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
-        self._cache = DatasetTypeCache()
+        self._cache = _cache if _cache is not None else DatasetTypeCache()
         self._use_astropy_ingest_date = self.ingest_date_dtype() is ddl.AstropyTimeNsecTai
         self._run_key_column = collections.getRunForeignKeyName()
 
@@ -270,6 +273,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             static=self._static,
             summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
             registry_schema_version=self._registry_schema_version,
+            # See notes on DatasetTypeCache.clone() about cache behavior after
+            # cloning.
+            _cache=self._cache.clone(),
         )
 
     def refresh(self) -> None:
@@ -501,6 +507,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def _dataset_type_from_row(self, row: Mapping) -> DatasetType:
         return self._record_from_row(row).dataset_type
+
+    def preload_cache(self) -> None:
+        self._fetch_dataset_types()
 
     def _fetch_dataset_types(self) -> list[DatasetType]:
         """Fetch list of all defined dataset types."""
