@@ -917,24 +917,24 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     f"butler://{label}/{ref.id}",
                     f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
                 ):
-                    new_butler, ref2 = Butler.get_dataset_from_uri(dataset_uri)
-                    self.assertEqual(ref, ref2)
+                    result = Butler.get_dataset_from_uri(dataset_uri)
+                    self.assertEqual(result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
-                    DatastoreMock.apply(new_butler)
-                    dataset_id, _ = butler.get(ref2)
+                    DatastoreMock.apply(result.butler)
+                    dataset_id, _ = result.butler.get(result.dataset)
                     self.assertEqual(dataset_id, ref.id)
 
-                    factory_butler, ref2 = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
-                    self.assertEqual(ref, ref2)
+                    factory_result = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
+                    self.assertEqual(factory_result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
-                    DatastoreMock.apply(factory_butler)
-                    dataset_id, _ = factory_butler.get(ref2)
+                    DatastoreMock.apply(factory_result.butler)
+                    dataset_id, _ = factory_result.butler.get(factory_result.dataset)
                     self.assertEqual(dataset_id, ref.id)
 
                 # Non existent dataset.
                 missing_id = str(ref.id).replace("2", "3")
-                _, no_ref = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
-                self.assertIsNone(no_ref)
+                result = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                self.assertIsNone(result.dataset)
 
         # Test some failure modes.
         for dataset_uri in (

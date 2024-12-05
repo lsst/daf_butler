@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ["Butler"]
 
+import dataclasses
 import urllib.parse
 import uuid
 from abc import abstractmethod
@@ -72,6 +73,19 @@ if TYPE_CHECKING:
     from .transfers import RepoExportContext
 
 _LOG = getLogger(__name__)
+
+
+@dataclasses.dataclass
+class ParsedButlerDatasetURI:
+    label: str
+    dataset_id: uuid.UUID
+    uri: str
+
+
+@dataclasses.dataclass
+class SpecificButlerDataset:
+    butler: Butler
+    dataset: DatasetRef | None
 
 
 class Butler(LimitedButler):  # numpydoc ignore=PR02
@@ -530,7 +544,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         return ButlerRepoIndex.get_known_repos()
 
     @classmethod
-    def parse_dataset_uri(cls, uri: str) -> tuple[str, DatasetId]:
+    def parse_dataset_uri(cls, uri: str) -> ParsedButlerDatasetURI:
         """Extract the butler label and dataset ID from a dataset URI.
 
         Parameters
@@ -540,11 +554,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        label : `str`
+        parsed : `ParsedButlerDatasetURI`
             The label associated with the butler repository from which this
-            dataset originates.
-        dataset_id : `DatasetId`
-            The ID of the dataset.
+            dataset originates and the ID of the dataset.
 
         Notes
         -----
@@ -594,12 +606,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             e.add_note(f"Error extracting dataset ID from uri {uri!r} with dataset ID string {id_!r}")
             raise
 
-        return label, dataset_id
+        return ParsedButlerDatasetURI(label=label, dataset_id=dataset_id, uri=uri)
 
     @classmethod
     def get_dataset_from_uri(
         cls, uri: str, factory: LabeledButlerFactoryProtocol | None = None
-    ) -> tuple[Butler, DatasetRef | None]:
+    ) -> SpecificButlerDataset:
         """Get the dataset associated with the given dataset URI.
 
         Parameters
@@ -613,23 +625,22 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        butler : `Butler`
-            Butler object associated with this URI.
-        ref : `DatasetRef` or `None`
-            The dataset associated with that URI, or `None` if the UUID
-            is valid but the dataset is not known to this butler.
+        result : `SpecificButlerDataset`
+            The butler associated with this URI and the dataset itself.
+            The dataset can be `None` if the UUID is valid but the dataset
+            is not known to this butler.
         """
-        label, dataset_id = cls.parse_dataset_uri(uri)
+        parsed = cls.parse_dataset_uri(uri)
         butler: Butler | None = None
         if factory is not None:
             # If the label is not recognized, it might be a path.
             try:
-                butler = factory(label)
+                butler = factory(parsed.label)
             except KeyError:
                 pass
         if butler is None:
-            butler = cls.from_config(label)
-        return butler, butler.get_dataset(dataset_id)
+            butler = cls.from_config(parsed.label)
+        return SpecificButlerDataset(butler=butler, dataset=butler.get_dataset(parsed.dataset_id))
 
     @abstractmethod
     def _caching_context(self) -> AbstractContextManager[None]:
