@@ -230,13 +230,17 @@ class RemoteButlerHttpConnection:
             raise ButlerServerError(request.request_id) from e
 
     def _send_with_retries(self, request: _Request, stream: bool) -> httpx.Response:
+        max_retry_time_seconds = 120
+        start_time = time.time()
         while True:
             response = self._client.send(request.request, stream=stream)
             retry = _needs_retry(response)
-            if retry.retry:
+            time_remaining = max_retry_time_seconds - (time.time() - start_time)
+            if retry.retry and time_remaining > 0:
                 if stream:
                     response.close()
-                time.sleep(retry.delay_seconds)
+                sleep_time = min(time_remaining, retry.delay_seconds)
+                time.sleep(sleep_time)
             else:
                 return response
 

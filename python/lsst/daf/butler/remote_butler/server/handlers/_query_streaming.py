@@ -123,8 +123,7 @@ async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
         await _block_retry_for_unit_test()
         raise HTTPException(
             status_code=503,  # service temporarily unavailable
-            detail="The Butler Server is currently overloaded with requests."
-            f" Try again in {_QUERY_RETRY_SECONDS} seconds.",
+            detail="The Butler Server is currently overloaded with requests.",
             headers={"retry-after": str(_QUERY_RETRY_SECONDS)},
         )
 
