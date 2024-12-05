@@ -65,7 +65,9 @@ def enable_telemetry() -> None:
     # Configuration will be pulled from SENTRY_* environment variables
     # (see https://docs.sentry.io/platforms/python/configuration/options/).
     # If SENTRY_DSN is not present, telemetry is disabled.
-    sentry_sdk.init(enable_tracing=True, traces_sampler=_decide_whether_to_sample_trace)
+    sentry_sdk.init(
+        enable_tracing=True, traces_sampler=_decide_whether_to_sample_trace, profiles_sample_rate=1.0
+    )
 
     global _telemetry_context
     _telemetry_context = SentryTelemetryContext()
