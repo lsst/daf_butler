@@ -91,6 +91,21 @@ class LabeledButlerFactory:
         self._preload_direct_butler_cache = True
 
     def bind(self, access_token: str | None) -> LabeledButlerFactoryProtocol:
+        """Create a callable factory function for generating Butler instances
+        with out needing to specify access tokans again.
+
+        Parameters
+        ----------
+        access_token : `str` or `None`
+            An optional access token to use for authentication with the Butler.
+
+        Returns
+        -------
+        bound : `LabeledButlerFactoryProtocol`
+            A callable that takes a label as input and returns a Butler
+            instance.
+        """
+
         def create(label: str) -> Butler:
             return self.create_butler(label=label, access_token=access_token)
 
