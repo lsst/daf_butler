@@ -568,7 +568,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         in the ``ivo`` URI query component.
         """
         parsed = urllib.parse.urlparse(uri)
-        if parsed.scheme == "ivo":
+        parsed_scheme = parsed.scheme.lower()
+        if parsed_scheme == "ivo":
             # Do not validate the netloc or the path values.
             qs = urllib.parse.parse_qs(parsed.query)
             if "repo" not in qs or "id" not in qs:
@@ -577,8 +578,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 raise ValueError(f"Butler IVOID only supports a single value of repo and id, got {uri}")
             label = qs["repo"][0]
             id_ = qs["id"][0]
-        elif parsed.scheme == "butler":
-            label = parsed.netloc
+        elif parsed_scheme == "butler":
+            label = parsed.netloc  # Butler label is case sensitive.
             # Need to strip the leading /.
             id_ = parsed.path[1:]
         else:
