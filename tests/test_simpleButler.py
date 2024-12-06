@@ -32,6 +32,7 @@ import os
 import re
 import tempfile
 import unittest
+import urllib.parse
 from typing import Any
 
 try:
@@ -899,8 +900,9 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
         self.assertIsInstance(ref, DatasetRef)
 
-        # Get the butler root for the URI.
-        config_dir = butler._config["root"]
+        # Get the butler root for the URI. It does have to be encoded
+        # in case there are special characters in the path.
+        config_dir = urllib.parse.quote(butler._config["root"])
 
         # Read it via a repo label and a path.
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as index_file:
