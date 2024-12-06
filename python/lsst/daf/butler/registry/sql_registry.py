@@ -2485,6 +2485,7 @@ class SqlRegistry:
     def preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""
         self.dimension_record_cache.preload_cache()
+        self._managers.datasets.preload_cache()
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
