@@ -29,9 +29,12 @@ from __future__ import annotations
 
 __all__ = ("create_app",)
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
+import anyio
 import safir.dependencies.logger
+import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from safir.logging import configure_logging, configure_uvicorn_logging
@@ -46,6 +49,7 @@ from .handlers._external_query import query_router
 from .handlers._internal import internal_router
 
 configure_logging(name="lsst.daf.butler.remote_butler.server")
+_LOG = structlog.get_logger("lsst.daf.butler.remote_butler.server")
 configure_uvicorn_logging()
 enable_telemetry()
 
@@ -54,7 +58,18 @@ def create_app() -> FastAPI:
     """Create a Butler server FastAPI application."""
     config = load_config()
 
-    app = FastAPI()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Set the size of the threadpool used internally by FastAPI for
+        # synchronous handlers.  Because most Butler server endpoints are sync,
+        # this effectively sets the maximum number of concurrent requests that
+        # can be handled.
+        # See https://github.com/encode/starlette/issues/1724#issuecomment-1179063924
+        _LOG.info(f"Thread pool size: {config.thread_pool_size}")
+        anyio.to_thread.current_default_thread_limiter().total_tokens = config.thread_pool_size
+        yield
+
+    app = FastAPI(lifespan=lifespan)
 
     # A single instance of the server can serve data from multiple Butler
     # repositories.  This 'repository' path placeholder is consumed by

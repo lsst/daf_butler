@@ -27,12 +27,10 @@
 
 from __future__ import annotations
 
-import dataclasses
-import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclasses.dataclass(frozen=True)
-class ButlerServerConfig:
+class ButlerServerConfig(BaseSettings):
     """Butler server configuration loaded from environment variables.
 
     Notes
@@ -43,12 +41,20 @@ class ButlerServerConfig:
      `ButlerRepoIndex`.
     """
 
-    static_files_path: str | None
+    model_config = SettingsConfigDict(env_prefix="daf_butler_server_")
+
+    static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
     as static files from the `configs/` HTTP route.
+    """
+
+    thread_pool_size: int = 40
+    """
+    Maximum number of concurrent threads that may be spawned by FastAPI for
+    synchronous handlers.
     """
 
 
 def load_config() -> ButlerServerConfig:
     """Read the Butler server configuration from the environment."""
-    return ButlerServerConfig(static_files_path=os.environ.get("DAF_BUTLER_SERVER_STATIC_FILES_PATH"))
+    return ButlerServerConfig()

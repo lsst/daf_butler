@@ -51,7 +51,8 @@ remote = [
 ]
 server = [
     "fastapi",
-    "safir >= 3.4.0"
+    "safir >= 3.4.0",
+    "pydantic-settings"
 ]
 test = [
     "pytest >= 3.2",
