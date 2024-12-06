@@ -571,7 +571,7 @@ class FileTemplate:
         parts = fmt.parse(self.template)
         output = ""
 
-        for literal, field_name, format_spec, _ in parts:
+        for literal, field_name, format_spec, conversion in parts:
             if field_name and "|" in field_name:
                 alternates = field_name.split("|")
                 for alt in alternates:
@@ -677,6 +677,10 @@ class FileTemplate:
                 value = value.replace(" ", "_")
                 if replace_slash:
                     value = value.replace("/", "_")
+
+            # Apply conversion (e.g., integer to string)
+            if conversion:
+                value = fmt.convert_field(value, conversion)
 
             # Now use standard formatting
             output = output + literal + format(value, format_spec)
