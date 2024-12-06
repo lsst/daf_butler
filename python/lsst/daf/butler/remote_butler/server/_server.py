@@ -65,6 +65,8 @@ def create_app() -> FastAPI:
         # this effectively sets the maximum number of concurrent requests that
         # can be handled.
         # See https://github.com/encode/starlette/issues/1724#issuecomment-1179063924
+        default_pool_size = anyio.to_thread.current_default_thread_limiter().total_tokens
+        _LOG.info(f"Default thread pool size {default_pool_size}")
         _LOG.info(f"Thread pool size: {config.thread_pool_size}")
         anyio.to_thread.current_default_thread_limiter().total_tokens = config.thread_pool_size
         yield
