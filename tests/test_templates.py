@@ -152,6 +152,15 @@ class TestFileTemplates(unittest.TestCase):
             self.makeDatasetRef("calexp", run="run.2", dataId=dataId),
         )
 
+        # Check that type conversion is applied
+        dataId = {"instrument": "dummy", "day_obs": 20250203}
+        tmplstr = "{run}/{datasetType}/{day_obs!s:.4s}"
+        self.assertTemplate(
+            tmplstr,
+            "run3/calexp/2025",
+            self.makeDatasetRef("calexp", run="run3", dataId=dataId),
+        )
+
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("no fields at all")
 
