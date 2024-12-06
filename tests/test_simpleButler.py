@@ -48,13 +48,14 @@ from lsst.daf.butler import (
     DatasetId,
     DatasetRef,
     DatasetType,
+    LabeledButlerFactory,
     StorageClass,
     Timespan,
 )
 from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
-from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, mock_env, removeTestTempDir
 
 try:
     from lsst.daf.butler.tests.server import create_test_server
@@ -882,9 +883,74 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         registryConfig = RegistryConfig(config.get("registry"))
         _RegistryFactory(registryConfig).create_from_config()
 
+        # Write the YAML file so that some tests can recreate butler from it.
+        config.dumpToUri(os.path.join(self.root, "butler.yaml"))
         butler = Butler.from_config(config, writeable=writeable)
         DatastoreMock.apply(butler)
         return butler
+
+    def test_dataset_uris(self):
+        """Test that dataset URIs can be parsed and retrieved."""
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
+        ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
+        self.assertIsInstance(ref, DatasetRef)
+
+        # Get the butler root for the URI.
+        config_dir = butler._config["root"]
+
+        # Read it via a repo label and a path.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as index_file:
+            label = "test_repo"
+            index_file.write(f"{label}: {config_dir}\n")
+            index_file.flush()
+            with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
+                butler_factory = LabeledButlerFactory()
+                factory = butler_factory.bind(access_token=None)
+
+                for dataset_uri in (
+                    f"ivo://org.rubinobs/usdac/test?repo={config_dir}&id={ref.id}",
+                    f"ivo://org.rubinobs/ukdac/lsst-dr1?repo={config_dir}%2Fbutler.yaml&id={ref.id}",
+                    f"butler://{label}/{ref.id}",
+                    f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
+                ):
+                    result = Butler.get_dataset_from_uri(dataset_uri)
+                    self.assertEqual(result.dataset, ref)
+                    # The returned butler needs to have the datastore mocked.
+                    DatastoreMock.apply(result.butler)
+                    dataset_id, _ = result.butler.get(result.dataset)
+                    self.assertEqual(dataset_id, ref.id)
+
+                    factory_result = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
+                    self.assertEqual(factory_result.dataset, ref)
+                    # The returned butler needs to have the datastore mocked.
+                    DatastoreMock.apply(factory_result.butler)
+                    dataset_id, _ = factory_result.butler.get(factory_result.dataset)
+                    self.assertEqual(dataset_id, ref.id)
+
+                # Non existent dataset.
+                missing_id = str(ref.id).replace("2", "3")
+                result = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                self.assertIsNone(result.dataset)
+
+        # Test some failure modes.
+        for dataset_uri in (
+            "butler://label/1234",  # Bad UUID.
+            "butler://1234",  # No UUID.
+            "butler:///1234",  # No label.
+            "ivo://rubin/1234",  # No query part and bad UUID and no label.
+            "ivo://rubin/datasets/dr1/82d79caa-0823-4300-9874-67b737367ee0",  # No query part.
+            "ivo://org.rubinobs/datasets?repo=dr1&id=1234",  # Bad UUID.
+            "ivo://org.rubinobs/butler?release=dr1&id=82d79caa-0823-4300-9874-67b737367ee0",  # No repo key.
+            "ivo://org.rubinobs/butler?repo=dr1&repo=dr2&id=82d79caa-0823-4300-9874-67b737367ee0",  # 2 vals.
+            "ivo://org.rubinobs/something?repo=%20&id=82d79caa-0823-4300-9874-67b737367ee0",  # no repo.
+            "https://something.edu/1234",  # Wrong scheme.
+        ):
+            with self.assertRaises(ValueError):
+                Butler.parse_dataset_uri(dataset_uri)
 
 
 class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):

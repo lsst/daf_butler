@@ -1,0 +1,5 @@
+Added two new APIs for handling Butler dataset URIs.
+``Butler.parse_dataset_uri`` parses a URI and returns the butler repository label and associated UUID.
+``Butler.get_dataset_from_uri`` will parse a URI and attempt to retrieve the ``DatasetRef``.
+URIs should be of the form IVOA identifiers as described in `DMTN-302 <https://dmtn-302.lsst.io>`_.
+Deprecated ``butler://`` URIs are still supported but should not be used in new systems.
