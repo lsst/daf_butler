@@ -199,7 +199,7 @@ class SqlSelectBuilder:
         self.joins.join(other)
         return self
 
-    def into_from_builder(
+    def into_joins_builder(
         self, cte: bool = False, force: bool = False, *, postprocessing: Postprocessing | None
     ) -> SqlJoinsBuilder:
         """Convert this builder into a `SqlJoinsBuilder`, nesting it in a
@@ -265,7 +265,7 @@ class SqlSelectBuilder:
             object.
         """
         return SqlSelectBuilder(
-            self.into_from_builder(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
+            self.into_joins_builder(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
         )
 
     def union_subquery(

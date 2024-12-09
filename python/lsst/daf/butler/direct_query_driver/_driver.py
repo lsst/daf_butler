@@ -715,7 +715,7 @@ class DirectQueryDriver(QueryDriver):
         searches : `list` [ `ResolvedDatasetSearch` ]
             Resolved dataset searches for all union dataset types with these
             dimensions.  Each item in the list groups dataset types with the
-            same colletion search path.
+            same collection search path.
         """
         # Gather the filtered collection search path for each union dataset
         # type.
