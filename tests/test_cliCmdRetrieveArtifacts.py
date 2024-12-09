@@ -75,6 +75,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
                 self.assertTrue(result.stdout.endswith(": 6\n"), f"Expected 6 got: {result.stdout}")
 
                 artifacts = self.find_files(destdir)
+                artifacts.sort()
                 self.assertEqual(len(artifacts), 7, f"Expected 7 artifacts including index: {artifacts}")
                 self.assertIn(f"{destdir}{prefix}", str(artifacts[1]))
 
