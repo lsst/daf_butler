@@ -1453,9 +1453,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 # Need a UNION subquery.
                 return tags_builder.union_subquery([calibs_builder])
             else:
-                return tags_builder.into_from_builder(postprocessing=None)
+                return tags_builder.into_joins_builder(postprocessing=None)
         elif calibs_builder is not None:
-            return calibs_builder.into_from_builder(postprocessing=None)
+            return calibs_builder.into_joins_builder(postprocessing=None)
         else:
             raise AssertionError("Branch should be unreachable.")
 

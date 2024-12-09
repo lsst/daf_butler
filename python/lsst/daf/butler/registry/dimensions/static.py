@@ -464,7 +464,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 self.make_joins_builder(element.implied_union_target, fields),
                 columns=qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(),
                 distinct=True,
-            ).into_from_builder(postprocessing=None)
+            ).into_joins_builder(postprocessing=None)
         if not element.has_own_table:
             raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
@@ -1082,7 +1082,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     self.builder.join(
                         joins_builder.to_select_builder(
                             qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
-                        ).into_from_builder(postprocessing=None)
+                        ).into_joins_builder(postprocessing=None)
                     )
                     # Short circuit here since the SQL WHERE clause has already
                     # been embedded in the subquery.
@@ -1147,7 +1147,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                             qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
                             distinct=True,
                         )
-                        .into_from_builder(postprocessing=None)
+                        .into_joins_builder(postprocessing=None)
                     )
                 # In both cases we add postprocessing to check that the regions
                 # really do overlap, since overlapping the same common skypix
