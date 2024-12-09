@@ -59,7 +59,7 @@ from typing import TYPE_CHECKING, Any
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import Region, UnionRegion
+from lsst.sphgeom import Region
 from lsst.utils.iteration import ensure_iterable
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -181,14 +181,7 @@ class Base64Region(Base64Bytes):
     def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> Region | None:
         if value is None:
             return None
-        regions = [
-            # For some reason super() doesn't work here!
-            Region.decode(Base64Bytes.process_result_value(self, union_member, dialect))
-            for union_member in value.split(":")
-        ]
-        if len(regions) == 1:
-            return regions[0]
-        return UnionRegion(*regions)
+        return Region.decodeBase64(value)
 
     @property
     def python_type(self) -> type[Region]:
