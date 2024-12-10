@@ -33,7 +33,7 @@ from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, ClassVar
 
 import sqlalchemy
-from lsst.sphgeom import DISJOINT, Region
+from lsst.sphgeom import Region
 
 from .._exceptions import CalibrationLookupError
 from ..queries import tree as qt
@@ -59,6 +59,7 @@ class Postprocessing:
     def __init__(self) -> None:
         self.spatial_join_filtering = []
         self.spatial_where_filtering = []
+        self.spatial_expression_filtering = []
         self.check_validity_match_count: bool = False
         self._limit: int | None = None
 
@@ -77,6 +78,12 @@ class Postprocessing:
     spatial_where_filtering: list[tuple[DimensionElement, Region]]
     """Dimension elements and regions that must overlap; rows with any
     non-overlap pair will be filtered out.
+    """
+
+    spatial_expression_filtering: list[str]
+    """The names of calculated columns that can be parsed by
+    `lsst.sphgeom.Region.decodeOverlapsBase64` into a `bool` or `None` that
+    indicates whether regions definitely overlap.
     """
 
     check_validity_match_count: bool
@@ -104,7 +111,9 @@ class Postprocessing:
         self._limit = value
 
     def __bool__(self) -> bool:
-        return bool(self.spatial_join_filtering or self.spatial_where_filtering)
+        return bool(
+            self.spatial_join_filtering or self.spatial_where_filtering or self.spatial_expression_filtering
+        )
 
     def gather_columns_required(self, columns: qt.ColumnSet) -> None:
         """Add all columns required to perform postprocessing to the given
@@ -197,8 +206,11 @@ class Postprocessing:
 
         for row in rows:
             m = row._mapping
-            if any(m[a].relate(m[b]) & DISJOINT for a, b in joins) or any(
-                m[field].relate(region) & DISJOINT for field, region in where
+            # Skip rows where at least one couple of regions do not overlap.
+            if (
+                any(Region.decodeOverlapsBase64(m[c]) is False for c in self.spatial_expression_filtering)
+                or any(m[a].overlaps(m[b]) is False for a, b in joins)
+                or any(m[field].overlaps(region) is False for field, region in where)
             ):
                 continue
             if self.check_validity_match_count and m[self.VALIDITY_MATCH_COUNT] > 1:

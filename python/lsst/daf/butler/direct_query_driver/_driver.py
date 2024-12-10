@@ -45,7 +45,7 @@ from .. import ddl
 from .._collection_type import CollectionType
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
-from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
+from ..dimensions import DataCoordinate, DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
 from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
 from ..queries.driver import (
@@ -388,6 +388,7 @@ class DirectQueryDriver(QueryDriver):
         select_builder = builder.finish_nested()
         # Replace the columns of the query with just COUNT(*).
         select_builder.columns = qt.ColumnSet(self._universe.empty)
+        select_builder.joins.special.clear()
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
         select_builder.joins.special["_ROWCOUNT"] = count_func
         # Render and run the query.
@@ -655,6 +656,9 @@ class DirectQueryDriver(QueryDriver):
             # it here.
             postprocessing.spatial_join_filtering.extend(m_state.postprocessing.spatial_join_filtering)
             postprocessing.spatial_where_filtering.extend(m_state.postprocessing.spatial_where_filtering)
+            postprocessing.spatial_expression_filtering.extend(
+                m_state.postprocessing.spatial_expression_filtering
+            )
         # Add data coordinate uploads.
         joins.data_coordinate_uploads.update(tree.data_coordinate_uploads)
         # Add dataset_searches and filter out collections that don't have the
@@ -715,7 +719,7 @@ class DirectQueryDriver(QueryDriver):
         searches : `list` [ `ResolvedDatasetSearch` ]
             Resolved dataset searches for all union dataset types with these
             dimensions.  Each item in the list groups dataset types with the
-            same colletion search path.
+            same collection search path.
         """
         # Gather the filtered collection search path for each union dataset
         # type.
@@ -849,6 +853,48 @@ class DirectQueryDriver(QueryDriver):
             joins_analysis.predicate.visit(SqlColumnVisitor(select_builder.joins, self))
         )
 
+    def project_spatial_join_filtering(
+        self,
+        columns: qt.ColumnSet,
+        postprocessing: Postprocessing,
+        select_builders: Iterable[SqlSelectBuilder],
+    ) -> None:
+        """Transform spatial join postprocessing into expressions that can be
+        OR'd together via an aggregate function in a GROUP BY.
+
+        This only affects spatial join constraints involving region columns
+        whose dimensions are being projected away.
+
+        Parameters
+        ----------
+        columns : `.queries.tree.ColumnSet`
+            Columns that will be included in the final query.
+        postprocessing : `Postprocessing`
+            Object that describes post-query processing; modified in place.
+        select_builders : `~collections.abc.Iterable` [ `SqlSelectBuilder` ]
+            SQL Builder objects to be modified in place.
+        """
+        kept: list[tuple[DimensionElement, DimensionElement]] = []
+        for a, b in postprocessing.spatial_join_filtering:
+            if a.name not in columns.dimensions.elements or b.name not in columns.dimensions.elements:
+                expr_name = f"_{a}_OVERLAPS_{b}"
+                postprocessing.spatial_expression_filtering.append(expr_name)
+                for select_builder in select_builders:
+                    expr = sqlalchemy.cast(
+                        sqlalchemy.cast(
+                            select_builder.joins.fields[a.name]["region"], type_=sqlalchemy.String
+                        )
+                        + sqlalchemy.literal("&", type_=sqlalchemy.String)
+                        + sqlalchemy.cast(
+                            select_builder.joins.fields[b.name]["region"], type_=sqlalchemy.String
+                        ),
+                        type_=sqlalchemy.LargeBinary,
+                    )
+                    select_builder.joins.special[expr_name] = expr
+            else:
+                kept.append((a, b))
+        postprocessing.spatial_join_filtering = kept
+
     def apply_query_projection(
         self,
         select_builder: SqlSelectBuilder,
@@ -938,8 +984,8 @@ class DirectQueryDriver(QueryDriver):
         #   the data IDs for those regions are not wholly included in the
         #   results (i.e. we need to postprocess on
         #   visit_detector_region.region, but the output rows don't have
-        #   detector, just visit - so we compute the union of the
-        #   visit_detector region over all matched detectors).
+        #   detector, just visit - so we pack the overlap expression into a
+        #   blob via an aggregate function and interpret it later).
         if postprocessing.check_validity_match_count:
             if needs_validity_match_count:
                 select_builder.joins.special[postprocessing.VALIDITY_MATCH_COUNT] = (
@@ -960,11 +1006,27 @@ class DirectQueryDriver(QueryDriver):
                 # might be collapsing the dimensions of the postprocessing
                 # regions.  When that happens, we want to apply an aggregate
                 # function to them that computes the union of the regions that
-                # are grouped together.
+                # are grouped together.  Note that this should only happen for
+                # constraints that involve a "given", external-to-the-database
+                # region (postprocessing.spatial_where_filtering); join
+                # constraints that need aggregates should have already been
+                # transformed in advance.
                 select_builder.joins.fields[element.name]["region"] = ddl.Base64Region.union_aggregate(
                     select_builder.joins.fields[element.name]["region"]
                 )
                 have_aggregates = True
+        # Postprocessing spatial join constraints where at least one region's
+        # dimensions are being projected away will have already been turned
+        # into the kind of expression that sphgeom.Region.decodeOverlapsBase64
+        # processes.  We can just apply an aggregate function to these.  Note
+        # that we don't do this to other constraints in order to minimize
+        # duplicate fetches of the same region blob.
+        for expr_name in postprocessing.spatial_expression_filtering:
+            select_builder.joins.special[expr_name] = sqlalchemy.cast(
+                sqlalchemy.func.aggregate_strings(select_builder.joins.special[expr_name], "|"),
+                type_=sqlalchemy.LargeBinary,
+            )
+            have_aggregates = True
 
         # All dimension record fields are derived fields.
         for element_name, fields_for_element in projection_columns.dimension_fields.items():
