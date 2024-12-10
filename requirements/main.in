@@ -19,3 +19,4 @@ httpx
 # Butler server dependencies sufficient for unit tests
 fastapi
 safir >= 3.4.0
+pydantic-settings

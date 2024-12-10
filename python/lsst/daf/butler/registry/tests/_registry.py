@@ -326,6 +326,32 @@ class RegistryTests(ABC):
         self.assertCountEqual([dt.name for dt in types], ["test", "testNoneTemplate"])
         self.assertEqual(missing, ["notarealdatasettype"])
 
+    def testDatasetTypeCache(self):
+        """Test for dataset type cache update logic after a cache miss."""
+        butler1 = self.make_butler()
+        butler2 = butler1.clone()
+        self.load_data(butler1, "base.yaml")
+
+        # Trigger full cache load.
+        butler2.get_dataset_type("flat")
+        # Have an external process register a dataset type.
+        butler1.registry.registerDatasetType(
+            DatasetType("test_type", ["instrument"], "int", universe=butler1.dimensions)
+        )
+        # Try to read the new dataset type -- this is a cache miss that
+        # triggers fetch of a single dataset type.
+        dt = butler2.get_dataset_type("test_type")
+        self.assertEqual(dt.name, "test_type")
+        self.assertEqual(list(dt.dimensions.names), ["instrument"])
+        # Read it again -- this time it should pull from the cache.
+        dt = butler2.get_dataset_type("test_type")
+        self.assertEqual(dt.name, "test_type")
+        self.assertEqual(list(dt.dimensions.names), ["instrument"])
+        # Do a query that uses the dataset type's tags table.
+        self.assertEqual(
+            butler2.query_datasets("test_type", collections="*", find_first=False, explain=False), []
+        )
+
     def testDimensions(self):
         """Tests for `SqlRegistry.insertDimensionData`,
         `SqlRegistry.syncDimensionData`, and `SqlRegistry.expandDataId`.
