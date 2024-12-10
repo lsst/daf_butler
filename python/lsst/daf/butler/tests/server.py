@@ -119,7 +119,7 @@ def create_test_server(
                 # instrument records etc during setup.  So configure the
                 # factory to disable this preloading and re-fetch the records
                 # as needed.
-                server_butler_factory._preload_direct_butler_cache = False
+                server_butler_factory._preload_unsafe_direct_butler_caches = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
 
                 # Using TestClient in a context manager ensures that it uses

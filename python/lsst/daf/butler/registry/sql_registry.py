@@ -2482,10 +2482,20 @@ class SqlRegistry:
                 pass
         self._datastore_record_classes = datastore_record_classes
 
-    def preload_cache(self) -> None:
-        """Immediately load caches that are used for common operations."""
-        self.dimension_record_cache.preload_cache()
+    def preload_cache(self, *, load_dimension_record_cache: bool) -> None:
+        """Immediately load caches that are used for common operations.
+
+        Parameters
+        ----------
+        load_dimension_record_cache : `bool`
+            If True, preload the dimension record cache.  When this cache is
+            preloaded, subsequent external changes to governor dimension
+            records will not be visible to this Butler.
+        """
         self._managers.datasets.preload_cache()
+
+        if load_dimension_record_cache:
+            self.dimension_record_cache.preload_cache()
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
