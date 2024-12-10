@@ -42,6 +42,7 @@ import sqlalchemy.ext.compiler
 
 from ... import ddl
 from ..._named import NamedValueAbstractSet
+from ..._utilities.locked_object import LockedObject
 from ..interfaces import Database, StaticTablesContext
 
 
@@ -109,7 +110,7 @@ class SqliteDatabase(Database):
         namespace: str | None = None,
         writeable: bool = True,
         filename: str | None,
-        metadata: sqlalchemy.schema.MetaData | None,
+        metadata: LockedObject[sqlalchemy.schema.MetaData] | None,
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
         super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
