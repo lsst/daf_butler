@@ -103,13 +103,13 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         # Create a read-write database by passing in the filename.
         rwFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=filename), origin=0)
-        self.assertEqual(rwFromFilename.filename, filename)
+        self.assertEqual(os.path.realpath(rwFromFilename.filename), os.path.realpath(filename))
         self.assertEqual(rwFromFilename.origin, 0)
         self.assertTrue(rwFromFilename.isWriteable())
         self.assertTrue(isEmptyDatabaseActuallyWriteable(rwFromFilename))
         # Create a read-write database via a URI.
         rwFromUri = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0)
-        self.assertEqual(rwFromUri.filename, filename)
+        self.assertEqual(os.path.realpath(rwFromUri.filename), os.path.realpath(filename))
         self.assertEqual(rwFromUri.origin, 0)
         self.assertTrue(rwFromUri.isWriteable())
         self.assertTrue(isEmptyDatabaseActuallyWriteable(rwFromUri))
@@ -123,13 +123,13 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
             roFromFilename = SqliteDatabase.fromEngine(
                 SqliteDatabase.makeEngine(filename=filename), origin=0, writeable=False
             )
-            self.assertEqual(roFromFilename.filename, filename)
+            self.assertEqual(os.path.realpath(roFromFilename.filename), os.path.realpath(filename))
             self.assertEqual(roFromFilename.origin, 0)
             self.assertFalse(roFromFilename.isWriteable())
             self.assertFalse(isEmptyDatabaseActuallyWriteable(roFromFilename))
             # Create a read-write database via a URI.
             roFromUri = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0, writeable=False)
-            self.assertEqual(roFromUri.filename, filename)
+            self.assertEqual(os.path.realpath(roFromUri.filename), os.path.realpath(filename))
             self.assertEqual(roFromUri.origin, 0)
             self.assertFalse(roFromUri.isWriteable())
             self.assertFalse(isEmptyDatabaseActuallyWriteable(roFromUri))
