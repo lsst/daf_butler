@@ -586,9 +586,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         record = self._fetch_dataset_type_record(name)
         if record is not None:
             self._cache.add(record.dataset_type, record.dataset_type_id)
-            return _DatasetRecordStorage(
-                record.dataset_type, record.dataset_type_id, record.make_dynamic_tables()
-            )
+            tables = record.make_dynamic_tables()
+            self._cache.add_by_dimensions(record.dataset_type.dimensions, tables)
+            return _DatasetRecordStorage(record.dataset_type, record.dataset_type_id, tables)
         raise MissingDatasetTypeError(f"Dataset type {name!r} does not exist.")
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
