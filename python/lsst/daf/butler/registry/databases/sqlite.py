@@ -42,7 +42,7 @@ import sqlalchemy.ext.compiler
 
 from ... import ddl
 from ..._named import NamedValueAbstractSet
-from ..interfaces import Database, StaticTablesContext
+from ..interfaces import Database, DatabaseMetadata, StaticTablesContext
 
 
 def _onSqlite3Connect(
@@ -109,7 +109,7 @@ class SqliteDatabase(Database):
         namespace: str | None = None,
         writeable: bool = True,
         filename: str | None,
-        metadata: sqlalchemy.schema.MetaData | None,
+        metadata: DatabaseMetadata | None,
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
         super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)

@@ -67,7 +67,7 @@ def isEmptyDatabaseActuallyWriteable(database: SqliteDatabase) -> bool:
                 "a", ddl.TableSpec(fields=[ddl.FieldSpec("b", dtype=sqlalchemy.Integer, primaryKey=True)])
             )
         # Drop created table so that schema remains empty.
-        database._metadata.drop_all(database._engine, tables=[table])
+        database._metadata._metadata.drop_all(database._engine, tables=[table])
         return True
     except Exception:
         return False
