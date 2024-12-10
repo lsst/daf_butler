@@ -422,6 +422,8 @@ class SqlColumns:
                 self.fields[element.name]["region"] = column_collection[
                     self.db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
                 ]
+            for name in postprocessing.spatial_expression_filtering:
+                self.special[name] = column_collection[name]
             if postprocessing.check_validity_match_count:
                 self.special[postprocessing.VALIDITY_MATCH_COUNT] = column_collection[
                     postprocessing.VALIDITY_MATCH_COUNT
@@ -670,6 +672,8 @@ def make_table_spec(
                     db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
                 )
             )
+        for name in postprocessing.spatial_expression_filtering:
+            results.fields.add(ddl.FieldSpec(name, dtype=sqlalchemy.types.LargeBinary, nullable=True))
     if not results.fields:
         results.fields.add(
             ddl.FieldSpec(name=SqlSelectBuilder.EMPTY_COLUMNS_NAME, dtype=SqlSelectBuilder.EMPTY_COLUMNS_TYPE)
