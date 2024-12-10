@@ -35,6 +35,7 @@ __all__ = (
 )
 
 import dataclasses
+import itertools
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Literal, TypeVar, overload
@@ -382,6 +383,9 @@ class SingleSelectQueryBuilder(QueryBuilder):
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         # Docstring inherited.
+        driver.project_spatial_join_filtering(
+            self.projection_columns, self.postprocessing, [self._select_builder]
+        )
         driver.apply_query_projection(
             self._select_builder,
             self.postprocessing,
@@ -635,6 +639,11 @@ class UnionQueryBuilder(QueryBuilder):
 
     def apply_projection(self, driver: DirectQueryDriver, order_by: Iterable[qt.OrderExpression]) -> None:
         # Docstring inherited.
+        driver.project_spatial_join_filtering(
+            self.projection_columns,
+            self.postprocessing,
+            itertools.chain.from_iterable(union_term.select_builders for union_term in self.union_terms),
+        )
         for union_term in self.union_terms:
             for builder in union_term.select_builders:
                 driver.apply_query_projection(
