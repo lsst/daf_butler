@@ -108,7 +108,7 @@ class DatasetTypeCache:
             Dataset type, replaces any existing dataset type with the same
             name.
         id : `int`
-            The dataset type primary key
+            The dataset type primary key.
             Additional opaque object stored with this dataset type.
         """
         self._by_name_cache[dataset_type.name] = (dataset_type, id)
