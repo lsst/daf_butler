@@ -1869,8 +1869,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             warn_limit = True
         with self.query() as query:
             result = (
-                query.where(data_id, where, bind=bind, **kwargs)
-                .datasets(dataset_type, collections=collections, find_first=find_first)
+                query.datasets(dataset_type, collections=collections, find_first=find_first)
+                .where(data_id, where, bind=bind, **kwargs)
                 .order_by(*ensure_iterable(order_by))
                 .limit(query_limit)
             )
