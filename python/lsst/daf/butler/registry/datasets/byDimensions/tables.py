@@ -451,7 +451,7 @@ def makeCalibTableSpec(
     return tableSpec
 
 
-DynamicTablesCache: TypeAlias = ThreadSafeCache[str, sqlalchemy.Table]
+TableCache: TypeAlias = ThreadSafeCache[str, sqlalchemy.Table]
 
 
 @immutable
@@ -519,7 +519,7 @@ class DynamicTables:
             calibs_name=makeCalibTableName(dimensions_key) if is_calibration else None,
         )
 
-    def create(self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache) -> None:
+    def create(self, db: Database, collections: type[CollectionManager], cache: TableCache) -> None:
         """Create the tables if they don't already exist.
 
         Parameters
@@ -551,7 +551,7 @@ class DynamicTables:
             )
 
     def add_calibs(
-        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
+        self, db: Database, collections: type[CollectionManager], cache: TableCache
     ) -> DynamicTables:
         """Create a calibs table for a dataset type whose dimensions already
         have a tags table.
@@ -577,9 +577,7 @@ class DynamicTables:
 
         return self.copy(calibs_name=calibs_name)
 
-    def tags(
-        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
-    ) -> sqlalchemy.Table:
+    def tags(self, db: Database, collections: type[CollectionManager], cache: TableCache) -> sqlalchemy.Table:
         """Return the "tags" table that associates datasets with data IDs in
         TAGGED and RUN collections.
 
@@ -612,7 +610,7 @@ class DynamicTables:
         return cache.set_or_get(self.tags_name, table)
 
     def calibs(
-        self, db: Database, collections: type[CollectionManager], cache: DynamicTablesCache
+        self, db: Database, collections: type[CollectionManager], cache: TableCache
     ) -> sqlalchemy.Table:
         """Return the "calibs" table that associates datasets with data IDs and
         timespans in CALIBRATION collections.

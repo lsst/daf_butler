@@ -33,7 +33,7 @@ from collections.abc import Iterable, Iterator
 
 from ...._dataset_type import DatasetType
 from ....dimensions import DimensionGroup
-from .tables import DynamicTables, DynamicTablesCache
+from .tables import DynamicTables, TableCache
 
 
 class DatasetTypeCache:
@@ -54,7 +54,7 @@ class DatasetTypeCache:
     """
 
     def __init__(self) -> None:
-        self.tables = DynamicTablesCache()
+        self.tables = TableCache()
         self._by_name_cache: dict[str, tuple[DatasetType, int]] = {}
         self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
         self._full = False
