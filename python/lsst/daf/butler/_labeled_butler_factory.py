@@ -88,7 +88,7 @@ class LabeledButlerFactory:
         self._initialization_locks = NamedLocks()
 
         # This may be overridden by unit tests.
-        self._preload_direct_butler_cache = True
+        self._preload_unsafe_direct_butler_caches = True
 
     def bind(self, access_token: str | None) -> LabeledButlerFactoryProtocol:
         """Create a callable factory function for generating Butler instances
@@ -161,7 +161,7 @@ class LabeledButlerFactory:
 
         match butler_type:
             case ButlerType.DIRECT:
-                return _create_direct_butler_factory(config, self._preload_direct_butler_cache)
+                return _create_direct_butler_factory(config, self._preload_unsafe_direct_butler_caches)
             case ButlerType.REMOTE:
                 return _create_remote_butler_factory(config)
             case _:
@@ -177,7 +177,7 @@ class LabeledButlerFactory:
             return config_uri
 
 
-def _create_direct_butler_factory(config: ButlerConfig, preload_cache: bool) -> _FactoryFunction:
+def _create_direct_butler_factory(config: ButlerConfig, preload_unsafe_caches: bool) -> _FactoryFunction:
     import lsst.daf.butler.direct_butler
 
     # Create a 'template' Butler that will be cloned when callers request an
@@ -187,8 +187,7 @@ def _create_direct_butler_factory(config: ButlerConfig, preload_cache: bool) -> 
 
     # Load caches so that data is available in cloned instances without
     # needing to refetch it from the database for every instance.
-    if preload_cache:
-        butler._preload_cache()
+    butler._preload_cache(load_dimension_record_cache=preload_unsafe_caches)
 
     def create_butler(access_token: str | None) -> Butler:
         # Access token is ignored because DirectButler does not use Gafaelfawr

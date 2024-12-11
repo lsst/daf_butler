@@ -30,29 +30,21 @@ from __future__ import annotations
 __all__ = ("DatasetTypeCache",)
 
 from collections.abc import Iterable, Iterator
-from typing import Generic, TypeVar
 
-from .._dataset_type import DatasetType
-from ..dimensions import DimensionGroup
-
-_T = TypeVar("_T")
-_U = TypeVar("_U")
+from ...._dataset_type import DatasetType
+from ....dimensions import DimensionGroup
+from .tables import DynamicTables, TableCache
 
 
-class DatasetTypeCache(Generic[_T, _U]):
+class DatasetTypeCache:
     """Cache for dataset types.
 
     Notes
     -----
     This cache is a pair of mappings with different kinds of keys:
 
-    - the `DatasetType` itself is cached by name, as is some opaque data used
-      only by a `DatasetRecordStorageManager` implementation;
-    - additional opaque data (also used only by `DatasetRecordStorageManager`
-      implementations can be cached by the dimensions dataset types (i.e. a
-      `DimensionGroup`).
-
-    `DatasetTypeCache` is generic over these two opaque data types.
+    - Dataset type name -> (`DatasetType`, database integer primary key)
+    - `DimensionGroup` -> database table information
 
     In some contexts (e.g. ``resolve_wildcard``) a full list of dataset types
     is needed. To signify that cache content can be used in such contexts,
@@ -62,10 +54,40 @@ class DatasetTypeCache(Generic[_T, _U]):
     """
 
     def __init__(self) -> None:
-        self._by_name_cache: dict[str, tuple[DatasetType, _T]] = {}
-        self._by_dimensions_cache: dict[DimensionGroup, _U] = {}
+        self.tables = TableCache()
+        self._by_name_cache: dict[str, tuple[DatasetType, int]] = {}
+        self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
         self._full = False
         self._dimensions_full = False
+
+    def clone(self) -> DatasetTypeCache:
+        """Make a copy of the caches that are safe to use in another thread.
+
+        Notes
+        -----
+        After cloning, the ``tables`` cache will be shared between the new
+        instance and the current instance. It is safe to read and update
+        ``tables`` from multiple threads simultaneously -- the cached values
+        are immutable table schemas, and they are looked up one at a time by
+        name.
+
+        The other caches are copied, because their access patterns are more
+        complex.
+
+        ``full`` and ``dimensions_full`` will initially return `False` in the
+        new instance.  This preserves the invariant that a Butler is able to
+        see any changes to the database made before the Butler is instantiated.
+        The downside is that the cloned cache will have to be re-fetched before
+        it can be used for glob searches.
+        """
+        clone = DatasetTypeCache()
+        # Share DynamicTablesCache between instances.
+        clone.tables = self.tables
+        # The inner key/value objects are immutable in both of these caches, so
+        # we can shallow-copy the dicts.
+        clone._by_name_cache = self._by_name_cache.copy()
+        clone._by_dimensions_cache = self._by_dimensions_cache.copy()
+        return clone
 
     @property
     def full(self) -> bool:
@@ -77,7 +99,7 @@ class DatasetTypeCache(Generic[_T, _U]):
         """`True` if cache holds all known dataset type dimensions (`bool`)."""
         return self._dimensions_full
 
-    def add(self, dataset_type: DatasetType, extra: _T) -> None:
+    def add(self, dataset_type: DatasetType, id: int) -> None:
         """Add one record to the cache.
 
         Parameters
@@ -85,17 +107,18 @@ class DatasetTypeCache(Generic[_T, _U]):
         dataset_type : `DatasetType`
             Dataset type, replaces any existing dataset type with the same
             name.
-        extra : `Any`
+        id : `int`
+            The dataset type primary key.
             Additional opaque object stored with this dataset type.
         """
-        self._by_name_cache[dataset_type.name] = (dataset_type, extra)
+        self._by_name_cache[dataset_type.name] = (dataset_type, id)
 
     def set(
         self,
-        data: Iterable[tuple[DatasetType, _T]],
+        data: Iterable[tuple[DatasetType, int]],
         *,
         full: bool = False,
-        dimensions_data: Iterable[tuple[DimensionGroup, _U]] | None = None,
+        dimensions_data: Iterable[tuple[DimensionGroup, DynamicTables]] | None = None,
         dimensions_full: bool = False,
     ) -> None:
         """Replace cache contents with the new set of dataset types.
@@ -136,7 +159,7 @@ class DatasetTypeCache(Generic[_T, _U]):
         """
         self._by_name_cache.pop(name, None)
 
-    def get(self, name: str) -> tuple[DatasetType | None, _T | None]:
+    def get(self, name: str) -> tuple[DatasetType | None, int | None]:
         """Return cached info given dataset type name.
 
         Parameters
@@ -177,7 +200,7 @@ class DatasetTypeCache(Generic[_T, _U]):
             return None
         return item[0]
 
-    def items(self) -> Iterator[tuple[DatasetType, _T]]:
+    def items(self) -> Iterator[tuple[DatasetType, int]]:
         """Return iterator for the set of items in the cache, can only be
         used if `full` is true.
 
@@ -195,19 +218,19 @@ class DatasetTypeCache(Generic[_T, _U]):
             raise RuntimeError("cannot call items() if cache is not full")
         return iter(self._by_name_cache.values())
 
-    def add_by_dimensions(self, dimensions: DimensionGroup, extra: _U) -> None:
+    def add_by_dimensions(self, dimensions: DimensionGroup, tables: DynamicTables) -> None:
         """Add information about a set of dataset type dimensions to the cache.
 
         Parameters
         ----------
         dimensions : `DimensionGroup`
             Dimensions of one or more dataset types.
-        extra : `Any`
+        tables : `DynamicTables`
             Additional opaque object stored with these dimensions.
         """
-        self._by_dimensions_cache[dimensions] = extra
+        self._by_dimensions_cache[dimensions] = tables
 
-    def get_by_dimensions(self, dimensions: DimensionGroup) -> _U | None:
+    def get_by_dimensions(self, dimensions: DimensionGroup) -> DynamicTables | None:
         """Get information about a set of dataset type dimensions.
 
         Parameters
@@ -217,13 +240,13 @@ class DatasetTypeCache(Generic[_T, _U]):
 
         Returns
         -------
-        extra : `Any` or `None`
+        tables : `DynamicTables` or `None`
             Additional opaque object stored with these dimensions, or `None` if
             these dimensions are not present in the cache.
         """
         return self._by_dimensions_cache.get(dimensions)
 
-    def by_dimensions_items(self) -> Iterator[tuple[DimensionGroup, _U]]:
+    def by_dimensions_items(self) -> Iterator[tuple[DimensionGroup, DynamicTables]]:
         """Return iterator for all dimensions-keyed data in the cache.
 
         This can only be called if `dimensions_full` is `True`.

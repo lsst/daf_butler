@@ -103,6 +103,13 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def preload_cache(self) -> None:
+        """Fetch data from the database and use it to pre-populate caches to
+        speed up later operations.
+        """
+        raise NotImplementedError()
+
     @classmethod
     @abstractmethod
     def initialize(

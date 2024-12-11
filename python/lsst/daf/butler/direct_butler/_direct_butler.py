@@ -2339,9 +2339,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             pages = query_all_datasets(self, query, args)
             yield iter(page.data for page in pages)
 
-    def _preload_cache(self) -> None:
+    def _preload_cache(self, *, load_dimension_record_cache: bool = True) -> None:
         """Immediately load caches that are used for common operations."""
-        self._registry.preload_cache()
+        self._registry.preload_cache(load_dimension_record_cache=load_dimension_record_cache)
 
     _config: ButlerConfig
     """Configuration for this Butler instance."""

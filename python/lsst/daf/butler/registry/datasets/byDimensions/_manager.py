@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
 import sqlalchemy
@@ -24,12 +24,13 @@ from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
 from ....direct_query_driver import SqlJoinsBuilder, SqlSelectBuilder  # new query system, server+direct only
 from ....queries import tree as qt  # new query system, both clients + server
-from ..._caching_context import CachingContext, GenericCachingContext
+from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
 from ...queries import SqlQueryContext  # old registry query system
 from ...wildcards import DatasetTypeWildcard
+from ._dataset_type_cache import DatasetTypeCache
 from .summaries import CollectionSummaryManager
 from .tables import DynamicTables, addDatasetForeignKey, makeStaticTableSpecs, makeTagTableSpec
 
@@ -79,7 +80,7 @@ class _DatasetTypeRecord:
             else:
                 # Some previously-cached dataset type had the same dimensions
                 # but was not a calibration.
-                current.calibs_name = self.calib_table_name
+                current = current.copy(calibs_name=self.calib_table_name)
             # If some previously-cached dataset type was a calibration but this
             # one isn't, we don't want to forget the calibs table.
         return current
@@ -132,10 +133,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
-    caching_context : `CachingContext`
-        Object controlling caching of information returned by managers.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
+    _cache : `None`, optional
+        For internal use only.
     """
 
     def __init__(
@@ -146,8 +147,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
-        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
+        _cache: DatasetTypeCache | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
@@ -155,7 +156,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
-        self._caching_context = cast(GenericCachingContext[int, DynamicTables], caching_context)
+        self._cache = _cache if _cache is not None else DatasetTypeCache()
         self._use_astropy_ingest_date = self.ingest_date_dtype() is ddl.AstropyTimeNsecTai
         self._run_key_column = collections.getRunForeignKeyName()
 
@@ -196,7 +197,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=static,
             summaries=summaries,
-            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -272,14 +272,15 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=self._static,
             summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
-            caching_context=caching_context,
             registry_schema_version=self._registry_schema_version,
+            # See notes on DatasetTypeCache.clone() about cache behavior after
+            # cloning.
+            _cache=self._cache.clone(),
         )
 
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
-        if self._caching_context.dataset_types is not None:
-            self._caching_context.dataset_types.clear()
+        self._cache.clear()
 
     def remove_dataset_type(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -317,18 +318,16 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             )
         record = self._fetch_dataset_type_record(dataset_type.name)
         if record is None:
-            if (
-                dynamic_tables := self._caching_context.dataset_types.get_by_dimensions(
-                    dataset_type.dimensions
-                )
-            ) is None:
+            if (dynamic_tables := self._cache.get_by_dimensions(dataset_type.dimensions)) is None:
                 dimensions_key = self._dimensions.save_dimension_group(dataset_type.dimensions)
                 dynamic_tables = DynamicTables.from_dimensions_key(
                     dataset_type.dimensions, dimensions_key, dataset_type.isCalibration()
                 )
-                dynamic_tables.create(self._db, type(self._collections))
+                dynamic_tables.create(self._db, type(self._collections), self._cache.tables)
             elif dataset_type.isCalibration() and dynamic_tables.calibs_name is None:
-                dynamic_tables.add_calibs(self._db, type(self._collections))
+                dynamic_tables = dynamic_tables.add_calibs(
+                    self._db, type(self._collections), self._cache.tables
+                )
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": dataset_type.name},
@@ -347,9 +346,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 returning=["id", "tag_association_table"],
             )
             # Make sure that cache is updated
-            if self._caching_context.dataset_types is not None and row is not None:
-                self._caching_context.dataset_types.add(dataset_type, row["id"])
-                self._caching_context.dataset_types.add_by_dimensions(dataset_type.dimensions, dynamic_tables)
+            if row is not None:
+                self._cache.add(dataset_type, row["id"])
+                self._cache.add_by_dimensions(dataset_type.dimensions, dynamic_tables)
         else:
             if dataset_type != record.dataset_type:
                 raise ConflictingDefinitionError(
@@ -433,28 +432,20 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             return None
         run = row[self._run_key_column]
         record = self._record_from_row(row)
-        dynamic_tables: DynamicTables | None = None
-        if self._caching_context.dataset_types is not None:
-            _, dataset_type_id = self._caching_context.dataset_types.get(record.dataset_type.name)
-            if dataset_type_id is None:
-                if self._caching_context.dataset_types is not None:
-                    self._caching_context.dataset_types.add(record.dataset_type, record.dataset_type_id)
-            else:
-                assert record.dataset_type_id == dataset_type_id, "Two IDs for the same dataset type name!"
-            dynamic_tables = self._caching_context.dataset_types.get_by_dimensions(
-                record.dataset_type.dimensions
-            )
+        _, dataset_type_id = self._cache.get(record.dataset_type.name)
+        if dataset_type_id is None:
+            self._cache.add(record.dataset_type, record.dataset_type_id)
+        else:
+            assert record.dataset_type_id == dataset_type_id, "Two IDs for the same dataset type name!"
+        dynamic_tables = self._cache.get_by_dimensions(record.dataset_type.dimensions)
         if dynamic_tables is None:
             dynamic_tables = record.make_dynamic_tables()
-            if self._caching_context.dataset_types is not None:
-                self._caching_context.dataset_types.add_by_dimensions(
-                    record.dataset_type.dimensions, dynamic_tables
-                )
+            self._cache.add_by_dimensions(record.dataset_type.dimensions, dynamic_tables)
         if record.dataset_type.dimensions:
             # This query could return multiple rows (one for each tagged
             # collection the dataset is in, plus one for its run collection),
             # and we don't care which of those we get.
-            tags_table = dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(dynamic_tables)
             data_id_sql = (
                 tags_table.select()
                 .where(
@@ -516,6 +507,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     def _dataset_type_from_row(self, row: Mapping) -> DatasetType:
         return self._record_from_row(row).dataset_type
 
+    def preload_cache(self) -> None:
+        self._fetch_dataset_types()
+
     def _fetch_dataset_types(self) -> list[DatasetType]:
         """Fetch list of all defined dataset types."""
         # This is one of three places we populate the dataset type cache:
@@ -540,63 +534,60 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # whenever a dataset type is added to the cache by name, to reduce the
         # number of possible states the cache can be in and minimize the number
         # of queries.
-        if self._caching_context.dataset_types is not None:
-            if self._caching_context.dataset_types.full:
-                return [dataset_type for dataset_type, _ in self._caching_context.dataset_types.items()]
+        if self._cache.full:
+            return [dataset_type for dataset_type, _ in self._cache.items()]
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
         records = [self._record_from_row(row) for row in sql_rows]
         # Cache everything and specify that cache is complete.
-        if self._caching_context.dataset_types is not None:
-            cache_data: list[tuple[DatasetType, int]] = []
-            cache_dimensions_data: dict[DimensionGroup, DynamicTables] = {}
-            for record in records:
-                cache_data.append((record.dataset_type, record.dataset_type_id))
-                if (dynamic_tables := cache_dimensions_data.get(record.dataset_type.dimensions)) is None:
-                    cache_dimensions_data[record.dataset_type.dimensions] = record.make_dynamic_tables()
-                else:
-                    record.update_dynamic_tables(dynamic_tables)
-            self._caching_context.dataset_types.set(
-                cache_data, full=True, dimensions_data=cache_dimensions_data.items(), dimensions_full=True
-            )
+        cache_data: list[tuple[DatasetType, int]] = []
+        cache_dimensions_data: dict[DimensionGroup, DynamicTables] = {}
+        for record in records:
+            cache_data.append((record.dataset_type, record.dataset_type_id))
+            if (dynamic_tables := cache_dimensions_data.get(record.dataset_type.dimensions)) is None:
+                tables = record.make_dynamic_tables()
+            else:
+                tables = record.update_dynamic_tables(dynamic_tables)
+            cache_dimensions_data[record.dataset_type.dimensions] = tables
+        self._cache.set(
+            cache_data, full=True, dimensions_data=cache_dimensions_data.items(), dimensions_full=True
+        )
         return [record.dataset_type for record in records]
 
     def _find_storage(self, name: str) -> _DatasetRecordStorage:
         """Find a dataset type and the extra information needed to work with
         it, utilizing and populating the cache as needed.
         """
-        if self._caching_context.dataset_types is not None:
-            dataset_type, dataset_type_id = self._caching_context.dataset_types.get(name)
+        dataset_type, dataset_type_id = self._cache.get(name)
+        if dataset_type is not None:
+            tables = self._cache.get_by_dimensions(dataset_type.dimensions)
+            assert (
+                dataset_type_id is not None and tables is not None
+            ), "Dataset type cache population is incomplete."
+            return _DatasetRecordStorage(
+                dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
+            )
+        else:
+            # On the first cache miss populate the cache with complete list
+            # of dataset types (if it was not done yet).
+            if not self._cache.full:
+                self._fetch_dataset_types()
+                # Try again
+                dataset_type, dataset_type_id = self._cache.get(name)
             if dataset_type is not None:
-                tables = self._caching_context.dataset_types.get_by_dimensions(dataset_type.dimensions)
+                tables = self._cache.get_by_dimensions(dataset_type.dimensions)
                 assert (
                     dataset_type_id is not None and tables is not None
                 ), "Dataset type cache population is incomplete."
                 return _DatasetRecordStorage(
                     dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
                 )
-            else:
-                # On the first cache miss populate the cache with complete list
-                # of dataset types (if it was not done yet).
-                if not self._caching_context.dataset_types.full:
-                    self._fetch_dataset_types()
-                    # Try again
-                    dataset_type, dataset_type_id = self._caching_context.dataset_types.get(name)
-                if dataset_type is not None:
-                    tables = self._caching_context.dataset_types.get_by_dimensions(dataset_type.dimensions)
-                    assert (
-                        dataset_type_id is not None and tables is not None
-                    ), "Dataset type cache population is incomplete."
-                    return _DatasetRecordStorage(
-                        dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
-                    )
         record = self._fetch_dataset_type_record(name)
         if record is not None:
-            if self._caching_context.dataset_types is not None:
-                self._caching_context.dataset_types.add(record.dataset_type, record.dataset_type_id)
-            return _DatasetRecordStorage(
-                record.dataset_type, record.dataset_type_id, record.make_dynamic_tables()
-            )
+            self._cache.add(record.dataset_type, record.dataset_type_id)
+            tables = record.make_dynamic_tables()
+            self._cache.add_by_dimensions(record.dataset_type.dimensions, tables)
+            return _DatasetRecordStorage(record.dataset_type, record.dataset_type_id, tables)
         raise MissingDatasetTypeError(f"Dataset type {name!r} does not exist.")
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
@@ -684,7 +675,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 for dataId, row in zip(data_id_list, rows, strict=True)
             ]
             # Insert those rows into the tags table.
-            self._db.insert(storage.dynamic_tables.tags(self._db, type(self._collections)), *tagsRows)
+            self._db.insert(self._get_tags_table(storage.dynamic_tables), *tagsRows)
 
         return [
             DatasetRef(
@@ -767,9 +758,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             summary.add_datasets(refs)
             self._summaries.update(run, [storage.dataset_type_id], summary)
             # Copy from temp table into tags table.
-            self._db.insert(
-                storage.dynamic_tables.tags(self._db, type(self._collections)), select=tmp_tags.select()
-            )
+            self._db.insert(self._get_tags_table(storage.dynamic_tables), select=tmp_tags.select())
         return refs
 
     def _validate_import(
@@ -793,7 +782,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             Raise if new datasets conflict with existing ones.
         """
         dataset = self._static.dataset
-        tags = storage.dynamic_tables.tags(self._db, type(self._collections))
+        tags = self._get_tags_table(storage.dynamic_tables)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
 
         # Check that existing datasets have the same dataset type and
@@ -943,7 +932,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # inserted there.
             self._summaries.update(collection, [storage.dataset_type_id], summary)
             # Update the tag table itself.
-            self._db.replace(storage.dynamic_tables.tags(self._db, type(self._collections)), *rows)
+            self._db.replace(self._get_tags_table(storage.dynamic_tables), *rows)
 
     def disassociate(
         self, dataset_type: DatasetType, collection: CollectionRecord, datasets: Iterable[DatasetRef]
@@ -964,7 +953,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             for dataset in datasets
         ]
         self._db.delete(
-            storage.dynamic_tables.tags(self._db, type(self._collections)),
+            self._get_tags_table(storage.dynamic_tables),
             ["dataset_id", self._collections.getCollectionForeignKeyName()],
             *rows,
         )
@@ -1015,7 +1004,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # inserted there.
         self._summaries.update(collection, [storage.dataset_type_id], summary)
         # Update the association table itself.
-        calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+        calibs_table = self._get_calibs_table(storage.dynamic_tables)
         if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
             # reraise the exception for consistency across DB engines.
@@ -1099,7 +1088,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         rows_to_insert = []
         # Acquire a table lock to ensure there are no concurrent writes
         # between the SELECT and the DELETE and INSERT queries based on it.
-        calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+        calibs_table = self._get_calibs_table(storage.dynamic_tables)
         with self._db.transaction(lock=[calibs_table], savepoint=True):
             # Enter SqlQueryContext in case we need to use a temporary table to
             # include the give data IDs in the query (see similar block in
@@ -1186,7 +1175,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         tag_relation: Relation | None = None
         calib_relation: Relation | None = None
         if collection_types != {CollectionType.CALIBRATION}:
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(storage.dynamic_tables)
             # We'll need a subquery for the tags table if any of the given
             # collections are not a CALIBRATION collection.  This intentionally
             # also fires when the list of collections is empty as a way to
@@ -1214,7 +1203,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
-            calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+            calibs_table = self._get_calibs_table(storage.dynamic_tables)
             calibs_parts = sql.Payload[LogicalColumn](calibs_table.alias(f"{dataset_type.name}_calibs"))
             if "timespan" in columns:
                 calibs_parts.columns_available[DatasetColumnTag(dataset_type.name, "timespan")] = (
@@ -1422,7 +1411,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # create a dummy subquery that we know will fail.
             # We give the table an alias because it might appear multiple times
             # in the same query, for different dataset types.
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections)).alias(
+            tags_table = self._get_tags_table(storage.dynamic_tables).alias(
                 f"{dataset_type.name}_tags{'_union' if is_union else ''}"
             )
             tags_builder = self._finish_query_builder(
@@ -1441,7 +1430,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
             # timespan as a result or constraint.
-            calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections)).alias(
+            calibs_table = self._get_calibs_table(storage.dynamic_tables).alias(
                 f"{dataset_type.name}_calibs{'_union' if is_union else ''}"
             )
             calibs_builder = self._finish_query_builder(
@@ -1616,14 +1605,14 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
             # Query datasets tables for associated collections.
             column_name = self._collections.getCollectionForeignKeyName()
-            tags_table = storage.dynamic_tables.tags(self._db, type(self._collections))
+            tags_table = self._get_tags_table(storage.dynamic_tables)
             query: sqlalchemy.sql.expression.SelectBase = (
                 sqlalchemy.select(tags_table.columns[column_name])
                 .where(tags_table.columns.dataset_type_id == storage.dataset_type_id)
                 .distinct()
             )
             if dataset_type.isCalibration():
-                calibs_table = storage.dynamic_tables.calibs(self._db, type(self._collections))
+                calibs_table = self._get_calibs_table(storage.dynamic_tables)
                 query2 = (
                     sqlalchemy.select(calibs_table.columns[column_name])
                     .where(calibs_table.columns.dataset_type_id == storage.dataset_type_id)
@@ -1636,6 +1625,12 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
             collections_to_delete = summary_collection_ids - collection_ids
             self._summaries.delete_collections(storage.dataset_type_id, collections_to_delete)
+
+    def _get_tags_table(self, table: DynamicTables) -> sqlalchemy.Table:
+        return table.tags(self._db, type(self._collections), self._cache.tables)
+
+    def _get_calibs_table(self, table: DynamicTables) -> sqlalchemy.Table:
+        return table.calibs(self._db, type(self._collections), self._cache.tables)
 
 
 def _create_case_expression_for_collections(
