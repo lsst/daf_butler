@@ -432,7 +432,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             return None
         run = row[self._run_key_column]
         record = self._record_from_row(row)
-        dynamic_tables: DynamicTables | None = None
         _, dataset_type_id = self._cache.get(record.dataset_type.name)
         if dataset_type_id is None:
             self._cache.add(record.dataset_type, record.dataset_type_id)
