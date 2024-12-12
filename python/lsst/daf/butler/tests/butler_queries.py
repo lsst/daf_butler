@@ -1921,6 +1921,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.assertEqual(rows[0]["visit"], 1)
             self.assertEqual(rows[0]["dt.collection"], "run1")
 
+        # Test that dataset fields like ingest_date can be used in the 'where'
+        # clause.
+        result = butler.query_datasets("dt", "run1", where="ingest_date > T'2000-01-01'")
+        self.assertEqual(len(result), 1)
+        result = butler.query_datasets("dt", "run1", where="ingest_date < T'2000-01-01'", explain=False)
+        self.assertEqual(len(result), 0)
+
     def test_multiple_instrument_queries(self) -> None:
         """Test that multiple-instrument queries are not rejected as having
         governor dimension ambiguities.
