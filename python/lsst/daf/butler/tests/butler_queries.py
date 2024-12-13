@@ -759,6 +759,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [1, 2, 3],
                 has_postprocessing=True,
             )
+            # Same as above, but with a materialization.
+            self.check_detector_records(
+                query.where(
+                    _x.visit_detector_region.region.overlaps(_x.patch.region),
+                    tract=0,
+                    patch=4,
+                )
+                .materialize(dimensions=["detector"])
+                .dimension_records("detector"),
+                [1, 2, 3],
+                has_postprocessing=True,
+            )
             # Query for that patch's region and express the previous query as
             # a region-constraint instead of a spatial join.
             (patch_record,) = query.where(tract=0, patch=4).dimension_records("patch")
@@ -776,6 +788,21 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     bind={"region": patch_record.region},
                 ),
                 ids=[1, 2, 3],
+            )
+            # Query for detectors where a patch/visit+detector overlap is
+            # satisfied, in the case where there are no rows with an overlap,
+            # but the union of the patch regions overlaps the union of the
+            # visit+detector regions.
+            self.check_detector_records(
+                query.where(
+                    _x.visit_detector_region.region.overlaps(_x.patch.region),
+                    _x.any(
+                        _x.all(_x.tract == 1, _x.visit == 1),
+                        _x.all(_x.tract == 0, _x.patch == 0, _x.visit == 2),
+                    ),
+                ).dimension_records("detector"),
+                [],
+                has_postprocessing=True,
             )
             # Combine postprocessing with order_by and limit.
             self.check_detector_records(
