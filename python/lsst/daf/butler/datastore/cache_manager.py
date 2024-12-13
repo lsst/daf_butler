@@ -129,7 +129,10 @@ def _parse_cache_name(cached_location: str) -> tuple[uuid.UUID, str | None, str 
     ext = "." + root_ext.pop(0) if root_ext else None
 
     parts = root.split("_")
-    id_ = uuid.UUID(parts.pop(0))
+    try:
+        id_ = uuid.UUID(parts.pop(0))
+    except ValueError as e:
+        raise InvalidCacheFilenameError(f"Invalid or missing ID in cache file name: {cached_location}") from e
     component = parts.pop(0) if parts else None
     return id_, component, ext
 
@@ -894,9 +897,14 @@ cached:
             if file.relative_to(self._temp_exempt_directory) is not None:
                 continue
 
-            path_in_cache = self._register_cache_entry(file, can_exist=True)
-            if path_in_cache:
-                found.add(path_in_cache)
+            try:
+                path_in_cache = self._register_cache_entry(file, can_exist=True)
+                if path_in_cache:
+                    found.add(path_in_cache)
+            except InvalidCacheFilenameError:
+                # Skip files that are in the cache directory, but were not
+                # created by us.
+                pass
 
         # Find any files that were recorded in the cache but are no longer
         # on disk. (something else cleared them out?)
@@ -1194,3 +1202,9 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
 
     def __str__(self) -> str:
         return f"{type(self).__name__}()"
+
+
+class InvalidCacheFilenameError(Exception):
+    """Raised when attempting to register a file in the cache with a name in
+    the incorrect format.
+    """

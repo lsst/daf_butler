@@ -1744,6 +1744,26 @@ cached:
         # Test that the cache directory is not marked temporary
         self.assertFalse(cache_manager.cache_directory.isTemporary)
 
+    def testUnexpectedFilesInCacheDir(self) -> None:
+        """Test for regression of a bug where extraneous files in a cache
+        directory would cause all cache lookups to raise an exception.
+        """
+        config_str = f"""
+cached:
+  root: '{self.root}'
+  cacheable:
+    metric0: true
+        """
+
+        for filename in ["unexpected.txt", "unexpected", "un_expected", "un_expected.txt"]:
+            unexpected_file = os.path.join(self.root, filename)
+            with open(unexpected_file, "w") as fh:
+                fh.write("test")
+
+        cache_manager = self._make_cache_manager(config_str)
+        cache_manager.scan_cache()
+        self.assertCache(cache_manager)
+
     def assertCache(self, cache_manager: DatastoreCacheManager) -> None:
         self.assertTrue(cache_manager.should_be_cached(self.refs[0]))
         self.assertFalse(cache_manager.should_be_cached(self.refs[1]))
