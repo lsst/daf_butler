@@ -117,7 +117,7 @@ class GeneralResultPage:
     spec: GeneralResultSpec
 
     # Raw tabular data, with columns in the same order as
-    # spec.get_result_columns().
+    # spec.get_all_result_columns().
     rows: list[tuple[Any, ...]]
 
 

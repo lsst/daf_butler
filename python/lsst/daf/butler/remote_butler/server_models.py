@@ -313,6 +313,9 @@ class GeneralResultModel(pydantic.BaseModel):
 
     type: Literal["general"] = "general"
     rows: list[tuple[Any, ...]]
+    # List of column names, default is used for compatibility with older
+    # servers that do not set this field.
+    columns: list[str] = pydantic.Field(default_factory=list)
 
 
 class QueryErrorResultModel(pydantic.BaseModel):

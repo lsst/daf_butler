@@ -35,11 +35,11 @@ from typing import Any, NamedTuple, final
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
-from ..dimensions import DataCoordinate, DimensionGroup
+from ..dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import GeneralResultSpec
-from .tree import QueryTree
+from .tree import QueryTree, ResultColumn
 
 
 class GeneralResultTuple(NamedTuple):
@@ -99,9 +99,9 @@ class GeneralQueryResults(QueryResultsBase):
             fields (separated from dataset type name by dot).
         """
         for page in self._driver.execute(self._spec, self._tree):
-            columns = tuple(str(column) for column in page.spec.get_result_columns())
+            columns = tuple(str(column) for column in page.spec.get_all_result_columns())
             for row in page.rows:
-                yield dict(zip(columns, row))
+                yield dict(zip(columns, row, strict=True))
 
     def iter_tuples(self, *dataset_types: DatasetType) -> Iterator[GeneralResultTuple]:
         """Iterate over result rows and return data coordinate, and dataset
@@ -125,14 +125,10 @@ class GeneralQueryResults(QueryResultsBase):
             run_key = f"{dataset_type.name}.run"
             dataset_keys.append((dataset_type, dimensions, id_key, run_key))
         for row in self:
-            values = tuple(
-                row[key] for key in itertools.chain(all_dimensions.required, all_dimensions.implied)
-            )
-            data_coordinate = DataCoordinate.from_full_values(all_dimensions, values)
+            data_coordinate = self._make_data_id(row, all_dimensions)
             refs = []
             for dataset_type, dimensions, id_key, run_key in dataset_keys:
-                values = tuple(row[key] for key in itertools.chain(dimensions.required, dimensions.implied))
-                data_id = DataCoordinate.from_full_values(dimensions, values)
+                data_id = data_coordinate.subset(dimensions)
                 refs.append(DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key]))
             yield GeneralResultTuple(data_id=data_coordinate, refs=refs, raw_row=row)
 
@@ -140,6 +136,19 @@ class GeneralQueryResults(QueryResultsBase):
     def dimensions(self) -> DimensionGroup:
         # Docstring inherited
         return self._spec.dimensions
+
+    @property
+    def has_dimension_records(self) -> bool:
+        """Whether all data IDs in this iterable contain dimension records."""
+        return self._spec.include_dimension_records
+
+    def with_dimension_records(self) -> GeneralQueryResults:
+        """Return a results object for which `has_dimension_records` is
+        `True`.
+        """
+        if self.has_dimension_records:
+            return self
+        return self._copy(tree=self._tree, include_dimension_records=True)
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
@@ -152,3 +161,27 @@ class GeneralQueryResults(QueryResultsBase):
     def _get_datasets(self) -> frozenset[str]:
         # Docstring inherited.
         return frozenset(self._spec.dataset_fields)
+
+    def _make_data_id(self, row: dict[str, Any], dimensions: DimensionGroup) -> DataCoordinate:
+        values = tuple(row[key] for key in itertools.chain(dimensions.required, dimensions.implied))
+        data_coordinate = DataCoordinate.from_full_values(dimensions, values)
+        if self.has_dimension_records:
+            records = {
+                name: self._make_dimension_record(row, dimensions.universe[name])
+                for name in dimensions.elements
+            }
+            data_coordinate = data_coordinate.expanded(records)
+        return data_coordinate
+
+    def _make_dimension_record(self, row: dict[str, Any], element: DimensionElement) -> DimensionRecord:
+        column_map = list(
+            zip(
+                element.schema.dimensions.names,
+                element.dimensions.names,
+            )
+        )
+        for field in element.schema.remainder.names:
+            column_map.append((field, str(ResultColumn(element.name, field))))
+        d = {k: row[v] for k, v in column_map}
+        record_cls = element.RecordClass
+        return record_cls(**d)

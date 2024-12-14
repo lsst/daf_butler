@@ -257,12 +257,25 @@ def _convert_query_result_page(
 
 def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) -> GeneralResultPage:
     """Convert GeneralResultModel to a general result page."""
-    columns = spec.get_result_columns()
+    columns = spec.get_all_result_columns()
+    # Verify that column list that we received from server matches local
+    # expectations (mismatch could result from different versions). Older
+    # server may not know about `model.columns` in that case it will be empty.
+    # If `model.columns` is empty then `zip(strict=True)` below will fail if
+    # column count is different (column names are not checked in that case).
+    if model.columns:
+        expected_column_names = [str(column) for column in columns]
+        if expected_column_names != model.columns:
+            raise ValueError(
+                "Inconsistent columns in general result -- "
+                f"server columns: {model.columns}, expected: {expected_column_names}"
+            )
+
     serializers = [
         columns.get_column_spec(column.logical_table, column.field).serializer() for column in columns
     ]
     rows = [
-        tuple(serializer.deserialize(value) for value, serializer in zip(row, serializers))
+        tuple(serializer.deserialize(value) for value, serializer in zip(row, serializers, strict=True))
         for row in model.rows
     ]
     return GeneralResultPage(spec=spec, rows=rows)
