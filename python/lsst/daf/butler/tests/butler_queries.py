@@ -436,7 +436,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 self.assertEqual(len(row_tuple.refs), 1)
                 self.assertEqual(row_tuple.refs[0].datasetType, flat)
                 self.assertTrue(row_tuple.refs[0].dataId.hasFull())
+                self.assertFalse(row_tuple.refs[0].dataId.hasRecords())
                 self.assertTrue(row_tuple.data_id.hasFull())
+                self.assertFalse(row_tuple.data_id.hasRecords())
                 self.assertEqual(row_tuple.data_id.dimensions, dimensions)
                 self.assertEqual(row_tuple.raw_row["flat.run"], "imported_g")
 
@@ -510,6 +512,46 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 {row_tuple.raw_row["flat.timespan"] for row_tuple in row_tuples},
                 {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty(), None},
             )
+
+        dimensions = butler.dimensions["detector"].minimal_group
+
+        # Include dimension records into query.
+        with butler.query() as query:
+            query = query.join_dimensions(dimensions)
+            result = query.general(dimensions).order_by("detector")
+            rows = list(result.with_dimension_records())
+            self.assertEqual(
+                rows[0],
+                {
+                    "instrument": "Cam1",
+                    "detector": 1,
+                    "instrument.visit_max": 1024,
+                    "instrument.visit_system": 1,
+                    "instrument.exposure_max": 512,
+                    "instrument.detector_max": 4,
+                    "instrument.class_name": "lsst.pipe.base.Instrument",
+                    "detector.full_name": "Aa",
+                    "detector.name_in_raft": "a",
+                    "detector.raft": "A",
+                    "detector.purpose": "SCIENCE",
+                },
+            )
+
+        dimensions = butler.dimensions.conform(["detector", "physical_filter"])
+
+        # DataIds should come with records.
+        with butler.query() as query:
+            query = query.join_dataset_search("flat", "imported_g")
+            result = query.general(dimensions, dataset_fields={"flat": ...}, find_first=True).order_by(
+                "detector"
+            )
+            result = result.with_dimension_records()
+            row_tuples = list(result.iter_tuples(flat))
+            self.assertEqual(len(row_tuples), 3)
+            for row_tuple in row_tuples:
+                self.assertTrue(row_tuple.data_id.hasRecords())
+                self.assertEqual(len(row_tuple.refs), 1)
+                self.assertTrue(row_tuple.refs[0].dataId.hasRecords())
 
     def test_query_ingest_date(self) -> None:
         """Test general query returning ingest_date field."""
