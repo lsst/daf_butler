@@ -44,6 +44,7 @@ from sqlalchemy import sql
 
 from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
+from ..._utilities.locked_object import LockedObject
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database
 
@@ -124,7 +125,7 @@ class PostgresqlDatabase(Database):
         namespace: str | None = None,
         writeable: bool = True,
         dbname: str,
-        metadata: sqlalchemy.schema.MetaData | None,
+        metadata: LockedObject[sqlalchemy.schema.MetaData] | None,
         pg_version: tuple[int, int],
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
