@@ -95,6 +95,7 @@ except ImportError:
 
 try:
     from lsst.daf.butler.formatters.parquet import (
+        ASTROPY_PANDAS_INDEX_KEY,
         ArrowAstropySchema,
         ArrowNumpySchema,
         DataFrameSchema,
@@ -105,6 +106,7 @@ try:
         _numpy_dtype_to_arrow_types,
         _numpy_style_arrays_to_arrow_arrays,
         _numpy_to_numpy_dict,
+        add_pandas_index_to_astropy,
         arrow_to_astropy,
         arrow_to_numpy,
         arrow_to_numpy_dict,
@@ -1192,6 +1194,44 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.butler.put(bad_tab, self.datasetType, dataId={})
 
+    @unittest.skipUnless(pd is not None, "Cannot test ParquetFormatterDataFrame without pandas.")
+    def testWriteAstropyTableWithPandasIndexHint(self, testStrip=True):
+        tab1 = _makeSimpleAstropyTable()
+
+        add_pandas_index_to_astropy(tab1, "index")
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        # Read in as an astropy table and ensure index hint is still there.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+
+        self.assertIn(ASTROPY_PANDAS_INDEX_KEY, tab2.meta)
+        self.assertEqual(tab2.meta[ASTROPY_PANDAS_INDEX_KEY], "index")
+
+        # Read as a dataframe and ensure index is set.
+        df3 = self.butler.get(self.datasetType, dataId={}, storageClass="DataFrame")
+
+        self.assertEqual(df3.index.name, "index")
+
+        # Read as a dataframe without naming the index column.
+        with self.assertLogs(level="WARNING") as cm:
+            _ = self.butler.get(
+                self.datasetType,
+                dataId={},
+                storageClass="DataFrame",
+                parameters={"columns": ["a", "b"]},
+            )
+        self.assertIn("Index column ``index``", cm.output[0])
+
+        if testStrip:
+            # Read as an astropy table without naming the index column.
+            tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "b"]})
+
+            self.assertNotIn(ASTROPY_PANDAS_INDEX_KEY, tab5.meta)
+
+        with self.assertRaises(ValueError):
+            add_pandas_index_to_astropy(tab1, "not_a_column")
+
 
 @unittest.skipUnless(atable is not None, "Cannot test InMemoryDatastore with AstropyTable without astropy.")
 class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase):
@@ -1221,6 +1261,10 @@ class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase)
 
         with self.assertRaises(AttributeError):
             delegate.getComponent(composite=tab1, componentName="nothing")
+
+    @unittest.skipUnless(pd is not None, "Cannot test ParquetFormatterDataFrame without pandas.")
+    def testWriteAstropyTableWithPandasIndexHint(self):
+        super().testWriteAstropyTableWithPandasIndexHint(testStrip=False)
 
 
 @unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
