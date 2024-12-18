@@ -37,6 +37,7 @@ __all__ = (
     "pandas_to_astropy",
     "astropy_to_arrow",
     "astropy_to_pandas",
+    "add_pandas_index_to_astropy",
     "numpy_to_arrow",
     "numpy_to_astropy",
     "numpy_dict_to_arrow",
@@ -78,6 +79,7 @@ if TYPE_CHECKING:
         AbstractFileSystem = type
 
 TARGET_ROW_GROUP_BYTES = 1_000_000_000
+ASTROPY_PANDAS_INDEX_KEY = "lsst::arrow::astropy_pandas_index"
 
 
 class ParquetFormatter(FormatterV2):
@@ -226,7 +228,20 @@ def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
     dataframe : `pandas.DataFrame`
         Converted pandas dataframe.
     """
-    return arrow_table.to_pandas(use_threads=False, integer_object_nulls=True)
+    dataframe = arrow_table.to_pandas(use_threads=False, integer_object_nulls=True)
+
+    metadata = arrow_table.schema.metadata if arrow_table.schema.metadata is not None else {}
+    if (key := ASTROPY_PANDAS_INDEX_KEY.encode()) in metadata:
+        pandas_index = metadata[key].decode("UTF8")
+        if pandas_index in arrow_table.schema.names:
+            dataframe.set_index(pandas_index, inplace=True)
+        else:
+            log.warning(
+                "Index column ``%s`` not available for arrow table conversion to DataFrame",
+                pandas_index,
+            )
+
+    return dataframe
 
 
 def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
@@ -249,6 +264,10 @@ def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
     astropy_table = Table(arrow_to_numpy_dict(arrow_table))
 
     _apply_astropy_metadata(astropy_table, arrow_table.schema)
+
+    if (key := ASTROPY_PANDAS_INDEX_KEY) in astropy_table.meta:
+        if astropy_table.meta[key] not in astropy_table.columns:
+            astropy_table.meta.pop(key)
 
     return astropy_table
 
@@ -487,6 +506,9 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     md = {}
     md[b"lsst::arrow::rowcount"] = str(len(astropy_table))
 
+    if (key := ASTROPY_PANDAS_INDEX_KEY) in astropy_table.meta:
+        md[key.encode()] = astropy_table.meta[key]
+
     for name in astropy_table.dtype.names:
         _append_numpy_string_metadata(md, name, astropy_table.dtype[name])
         _append_numpy_multidim_metadata(md, name, astropy_table.dtype[name])
@@ -543,14 +565,45 @@ def astropy_to_pandas(astropy_table: atable.Table, index: str | None = None) -> 
     dataframe : `pandas.DataFrame`
         Output pandas dataframe.
     """
+    index_requested = False
+    if (key := ASTROPY_PANDAS_INDEX_KEY) in astropy_table.meta:
+        _index = astropy_table.meta[key]
+        if _index not in astropy_table.columns:
+            log.warning(
+                "Index column ``%s`` not available for astropy table conversion to DataFrame",
+                _index,
+            )
+            _index = None
+    else:
+        index_requested = True
+        _index = index
+
     dataframe = arrow_to_pandas(astropy_to_arrow(astropy_table))
 
-    if isinstance(index, str):
-        dataframe = dataframe.set_index(index)
-    elif index:
+    # Set the index if we have a valid index name, and either the
+    # index was requested in the call to the function or the dataframe
+    # was not previously indexed with the call to arrow_to_pandas.
+    if isinstance(_index, str) and (index_requested or dataframe.index.name is None):
+        dataframe.set_index(_index, inplace=True)
+    elif _index and index_requested:
         raise RuntimeError("index must be a string or None.")
 
     return dataframe
+
+
+def add_pandas_index_to_astropy(astropy_table: atable.Table, index: str) -> None:
+    """Add special metadata to an astropy table to indicate a pandas index.
+
+    Parameters
+    ----------
+    astropy_table : `astropy.table.Table`
+        Input astropy table.
+    index : `str`
+        Name of column for pandas to set as index, if read as DataFrame.
+    """
+    if index not in astropy_table.columns:
+        raise ValueError("Column ``%s`` not in astropy table columns to use as pandas index.", index)
+    astropy_table.meta[ASTROPY_PANDAS_INDEX_KEY] = index
 
 
 def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]:
