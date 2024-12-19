@@ -35,7 +35,7 @@ from typing import Any, NamedTuple, final
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
-from ..dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
+from ..dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord, DimensionRecordSet
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import GeneralResultSpec
@@ -99,9 +99,13 @@ class GeneralQueryResults(QueryResultsBase):
             fields (separated from dataset type name by dot).
         """
         for page in self._driver.execute(self._spec, self._tree):
-            columns = tuple(str(column) for column in page.spec.get_all_result_columns())
+            columns = tuple(str(column) for column in page.spec.get_result_columns())
             for row in page.rows:
-                yield dict(zip(columns, row, strict=True))
+                result = dict(zip(columns, row, strict=True))
+                if page.dimension_records:
+                    records = self._get_cached_dimension_records(result, page.dimension_records)
+                    self._add_dimension_records(result, records)
+                yield result
 
     def iter_tuples(self, *dataset_types: DatasetType) -> Iterator[GeneralResultTuple]:
         """Iterate over result rows and return data coordinate, and dataset
@@ -124,13 +128,21 @@ class GeneralQueryResults(QueryResultsBase):
             id_key = f"{dataset_type.name}.dataset_id"
             run_key = f"{dataset_type.name}.run"
             dataset_keys.append((dataset_type, dimensions, id_key, run_key))
-        for row in self:
-            data_coordinate = self._make_data_id(row, all_dimensions)
-            refs = []
-            for dataset_type, dimensions, id_key, run_key in dataset_keys:
-                data_id = data_coordinate.subset(dimensions)
-                refs.append(DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key]))
-            yield GeneralResultTuple(data_id=data_coordinate, refs=refs, raw_row=row)
+        for page in self._driver.execute(self._spec, self._tree):
+            columns = tuple(str(column) for column in page.spec.get_result_columns())
+            for page_row in page.rows:
+                row = dict(zip(columns, page_row, strict=True))
+                if page.dimension_records:
+                    cached_records = self._get_cached_dimension_records(row, page.dimension_records)
+                    self._add_dimension_records(row, cached_records)
+                else:
+                    cached_records = {}
+                data_coordinate = self._make_data_id(row, all_dimensions, cached_records)
+                refs = []
+                for dataset_type, dimensions, id_key, run_key in dataset_keys:
+                    data_id = data_coordinate.subset(dimensions)
+                    refs.append(DatasetRef(dataset_type, data_id, row[run_key], id=row[id_key]))
+                yield GeneralResultTuple(data_id=data_coordinate, refs=refs, raw_row=row)
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -162,14 +174,22 @@ class GeneralQueryResults(QueryResultsBase):
         # Docstring inherited.
         return frozenset(self._spec.dataset_fields)
 
-    def _make_data_id(self, row: dict[str, Any], dimensions: DimensionGroup) -> DataCoordinate:
+    def _make_data_id(
+        self,
+        row: dict[str, Any],
+        dimensions: DimensionGroup,
+        cached_row_records: dict[DimensionElement, DimensionRecord],
+    ) -> DataCoordinate:
         values = tuple(row[key] for key in itertools.chain(dimensions.required, dimensions.implied))
         data_coordinate = DataCoordinate.from_full_values(dimensions, values)
         if self.has_dimension_records:
-            records = {
-                name: self._make_dimension_record(row, dimensions.universe[name])
-                for name in dimensions.elements
-            }
+            records = {}
+            for name in dimensions.elements:
+                element = dimensions.universe[name]
+                record = cached_row_records.get(element)
+                if record is None:
+                    record = self._make_dimension_record(row, dimensions.universe[name])
+                records[name] = record
             data_coordinate = data_coordinate.expanded(records)
         return data_coordinate
 
@@ -185,3 +205,22 @@ class GeneralQueryResults(QueryResultsBase):
         d = {k: row[v] for k, v in column_map}
         record_cls = element.RecordClass
         return record_cls(**d)
+
+    def _get_cached_dimension_records(
+        self, row: dict[str, Any], dimension_records: dict[DimensionElement, DimensionRecordSet]
+    ) -> dict[DimensionElement, DimensionRecord]:
+        """Find cached dimension records matching this row."""
+        records = {}
+        for element, element_records in dimension_records.items():
+            required_values = tuple(row[key] for key in element.required.names)
+            records[element] = element_records.find_with_required_values(required_values)
+        return records
+
+    def _add_dimension_records(
+        self, row: dict[str, Any], records: dict[DimensionElement, DimensionRecord]
+    ) -> None:
+        """Extend row with the fields from cached dimension records."""
+        for element, record in records.items():
+            for name, value in record.toDict().items():
+                if name not in element.schema.required.names:
+                    row[f"{element.name}.{name}"] = value
