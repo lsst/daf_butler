@@ -213,6 +213,11 @@ class GeneralResultSpec(ResultSpecBase):
     dataset_fields: Mapping[str, set[DatasetFieldName]]
     """Dataset fields included in this query."""
 
+    include_dimension_records: bool = False
+    """Whether to include fields for all dimension records, in addition to
+    explicitly specified in `dimension_fields`.
+    """
+
     find_first: bool
     """Whether this query requires find-first resolution for a dataset.
 
@@ -241,6 +246,12 @@ class GeneralResultSpec(ResultSpecBase):
             result.dimension_fields[element_name].update(fields_for_element)
         for dataset_type, fields_for_dataset in self.dataset_fields.items():
             result.dataset_fields[dataset_type].update(fields_for_dataset)
+        if self.include_dimension_records:
+            # This only adds record fields for non-cached and non-skypix
+            # elements, this is what we want when generating query. When
+            # `include_dimension_records` is True, dimension records for cached
+            # and skypix elements are added to result pages by page converter.
+            _add_dimension_records_to_column_set(self.dimensions, result)
         return result
 
     @pydantic.model_validator(mode="after")

@@ -313,6 +313,10 @@ class GeneralResultModel(pydantic.BaseModel):
 
     type: Literal["general"] = "general"
     rows: list[tuple[Any, ...]]
+    # Dimension records indexed by element name, only cached and skypix
+    # elements are included. Default is used for compatibility with older
+    # servers that do not set this field.
+    dimension_records: dict[str, list[SerializedDimensionRecord]] | None = None
 
 
 class QueryErrorResultModel(pydantic.BaseModel):

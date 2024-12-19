@@ -326,21 +326,48 @@ class GeneralResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
 
     def __init__(self, spec: GeneralResultSpec, ctx: ResultPageConverterContext) -> None:
         self.spec = spec
-
-        result_columns = spec.get_result_columns()
+        # In case `spec.include_dimension_records` is True then in addition to
+        # columns returned by the query we have to add columns from dimension
+        # records that are not returned by the query. These columns belong to
+        # either cached or skypix dimensions.
+        columns = spec.get_result_columns()
+        universe = spec.dimensions.universe
         self.converters: list[_GeneralColumnConverter] = []
-        for column in result_columns:
+        self.record_converters: dict[DimensionElement, _DimensionRecordRowConverter] = {}
+        for column in columns:
             column_name = qt.ColumnSet.get_qualified_name(column.logical_table, column.field)
+            converter: _GeneralColumnConverter
             if column.field == TimespanDatabaseRepresentation.NAME:
-                self.converters.append(_TimespanGeneralColumnConverter(column_name, ctx.db))
+                converter = _TimespanGeneralColumnConverter(column_name, ctx.db)
             elif column.field == "ingest_date":
-                self.converters.append(_TimestampGeneralColumnConverter(column_name))
+                converter = _TimestampGeneralColumnConverter(column_name)
             else:
-                self.converters.append(_DefaultGeneralColumnConverter(column_name))
+                converter = _DefaultGeneralColumnConverter(column_name)
+            self.converters.append(converter)
+
+        if spec.include_dimension_records:
+            universe = self.spec.dimensions.universe
+            for element_name in self.spec.dimensions.elements:
+                element = universe[element_name]
+                if isinstance(element, SkyPixDimension):
+                    self.record_converters[element] = _SkypixDimensionRecordRowConverter(element)
+                elif element.is_cached:
+                    self.record_converters[element] = _CachedDimensionRecordRowConverter(
+                        element, ctx.dimension_record_cache
+                    )
 
     def convert(self, raw_rows: Iterable[sqlalchemy.Row]) -> GeneralResultPage:
-        rows = [tuple(cvt.convert(row) for cvt in self.converters) for row in raw_rows]
-        return GeneralResultPage(spec=self.spec, rows=rows)
+        rows = []
+        dimension_records = None
+        if self.spec.include_dimension_records:
+            dimension_records = {element: DimensionRecordSet(element) for element in self.record_converters}
+        for row in raw_rows:
+            rows.append(tuple(cvt.convert(row) for cvt in self.converters))
+            if dimension_records:
+                for element, converter in self.record_converters.items():
+                    dimension_records[element].add(converter.convert(row))
+
+        return GeneralResultPage(spec=self.spec, rows=rows, dimension_records=dimension_records)
 
 
 class _GeneralColumnConverter:

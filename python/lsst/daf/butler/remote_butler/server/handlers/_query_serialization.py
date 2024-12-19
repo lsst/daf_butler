@@ -84,6 +84,13 @@ def _convert_general_result(page: GeneralResultPage) -> GeneralResultModel:
         columns.get_column_spec(column.logical_table, column.field).serializer() for column in columns
     ]
     rows = [
-        tuple(serializer.serialize(value) for value, serializer in zip(row, serializers)) for row in page.rows
+        tuple(serializer.serialize(value) for value, serializer in zip(row, serializers, strict=True))
+        for row in page.rows
     ]
-    return GeneralResultModel(rows=rows)
+    dimension_records = None
+    if page.dimension_records is not None:
+        dimension_records = {
+            element.name: [record.to_simple() for record in records]
+            for element, records in page.dimension_records.items()
+        }
+    return GeneralResultModel(rows=rows, dimension_records=dimension_records)
