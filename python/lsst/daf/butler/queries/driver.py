@@ -47,6 +47,7 @@ from .._dataset_type import DatasetType
 from ..dimensions import (
     DataCoordinate,
     DataIdValue,
+    DimensionElement,
     DimensionGroup,
     DimensionRecord,
     DimensionRecordSet,
@@ -117,8 +118,12 @@ class GeneralResultPage:
     spec: GeneralResultSpec
 
     # Raw tabular data, with columns in the same order as
-    # spec.get_all_result_columns().
+    # spec.get_result_columns().
     rows: list[tuple[Any, ...]]
+
+    # This map contains dimension records for cached and skypix elements,
+    # and only when spec.include_dimension_records is True.
+    dimension_records: dict[DimensionElement, DimensionRecordSet] | None
 
 
 ResultPage: TypeAlias = Union[

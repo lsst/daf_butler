@@ -330,25 +330,14 @@ class GeneralResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
         # columns returned by the query we have to add columns from dimension
         # records that are not returned by the query. These columns belong to
         # either cached or skypix dimensions.
-        query_result_columns = set(spec.get_result_columns())
-        output_columns = spec.get_all_result_columns()
+        columns = spec.get_result_columns()
         universe = spec.dimensions.universe
         self.converters: list[_GeneralColumnConverter] = []
-        for column in output_columns:
+        self.record_converters: dict[DimensionElement, _DimensionRecordRowConverter] = {}
+        for column in columns:
             column_name = qt.ColumnSet.get_qualified_name(column.logical_table, column.field)
             converter: _GeneralColumnConverter
-            if column not in query_result_columns and column.field is not None:
-                # This must be a field from a cached dimension record or
-                # skypix record.
-                assert isinstance(column.logical_table, str), "Do not expect AnyDatasetType here"
-                element = universe[column.logical_table]
-                if isinstance(element, SkyPixDimension):
-                    converter = _SkypixRecordGeneralColumnConverter(element, column.field)
-                else:
-                    converter = _CachedRecordGeneralColumnConverter(
-                        element, column.field, ctx.dimension_record_cache
-                    )
-            elif column.field == TimespanDatabaseRepresentation.NAME:
+            if column.field == TimespanDatabaseRepresentation.NAME:
                 converter = _TimespanGeneralColumnConverter(column_name, ctx.db)
             elif column.field == "ingest_date":
                 converter = _TimestampGeneralColumnConverter(column_name)
@@ -356,9 +345,29 @@ class GeneralResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
                 converter = _DefaultGeneralColumnConverter(column_name)
             self.converters.append(converter)
 
+        if spec.include_dimension_records:
+            universe = self.spec.dimensions.universe
+            for element_name in self.spec.dimensions.elements:
+                element = universe[element_name]
+                if isinstance(element, SkyPixDimension):
+                    self.record_converters[element] = _SkypixDimensionRecordRowConverter(element)
+                elif element.is_cached:
+                    self.record_converters[element] = _CachedDimensionRecordRowConverter(
+                        element, ctx.dimension_record_cache
+                    )
+
     def convert(self, raw_rows: Iterable[sqlalchemy.Row]) -> GeneralResultPage:
-        rows = [tuple(cvt.convert(row) for cvt in self.converters) for row in raw_rows]
-        return GeneralResultPage(spec=self.spec, rows=rows)
+        rows = []
+        dimension_records = None
+        if self.spec.include_dimension_records:
+            dimension_records = {element: DimensionRecordSet(element) for element in self.record_converters}
+        for row in raw_rows:
+            rows.append(tuple(cvt.convert(row) for cvt in self.converters))
+            if dimension_records:
+                for element, converter in self.record_converters.items():
+                    dimension_records[element].add(converter.convert(row))
+
+        return GeneralResultPage(spec=self.spec, rows=rows, dimension_records=dimension_records)
 
 
 class _GeneralColumnConverter:
@@ -440,47 +449,3 @@ class _TimespanGeneralColumnConverter(_GeneralColumnConverter):
     def convert(self, row: sqlalchemy.Row) -> Any:
         timespan = self.timespan_class.extract(row._mapping, self.name)
         return timespan
-
-
-class _CachedRecordGeneralColumnConverter(_GeneralColumnConverter):
-    """Helper for converting result row into a field value for cached
-    dimension records.
-
-    Parameters
-    ----------
-    element : `DimensionElement`
-        Dimension element, must be of cached type.
-    field : `str`
-        Name of the field to extract from the dimension record.
-    cache : `DimensionRecordCache`
-        Cache for dimension records.
-    """
-
-    def __init__(self, element: DimensionElement, field: str, cache: DimensionRecordCache) -> None:
-        self._record_converter = _CachedDimensionRecordRowConverter(element, cache)
-        self._field = field
-
-    def convert(self, row: sqlalchemy.Row) -> Any:
-        record = self._record_converter.convert(row)
-        return getattr(record, self._field)
-
-
-class _SkypixRecordGeneralColumnConverter(_GeneralColumnConverter):
-    """Helper for converting result row into a field value for skypix
-    dimension records.
-
-    Parameters
-    ----------
-    element : `SkyPixDimension`
-        Dimension element.
-    field : `str`
-        Name of the field to extract from the dimension record.
-    """
-
-    def __init__(self, element: SkyPixDimension, field: str) -> None:
-        self._record_converter = _SkypixDimensionRecordRowConverter(element)
-        self._field = field
-
-    def convert(self, row: sqlalchemy.Row) -> Any:
-        record = self._record_converter.convert(row)
-        return getattr(record, self._field)
