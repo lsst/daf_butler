@@ -106,6 +106,12 @@ class RecordFactory:
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
         spatial_plugins: Collection[SpatialObsCorePlugin],
+        # I would like to be able to set more generic
+        # plugin class in obscore configuration YAML
+        # that would give me the flexibility to adopt the code
+        # to project-specific needs.
+        # When region is set in dataId, exposure_region_factory
+        # might not be needed at all.
         exposure_region_factory: ExposureRegionFactory | None = None,
     ):
         self.config = config
@@ -115,10 +121,12 @@ class RecordFactory:
         self.spatial_plugins = spatial_plugins
 
         # All dimension elements used below.
-        self.band = cast(Dimension, universe["band"])
-        self.exposure = universe["exposure"]
-        self.visit = universe["visit"]
-        self.physical_filter = cast(Dimension, universe["physical_filter"])
+        # TG SPHEREx is using completely different dimension model
+        # TG These should be in project-specific plugin
+        # self.band = cast(Dimension, universe["band"])
+        # self.exposure = universe["exposure"]
+        # self.visit = universe["visit"]
+        # self.physical_filter = cast(Dimension, universe["detector"])
 
     def __call__(self, ref: DatasetRef) -> Record | None:
         """Make an ObsCore record from a dataset.
@@ -187,13 +195,13 @@ class RecordFactory:
                 record["t_max"] = t_max.mjd
 
         region = dataId.region
-        if self.exposure.name in dataId:
-            if (dimension_record := dataId.records[self.exposure.name]) is not None:
-                self._exposure_records(dimension_record, record)
-                if self.exposure_region_factory is not None:
-                    region = self.exposure_region_factory.exposure_region(dataId)
-        elif self.visit.name in dataId and (dimension_record := dataId.records[self.visit.name]) is not None:
-            self._visit_records(dimension_record, record)
+        # if self.exposure.name in dataId:
+        #     if (dimension_record := dataId.records[self.exposure.name]) is not None:
+        #         self._exposure_records(dimension_record, record)
+        #         if self.exposure_region_factory is not None:
+        #             region = self.exposure_region_factory.exposure_region(dataId)
+        # elif self.visit.name in dataId and (dimension_record := dataId.records[self.visit.name]) is not None:
+        #     self._visit_records(dimension_record, record)
 
         # ask each plugin for its values to add to a record.
         try:
@@ -207,19 +215,21 @@ class RecordFactory:
         else:
             record.update(plugin_records)
 
-        if self.band.name in dataId:
-            em_range = None
-            if (label := dataId.get(self.physical_filter.name)) is not None:
-                em_range = self.config.spectral_ranges.get(cast(str, label))
-            if not em_range:
-                band_name = dataId[self.band.name]
-                assert isinstance(band_name, str), "Band name must be string"
-                em_range = self.config.spectral_ranges.get(band_name)
-            if em_range:
-                record["em_min"], record["em_max"] = em_range
-            else:
-                _LOG.warning("could not find spectral range for dataId=%s", dataId)
-            record["em_filter_name"] = dataId["band"]
+        # TG: SPHEREX can take spectral ranges from detector dimension record
+        # TG: Handling spectral ranges is project specific
+        # if self.band in dataId:
+        #     em_range = None
+        #     if (label := dataId.get(self.physical_filter.name)) is not None:
+        #         em_range = self.config.spectral_ranges.get(cast(str, label))
+        #     if not em_range:
+        #         band_name = dataId[self.band.name]
+        #         assert isinstance(band_name, str), "Band name must be string"
+        #         em_range = self.config.spectral_ranges.get(band_name)
+        #     if em_range:
+        #         record["em_min"], record["em_max"] = em_range
+        #     else:
+        #         _LOG.warning("could not find spectral range for dataId=%s", dataId)
+        #     record["em_filter_name"] = dataId["band"]
 
         # Dictionary to use for substitutions when formatting various
         # strings.
@@ -283,12 +293,12 @@ class RecordFactory:
                 record.update(plugin_record)
         return record
 
-    def _exposure_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
-        """Extract all needed info from a visit dimension record."""
-        record["t_exptime"] = dimension_record.exposure_time
-        record["target_name"] = dimension_record.target_name
+    # def _exposure_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
+    #     """Extract all needed info from a visit dimension record."""
+    #     record["t_exptime"] = dimension_record.exposure_time
+    #     record["target_name"] = dimension_record.target_name
 
-    def _visit_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
-        """Extract all needed info from an exposure dimension record."""
-        record["t_exptime"] = dimension_record.exposure_time
-        record["target_name"] = dimension_record.target_name
+    # def _visit_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
+    #     """Extract all needed info from an exposure dimension record."""
+    #     record["t_exptime"] = dimension_record.exposure_time
+    #     record["target_name"] = dimension_record.target_name
