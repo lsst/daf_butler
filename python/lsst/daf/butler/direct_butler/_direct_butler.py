@@ -1426,18 +1426,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         names = list(names)
         refs: list[DatasetRef] = []
         all_dataset_types = [dt.name for dt in self._registry.queryDatasetTypes(...)]
-        for name in names:
-            collectionType = self._registry.getCollectionType(name)
-            if collectionType is not CollectionType.RUN:
-                raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
-            with self.query() as query:
-                # Work out the dataset types that are relevant.
-                collections_info = self.collections.query_info(name, include_summary=True)
-                filtered_dataset_types = self.collections._filter_dataset_types(
-                    all_dataset_types, collections_info
-                )
-                for dt in filtered_dataset_types:
-                    refs.extend(query.datasets(dt, collections=name))
+        with self._caching_context():
+            for name in names:
+                collectionType = self._registry.getCollectionType(name)
+                if collectionType is not CollectionType.RUN:
+                    raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
+                with self.query() as query:
+                    # Work out the dataset types that are relevant.
+                    collections_info = self.collections.query_info(name, include_summary=True)
+                    filtered_dataset_types = self.collections._filter_dataset_types(
+                        all_dataset_types, collections_info
+                    )
+                    for dt in filtered_dataset_types:
+                        refs.extend(query.datasets(dt, collections=name))
         with self._datastore.transaction(), self._registry.transaction():
             if unstore:
                 self._datastore.trash(refs)
