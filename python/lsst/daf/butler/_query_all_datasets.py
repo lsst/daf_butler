@@ -113,30 +113,33 @@ def query_all_datasets(
         raise InvalidQueryError("Can not use wildcards in collections when find_first=True")
 
     dataset_type_query = list(ensure_iterable(args.name))
-    dataset_type_collections = _filter_collections_and_dataset_types(
-        butler, args.collections, dataset_type_query
-    )
 
-    limit = args.limit
-    for dt, filtered_collections in sorted(dataset_type_collections.items()):
-        _LOG.debug("Querying dataset type %s", dt)
-        results = (
-            query.datasets(dt, filtered_collections, find_first=args.find_first)
-            .where(args.data_id, args.where, args.kwargs, bind=args.bind)
-            .limit(limit)
+    with butler.registry.caching_context():
+        dataset_type_collections = _filter_collections_and_dataset_types(
+            butler, args.collections, dataset_type_query
         )
-        if args.with_dimension_records:
-            results = results.with_dimension_records()
 
-        for page in results._iter_pages():
-            if limit is not None:
-                # Track how much of the limit has been used up by each query.
-                limit -= len(page)
+        limit = args.limit
+        for dt, filtered_collections in sorted(dataset_type_collections.items()):
+            _LOG.debug("Querying dataset type %s", dt)
+            results = (
+                query.datasets(dt, filtered_collections, find_first=args.find_first)
+                .where(args.data_id, args.where, args.kwargs, bind=args.bind)
+                .limit(limit)
+            )
+            if args.with_dimension_records:
+                results = results.with_dimension_records()
 
-            yield DatasetsPage(dataset_type=dt, data=page)
+            for page in results._iter_pages():
+                if limit is not None:
+                    # Track how much of the limit has been used up by each
+                    # query.
+                    limit -= len(page)
 
-        if limit is not None and limit <= 0:
-            break
+                yield DatasetsPage(dataset_type=dt, data=page)
+
+            if limit is not None and limit <= 0:
+                break
 
 
 def _filter_collections_and_dataset_types(
