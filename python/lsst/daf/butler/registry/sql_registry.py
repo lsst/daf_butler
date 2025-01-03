@@ -2332,17 +2332,16 @@ class SqlRegistry:
         default_data_id: DataCoordinate,
     ) -> Iterator[DirectQueryDriver]:
         """Set up a `QueryDriver` instance for query execution."""
-        with self.caching_context():
-            driver = DirectQueryDriver(
-                self._db,
-                self.dimensions,
-                self._managers,
-                self.dimension_record_cache,
-                default_collections=default_collections,
-                default_data_id=default_data_id,
-            )
-            with driver:
-                yield driver
+        driver = DirectQueryDriver(
+            self._db,
+            self.dimensions,
+            self._managers,
+            self.dimension_record_cache,
+            default_collections=default_collections,
+            default_data_id=default_data_id,
+        )
+        with driver:
+            yield driver
 
     def queryDatasetAssociations(
         self,
