@@ -856,30 +856,6 @@ class Database(ABC):
         """
         return shrunk
 
-    def _mangleTableName(self, name: str) -> str:
-        """Map a logical, user-visible table name to the true table name used
-        in the database.
-
-        The default implementation returns the given name unchanged.
-
-        Parameters
-        ----------
-        name : `str`
-            Input table name.  Should not include a namespace (i.e. schema)
-            prefix.
-
-        Returns
-        -------
-        mangled : `str`
-            Mangled version of the table name (still with no namespace prefix).
-
-        Notes
-        -----
-        Reimplementations of this method must be idempotent - mangling an
-        already-mangled name must have no effect.
-        """
-        return name
-
     def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> list[sqlalchemy.CheckConstraint]:
         """Create constraints based on this spec.
 
@@ -972,13 +948,11 @@ class Database(ABC):
             SQLAlchemy representation of the constraint.
         """
         name = self.shrinkDatabaseEntityName(
-            "_".join(
-                ["fkey", table, self._mangleTableName(spec.table)] + list(spec.target) + list(spec.source)
-            )
+            "_".join(["fkey", table, spec.table] + list(spec.target) + list(spec.source))
         )
         return sqlalchemy.schema.ForeignKeyConstraint(
             spec.source,
-            [f"{self._mangleTableName(spec.table)}.{col}" for col in spec.target],
+            [f"{spec.table}.{col}" for col in spec.target],
             name=name,
             ondelete=spec.onDelete,
         )
@@ -1048,7 +1022,6 @@ class Database(ABC):
         avoid circular dependencies.  These are added by higher-level logic in
         `ensureTableExists`, `getExistingTable`, and `declareStaticTables`.
         """
-        name = self._mangleTableName(name)
         args: list[sqlalchemy.schema.SchemaItem] = [
             self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields
         ]
@@ -1188,7 +1161,6 @@ class Database(ABC):
         Subclasses may override this method, but usually should not need to.
         """
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
-        name = self._mangleTableName(name)
         table = self._metadata.get_table(name)
         if table is not None:
             if spec.fields.names != set(table.columns.keys()):
