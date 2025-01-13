@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ["ExposureRegionFactory", "Record", "RecordFactory"]
+__all__ = ["DerivedRegionFactory", "Record", "RecordFactory"]
 
 import logging
 import warnings
@@ -63,17 +63,17 @@ _TYPE_CONVERSION: Mapping[str, Callable[[str], Any]] = {
 }
 
 
-class ExposureRegionFactory:
-    """Abstract interface for a class that returns a Region for an exposure."""
+class DerivedRegionFactory:
+    """Abstract interface for a class that returns a Region for a data ID."""
 
     @abstractmethod
-    def exposure_region(self, dataId: DataCoordinate) -> Region | None:
-        """Return a region for a given DataId that corresponds to an exposure.
+    def derived_region(self, dataId: DataCoordinate) -> Region | None:
+        """Return a region for a given DataId that may have been derived.
 
         Parameters
         ----------
         dataId : `DataCoordinate`
-            Data ID for an exposure dataset.
+            Data ID for the relevant dataset.
 
         Returns
         -------
@@ -99,7 +99,7 @@ class RecordFactory:
         Registry dimensions universe.
     spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
         Spatial plugins.
-    exposure_region_factory : `ExposureRegionFactory`, optional
+    derived_region_factory : `DerivedRegionFactory`, optional
         Manager for Registry dimensions.
     """
 
@@ -109,12 +109,12 @@ class RecordFactory:
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
         spatial_plugins: Collection[SpatialObsCorePlugin],
-        exposure_region_factory: ExposureRegionFactory | None = None,
+        derived_region_factory: DerivedRegionFactory | None = None,
     ):
         self.config = config
         self.schema = schema
         self.universe = universe
-        self.exposure_region_factory = exposure_region_factory
+        self.derived_region_factory = derived_region_factory
         self.spatial_plugins = spatial_plugins
 
         # All dimension elements used below.
@@ -360,7 +360,7 @@ class DafButlerRecordFactory(RecordFactory):
         Registry dimensions universe.
     spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
         Spatial plugins.
-    exposure_region_factory : `ExposureRegionFactory`, optional
+    derived_region_factory : `DerivedRegionFactory`, optional
         Manager for Registry dimensions.
     """
 
@@ -370,14 +370,14 @@ class DafButlerRecordFactory(RecordFactory):
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
         spatial_plugins: Collection[SpatialObsCorePlugin],
-        exposure_region_factory: ExposureRegionFactory | None = None,
+        derived_region_factory: DerivedRegionFactory | None = None,
     ):
         super().__init__(
             config=config,
             schema=schema,
             universe=universe,
             spatial_plugins=spatial_plugins,
-            exposure_region_factory=exposure_region_factory,
+            derived_region_factory=derived_region_factory,
         )
 
         # All dimension elements used below.
@@ -411,8 +411,8 @@ class DafButlerRecordFactory(RecordFactory):
         if self.exposure.name in dataId:
             if (dimension_record := dataId.records[self.exposure.name]) is not None:
                 self._exposure_records(dimension_record, record)
-                if self.exposure_region_factory is not None:
-                    region = self.exposure_region_factory.exposure_region(dataId)
+                if self.derived_region_factory is not None:
+                    region = self.derived_region_factory.derived_region(dataId)
         elif self.visit.name in dataId and (dimension_record := dataId.records[self.visit.name]) is not None:
             self._visit_records(dimension_record, record)
 

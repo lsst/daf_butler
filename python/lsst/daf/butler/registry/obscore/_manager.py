@@ -47,7 +47,7 @@ from ..._column_type_info import ColumnTypeInfo
 from ..interfaces import ObsCoreTableManager, VersionTuple
 from ..queries import SqlQueryContext
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
-from ._records import ExposureRegionFactory, Record, RecordFactory
+from ._records import DerivedRegionFactory, Record, RecordFactory
 from ._schema import ObsCoreSchema
 from ._spatial import RegionTypeError, RegionTypeWarning, SpatialObsCorePlugin
 
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 _VERSION = VersionTuple(0, 0, 1)
 
 
-class _ExposureRegionFactory(ExposureRegionFactory):
+class _ExposureRegionFactory(DerivedRegionFactory):
     """Find exposure region from a matching visit dimensions records.
 
     Parameters
@@ -79,7 +79,7 @@ class _ExposureRegionFactory(ExposureRegionFactory):
         self.exposure_detector_dimensions = self.universe.conform(["exposure", "detector"])
         self._context = context
 
-    def exposure_region(self, dataId: DataCoordinate) -> Region | None:
+    def derived_region(self, dataId: DataCoordinate) -> Region | None:
         # Docstring is inherited from a base class.
         context = self._context
         # Make a relation that starts with visit_definition (mapping between
