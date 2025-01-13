@@ -167,7 +167,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             dimensions,
             SqlQueryContext(self.db, column_type_info),
         )
-        self.record_factory = RecordFactory(
+        self.record_factory = RecordFactory.get_record_type_from_universe(universe)(
             config, schema, universe, spatial_plugins, exposure_region_factory
         )
         self.tagged_collection: str | None = None
