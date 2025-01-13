@@ -45,6 +45,7 @@ from ._config import ExtraColumnConfig, ExtraColumnType, ObsCoreConfig
 from ._spatial import RegionTypeError, RegionTypeWarning
 
 if TYPE_CHECKING:
+    from lsst.daf.butler import DimensionGroup
     from lsst.sphgeom import Region
 
     from ._config import DatasetTypeConfig
@@ -121,6 +122,32 @@ class RecordFactory:
         self.exposure = universe["exposure"]
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
+
+    @abstractmethod
+    def region_dimension(self, dimensions: DimensionGroup) -> tuple[str, str] | tuple[None, None]:
+        """Return the dimension to use to obtain a region.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            The dimensions to be examined.
+
+        Returns
+        -------
+        region_dim : `str` or `None`
+            The dimension to use to get the region information. Can be `None`
+            if there is no relevant dimension for a region.
+        region_metadata : `str` or `None`
+            The metadata field for the ``region_dim`` that specifies the
+            region itself. Will be `None` if ``region_dim`` is `None`.
+
+        Notes
+        -----
+        This is universe specific. For example, in the ``daf_butler`` namespace
+        the region for an ``exposure`` is obtained by looking for the relevant
+        ``visit`` or ``visit_detector_region``.
+        """
+        raise NotImplementedError()
 
     def make_generic_records(self, ref: DatasetRef, dataset_config: DatasetTypeConfig) -> Record:
         """Fill record content that is not associated with a specific universe.
@@ -421,3 +448,16 @@ class DafButlerRecordFactory(RecordFactory):
         """Extract all needed info from an exposure dimension record."""
         record["t_exptime"] = dimension_record.exposure_time
         record["target_name"] = dimension_record.target_name
+
+    def region_dimension(self, dimensions: DimensionGroup) -> tuple[str, str] | tuple[None, None]:
+        # Inherited doc string.
+        region_dim = dimensions.region_dimension
+        if not region_dim:
+            if "exposure" in dimensions:
+                if "detector" in dimensions:
+                    region_dim = "visit_detector_region"
+                else:
+                    region_dim = "visit"
+            else:
+                return None, None
+        return region_dim, "region"
