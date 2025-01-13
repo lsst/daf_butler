@@ -27,6 +27,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
+from typing import Generic, TypeVar
+
 __all__ = ["CachingContext"]
 
 from ._collection_record_cache import CollectionRecordCache
@@ -48,46 +52,70 @@ class CachingContext:
     """
 
     def __init__(self) -> None:
-        self._collection_records: CollectionRecordCache | None = None
-        self._collection_summaries: CollectionSummaryCache | None = None
-        self._depth = 0
+        self._collection_records = _CacheToggle(CollectionRecordCache)
+        self._collection_summaries = _CacheToggle(CollectionSummaryCache)
 
-    @property
-    def is_enabled(self) -> bool:
-        return self._collection_records is not None
+    def enable_collection_record_cache(self) -> AbstractContextManager[None]:
+        """Enable the collection record cache.
 
-    def _enable(self) -> None:
-        """Enable caches.
-
-        For use only by RegistryManagerInstances, which is the single point
-        of entry for enabling and disabling the caches.
+        Notes
+        -----
+        When this cache is enabled, any changes made by other processes to
+        collections in the database may not be visible.
         """
-        if self._depth == 0:
-            self._collection_records = CollectionRecordCache()
-            self._collection_summaries = CollectionSummaryCache()
-        self._depth += 1
+        return self._collection_records.enable()
 
-    def _disable(self) -> None:
-        """Disable caches.
+    def enable_collection_summary_cache(self) -> AbstractContextManager[None]:
+        """Enable the collection summary cache.
 
-        For use only by RegistryManagerInstances, which is the single point
-        of entry for enabling and disabling the caches.
+        Notes
+        -----
+        When this cache is enabled, changes made by other processes to
+        collections in the database may not be visible.
+
+        When the collection summary cache is enabled, the performance of
+        database lookups for summaries changes.  Summaries will be aggressively
+        fetched for all dataset types in the collections, which can cause
+        significantly more rows to be returned than when the cache is disabled.
+        This should only be enabled when you know that you will be doing many
+        summary lookups for the same collections.
         """
-        if self._depth == 1:
-            self._collection_records = None
-            self._collection_summaries = None
-            self._depth = 0
-        elif self._depth > 1:
-            self._depth -= 1
-        else:
-            raise AssertionError("Bad caching context management detected.")
+        return self._collection_summaries.enable()
 
     @property
     def collection_records(self) -> CollectionRecordCache | None:
         """Cache for collection records (`CollectionRecordCache`)."""
-        return self._collection_records
+        return self._collection_records.cache
 
     @property
     def collection_summaries(self) -> CollectionSummaryCache | None:
         """Cache for collection summary records (`CollectionSummaryCache`)."""
-        return self._collection_summaries
+        return self._collection_summaries.cache
+
+
+_T = TypeVar("_T")
+
+
+class _CacheToggle(Generic[_T]):
+    """Utility class to track nested enable/disable calls for a cache."""
+
+    def __init__(self, enable_function: Callable[[], _T]):
+        self.cache: _T | None = None
+        self._enable_function = enable_function
+        self._depth = 0
+
+    @contextmanager
+    def enable(self) -> Iterator[None]:
+        """Context manager to enable the cache.  This context may be nested any
+        number of times, and the cache will only be disabled once all callers
+        have exited the context manager.
+        """
+        self._depth += 1
+        try:
+            if self._depth == 1:
+                self.cache = self._enable_function()
+            yield
+        finally:
+            self._depth -= 1
+            if self._depth == 0:
+                self.cache = None
