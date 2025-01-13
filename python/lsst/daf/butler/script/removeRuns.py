@@ -86,29 +86,34 @@ def _getCollectionInfo(
         The dataset types and and how many will be removed.
     """
     butler = Butler.from_config(repo)
-    try:
-        collections = butler.collections.query_info(
-            collection, CollectionType.RUN, include_chains=False, include_parents=True, include_summary=True
-        )
-    except MissingCollectionError:
-        # Act as if no collections matched.
-        collections = []
-    dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(...)]
-    dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections))
+    with butler.registry.caching_context():
+        try:
+            collections = butler.collections.query_info(
+                collection,
+                CollectionType.RUN,
+                include_chains=False,
+                include_parents=True,
+                include_summary=True,
+            )
+        except MissingCollectionError:
+            # Act as if no collections matched.
+            collections = []
+        dataset_types = [dt.name for dt in butler.registry.queryDatasetTypes(...)]
+        dataset_types = list(butler.collections._filter_dataset_types(dataset_types, collections))
 
-    runs = []
-    datasets: dict[str, int] = defaultdict(int)
-    for collection_info in collections:
-        assert collection_info.type == CollectionType.RUN and collection_info.parents is not None
-        runs.append(RemoveRun(collection_info.name, list(collection_info.parents)))
-        with butler.query() as query:
-            for dt in dataset_types:
-                results = query.datasets(dt, collections=collection_info.name)
-                count = results.count(exact=False)
-                if count:
-                    datasets[dt] += count
+        runs = []
+        datasets: dict[str, int] = defaultdict(int)
+        for collection_info in collections:
+            assert collection_info.type == CollectionType.RUN and collection_info.parents is not None
+            runs.append(RemoveRun(collection_info.name, list(collection_info.parents)))
+            with butler.query() as query:
+                for dt in dataset_types:
+                    results = query.datasets(dt, collections=collection_info.name)
+                    count = results.count(exact=False)
+                    if count:
+                        datasets[dt] += count
 
-    return runs, {k: datasets[k] for k in sorted(datasets.keys())}
+        return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 
 
 def removeRuns(

@@ -362,11 +362,11 @@ class RegistryManagerInstances(
         may even be closed out of order, with only the context manager entered
         and the last context manager exited having any effect.
         """
-        self.caching_context._enable()
-        try:
+        with (
+            self.caching_context.enable_collection_record_cache(),
+            self.caching_context.enable_collection_summary_cache(),
+        ):
             yield
-        finally:
-            self.caching_context._disable()
 
     @classmethod
     def initialize(

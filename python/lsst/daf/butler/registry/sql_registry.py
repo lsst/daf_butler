@@ -2332,7 +2332,9 @@ class SqlRegistry:
         default_data_id: DataCoordinate,
     ) -> Iterator[DirectQueryDriver]:
         """Set up a `QueryDriver` instance for query execution."""
-        with self.caching_context():
+        # Query internals do repeated lookups of the same collections, so it
+        # benefits from the collection record cache.
+        with self._managers.caching_context.enable_collection_record_cache():
             driver = DirectQueryDriver(
                 self._db,
                 self.dimensions,

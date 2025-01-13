@@ -581,7 +581,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         skip_caching_check: bool = False,
         skip_cycle_check: bool = False,
     ) -> Iterator[_CollectionChainModificationContext[K]]:
-        if (not skip_caching_check) and self._caching_context.is_enabled:
+        if (not skip_caching_check) and self._caching_context.collection_records is not None:
             # Avoid having cache-maintenance code around that is unlikely to
             # ever be used.
             raise RuntimeError("Chained collection modification not permitted with active caching context.")

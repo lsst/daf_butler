@@ -86,7 +86,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
 
     def get_collection_name(self, key: Any) -> str:
         assert (
-            self._managers.caching_context.is_enabled
+            self._managers.caching_context.collection_records is not None
         ), "Collection-record caching should already been enabled any time this is called."
         return self._managers.collections[key].name
 
