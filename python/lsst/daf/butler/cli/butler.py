@@ -334,7 +334,16 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if hasattr(cls, "entryPoint"):
             plugins = entry_points(group=cls.entryPoint)
             for p in plugins:
-                func = p.load()
+                try:
+                    func = p.load()
+                except Exception as err:
+                    log.warning("Could not import plugin from entry point %s, skipping.", p)
+                    log.debug(
+                        "Plugin import exception: %s\nTraceback:\n%s",
+                        err,
+                        "".join(traceback.format_tb(err.__traceback__)),
+                    )
+                    continue
                 func_name = get_full_type_name(func)
                 pluginCommands = {cmd.name: [PluginCommand(cmd, func_name)] for cmd in func()}
                 cls._mergeCommandLists(commands, defaultdict(list, pluginCommands))
