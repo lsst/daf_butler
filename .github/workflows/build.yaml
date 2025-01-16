@@ -64,7 +64,6 @@ jobs:
         run: |
           pip install uv
           uv pip install -r requirements.txt
-          uv pip install fsspec s3fs
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages
