@@ -100,7 +100,8 @@ class RecordFactory:
     spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
         Spatial plugins.
     derived_region_factory : `DerivedRegionFactory`, optional
-        Manager for Registry dimensions.
+        Factory for handling derived regions that are not directly
+        available from the data ID.
     """
 
     def __init__(
@@ -361,7 +362,8 @@ class DafButlerRecordFactory(RecordFactory):
     spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
         Spatial plugins.
     derived_region_factory : `DerivedRegionFactory`, optional
-        Manager for Registry dimensions.
+        Factory for handling derived regions that are not directly
+        available from the data ID.
     """
 
     def __init__(
