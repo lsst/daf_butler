@@ -405,28 +405,27 @@ class CliLogTestBase:
                 result = self.runner.invoke(butlerCli, args)
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-                # Record to test. Test one in the middle that we know is
-                # a DEBUG message. The first message might come from
-                # python itself since warnings are redirected to log
-                # messages.
-                num = 4
+                # We have no real control over other packages causing lsst
+                # DEBUG log messages to turn up (for example from misconfigured
+                # CLI plugins). Check for any DEBUG messages.
+                # We know there are at least this number of log
+                # messages issued.
+                min_records = 10
 
-                n_records = 5
                 if suffix == ".json":
                     records = ButlerLogRecords.from_file(filename)
-                    self.assertGreater(len(records), num)
-                    self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
+                    self.assertGreater(len(records), min_records)
                     self.assertEqual(records[0].MDC, dict(K1="v1", K2="v2", K3="v3"))
-
-                    self.assertGreater(len(records), n_records)
+                    # Find a DEBUG message.
+                    self.assertTrue(any(rec.levelname == "DEBUG" for rec in records), records)
                 else:
                     with open(filename) as filed:
                         records_text = filed.readlines()
-                    self.assertGreater(len(records_text), num)
-                    self.assertIn("DEBUG", records_text[num], str(records_text[num]))
-                    self.assertNotIn("{", records_text[num], str(records_text[num]))
+                    self.assertGreater(len(records_text), min_records)  # Counting lines not records.
+                    content = "".join(records_text)
+                    self.assertFalse(content.startswith("{"), f"Checking for JSON content in {content}")
 
-                    self.assertGreater(len(records_text), n_records)
+                    self.assertTrue(any("DEBUG:" in rec for rec in records_text), content)
 
     def testLogTty(self) -> None:
         """Verify that log output to terminal can be suppressed."""
