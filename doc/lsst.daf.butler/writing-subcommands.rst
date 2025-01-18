@@ -368,7 +368,10 @@ Adding Butler Subcommands
 Packages can add subcommands to the ``butler`` command using a plugin system. This section describes how to do that.
 To use the plugin system you should also read and understand the sections above about `the butler command`_.
 Then, write your subcommands and arrange them as described below in `Package Layout`_.
-Finally, declare them as ``butler`` command plugins as described in `Manifest`_.
+Finally, configure the package's entry points to make them known to the butler infrastructure, as described in `Entry Points`_.
+
+Older versions of the Butler plugin system supported a YAML resource file and environment variable to enable plugin discovery but this approach is now deprecated and will be removed in the future (this is documented in `Manifest`_).
+
 
 Package Layout
 --------------
@@ -391,11 +394,48 @@ The following conventions are recommended but not required:
    │    ├── arguments.py
    │    ├── options.py
    │    └── sharedOptions.py
-   ├── resources.yaml
    └── utils.yaml
 
-Manifest
---------
+Entry Points
+------------
+
+The butler subcommands use an entry point group named ``butler.cli``.
+The entry points should be declared in the package's ``pyproject.toml`` file in the standard manner.
+For example, in ``obs_base`` it looks like this:
+
+.. code-block:: toml
+
+    [project.entry-points.'butler.cli']
+    obs_base = "lsst.obs.base.cli:get_cli_subcommands"
+
+The name and location of the function does not matter, but by convention it is placed within the ``cli`` hierarchy of the package.
+The function mentioned should return all the registered click commands.
+An example implementation is:
+
+.. code-block:: python
+
+    import click
+
+    from . import cmd
+
+
+    def get_cli_subcommands() -> list[click.Command]:
+        """Return the location of the CLI command plugin definitions.
+
+        Returns
+        -------
+        commands : `list` [ `click.Command` ]
+            The command-line subcommands provided by this package.
+        """
+        return [getattr(cmd, c) for c in cmd.__all__]
+
+Which should be sufficient for most implementations where the commands are already stored in ``__all__``.
+
+Manifest (Deprecated)
+---------------------
+
+This section refers to the old approach to registering plugins.
+New code should not register subcommands this way.
 
 The ``butler`` command finds plugin commands by way of a resource manifest published in an environment variable.
 By convention it is usually in the ``cli`` folder and named ``resources.yaml``.
@@ -421,7 +461,7 @@ Publish the resource manifest in an environment variable: in the package's ``ups
 command to prepend ``DAF_BUTLER_PLUGINS`` with the location of the resource manifest. Make sure to use the
 environment variable for the location of the package.
 
-The settings for ``obs_base`` are like this:
+The settings for ``obs_base`` were like this:
 
 .. code-block:: text
 
