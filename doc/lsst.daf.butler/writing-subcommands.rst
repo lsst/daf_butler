@@ -396,6 +396,8 @@ The following conventions are recommended but not required:
    │    └── sharedOptions.py
    └── utils.yaml
 
+.. _daf_butler_cli-entry-points:
+
 Entry Points
 ------------
 
