@@ -85,6 +85,7 @@ You can find Jira issues for this module under the `daf_butler <https://jira.lss
    :maxdepth: 1
 
    dev/dataCoordinate.rst
+   dev/entryPoints.rst
 
 Butler Command Line Interface Development
 -----------------------------------------
