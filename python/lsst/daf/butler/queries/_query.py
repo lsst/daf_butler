@@ -74,16 +74,17 @@ class Query(QueryBase):
 
     Parameters
     ----------
-    driver : `QueryDriver`
+    driver : `~lsst.daf.butler.queries.driver.QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `QueryTree`, optional
+    tree : `~lsst.daf.butler.queries.tree.QueryTree`, optional
         Description of the query as a tree of joins and column expressions.
-        Defaults to the result of a call to  `tree.make_identity_query_tree`.
+        Defaults to the result of a call to
+        `~lsst.daf.butler.queries.tree.make_identity_query_tree`.
 
     Notes
     -----
     `Query` objects should never be constructed directly by users; use
-    `Butler.query` instead.
+    `Butler.query <lsst.daf.butler.Butler.query>` instead.
 
     A `Query` object represents the first stage of query construction, in which
     constraints and joins are defined (roughly corresponding to the WHERE and
@@ -158,62 +159,77 @@ class Query(QueryBase):
                     x.any(x.band == 'u', x.band == 'y'),
                 )
 
-        As shown above, the returned object also has an `any` method to create
-        combine expressions with logical OR (as well as `not_` and `all`,
+        As shown above, the returned object also has an
+        `~lsst.daf.butler.queries.expression_factory.ExpressionFactory.any`
+        method to create combine expressions with logical OR (as well as
+        `~lsst.daf.butler.queries.expression_factory.ExpressionFactory.not_`
+        and
+        `~lsst.daf.butler.queries.expression_factory.ExpressionFactory.all`,
         though the latter is rarely necessary since `where` already combines
         its arguments with AND).
 
         Proxies for fields associated with dataset types (``dataset_id``,
         ``ingest_date``, ``run``, ``collection``, as well as ``timespan`` for
-        `~CollectionType.CALIBRATION` collection searches) can be obtained with
-        dict-like access instead::
+        `~lsst.daf.butler.CollectionType.CALIBRATION` collection searches) can
+        be obtained with dict-like access instead::
 
             with butler.query() as query:
                 query = query.order_by(x["raw"].ingest_date)
 
         Expression proxy objects that correspond to scalar columns overload the
         standard comparison operators (``==``, ``!=``, ``<``, ``>``, ``<=``,
-        ``>=``) and provide `~ScalarExpressionProxy.in_range`,
-        `~ScalarExpressionProxy.in_iterable`, and
-        `~ScalarExpressionProxy.in_query` methods for membership tests.  For
-        `order_by` contexts, they also have a `~ScalarExpressionProxy.desc`
+        ``>=``) and provide
+        `~lsst.daf.butler.queries.expression_factory.ScalarExpressionProxy.in_range`,
+        `~lsst.daf.butler.queries.expression_factory.ScalarExpressionProxy.in_iterable`, and
+        `~lsst.daf.butler.queries.expression_factory.ScalarExpressionProxy.in_query`
+        methods for membership tests.  For ``order_by`` contexts, they also have a
+        `~lsst.daf.butler.queries.expression_factory.ScalarExpressionProxy.desc`
         property to indicate that the sort order for that expression should be
         reversed.
 
-        Proxy objects for region and timespan fields have an `overlaps` method,
-        and timespans also have `~TimespanProxy.begin` and `~TimespanProxy.end`
+        Proxy objects for
+        `region <lsst.daf.butler.queries.expression_factory.RegionProxy>` and
+        `timespan <lsst.daf.butler.queries.expression_factory.TimespanProxy>`
+        fields have an ``overlaps`` method, and timespans also have
+        `~lsst.daf.butler.queries.expression_factory.TimespanProxy.begin` and
+        `~lsst.daf.butler.queries.expression_factory.TimespanProxy.end`
         properties to access scalar expression proxies for the bounds.
 
-        All proxy objects also have a `~ExpressionProxy.is_null` property.
+        All proxy objects also have an
+        `~lsst.daf.butler.queries.expression_factory.ExpressionProxy.is_null`
+        property.
 
-        Literal values can be created by calling `ExpressionFactory.literal`,
+        Literal values can be created by calling
+        `ExpressionFactory.literal <lsst.daf.butler.queries.expression_factory.ExpressionFactory.literal>`,
         but can almost always be created implicitly via overloaded operators
         instead.
-        """
+        """  # noqa: W505, long docstrings
         return ExpressionFactory(self._driver.universe)
 
     def data_ids(
         self, dimensions: DimensionGroup | Iterable[str] | str | None = None
     ) -> DataCoordinateQueryResults:
-        """Return a result object that is a `DataCoordinate` iterable.
+        """Return a result object that is a `~lsst.daf.butler.DataCoordinate`
+        iterable.
 
         Parameters
         ----------
-        dimensions : `DimensionGroup`, `str`, or \
+        dimensions : `~lsst.daf.butler.DimensionGroup`, `str`, or \
                 `~collections.abc.Iterable` [`str`], optional
-            The dimensions of the data IDs to yield, as either `DimensionGroup`
-            instances or `str` names.  Will be automatically expanded to a
-            complete `DimensionGroup`.  These dimensions do not need to match
-            the query's current `dimensions`.  Default is
+            The dimensions of the data IDs to yield, as either
+            `~lsst.daf.butler.DimensionGroup` instances or `str` names.  Will
+            be automatically expanded to a complete
+            `~lsst.daf.butler.DimensionGroup`.  These dimensions do not need to
+            match the query's current dimensions.  Default is
             `constraint_dimensions`.
 
         Returns
         -------
-        data_ids : `DataCoordinateQueryResults`
+        data_ids : `~lsst.daf.butler.queries.DataCoordinateQueryResults`
             Data IDs matching the given query parameters.  These are guaranteed
-            to identify all dimensions (`DataCoordinate.hasFull` returns
-            `True`), but will not contain `DimensionRecord` objects
-            (`DataCoordinate.hasRecords` returns `False`).  Call
+            to identify all dimensions (``DataCoordinate.hasFull`` returns
+            `True`), but will not contain `~lsst.daf.butler.DimensionRecord`
+            objects (``DataCoordinate.hasRecords`` returns `False`).  Call
             `~DataCoordinateQueryResults.with_dimension_records` on the
             returned object to include dimension records as well.
         """
@@ -238,11 +254,12 @@ class Query(QueryBase):
         *,
         find_first: bool = True,
     ) -> DatasetRefQueryResults:
-        """Return a result object that is a `DatasetRef` iterable.
+        """Return a result object that is a `~lsst.daf.butler.DatasetRef`
+        iterable.
 
         Parameters
         ----------
-        dataset_type : `str` or `DatasetType`
+        dataset_type : `str` or `~lsst.daf.butler.DatasetType`
             The dataset type to search for.
         collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
             The collection or collections to search, in order.  If not provided
@@ -250,18 +267,19 @@ class Query(QueryBase):
             query, the default collection search path for this butler is used.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
-            `DatasetRef` of each `DatasetType`, from the first collection in
+            `~lsst.daf.butler.DatasetRef` of each
+            `~lsst.daf.butler.DatasetType`, from the first collection in
             which a dataset of that dataset type appears (according to the
             order of ``collections`` passed in).  If `True`, ``collections``
             must not be ``...``.
 
         Returns
         -------
-        refs : `.queries.DatasetRefQueryResults`
+        refs : `lsst.daf.butler.queries.DatasetRefQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
-            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
-            include dimension records (`DataCoordinate.hasRecords` will be
+            (i.e. ``DataCoordinate.hasFull`` will return `True`), but will not
+            include dimension records (``DataCoordinate.hasRecords`` will be
             `False`) unless
             `~.queries.DatasetRefQueryResults.with_dimension_records` is
             called on the result object (which returns a new one).
@@ -299,7 +317,8 @@ class Query(QueryBase):
         return DatasetRefQueryResults(self._driver, tree=query._tree, spec=spec)
 
     def dimension_records(self, element: str) -> DimensionRecordQueryResults:
-        """Return a result object that is a `DimensionRecord` iterable.
+        """Return a result object that is a `~lsst.daf.butler.DimensionRecord`
+        iterable.
 
         Parameters
         ----------
@@ -308,7 +327,7 @@ class Query(QueryBase):
 
         Returns
         -------
-        records : `.queries.DimensionRecordQueryResults`
+        records : `lsst.daf.butler.queries.DimensionRecordQueryResults`
             Data IDs matching the given query parameters.
         """
         if element not in self._driver.universe:
@@ -338,22 +357,23 @@ class Query(QueryBase):
 
         Parameters
         ----------
-        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
+        dimensions : `~lsst.daf.butler.DimensionGroup` or \
+                `~collections.abc.Iterable` [ `str` ]
             The dimensions that span all fields returned by this query.
         *names : `str`
             Names of dimensions fields (in  "dimension.field" format), dataset
             fields (in  "dataset_type.field" format) to include in this query.
         dimension_fields : `~collections.abc.Mapping` [`str`, \
-                `~collections.abc.Set`[`str` ]], optional
+                `~collections.abc.Set` [`str`]], optional
             Dimension record fields included in this query, keyed by dimension
             element name.
         dataset_fields : `~collections.abc.Mapping` [`str`, \
-            `~collections.abc.Set`[`DatasetFieldName`] | ``...`` ], optional
+                `~collections.abc.Set` | ``...`` ], optional
             Dataset fields included in this query, the key in the mapping is
             dataset type name. Ellipsis (``...``) can be used for value
-            to include all dataset fields needed to extract `DatasetRef`
-            instances later.
-        find_first : bool, optional
+            to include all dataset fields needed to extract
+            `~lsst.daf.butler.DatasetRef` instances later.
+        find_first : `bool`, optional
             Whether this query requires find-first resolution for a dataset.
             This is ignored and can be omitted if the query has no dataset
             fields.  It must be explicitly set to `False` if there are multiple
@@ -362,7 +382,7 @@ class Query(QueryBase):
 
         Returns
         -------
-        result : `GeneralQueryResults`
+        result : `~lsst.daf.butler.queries.GeneralQueryResults`
             Query result that can be iterated over.
 
         Notes
@@ -475,7 +495,7 @@ class Query(QueryBase):
         Parameters
         ----------
         dimensions : `~collections.abc.Iterable` [ `str` ] or \
-                `DimensionGroup`, optional
+                `~lsst.daf.butler.DimensionGroup`, optional
             Dimensions to include in the temporary results.  Default is to
             include all dimensions in the query.
         datasets : `~collections.abc.Iterable` [ `str` ], optional
@@ -536,7 +556,7 @@ class Query(QueryBase):
 
         Parameters
         ----------
-        dataset_type : `str` or `DatasetType`
+        dataset_type : `str` or `~lsst.daf.butler.DatasetType`
             Dataset type or name.  May not refer to a dataset component.
         collections : `~collections.abc.Iterable` [ `str` ], optional
             Iterable of collections to search.  Order is preserved, but will
@@ -576,9 +596,10 @@ class Query(QueryBase):
 
         Parameters
         ----------
-        iterable : `~collections.abc.Iterable` [ `DataCoordinate` ]
-            Iterable of `DataCoordinate`.  All items must have the same
-            dimensions.  Must have at least one item.
+        iterable : `~collections.abc.Iterable` \
+                [`~lsst.daf.butler.DataCoordinate`]
+            Iterable of `~lsst.daf.butler.DataCoordinate`.  All items must have
+            the same dimensions.  Must have at least one item.
 
         Returns
         -------
@@ -609,7 +630,8 @@ class Query(QueryBase):
 
         Parameters
         ----------
-        dimensions : `~collections.abc.Iterable` [ `str` ] or `DimensionGroup`
+        dimensions : `~collections.abc.Iterable` [ `str` ] or \
+                `~lsst.daf.butler.DimensionGroup`
             Names of dimensions to join in.
 
         Returns
@@ -637,7 +659,8 @@ class Query(QueryBase):
         ----------
         *args
             Constraints to apply, combined with logical AND.  Arguments may be
-            `str` expressions to parse, `Predicate` objects (these are
+            `str` expressions to parse,
+            `~lsst.daf.butler.queries.tree.Predicate` objects (these are
             typically constructed via `expression_factory`) or data IDs.
         bind : `~collections.abc.Mapping`
             Mapping from string identifier appearing in a string expression to
