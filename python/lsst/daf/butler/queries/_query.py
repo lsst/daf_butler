@@ -295,13 +295,6 @@ class Query(QueryBase):
         TypeError
             Raised when the arguments are incompatible, such as when a
             collection wildcard is passed when ``find_first`` is `True`
-
-        Notes
-        -----
-        When multiple dataset types are queried in a single call, the
-        results of this operation are equivalent to querying for each dataset
-        type separately in turn, and no information about the relationships
-        between datasets of different types is included.
         """
         dataset_type_name, storage_class_name, query = self._join_dataset_search_impl(
             dataset_type, collections
