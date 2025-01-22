@@ -311,7 +311,9 @@ class DirectQueryDriver(QueryDriver):
         #
         sql_select, _ = plan.finish_select(return_columns=False)
         table = self._exit_stack.enter_context(
-            self.db.temporary_table(make_table_spec(plan.final_columns, self.db, plan.postprocessing))
+            self.db.temporary_table(
+                make_table_spec(plan.final_columns, self.db, plan.postprocessing, make_indices=True)
+            )
         )
         self.db.insert(table, select=sql_select)
         if key is None:

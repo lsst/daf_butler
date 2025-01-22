@@ -37,6 +37,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 import sqlalchemy
 
 from .. import ddl
+from ..dimensions import DimensionGroup
+from ..dimensions._group import SortedSequenceSet
 from ..nonempty_mapping import NonemptyMapping
 from ..queries import tree as qt
 from ._postprocessing import Postprocessing
@@ -638,7 +640,7 @@ class SqlJoinsBuilder(SqlColumns):
 
 
 def make_table_spec(
-    columns: qt.ColumnSet, db: Database, postprocessing: Postprocessing | None
+    columns: qt.ColumnSet, db: Database, postprocessing: Postprocessing | None, *, make_indices: bool = False
 ) -> ddl.TableSpec:
     """Make a specification that can be used to create a table to store
     this query's outputs.
@@ -652,6 +654,8 @@ def make_table_spec(
     postprocessing : `Postprocessing`
         Struct representing post-query processing in Python, which may
         require additional columns in the query results.
+    make_indices : `bool`, optional
+        If `True` add indices for groups of columns.
 
     Returns
     -------
@@ -659,11 +663,13 @@ def make_table_spec(
         Table specification for this query's result columns (including
         those from `postprocessing` and `SqlJoinsBuilder.special`).
     """
+    indices = _make_table_indices(columns.dimensions) if make_indices else []
     results = ddl.TableSpec(
         [
             columns.get_column_spec(logical_table, field).to_sql_spec(name_shrinker=db.name_shrinker)
             for logical_table, field in columns
-        ]
+        ],
+        indexes=indices,
     )
     if postprocessing:
         for element in postprocessing.iter_missing(columns):
@@ -679,3 +685,19 @@ def make_table_spec(
             ddl.FieldSpec(name=SqlSelectBuilder.EMPTY_COLUMNS_NAME, dtype=SqlSelectBuilder.EMPTY_COLUMNS_TYPE)
         )
     return results
+
+
+def _make_table_indices(dimensions: DimensionGroup) -> list[ddl.IndexSpec]:
+
+    index_columns: list[SortedSequenceSet] = []
+    for dimension in dimensions.required:
+        minimal_group = dimensions.universe[dimension].minimal_group.required
+
+        for idx in range(len(index_columns)):
+            if index_columns[idx] <= minimal_group:
+                index_columns[idx] = minimal_group
+                break
+        else:
+            index_columns.append(minimal_group)
+
+    return [ddl.IndexSpec(*columns) for columns in index_columns]
