@@ -168,8 +168,9 @@ class Query(QueryBase):
         though the latter is rarely necessary since `where` already combines
         its arguments with AND).
 
-        Proxies for fields associated with dataset types (``dataset_id``,
-        ``ingest_date``, ``run``, ``collection``, as well as ``timespan`` for
+        Proxies for fields associated with individual datasets but not
+        dimension records (``dataset_id``, ``ingest_date``, ``run``,
+        ``collection``, as well as ``timespan`` for
         `~lsst.daf.butler.CollectionType.CALIBRATION` collection searches) can
         be obtained with dict-like access instead::
 
@@ -377,7 +378,7 @@ class Query(QueryBase):
             Whether this query requires find-first resolution for a dataset.
             This is ignored and can be omitted if the query has no dataset
             fields.  It must be explicitly set to `False` if there are multiple
-            dataset types with fields, or if any dataset type's ``collections``
+            dataset types with fields, or if any dataset's ``collections``
             or ``timespan`` fields are included in the results.
 
         Returns
@@ -574,7 +575,7 @@ class Query(QueryBase):
         Raises
         ------
         DatasetTypeError
-            Raised given dataset type is inconsistent with the registered
+            Raised if given dataset type is inconsistent with the registered
             dataset type.
         MissingDatasetTypeError
             Raised if the dataset type has not been registered and only a
