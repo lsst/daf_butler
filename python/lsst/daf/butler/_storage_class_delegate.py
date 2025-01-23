@@ -40,6 +40,8 @@ from typing import TYPE_CHECKING, Any
 from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetRef
+
     from ._storage_class import StorageClass
 
 log = logging.getLogger(__name__)
@@ -332,6 +334,28 @@ class StorageClassDelegate:
             raise ValueError(f"Unhandled components during disassembly ({requested})")
 
         return components
+
+    def add_provenance(self, inMemoryDataset: Any, ref: DatasetRef) -> Any:
+        """Add provenance to the composite dataset.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The composite dataset to serialize.
+        ref : `DatasetRef`
+            The dataset associated with this in-memory dataset.
+
+        Returns
+        -------
+        dataset_to_disassemble : `object`
+            The dataset to use for serialization and disassembly.
+            Can be the same object as given.
+
+        Notes
+        -----
+        The base class implementation returns the given object unchanged.
+        """
+        return inMemoryDataset
 
     def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters.

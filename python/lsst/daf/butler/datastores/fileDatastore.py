@@ -2343,6 +2343,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         artifacts = []
         if doDisassembly:
+            inMemoryDataset = ref.datasetType.storageClass.delegate().add_provenance(inMemoryDataset, ref)
             components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
             if components is None:
                 raise RuntimeError(
