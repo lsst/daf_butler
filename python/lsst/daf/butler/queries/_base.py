@@ -138,10 +138,10 @@ class QueryBase(ABC):
 
         Notes
         -----
-        If an expression references a dimension or dimension element that is
-        not already present in the query, it will be joined in, but dataset
-        searches must already be joined into a query in order to reference
-        their fields in expressions.
+        Expressions referring to dimensions or dimension elements are resolved
+        automatically. References to dataset fields (see `expression_factory`
+        for the distinction) may or may not be resolvable, depending on the
+        implementation class.
 
         Data ID values are not checked for consistency; they are extracted from
         ``args`` and then ``kwargs`` and combined, with later values overriding

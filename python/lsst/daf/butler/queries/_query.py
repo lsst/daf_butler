@@ -675,15 +675,17 @@ class Query(QueryBase):
 
         Notes
         -----
-        If an expression references a dimension or dimension element that is
-        not already present in the query, it will be joined in, but dataset
-        searches must already be joined into a query in order to reference
-        their fields in expressions.
+        Expressions referring to dimensions or dimension elements are resolved
+        automatically. References to dataset fields (see `expression_factory`
+        for the distinction) cannot be resolved by default; they must either be
+        preceded by a call to `join_dataset_search` or must be passed to
+        `DatasetRefQueryResults.where <lsst.daf.butler.queries.DatasetRefQueryResults.where>`
+        instead.
 
         Data ID values are not checked for consistency; they are extracted from
         ``args`` and then ``kwargs`` and combined, with later values overriding
         earlier ones.
-        """
+        """  # noqa: W505, long docstrings
         return Query(
             tree=self._tree.where(
                 convert_where_args(
