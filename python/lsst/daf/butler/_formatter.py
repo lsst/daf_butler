@@ -863,6 +863,26 @@ class FormatterV2:
         """
         return NotImplemented
 
+    def add_provenance(self, in_memory_dataset: Any) -> Any:
+        """Add provenance to the dataset.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            The dataset to serialize.
+
+        Returns
+        -------
+        dataset_to_write : `object`
+            The dataset to use for serialization. Can be the same object as
+            given.
+
+        Notes
+        -----
+        The base class implementation returns the given object unchanged.
+        """
+        return in_memory_dataset
+
     @final
     def write(
         self,
@@ -894,6 +914,10 @@ class FormatterV2:
         """
         # Ensure we are using the correct file extension.
         uri = self.file_descriptor.location.uri.updatedExtension(self.get_write_extension())
+
+        # Attach any provenance to the dataset. This could involve returning
+        # a different object.
+        in_memory_dataset = self.add_provenance(in_memory_dataset)
 
         written = self.write_direct(in_memory_dataset, uri, cache_manager)
         if not written:
