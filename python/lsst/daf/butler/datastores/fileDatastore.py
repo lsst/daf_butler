@@ -108,7 +108,7 @@ from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import LookupKey
+    from lsst.daf.butler import DatasetProvenance, LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = getLogger(__name__)
@@ -830,13 +830,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             parameters=parameters,
         )
 
-    def _determine_put_formatter_location(self, ref: DatasetRef) -> tuple[Location, Formatter | FormatterV2]:
+    def _determine_put_formatter_location(
+        self, ref: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> tuple[Location, Formatter | FormatterV2]:
         """Calculate the formatter and output location to use for put.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Reference to the associated Dataset.
+        provenance : `DatasetProvenance`
+            Any provenance that should be attached to the serialized dataset.
 
         Returns
         -------
@@ -865,6 +869,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 FileDescriptor(location, storageClass=storageClass, component=ref.datasetType.component()),
                 dataId=ref.dataId,
                 ref=ref,
+                provenance=provenance,
             )
         except KeyError as e:
             raise DatasetTypeNotSupportedError(
@@ -1275,7 +1280,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         return location
 
-    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
+    def _write_in_memory_to_artifact(
+        self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> StoredFileInfo:
         """Write out in memory dataset to datastore.
 
         Parameters
@@ -1284,6 +1291,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             Dataset to write to datastore.
         ref : `DatasetRef`
             Registry information associated with this dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all formatters.
 
         Returns
         -------
@@ -1302,7 +1312,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 f"Dataset {ref} has been rejected by this datastore via configuration."
             )
 
-        location, formatter = self._determine_put_formatter_location(ref)
+        location, formatter = self._determine_put_formatter_location(ref, provenance)
 
         # The external storage class can differ from the registry storage
         # class AND the given in-memory dataset might not match any of the
@@ -2313,7 +2323,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         )
 
     @transactional
-    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
+    def put(self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
         Parameters
@@ -2322,6 +2332,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Can be ignored by a formatter or delegate.
 
         Raises
         ------
@@ -2343,7 +2356,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         artifacts = []
         if doDisassembly:
-            inMemoryDataset = ref.datasetType.storageClass.delegate().add_provenance(inMemoryDataset, ref)
+            inMemoryDataset = ref.datasetType.storageClass.delegate().add_provenance(
+                inMemoryDataset, ref, provenance=provenance
+            )
             components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
             if components is None:
                 raise RuntimeError(
@@ -2358,11 +2373,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # DatasetType does not refer to the types of components
                 # So we construct one ourselves.
                 compRef = ref.makeComponentRef(component)
+                # Provenance has already been attached above.
                 storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
                 artifacts.append((compRef, storedInfo))
         else:
             # Write the entire thing out
-            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref, provenance=provenance)
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)

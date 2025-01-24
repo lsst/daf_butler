@@ -36,6 +36,7 @@ from typing import Any, ClassVar
 
 from lsst.resources import ResourcePath
 
+from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._storage_class import StorageClass, StorageClassFactory
@@ -64,7 +65,7 @@ class LimitedButler(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def put(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
+    def put(self, obj: Any, ref: DatasetRef, /, *, provenance: DatasetProvenance | None = None) -> DatasetRef:
         """Store a dataset that already has a UUID and ``RUN`` collection.
 
         Parameters
@@ -73,6 +74,9 @@ class LimitedButler(ABC):
             The dataset.
         ref : `DatasetRef`
             Resolved reference for a not-yet-stored dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all serialization mechanisms.
 
         Returns
         -------

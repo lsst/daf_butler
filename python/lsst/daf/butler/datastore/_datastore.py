@@ -61,6 +61,7 @@ if TYPE_CHECKING:
 
     from .. import ddl
     from .._config_support import LookupKey
+    from .._dataset_provenance import DatasetProvenance
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
@@ -626,7 +627,9 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
+    def put(
+        self, inMemoryDataset: Any, datasetRef: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> None:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
 
         Parameters
@@ -635,6 +638,9 @@ class Datastore(metaclass=ABCMeta):
             The Dataset to store.
         datasetRef : `DatasetRef`
             Reference to the associated Dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all serialization mechanisms.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -1449,7 +1455,9 @@ class NullDatastore(Datastore):
     ) -> Any:
         raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
-    def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
+    def put(
+        self, inMemoryDataset: Any, datasetRef: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:

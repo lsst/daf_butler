@@ -47,6 +47,7 @@ from ._config import *
 from ._config_support import LookupKey
 from ._dataset_association import *
 from ._dataset_existence import *
+from ._dataset_provenance import *
 from ._dataset_ref import *
 from ._dataset_type import *
 from ._deferredDatasetHandle import *

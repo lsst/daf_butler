@@ -60,6 +60,7 @@ from .mapping_factory import MappingFactory
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from ._dataset_provenance import DatasetProvenance
     from ._dataset_ref import DatasetRef
     from ._dataset_type import DatasetType
     from ._storage_class import StorageClass
@@ -98,6 +99,10 @@ class FormatterV2:
          Parameters to control how the dataset is serialized.
     write_recipes : `dict`, optional
         Detailed write recipes indexed by recipe name.
+    provenance : `DatasetProvenance` or `None`, optional
+        Any provenance that should be attached to the serialized dataset.
+        Can be ignored by a formatter.
+
     **kwargs
         Additional arguments that will be ignored but allow for
         `Formatter` V1 parameters to be given.
@@ -169,6 +174,7 @@ class FormatterV2:
         ref: DatasetRef,
         write_parameters: Mapping[str, Any] | None = None,
         write_recipes: Mapping[str, Any] | None = None,
+        provenance: DatasetProvenance | None = None,
         # Compatibility parameters. Unused in v2.
         **kwargs: Any,
     ):
@@ -198,6 +204,7 @@ class FormatterV2:
 
         self._write_parameters = write_parameters
         self._write_recipes = self.validate_write_recipes(write_recipes)
+        self._provenance = provenance
 
     def __str__(self) -> str:
         return f"{self.name()}@{self.file_descriptor.location.uri}"

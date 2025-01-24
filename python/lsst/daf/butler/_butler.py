@@ -59,6 +59,7 @@ from .utils import has_globs
 
 if TYPE_CHECKING:
     from ._dataset_existence import DatasetExistence
+    from ._dataset_provenance import DatasetProvenance
     from ._dataset_ref import DatasetId, DatasetRef
     from ._dataset_type import DatasetType
     from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -664,6 +665,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         dataId: DataId | None = None,
         *,
         run: str | None = None,
+        provenance: DatasetProvenance | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         """Store and register a dataset.
@@ -683,6 +685,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``. Not used if a resolved `DatasetRef` is provided.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all serialization mechanisms.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`

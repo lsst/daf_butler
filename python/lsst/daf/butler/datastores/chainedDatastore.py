@@ -53,7 +53,7 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import Config, DatasetType, LookupKey, StorageClass
+    from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from lsst.resources import ResourcePathExpression
 
@@ -420,7 +420,7 @@ class ChainedDatastore(Datastore):
 
         return None
 
-    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
+    def put(self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each
         datastore.
 
@@ -435,6 +435,9 @@ class ChainedDatastore(Datastore):
             The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all serialization mechanisms.
 
         Raises
         ------
@@ -468,7 +471,7 @@ class ChainedDatastore(Datastore):
             else:
                 npermanent += 1
             try:
-                datastore.put(inMemoryDataset, ref)
+                datastore.put(inMemoryDataset, ref, provenance=provenance)
                 nsuccess += 1
                 if not datastore.isEphemeral:
                     isPermanent = True

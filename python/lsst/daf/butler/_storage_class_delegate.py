@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any
 from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DatasetRef
+    from lsst.daf.butler import DatasetProvenance, DatasetRef
 
     from ._storage_class import StorageClass
 
@@ -335,7 +335,9 @@ class StorageClassDelegate:
 
         return components
 
-    def add_provenance(self, inMemoryDataset: Any, ref: DatasetRef) -> Any:
+    def add_provenance(
+        self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> Any:
         """Add provenance to the composite dataset.
 
         Parameters
@@ -344,6 +346,9 @@ class StorageClassDelegate:
             The composite dataset to serialize.
         ref : `DatasetRef`
             The dataset associated with this in-memory dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Can be ignored by a delegate.
 
         Returns
         -------

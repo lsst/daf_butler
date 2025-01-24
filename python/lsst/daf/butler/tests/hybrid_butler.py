@@ -37,6 +37,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from .._butler import Butler
 from .._butler_collections import ButlerCollections
 from .._dataset_existence import DatasetExistence
+from .._dataset_provenance import DatasetProvenance
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
@@ -92,9 +93,12 @@ class HybridButler(Butler):
         dataId: DataId | None = None,
         *,
         run: str | None = None,
+        provenance: DatasetProvenance | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
-        return self._direct_butler.put(obj, datasetRefOrType, dataId, run=run, **kwargs)
+        return self._direct_butler.put(
+            obj, datasetRefOrType, dataId, run=run, provenance=provenance, **kwargs
+        )
 
     def getDeferred(
         self,
