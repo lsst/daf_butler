@@ -163,6 +163,7 @@ class RemoteQueryDriver(QueryDriver):
         tree: QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
+        allow_duplicate_overlaps: bool = False,
     ) -> MaterializationKey:
         key = uuid4()
         self._stored_query_inputs.append(
@@ -171,6 +172,7 @@ class RemoteQueryDriver(QueryDriver):
                 tree=SerializedQueryTree(tree.model_copy(deep=True)),
                 dimensions=dimensions.to_simple(),
                 datasets=datasets,
+                allow_duplicate_overlaps=allow_duplicate_overlaps,
             ),
         )
         return key

@@ -690,6 +690,26 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 doomed=True,
             )
 
+    def test_duplicate_overlaps(self) -> None:
+        """Test for query option that enables duplicate rows in queries that
+        use skypix overalps.
+        """
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+        butler.registry.defaults = RegistryDefaults(instrument="Cam1", skymap="SkyMap1")
+        with butler.query() as query:
+
+            data_ids = list(query.data_ids(["visit", "detector", "patch"]).where(visit=1, detector=1))
+            self.assertCountEqual(
+                [(data_id["tract"], data_id["patch"]) for data_id in data_ids], [(0, 0), (0, 2)]
+            )
+
+            query._allow_duplicate_overlaps = True
+            data_ids = list(query.data_ids(["visit", "detector", "patch"]).where(visit=1, detector=1))
+            self.assertCountEqual(
+                [(data_id["tract"], data_id["patch"]) for data_id in data_ids],
+                [(0, 0), (0, 0), (0, 2), (0, 2)],
+            )
+
     def test_spatial_overlaps(self) -> None:
         """Test queries for dimension records with spatial overlaps.
 

@@ -369,6 +369,7 @@ class _TestQueryDriver(qd.QueryDriver):
         tree: qt.QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
+        allow_duplicate_overlaps: bool = False,
     ) -> qd.MaterializationKey:
         key = uuid.uuid4()
         self.materializations[key] = (tree, dimensions, datasets)

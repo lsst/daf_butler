@@ -402,6 +402,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str | AnyDatasetType],
+        allow_duplicates: bool = False,
     ) -> tuple[Predicate, SqlSelectBuilder, Postprocessing]:
         """Process a query's WHERE predicate and dimensions to handle spatial
         and temporal overlaps.
@@ -424,6 +425,9 @@ class DimensionRecordStorageManager(VersionedExtension):
                 `..queries.tree.AnyDatasetType` ]
             The names of dataset types that have been joined into the query via
             a search that includes at least one calibration collection.
+        allow_duplicates : `bool`
+            If set to `True` then query will be allowed to return non-distinct
+            rows.
 
         Returns
         -------
