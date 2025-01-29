@@ -271,7 +271,7 @@ def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) 
         # is True, but it will be None if remote server was not upgraded.
         if model.dimension_records is None:
             raise ValueError(
-                "Missing dimension records in general result -- " "it is likely that server needs an upgrade."
+                "Missing dimension records in general result -- it is likely that server needs an upgrade."
             )
 
     columns = spec.get_result_columns()

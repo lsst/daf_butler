@@ -261,8 +261,7 @@ class LimitedButler(ABC):
 
         if primary is None or components:
             raise RuntimeError(
-                f"Dataset ({ref}) includes distinct URIs for components. "
-                "Use LimitedButler.getURIs() instead."
+                f"Dataset ({ref}) includes distinct URIs for components. Use LimitedButler.getURIs() instead."
             )
         return primary
 

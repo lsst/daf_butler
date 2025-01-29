@@ -3350,7 +3350,7 @@ class RegistryTests(ABC):
 
         with self.assertRaisesRegex(
             (ValueError, InvalidQueryError),
-            "(Field 'name' does not exist in 'tract')" "|(Unrecognized field 'name' for tract.)",
+            "(Field 'name' does not exist in 'tract')|(Unrecognized field 'name' for tract.)",
         ):
             list(do_query("tract").order_by("tract.name"))
 
