@@ -25,8 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Unit tests for the daf_butler CLI plugin loader.
-"""
+"""Unit tests for the daf_butler CLI plugin loader."""
 
 import os
 import unittest

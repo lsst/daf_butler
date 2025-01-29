@@ -25,8 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Configuration classes specific to the Butler.
-"""
+"""Configuration classes specific to the Butler."""
 from __future__ import annotations
 
 __all__ = ("ButlerConfig",)

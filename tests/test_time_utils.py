@@ -25,8 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Unit tests for methods in butler.time module.
-"""
+"""Unit tests for methods in butler.time module."""
 
 import unittest
 import warnings

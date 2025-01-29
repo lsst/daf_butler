@@ -25,8 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Tests for Butler.
-"""
+"""Tests for Butler."""
 from __future__ import annotations
 
 import json
