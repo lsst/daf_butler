@@ -44,6 +44,8 @@ class DatasetProvenance(pydantic.BaseModel):
     """The input datasets."""
     quantum_id: uuid.UUID | None = None
     """Identifier of the Quantum that was executed."""
+    extras: dict[uuid.UUID, dict[str, int | float | str | bool]] = pydantic.Field(default_factory=dict)
+    """Extra provenance information associated with a particular dataset."""
     _uuids: set[uuid.UUID] = pydantic.PrivateAttr(default_factory=set)
 
     @pydantic.model_validator(mode="after")
@@ -65,3 +67,18 @@ class DatasetProvenance(pydantic.BaseModel):
             return
         self._uuids.add(ref.id)
         self.inputs.append(ref.to_simple())
+
+    def add_extra_provenance(self, dataset_id: uuid.UUID, extra: dict[str, int | float | str | bool]) -> None:
+        """Attach extra provenance to a specific dataset.
+
+        Parameters
+        ----------
+        dataset_id : `uuid.UUID`
+            The ID of the dataset to receive this provenance.
+        extra : `dict` [ `str`, `typing.Any` ]
+            The extra provenance information as a dictionary. The values
+            must be simple Python scalars.
+        """
+        if dataset_id not in self._uuids:
+            raise ValueError(f"The given dataset ID {dataset_id} is not known to this provenance instance.")
+        self.extras.setdefault(dataset_id, {}).update(extra)
