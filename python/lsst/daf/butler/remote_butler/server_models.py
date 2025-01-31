@@ -243,6 +243,7 @@ class MaterializedQuery(pydantic.BaseModel):
     tree: SerializedQueryTree
     dimensions: SerializedDimensionGroup
     datasets: list[str]
+    allow_duplicate_overlaps: bool = False
 
 
 class DataCoordinateUpload(pydantic.BaseModel):

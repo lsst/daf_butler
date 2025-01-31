@@ -690,6 +690,26 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 doomed=True,
             )
 
+    def test_duplicate_overlaps(self) -> None:
+        """Test for query option that enables duplicate rows in queries that
+        use skypix overalps.
+        """
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+        butler.registry.defaults = RegistryDefaults(instrument="Cam1", skymap="SkyMap1")
+        with butler.query() as query:
+
+            data_ids = list(query.data_ids(["visit", "detector", "patch"]).where(visit=1, detector=1))
+            self.assertCountEqual(
+                [(data_id["tract"], data_id["patch"]) for data_id in data_ids], [(0, 0), (0, 2)]
+            )
+
+            query._allow_duplicate_overlaps = True
+            data_ids = list(query.data_ids(["visit", "detector", "patch"]).where(visit=1, detector=1))
+            self.assertCountEqual(
+                [(data_id["tract"], data_id["patch"]) for data_id in data_ids],
+                [(0, 0), (0, 0), (0, 2), (0, 2)],
+            )
+
     def test_spatial_overlaps(self) -> None:
         """Test queries for dimension records with spatial overlaps.
 
@@ -1333,6 +1353,43 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             m_query = query.materialize()
             _ = list(m_query.datasets("skyMap", collections))
             _ = list(m_query.datasets("calexp", collections))
+
+    def test_materialization_no_results(self) -> None:
+        """Test querying for datasets when materialized table is empty."""
+        butler = self.make_butler("ci_hsc-subset.yaml", "ci_hsc-subset-skymap.yaml")
+
+        run = "HSC/runs/ci_hsc/20240806T180642Z"
+
+        # Register a dataset type but do not add any datasets.
+        butler.registry.registerDatasetType(
+            DatasetType("nothing", ["visit", "detector"], "int", universe=butler.dimensions)
+        )
+
+        collections = [run]
+        with butler.query() as query:
+            query = query.join_dimensions(
+                [
+                    "instrument",
+                    "physical_filter",
+                    "band",
+                    "visit",
+                    "detector",
+                    "day_obs",
+                    "skymap",
+                    "tract",
+                ]
+            )
+            query = query.join_dataset_search("calexp", collections)
+            query = query.join_dataset_search("nothing", collections)
+            query = query.where({}, "instrument='HSC' AND skymap='discrete/ci_hsc'", bind=None)
+            no_results = "\n".join(query.explain_no_results())
+            self.assertIn("No datasets of type 'nothing'", no_results)
+
+            m_query = query.materialize()
+            result = m_query.datasets("nothing")
+            self.assertFalse(result.any())
+            no_results = "\n".join(result.explain_no_results())
+            self.assertIn("No datasets of type 'nothing'", no_results)
 
     def test_timespan_results(self) -> None:
         """Test returning dimension records that include timespans."""

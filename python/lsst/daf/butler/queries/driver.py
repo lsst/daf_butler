@@ -209,6 +209,7 @@ class QueryDriver(AbstractContextManager[None]):
         tree: QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
+        allow_duplicate_overlaps: bool = False,
     ) -> MaterializationKey:
         """Execute a query tree, saving results to temporary storage for use
         in later queries.
@@ -222,6 +223,9 @@ class QueryDriver(AbstractContextManager[None]):
         datasets : `frozenset` [ `str` ]
             Names of dataset types whose ID columns may be materialized.  It
             is implementation-defined whether they actually are.
+        allow_duplicate_overlaps : `bool`, optional
+            If set to `True` then query will be allowed to generate
+            non-distinct rows for spatial overlaps.
 
         Returns
         -------

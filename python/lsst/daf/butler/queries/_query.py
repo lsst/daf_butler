@@ -106,6 +106,12 @@ class Query(QueryBase):
             tree = make_identity_query_tree(driver.universe)
         super().__init__(driver, tree)
 
+        # If ``_allow_duplicate_overlaps`` is set to `True` then query will be
+        # allowed to generate non-distinct rows for spatial overlaps. This is
+        # not a part of public API for now, to be used by graph builder as
+        # optimization.
+        self._allow_duplicate_overlaps: bool = False
+
     @property
     def constraint_dataset_types(self) -> Set[str]:
         """The names of all dataset types joined into the query.
@@ -218,7 +224,11 @@ class Query(QueryBase):
             dimensions = self._driver.universe.conform(dimensions)
             if not dimensions <= self._tree.dimensions:
                 tree = tree.join_dimensions(dimensions)
-        result_spec = DataCoordinateResultSpec(dimensions=dimensions, include_dimension_records=False)
+        result_spec = DataCoordinateResultSpec(
+            dimensions=dimensions,
+            include_dimension_records=False,
+            allow_duplicate_overlaps=self._allow_duplicate_overlaps,
+        )
         return DataCoordinateQueryResults(self._driver, tree, result_spec)
 
     def datasets(
@@ -284,6 +294,7 @@ class Query(QueryBase):
             storage_class_name=storage_class_name,
             include_dimension_records=False,
             find_first=find_first,
+            allow_duplicate_overlaps=self._allow_duplicate_overlaps,
         )
         return DatasetRefQueryResults(self._driver, tree=query._tree, spec=spec)
 
@@ -308,7 +319,9 @@ class Query(QueryBase):
         tree = self._tree
         if element not in tree.dimensions.elements:
             tree = tree.join_dimensions(self._driver.universe[element].minimal_group)
-        result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
+        result_spec = DimensionRecordResultSpec(
+            element=self._driver.universe[element], allow_duplicate_overlaps=self._allow_duplicate_overlaps
+        )
         return DimensionRecordQueryResults(self._driver, tree, result_spec)
 
     def general(
@@ -445,6 +458,7 @@ class Query(QueryBase):
             dimension_fields=dimension_fields_dict,
             dataset_fields=dataset_fields_dict,
             find_first=find_first,
+            allow_duplicate_overlaps=self._allow_duplicate_overlaps,
         )
         return GeneralQueryResults(self._driver, tree=tree, spec=result_spec)
 
@@ -495,7 +509,9 @@ class Query(QueryBase):
             dimensions = self._tree.dimensions
         else:
             dimensions = self._driver.universe.conform(dimensions)
-        key = self._driver.materialize(self._tree, dimensions, datasets)
+        key = self._driver.materialize(
+            self._tree, dimensions, datasets, allow_duplicate_overlaps=self._allow_duplicate_overlaps
+        )
         tree = make_identity_query_tree(self._driver.universe).join_materialization(
             key, dimensions=dimensions
         )
@@ -508,7 +524,7 @@ class Query(QueryBase):
                     "Expand the dimensions or drop this dataset type in the arguments to materialize to "
                     "avoid this error."
                 )
-            tree = tree.join_dataset(dataset_type_name, self._tree.datasets[dataset_type_name])
+            tree = tree.join_dataset(dataset_type_name, dataset_search)
         return Query(self._driver, tree)
 
     def join_dataset_search(

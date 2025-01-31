@@ -487,9 +487,10 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
+        allow_duplicates: bool = False,
     ) -> tuple[qt.Predicate, SqlSelectBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
-            self._db, dimensions, calibration_dataset_types, self._overlap_tables
+            self._db, dimensions, calibration_dataset_types, self._overlap_tables, allow_duplicates
         )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.builder, overlaps_visitor.postprocessing
@@ -1025,6 +1026,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         dimensions: DimensionGroup,
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
+        allow_duplicates: bool,
     ):
         super().__init__(dimensions, calibration_dataset_types)
         self.builder: SqlSelectBuilder = SqlJoinsBuilder(db=db).to_select_builder(qt.ColumnSet(dimensions))
@@ -1032,6 +1034,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
         self.common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
+        self.allow_duplicates = allow_duplicates
 
     def visit_spatial_constraint(
         self,
@@ -1081,7 +1084,8 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     joins_builder.where(sqlalchemy.or_(*sql_where_or))
                     self.builder.join(
                         joins_builder.to_select_builder(
-                            qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
+                            qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(),
+                            distinct=not self.allow_duplicates,
                         ).into_joins_builder(postprocessing=None)
                     )
                     # Short circuit here since the SQL WHERE clause has already
@@ -1145,7 +1149,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                         .join(self._make_common_skypix_overlap_joins_builder(b))
                         .to_select_builder(
                             qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
-                            distinct=True,
+                            distinct=not self.allow_duplicates,
                         )
                         .into_joins_builder(postprocessing=None)
                     )

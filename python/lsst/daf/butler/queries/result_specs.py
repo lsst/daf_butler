@@ -62,6 +62,11 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
     limit: int | None = None
     """Maximum number of rows to return, or `None` for no bound."""
 
+    allow_duplicate_overlaps: bool = False
+    """If set to True the queries are allowed to returnd duplicate rows for
+    spatial overlaps.
+    """
+
     def validate_tree(self, tree: QueryTree) -> None:
         """Check that this result object is consistent with a query tree.
 

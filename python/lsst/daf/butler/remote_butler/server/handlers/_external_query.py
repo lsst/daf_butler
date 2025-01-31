@@ -195,6 +195,7 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
                     DimensionGroup.from_simple(input.dimensions, butler.dimensions),
                     frozenset(input.datasets),
                     key=input.key,
+                    allow_duplicate_overlaps=input.allow_duplicate_overlaps,
                 )
             elif input.type == "upload":
                 driver.upload_data_coordinates(

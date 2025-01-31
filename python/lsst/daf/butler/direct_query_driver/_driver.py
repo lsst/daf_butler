@@ -217,6 +217,7 @@ class DirectQueryDriver(QueryDriver):
             final_columns=result_spec.get_result_columns(),
             order_by=result_spec.order_by,
             find_first_dataset=result_spec.find_first_dataset,
+            allow_duplicate_overlaps=result_spec.allow_duplicate_overlaps,
         )
         sql_select, sql_columns = builder.finish_select()
         if result_spec.order_by:
@@ -290,12 +291,15 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
+        allow_duplicate_overlaps: bool = False,
         key: qt.MaterializationKey | None = None,
     ) -> qt.MaterializationKey:
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
-        plan = self.build_query(tree, qt.ColumnSet(dimensions))
+        plan = self.build_query(
+            tree, qt.ColumnSet(dimensions), allow_duplicate_overlaps=allow_duplicate_overlaps
+        )
         # Current implementation ignores 'datasets' aside from remembering
         # them, because figuring out what to put in the temporary table for
         # them is tricky, especially if calibration collections are involved.
@@ -311,7 +315,9 @@ class DirectQueryDriver(QueryDriver):
         #
         sql_select, _ = plan.finish_select(return_columns=False)
         table = self._exit_stack.enter_context(
-            self.db.temporary_table(make_table_spec(plan.final_columns, self.db, plan.postprocessing))
+            self.db.temporary_table(
+                make_table_spec(plan.final_columns, self.db, plan.postprocessing, make_indices=True)
+            )
         )
         self.db.insert(table, select=sql_select)
         if key is None:
@@ -401,7 +407,7 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        builder = self.build_query(tree, qt.ColumnSet(tree.dimensions))
+        builder = self.build_query(tree, qt.ColumnSet(tree.dimensions), allow_duplicate_overlaps=True)
         if not all(d.collection_records for d in builder.joins_analysis.datasets.values()):
             return False
         if not execute:
@@ -447,6 +453,7 @@ class DirectQueryDriver(QueryDriver):
         order_by: Iterable[qt.OrderExpression] = (),
         find_first_dataset: str | qt.AnyDatasetType | None = None,
         analyze_only: bool = False,
+        allow_duplicate_overlaps: bool = False,
     ) -> QueryBuilder:
         """Convert a query description into a nearly-complete builder object
         for the SQL version of that query.
@@ -470,6 +477,9 @@ class DirectQueryDriver(QueryDriver):
             builder, but do not call methods that build its SQL form.  This can
             be useful for obtaining diagnostic information about the query that
             would be generated.
+        allow_duplicate_overlaps : `bool`, optional
+            If set to `True` then query will be allowed to generate
+            non-distinct rows for spatial overlaps.
 
         Returns
         -------
@@ -542,7 +552,7 @@ class DirectQueryDriver(QueryDriver):
         # SqlSelectBuilder and Postprocessing with spatial/temporal constraints
         # potentially transformed by the dimensions manager (but none of the
         # rest of the analysis reflected in that SqlSelectBuilder).
-        query_tree_analysis = self._analyze_query_tree(tree)
+        query_tree_analysis = self._analyze_query_tree(tree, allow_duplicate_overlaps)
         # The "projection" columns differ from the final columns by not
         # omitting any dimension keys (this keeps queries for different result
         # types more similar during construction), including any columns needed
@@ -589,7 +599,7 @@ class DirectQueryDriver(QueryDriver):
             builder.apply_find_first(self)
         return builder
 
-    def _analyze_query_tree(self, tree: qt.QueryTree) -> QueryTreeAnalysis:
+    def _analyze_query_tree(self, tree: qt.QueryTree, allow_duplicate_overlaps: bool) -> QueryTreeAnalysis:
         """Analyze a `.queries.tree.QueryTree` as the first step in building
         a SQL query.
 
@@ -603,6 +613,9 @@ class DirectQueryDriver(QueryDriver):
         tree_analysis : `QueryTreeAnalysis`
             Struct containing additional information need to build the joins
             stage of a query.
+        allow_duplicate_overlaps : `bool`, optional
+            If set to `True` then query will be allowed to generate
+            non-distinct rows for spatial overlaps.
 
         Notes
         -----
@@ -632,6 +645,7 @@ class DirectQueryDriver(QueryDriver):
             tree.predicate,
             tree.get_joined_dimension_groups(),
             collection_analysis.calibration_dataset_types,
+            allow_duplicate_overlaps,
         )
         # Extract the data ID implied by the predicate; we can use the governor
         # dimensions in that to constrain the collections we search for
@@ -799,13 +813,22 @@ class DirectQueryDriver(QueryDriver):
                     select_builder.joins, materialization_key, materialization_dimensions
                 )
             )
-        # Process dataset joins (not including any union dataset).
-        for dataset_search in joins_analysis.datasets.values():
-            self.join_dataset_search(
-                select_builder.joins,
-                dataset_search,
-                joins_analysis.columns.dataset_fields[dataset_search.name],
-            )
+        # Process dataset joins (not including any union dataset). Datasets
+        # searches included in materialization can be skipped unless we need
+        # something from their tables.
+        materialized_datasets = set()
+        for m_state in self._materializations.values():
+            materialized_datasets.update(m_state.datasets)
+        for dataset_type_name, dataset_search in joins_analysis.datasets.items():
+            if (
+                dataset_type_name not in materialized_datasets
+                or dataset_type_name in select_builder.columns.dataset_fields
+            ):
+                self.join_dataset_search(
+                    select_builder.joins,
+                    dataset_search,
+                    joins_analysis.columns.dataset_fields[dataset_search.name],
+                )
         # Join in dimension element tables that we know we need relationships
         # or columns from.
         for element in joins_analysis.iter_mandatory(union_dataset_dimensions):

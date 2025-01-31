@@ -246,20 +246,21 @@ class PostgresqlDatabase(Database):
                 # PostgreSQL actually considers SET TRANSACTION to be a
                 # fundamentally different statement from SET (they have their
                 # own distinct doc pages, at least).
-                if not (self.isWriteable() or for_temp_tables):
+                with closing(connection.connection.cursor()) as cursor:
                     # PostgreSQL permits writing to temporary tables inside
                     # read-only transactions, but it doesn't permit creating
                     # them.
-                    with closing(connection.connection.cursor()) as cursor:
+                    if not (self.isWriteable() or for_temp_tables):
                         cursor.execute("SET TRANSACTION READ ONLY")
-                        cursor.execute("SET TIME ZONE 0")
-                else:
-                    with closing(connection.connection.cursor()) as cursor:
-                        # Make timestamps UTC, because we didn't use TIMESTAMPZ
-                        # for the column type.  When we can tolerate a schema
-                        # change, we should change that type and remove this
-                        # line.
-                        cursor.execute("SET TIME ZONE 0")
+                    # Make timestamps UTC, because we didn't use TIMESTAMPZ
+                    # for the column type.  When we can tolerate a schema
+                    # change, we should change that type and remove this
+                    # line.
+                    cursor.execute("SET TIME ZONE 0")
+                    # Using server-side cursors with complex queries frequently
+                    # generates suboptimal query plan, setting
+                    # cursor_tuple_fraction=1 helps for those cases.
+                    cursor.execute("SET cursor_tuple_fraction = 1")
             yield is_new, connection
 
     @contextmanager
