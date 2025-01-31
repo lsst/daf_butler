@@ -46,10 +46,11 @@ __all__ = (
 import copy
 import dataclasses
 import types
+import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import StorageClass, StorageClassDelegate
+from lsst.daf.butler import DatasetProvenance, StorageClass, StorageClassDelegate
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -297,6 +298,8 @@ class MetricsExampleModel(BaseModel):
     summary: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
     data: list[Any] | None = None
+    provenance: DatasetProvenance | None = None
+    dataset_id: uuid.UUID | None = None
 
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:
