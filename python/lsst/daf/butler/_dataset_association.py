@@ -72,10 +72,11 @@ class DatasetAssociation:
 
         Parameters
         ----------
-        result : `GeneralQueryResults`
-            General query result returned by `Query.general` method. The result
-            has to include "{dataset_type.name}.timespan" and
-            "{dataset_type.name}.collection" columns.
+        result : `~lsst.daf.butler.queries.GeneralQueryResults`
+            General query result returned by
+            `Query.general <lsst.daf.butler.queries.Query.general>` method. The
+            result has to include "dataset_id", "run", "collection", and
+            "timespan" dataset fields for ``dataset_type``.
         dataset_type : `DatasetType`
             Dataset type, query has to include this dataset type.
         """

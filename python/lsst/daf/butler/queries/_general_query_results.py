@@ -111,6 +111,9 @@ class GeneralQueryResults(QueryResultsBase):
         """Iterate over result rows and return data coordinate, and dataset
         refs constructed from each row, and an original row.
 
+        This object has to include "dataset_id" and "run" columns for each type
+        in ``dataset_types``.
+
         Parameters
         ----------
         *dataset_types : `DatasetType`

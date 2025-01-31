@@ -227,7 +227,9 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                     dtype=b.int | b.float | b.str | astropy.time.Time | datetime.datetime
                 ) as lhs,
                 ColumnExpression() as rhs,
-            ] if lhs.dtype is rhs.dtype:
+            ] if (
+                lhs.dtype is rhs.dtype
+            ):
                 return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
             # Allow comparisons between datetime expressions and
             # astropy.time.Time literals/binds (only), by coercing the
@@ -321,7 +323,9 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 "+" | "-" | "*",
                 ColumnExpression(dtype=b.int | b.float) as lhs,
                 ColumnExpression() as rhs,
-            ] if lhs.dtype is rhs.dtype:
+            ] if (
+                lhs.dtype is rhs.dtype
+            ):
                 return lhs.method(self.OPERATOR_MAP[operator], rhs, dtype=lhs.dtype)
             case ["/", ColumnExpression(dtype=b.float) as lhs, ColumnExpression(dtype=b.float) as rhs]:
                 return lhs.method("__truediv__", rhs, dtype=b.float)
@@ -411,9 +415,9 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         assert isinstance(lhs, ColumnExpression), "LHS of IN guaranteed to be scalar by parser."
         for rhs_item in values:
             match rhs_item:
-                case ColumnExpressionSequence(
-                    items=rhs_items, dtype=rhs_dtype
-                ) if rhs_dtype is None or rhs_dtype == lhs.dtype:
+                case ColumnExpressionSequence(items=rhs_items, dtype=rhs_dtype) if (
+                    rhs_dtype is None or rhs_dtype == lhs.dtype
+                ):
                     items.extend(rhs_items)
                 case ColumnContainer(dtype=lhs.dtype):
                     clauses.append(rhs_item.contains(lhs))

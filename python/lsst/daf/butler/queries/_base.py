@@ -41,16 +41,17 @@ from .tree import OrderExpression, Predicate, QueryTree
 
 
 class QueryBase(ABC):
-    """Common base class for `Query` and all `QueryResult` objects.
+    """Common base class for `~lsst.daf.butler.queries.Query` and all
+    ``QueryResult`` objects.
 
     This class should rarely be referenced directly; it is public only because
     it provides public methods to its subclasses.
 
     Parameters
     ----------
-    driver : `QueryDriver`
+    driver : `~lsst.daf.butler.queries.driver.QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `QueryTree`
+    tree : `~lsst.daf.butler.queries.tree.QueryTree`
         Description of the query as a tree of joins and column expressions.
     """
 
@@ -113,8 +114,11 @@ class QueryBase(ABC):
         ----------
         *args
             Constraints to apply, combined with logical AND.  Arguments may be
-            `str` expressions to parse, `Predicate` objects (these are
-            typically constructed via `expression_factory`) or data IDs.
+            `str` expressions to parse,
+            `~lsst.daf.butler.queries.tree.Predicate` objects (these are
+            typically constructed via
+            `Query.expression_factory <lsst.daf.butler.queries.Query.expression_factory>`)
+            or data IDs.
         bind : `~collections.abc.Mapping`
             Mapping from string identifier appearing in a string expression to
             a literal value that should be substituted for it.  This is
@@ -134,15 +138,15 @@ class QueryBase(ABC):
 
         Notes
         -----
-        If an expression references a dimension or dimension element that is
-        not already present in the query, it will be joined in, but dataset
-        searches must already be joined into a query in order to reference
-        their fields in expressions.
+        Expressions referring to dimensions or dimension elements are resolved
+        automatically. References to dataset fields (see `expression_factory`
+        for the distinction) may or may not be resolvable, depending on the
+        implementation class.
 
         Data ID values are not checked for consistency; they are extracted from
         ``args`` and then ``kwargs`` and combined, with later values overriding
         earlier ones.
-        """
+        """  # noqa: W505, long docstrings
         raise NotImplementedError()
 
 
