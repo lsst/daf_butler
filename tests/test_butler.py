@@ -77,6 +77,7 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetExistence,
     DatasetNotFoundError,
+    DatasetProvenance,
     DatasetRef,
     DatasetType,
     FileDataset,
@@ -101,7 +102,7 @@ from lsst.daf.butler.registry import (
 )
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
+from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
@@ -2123,6 +2124,33 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         with self.assertRaises(ValueError):
             butler.get(datasetTypeName, dataId=dataId)
+
+    def test_provenance(self):
+        """Test that provenance is attached on put."""
+        run = "test_run"
+        butler, datasetType = self.create_butler(run, "MetricsExampleModelProvenance", "prov_metric")
+        metric = MetricsExampleModel(
+            summary={"AM1": 5.2, "AM2": 30.6},
+            output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+            data=[563, 234, 456.7, 752, 8, 9, 27],
+        )
+        # Provenance can be attached to the object being put. Whether
+        # it is or not is dependent on the formatter. For this test we
+        # copy on adding provenance to ensure they differ.
+        self.assertIsNone(metric.dataset_id)
+        metric_ref = butler.put(metric, datasetType, visit=424, instrument="DummyCamComp")
+        self.assertIsNone(metric.dataset_id)
+        metric_2 = butler.get(metric_ref)
+        self.assertEqual(metric_2.data, metric.data)
+        self.assertEqual(metric_2.dataset_id, metric_ref.id)
+        self.assertIsNone(metric_2.provenance)
+
+        # Put with provenance.
+        prov = DatasetProvenance(quantum_id=uuid.uuid4())
+        prov.add_input(metric_ref)
+        metric_ref2 = butler.put(metric, datasetType, visit=423, instrument="DummyCamComp", provenance=prov)
+        metric_3 = butler.get(metric_ref2)
+        self.assertEqual(metric_3.provenance, prov)
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):

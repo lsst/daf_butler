@@ -48,7 +48,7 @@ from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import Config, DatasetType, LookupKey
+    from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey
     from lsst.daf.butler.datastore import DatastoreOpaqueTable
     from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
@@ -374,7 +374,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         # Last minute type conversion.
         return refStorageClass.coerce_type(inMemoryDataset)
 
-    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
+    def put(self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
         Parameters
@@ -383,6 +383,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
 
         Raises
         ------
@@ -414,6 +416,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             delegate = None
         if not delegate or not delegate.can_accept(inMemoryDataset):
             inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
+
+        # Update provenance.
+        if delegate:
+            inMemoryDataset = delegate.add_provenance(inMemoryDataset, ref, provenance=provenance)
 
         self.datasets[ref.id] = inMemoryDataset
         log.debug("Store %s in %s", ref, self.name)

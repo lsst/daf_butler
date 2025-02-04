@@ -86,6 +86,7 @@ from .server_models import (
 )
 
 if TYPE_CHECKING:
+    from .._dataset_provenance import DatasetProvenance
     from .._file_dataset import FileDataset
     from .._limited_butler import LimitedButler
     from .._timespan import Timespan
@@ -238,6 +239,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         dataId: DataId | None = None,
         *,
         run: str | None = None,
+        provenance: DatasetProvenance | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         # Docstring inherited.

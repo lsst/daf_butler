@@ -43,6 +43,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._butler_config import ButlerConfig
 from ._config import Config
+from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetId, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -453,11 +454,11 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return self._dimensions
 
-    def put(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
+    def put(self, obj: Any, ref: DatasetRef, /, *, provenance: DatasetProvenance | None = None) -> DatasetRef:
         # Docstring inherited.
         if ref.id not in self._predicted_outputs:
             raise RuntimeError("Cannot `put` dataset that was not predicted as an output.")
-        self._datastore.put(obj, ref)
+        self._datastore.put(obj, ref, provenance=provenance)
         self._actual_output_refs.add(ref)
         return ref
 

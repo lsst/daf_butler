@@ -90,6 +90,7 @@ from ._direct_butler_collections import DirectButlerCollections
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
+    from .._dataset_provenance import DatasetProvenance
     from .._dataset_ref import DatasetId
     from ..datastore import DatasetRefURIs
     from ..dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
@@ -945,6 +946,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         dataId: DataId | None = None,
         *,
         run: str | None = None,
+        provenance: DatasetProvenance | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         """Store and register a dataset.
@@ -964,6 +966,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``. Not used if a resolved `DatasetRef` is provided.
+        provenance : `DatasetProvenance` or `None`, optional
+            Any provenance that should be attached to the serialized dataset.
+            Not supported by all serialization mechanisms.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -998,7 +1003,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # with another write, the content of stored data may be
             # unpredictable.
             try:
-                self._datastore.put(obj, datasetRefOrType)
+                self._datastore.put(obj, datasetRefOrType, provenance=provenance)
             except IntegrityError as e:
                 raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
             return datasetRefOrType
@@ -1014,7 +1019,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Add Registry Dataset entry.
         dataId = self._registry.expandDataId(dataId, dimensions=datasetType.dimensions, **kwargs)
         (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-        self._datastore.put(obj, ref)
+        self._datastore.put(obj, ref, provenance=provenance)
 
         return ref
 

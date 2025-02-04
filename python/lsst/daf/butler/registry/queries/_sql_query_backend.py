@@ -34,6 +34,7 @@ from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
 
 from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Predicate, Relation
+from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._collection_type import CollectionType
 from ..._column_categorization import ColumnCategorization
@@ -343,6 +344,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                         "DataIdValueError will no longer be raised for invalid governor dimension values."
                         " Instead, an empty list will be returned.  Will be changed after v28.",
                         FutureWarning,
+                        stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                     )
                     raise DataIdValueError(
                         f"Unknown values specified for governor dimension {dimension_name}: "

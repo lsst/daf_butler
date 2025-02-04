@@ -1217,8 +1217,7 @@ class Database(ABC):
         )
         if table.key in self._temp_tables and table.key != name:
             raise ValueError(
-                f"A temporary table with name {name} (transformed to {table.key} by "
-                "Database) already exists."
+                f"A temporary table with name {name} (transformed to {table.key} by Database) already exists."
             )
         with self._transaction():
             table.create(connection)

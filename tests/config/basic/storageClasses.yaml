@@ -145,3 +145,5 @@ storageClasses:
     pytype: tuple
   TupleExampleB:
     pytype: tuple
+  MetricsExampleModelProvenance:
+    pytype: lsst.daf.butler.tests.MetricsExampleModel

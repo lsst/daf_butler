@@ -47,3 +47,4 @@ MetricsExampleModelB: lsst.daf.butler.formatters.yaml.YamlFormatter
 TupleExampleA: lsst.daf.butler.formatters.json.JsonFormatter
 TupleExampleB: lsst.daf.butler.formatters.yaml.YamlFormatter
 MetricsConversion: lsst.daf.butler.formatters.json.JsonFormatter
+MetricsExampleModelProvenance: lsst.daf.butler.tests.testFormatters.MetricsExampleModelProvenanceFormatter
