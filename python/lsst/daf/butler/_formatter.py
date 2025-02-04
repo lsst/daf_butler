@@ -99,9 +99,6 @@ class FormatterV2:
          Parameters to control how the dataset is serialized.
     write_recipes : `dict`, optional
         Detailed write recipes indexed by recipe name.
-    provenance : `DatasetProvenance` or `None`, optional
-        Any provenance that should be attached to the serialized dataset.
-        Can be ignored by a formatter.
 
     **kwargs
         Additional arguments that will be ignored but allow for
@@ -174,7 +171,6 @@ class FormatterV2:
         ref: DatasetRef,
         write_parameters: Mapping[str, Any] | None = None,
         write_recipes: Mapping[str, Any] | None = None,
-        provenance: DatasetProvenance | None = None,
         # Compatibility parameters. Unused in v2.
         **kwargs: Any,
     ):
@@ -204,7 +200,6 @@ class FormatterV2:
 
         self._write_parameters = write_parameters
         self._write_recipes = self.validate_write_recipes(write_recipes)
-        self._provenance = provenance
 
     def __str__(self) -> str:
         return f"{self.name()}@{self.file_descriptor.location.uri}"
@@ -870,13 +865,17 @@ class FormatterV2:
         """
         return NotImplemented
 
-    def add_provenance(self, in_memory_dataset: Any) -> Any:
+    def add_provenance(
+        self, in_memory_dataset: Any, /, *, provenance: DatasetProvenance | None = None
+    ) -> Any:
         """Add provenance to the dataset.
 
         Parameters
         ----------
         in_memory_dataset : `object`
             The dataset to serialize.
+        provenance : `DatasetProvenance` or `None`, optional
+            Provenance to attach to dataset.
 
         Returns
         -------
@@ -894,7 +893,10 @@ class FormatterV2:
     def write(
         self,
         in_memory_dataset: Any,
+        /,
+        *,
         cache_manager: AbstractDatastoreCacheManager | None = None,
+        provenance: DatasetProvenance | None = None,
     ) -> None:
         """Write a Dataset.
 
@@ -905,6 +907,8 @@ class FormatterV2:
         cache_manager : `AbstractDatastoreCacheManager`
             A cache manager to use to allow a formatter to cache the written
             file.
+        provenance : `DatasetProvenance` | `None`, optional
+            Provenance to attach to the file being written.
 
         Raises
         ------
@@ -924,7 +928,7 @@ class FormatterV2:
 
         # Attach any provenance to the dataset. This could involve returning
         # a different object.
-        in_memory_dataset = self.add_provenance(in_memory_dataset)
+        in_memory_dataset = self.add_provenance(in_memory_dataset, provenance=provenance)
 
         written = self.write_direct(in_memory_dataset, uri, cache_manager)
         if not written:

@@ -1312,7 +1312,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 f"Dataset {ref} has been rejected by this datastore via configuration."
             )
 
-        location, formatter = self._determine_put_formatter_location(ref, provenance)
+        location, formatter = self._determine_put_formatter_location(ref)
 
         # The external storage class can differ from the registry storage
         # class AND the given in-memory dataset might not match any of the
@@ -1372,7 +1372,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         with time_this(log, msg="Writing dataset %s with formatter %s", args=(ref, formatter.name())):
             try:
-                formatter_compat.write(inMemoryDataset, cache_manager=self.cacheManager)
+                formatter_compat.write(
+                    inMemoryDataset, cache_manager=self.cacheManager, provenance=provenance
+                )
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to serialize dataset {ref} of type {get_full_type_name(inMemoryDataset)} "

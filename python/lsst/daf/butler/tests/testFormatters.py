@@ -48,6 +48,7 @@ from ..formatters.json import JsonFormatter
 from ..formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
+    from .._dataset_provenance import DatasetProvenance
     from .._location import Location
 
 
@@ -277,9 +278,11 @@ class MetricsExampleDataFormatter(Formatter):
 class MetricsExampleModelProvenanceFormatter(JsonFormatter):
     """Specialist formatter to test provenance addition."""
 
-    def add_provenance(self, in_memory_dataset: Any) -> Any:
+    def add_provenance(
+        self, in_memory_dataset: Any, /, *, provenance: DatasetProvenance | None = None
+    ) -> Any:
         # Copy it to prove that works.
         new = in_memory_dataset.model_copy()
-        new.provenance = self._provenance
+        new.provenance = provenance
         new.dataset_id = self.dataset_ref.id
         return new
