@@ -130,6 +130,8 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual(table[0], self.records["visit"][0])
         self.assertEqual(table[1], self.records["visit"][1])
         self.assertEqual(list(table), list(self.records["visit"]))
+        self.assertListEqual([x.region for x in table], [x.region for x in self.records["visit"]])
+        self.assertListEqual([x.timespan for x in table], [x.timespan for x in self.records["visit"]])
         self.assertEqual(table.element, self.universe["visit"])
         self.assertEqual(table.column("instrument")[0].as_py(), "Cam1")
         self.assertEqual(table.column("instrument")[1].as_py(), "Cam1")
@@ -169,6 +171,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         and regions, and those are the tricky column types for interoperability
         with Arrow.
         """
+        original_records = list(self.records["visit"])
         table1 = DimensionRecordTable(self.universe["visit"], self.records["visit"])
         stream = pa.BufferOutputStream()
         pq.write_table(table1.to_arrow(), stream)
@@ -176,6 +179,11 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
             universe=self.universe, table=pq.read_table(pa.BufferReader(stream.getvalue()))
         )
         self.assertEqual(list(table1), list(table2))
+        self.assertEqual(original_records, list(table2))
+        self.assertListEqual([x.region for x in table1], [x.region for x in table2])
+        self.assertListEqual([x.region for x in original_records], [x.region for x in table2])
+        self.assertListEqual([x.timespan for x in table1], [x.timespan for x in table2])
+        self.assertListEqual([x.timespan for x in original_records], [x.timespan for x in table2])
 
     def test_record_table_parquet_skymap(self):
         """Test round-tripping a dimension record table through Parquet.

@@ -516,9 +516,7 @@ class TimespanArrowScalar(pa.ExtensionScalar):
     """
 
     def as_py(self) -> Timespan:
-        return Timespan(
-            None, None, _nsec=(self.value["begin_nsec"].as_py(), self.value["begin_nsec"].as_py())
-        )
+        return Timespan(None, None, _nsec=(self.value["begin_nsec"].as_py(), self.value["end_nsec"].as_py()))
 
 
 @final
