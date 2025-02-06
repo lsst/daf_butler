@@ -34,13 +34,13 @@ __all__ = (
     "CollectionTypeError",
     "DataIdValueError",
     "DatasetNotFoundError",
-    "DimensionNameError",
     "DatasetTypeNotSupportedError",
+    "DimensionNameError",
     "EmptyQueryResultError",
     "InconsistentDataIdError",
     "InvalidQueryError",
-    "MissingDatasetTypeError",
     "MissingCollectionError",
+    "MissingDatasetTypeError",
     "ValidationError",
 )
 

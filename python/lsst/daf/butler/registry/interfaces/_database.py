@@ -30,10 +30,10 @@ from ... import ddl, time_utils
 
 __all__ = [
     "Database",
-    "DatabaseMetadata",
-    "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "DatabaseInsertMode",
+    "DatabaseMetadata",
+    "ReadOnlyDatabaseError",
     "SchemaAlreadyDefinedError",
     "StaticTablesContext",
 ]

@@ -26,7 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("make_string_expression_predicate", "ExpressionTypeError")
+__all__ = ("ExpressionTypeError", "make_string_expression_predicate")
 
 import builtins
 import datetime

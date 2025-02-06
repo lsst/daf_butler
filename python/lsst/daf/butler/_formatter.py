@@ -28,13 +28,13 @@
 from __future__ import annotations
 
 __all__ = (
-    "Formatter",
-    "FormatterV2",
-    "FormatterV1inV2",
-    "FormatterFactory",
-    "FormatterParameter",
-    "FormatterNotImplementedError",
     "FileIntegrityError",
+    "Formatter",
+    "FormatterFactory",
+    "FormatterNotImplementedError",
+    "FormatterParameter",
+    "FormatterV1inV2",
+    "FormatterV2",
 )
 
 import contextlib

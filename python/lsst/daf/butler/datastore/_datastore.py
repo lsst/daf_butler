@@ -34,9 +34,9 @@ __all__ = (
     "Datastore",
     "DatastoreConfig",
     "DatastoreOpaqueTable",
+    "DatastoreTransaction",
     "DatastoreValidationError",
     "NullDatastore",
-    "DatastoreTransaction",
 )
 
 import contextlib

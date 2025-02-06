@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
+__all__ = ("InMemoryDatastore", "StoredMemoryItemInfo")
 
 import logging
 import time

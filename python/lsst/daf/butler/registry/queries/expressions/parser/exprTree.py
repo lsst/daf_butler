@@ -38,11 +38,11 @@ to database directly.
 from __future__ import annotations
 
 __all__ = [
-    "Node",
     "BinaryOp",
     "FunctionCall",
     "Identifier",
     "IsIn",
+    "Node",
     "NumericLiteral",
     "Parens",
     "PointNode",

@@ -29,9 +29,9 @@ from __future__ import annotations
 
 __all__ = (
     "DeferredValidation",
-    "get_universe_from_context",
     "SerializableRegion",
     "SerializableTime",
+    "get_universe_from_context",
 )
 
 from types import EllipsisType

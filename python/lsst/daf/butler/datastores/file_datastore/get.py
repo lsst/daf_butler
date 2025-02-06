@@ -26,8 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __all__ = (
-    "DatastoreFileGetInformation",
     "DatasetLocationInformation",
+    "DatastoreFileGetInformation",
     "generate_datastore_get_information",
     "get_dataset_as_python_object_from_get_info",
 )

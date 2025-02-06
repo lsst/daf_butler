@@ -196,12 +196,13 @@ select = [
     "D",  # pydocstyle
     "UP",  # pyupgrade
     "I",  # isort
+    "RUF022",  # sort __all__
 ]
 # Commented out to suppress "unused noqa" in jenkins which has older ruff not
 # generating E721.
-#extend-select = [
-#    "RUF100", # Warn about unused noqa
-#]
+extend-select = [
+    "RUF100", # Warn about unused noqa
+]
 
 [tool.ruff.lint.per-file-ignores]
 # parserYacc docstrings can not be fixed. Docstrings are used to define grammar.

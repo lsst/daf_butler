@@ -28,12 +28,12 @@
 from __future__ import annotations
 
 __all__ = (
-    "QueryTree",
-    "make_identity_query_tree",
     "DataCoordinateUploadKey",
-    "MaterializationKey",
     "DatasetSearch",
+    "MaterializationKey",
+    "QueryTree",
     "SerializedQueryTree",
+    "make_identity_query_tree",
 )
 
 import uuid

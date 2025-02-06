@@ -28,10 +28,10 @@
 from __future__ import annotations
 
 __all__ = (
-    "QueryJoinsAnalysis",
-    "QueryFindFirstAnalysis",
-    "ResolvedDatasetSearch",
     "QueryCollectionAnalysis",
+    "QueryFindFirstAnalysis",
+    "QueryJoinsAnalysis",
+    "ResolvedDatasetSearch",
 )
 
 import dataclasses

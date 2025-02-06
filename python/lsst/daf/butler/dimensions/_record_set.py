@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecordSet", "DimensionRecordFactory")
+__all__ = ("DimensionRecordFactory", "DimensionRecordSet")
 
 from collections.abc import Collection, Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Protocol, final

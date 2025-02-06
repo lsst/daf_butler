@@ -28,10 +28,10 @@ from __future__ import annotations
 
 __all__ = (
     "ChainedDatasetQueryResults",
+    "DataCoordinateQueryResults",
     "DatabaseDataCoordinateQueryResults",
     "DatabaseDimensionRecordQueryResults",
     "DatabaseParentDatasetQueryResults",
-    "DataCoordinateQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",

@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo", "SerializedStoredFileInfo")
+__all__ = ("SerializedStoredFileInfo", "StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
 from collections.abc import Iterable, Mapping

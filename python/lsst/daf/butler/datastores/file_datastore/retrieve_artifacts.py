@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips", "ZipIndex")
+__all__ = ("ZipIndex", "determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips")
 
 import logging
 import tempfile

@@ -28,15 +28,15 @@
 from __future__ import annotations
 
 __all__ = (
-    "ToArrow",
-    "RegionArrowType",
-    "RegionArrowScalar",
-    "TimespanArrowType",
-    "TimespanArrowScalar",
-    "DateTimeArrowType",
     "DateTimeArrowScalar",
-    "UUIDArrowType",
+    "DateTimeArrowType",
+    "RegionArrowScalar",
+    "RegionArrowType",
+    "TimespanArrowScalar",
+    "TimespanArrowType",
+    "ToArrow",
     "UUIDArrowScalar",
+    "UUIDArrowType",
 )
 
 import uuid

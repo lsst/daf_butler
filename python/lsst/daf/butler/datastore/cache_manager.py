@@ -31,9 +31,9 @@ from __future__ import annotations
 
 __all__ = (
     "AbstractDatastoreCacheManager",
-    "DatastoreDisabledCacheManager",
     "DatastoreCacheManager",
     "DatastoreCacheManagerConfig",
+    "DatastoreDisabledCacheManager",
 )
 
 import atexit

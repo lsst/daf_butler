@@ -208,7 +208,7 @@ class SerializedDimensionRecord(BaseModel):
         # transform to tuples.
         _recItems = {
             k: (
-                v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v))  # noqa: E721
+                v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v))
             )  # type: ignore
             for k, v in record.items()
         }

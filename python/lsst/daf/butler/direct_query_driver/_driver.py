@@ -1520,7 +1520,7 @@ class _Cursor:
         cursor = self._context.__enter__()
         try:
             self._iterator = cursor.partitions()
-        except:  # noqa: E722
+        except:
             self.close(*sys.exc_info())
             raise
 
@@ -1560,6 +1560,6 @@ class _Cursor:
 
             postprocessed_rows = self._postprocessing.apply(raw_page)
             return self._page_converter.convert(postprocessed_rows)
-        except:  # noqa: E722
+        except:
             self.close(*sys.exc_info())
             raise

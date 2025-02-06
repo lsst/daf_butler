@@ -28,9 +28,9 @@
 from __future__ import annotations
 
 __all__ = (
-    "TopologicalSpace",
     "TopologicalFamily",
     "TopologicalRelationshipEndpoint",
+    "TopologicalSpace",
 )
 
 import enum

@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
+__all__ = ("from_json_generic", "from_json_pydantic", "to_json_generic", "to_json_pydantic")
 
 import json
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol

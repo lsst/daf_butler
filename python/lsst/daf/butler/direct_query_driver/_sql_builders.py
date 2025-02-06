@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SqlJoinsBuilder", "SqlSelectBuilder", "SqlColumns", "make_table_spec")
+__all__ = ("SqlColumns", "SqlJoinsBuilder", "SqlSelectBuilder", "make_table_spec")
 
 import dataclasses
 import itertools

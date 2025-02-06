@@ -28,10 +28,10 @@
 from __future__ import annotations
 
 __all__ = (
-    "ResultSpecBase",
     "DataCoordinateResultSpec",
-    "DimensionRecordResultSpec",
     "DatasetRefResultSpec",
+    "DimensionRecordResultSpec",
+    "ResultSpecBase",
 )
 
 from abc import ABC, abstractmethod

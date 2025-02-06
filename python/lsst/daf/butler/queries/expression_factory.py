@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ExpressionFactory", "ExpressionProxy", "ScalarExpressionProxy", "TimespanProxy", "RegionProxy")
+__all__ = ("ExpressionFactory", "ExpressionProxy", "RegionProxy", "ScalarExpressionProxy", "TimespanProxy")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable

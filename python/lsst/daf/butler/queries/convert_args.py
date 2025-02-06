@@ -28,8 +28,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "convert_where_args",
     "convert_order_by_args",
+    "convert_where_args",
 )
 
 from collections.abc import Mapping, Set

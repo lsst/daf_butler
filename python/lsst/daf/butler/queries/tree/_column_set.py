@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnSet", "ColumnOrder", "ResultColumn")
+__all__ = ("ColumnOrder", "ColumnSet", "ResultColumn")
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
 from typing import NamedTuple, cast

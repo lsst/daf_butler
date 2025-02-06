@@ -28,12 +28,12 @@
 from __future__ import annotations
 
 __all__ = [
-    "makeTestRepo",
-    "makeTestCollection",
-    "addDatasetType",
-    "expandUniqueId",
     "DatastoreMock",
     "addDataIdValue",
+    "addDatasetType",
+    "expandUniqueId",
+    "makeTestCollection",
+    "makeTestRepo",
 ]
 
 import random

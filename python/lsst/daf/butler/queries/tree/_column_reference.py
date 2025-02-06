@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
+__all__ = ("ColumnReference", "DatasetFieldReference", "DimensionFieldReference", "DimensionKeyReference")
 
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, Union, final
 

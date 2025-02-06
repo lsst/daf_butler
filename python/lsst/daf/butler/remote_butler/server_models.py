@@ -32,9 +32,9 @@ __all__ = [
     "DatasetTypeName",
     "FindDatasetRequestModel",
     "FindDatasetResponseModel",
-    "GetFileResponseModel",
     "GetCollectionInfoResponseModel",
     "GetCollectionSummaryResponseModel",
+    "GetFileResponseModel",
 ]
 
 from collections.abc import Iterable

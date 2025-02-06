@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplateValidationError")
+__all__ = ("FileTemplate", "FileTemplateValidationError", "FileTemplates", "FileTemplatesConfig")
 
 import logging
 import os.path

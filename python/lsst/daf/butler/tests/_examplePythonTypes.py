@@ -37,9 +37,9 @@ __all__ = (
     "ListDelegate",
     "MetricsDelegate",
     "MetricsExample",
-    "registerMetricsExample",
-    "MetricsExampleModel",
     "MetricsExampleDataclass",
+    "MetricsExampleModel",
+    "registerMetricsExample",
 )
 
 

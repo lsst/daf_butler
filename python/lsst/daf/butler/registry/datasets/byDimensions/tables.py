@@ -28,13 +28,13 @@
 from __future__ import annotations
 
 __all__ = (
+    "StaticDatasetTablesTuple",
     "addDatasetForeignKey",
     "makeCalibTableName",
     "makeCalibTableSpec",
     "makeStaticTableSpecs",
     "makeTagTableName",
     "makeTagTableSpec",
-    "StaticDatasetTablesTuple",
 )
 
 from collections import namedtuple

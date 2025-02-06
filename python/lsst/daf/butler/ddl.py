@@ -40,14 +40,14 @@ databases, a "schema" is also another term for a namespace.
 from __future__ import annotations
 
 __all__ = (
-    "TableSpec",
+    "GUID",
+    "AstropyTimeNsecTai",
+    "Base64Bytes",
+    "Base64Region",
     "FieldSpec",
     "ForeignKeySpec",
     "IndexSpec",
-    "Base64Bytes",
-    "Base64Region",
-    "AstropyTimeNsecTai",
-    "GUID",
+    "TableSpec",
 )
 
 import logging

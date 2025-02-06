@@ -28,8 +28,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "FormatterTest",
     "DoNothingFormatter",
+    "FormatterTest",
     "LenientYamlFormatter",
     "MetricsExampleFormatter",
     "MultipleExtensionsFormatter",

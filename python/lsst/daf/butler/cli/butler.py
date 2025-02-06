@@ -27,8 +27,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "LoaderCLI",
     "ButlerCLI",
+    "LoaderCLI",
     "cli",
     "main",
 )

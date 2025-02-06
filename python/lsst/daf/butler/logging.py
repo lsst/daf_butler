@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler", "ButlerLogRecord", "JsonLogFormatter")
+__all__ = ("ButlerLogRecord", "ButlerLogRecordHandler", "ButlerLogRecords", "ButlerMDC", "JsonLogFormatter")
 
 import datetime
 import logging

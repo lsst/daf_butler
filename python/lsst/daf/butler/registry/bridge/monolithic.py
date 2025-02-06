@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from ... import ddl
 
-__all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegistryBridge")
+__all__ = ("MonolithicDatastoreRegistryBridge", "MonolithicDatastoreRegistryBridgeManager")
 
 import copy
 from collections import namedtuple

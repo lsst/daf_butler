@@ -28,17 +28,17 @@
 from __future__ import annotations
 
 __all__ = (
-    "ColumnSpec",
-    "IntColumnSpec",
-    "StringColumnSpec",
-    "HashColumnSpec",
-    "FloatColumnSpec",
-    "BoolColumnSpec",
-    "UUIDColumnSpec",
-    "RegionColumnSpec",
-    "TimespanColumnSpec",
-    "ColumnType",
     "COLLECTION_NAME_MAX_LENGTH",
+    "BoolColumnSpec",
+    "ColumnSpec",
+    "ColumnType",
+    "FloatColumnSpec",
+    "HashColumnSpec",
+    "IntColumnSpec",
+    "RegionColumnSpec",
+    "StringColumnSpec",
+    "TimespanColumnSpec",
+    "UUIDColumnSpec",
 )
 
 import textwrap

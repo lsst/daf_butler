@@ -27,8 +27,8 @@
 from __future__ import annotations
 
 __all__ = [
-    "ButlerAttributeManager",
     "ButlerAttributeExistsError",
+    "ButlerAttributeManager",
 ]
 
 from abc import abstractmethod

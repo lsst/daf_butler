@@ -30,8 +30,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "DirectButler",
     "ButlerValidationError",
+    "DirectButler",
 )
 
 import collections.abc

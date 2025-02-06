@@ -28,13 +28,13 @@
 from __future__ import annotations
 
 __all__ = (
+    "BinaryExpression",
+    "BinaryOperator",
     "ColumnExpression",
     "OrderExpression",
-    "UnaryExpression",
-    "BinaryExpression",
     "Reversed",
+    "UnaryExpression",
     "UnaryOperator",
-    "BinaryOperator",
     "is_one_datetime_and_one_ingest_date",
     "is_one_timespan_and_one_datetime",
     "validate_order_expression",
