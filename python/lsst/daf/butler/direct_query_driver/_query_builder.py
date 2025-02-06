@@ -78,6 +78,10 @@ class QueryBuilder(ABC):
         or DISTINCT may be performed.
     final_columns : `.queries.tree.ColumnSet`
         Columns to include in the final query.
+    find_first_dataset : `str` or ``...`` or None
+        Name of the dataset type that needs a find-first search.  ``...``
+        is used to indicate the dataset types in a union dataset query.
+        `None` means find-first is not used.
     """
 
     def __init__(
@@ -86,13 +90,14 @@ class QueryBuilder(ABC):
         *,
         projection_columns: qt.ColumnSet,
         final_columns: qt.ColumnSet,
+        find_first_dataset: str | qt.AnyDatasetType | None,
     ):
         self.joins_analysis = tree_analysis.joins
         self.postprocessing = tree_analysis.postprocessing
         self.projection_columns = projection_columns
         self.final_columns = final_columns
         self.needs_dimension_distinct = False
-        self.find_first_dataset = None
+        self.find_first_dataset = find_first_dataset
 
     joins_analysis: QueryJoinsAnalysis
     """Description of the "joins" stage of query construction."""
@@ -161,7 +166,7 @@ class QueryBuilder(ABC):
             self.needs_dimension_distinct = True
 
     @abstractmethod
-    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
+    def analyze_find_first(self) -> None:
         """Analyze the "find first" stage of query construction, in  which a
         Common Table Expression with PARTITION ON may be used to find the first
         dataset for each data ID and dataset type in an ordered collection
@@ -169,12 +174,6 @@ class QueryBuilder(ABC):
 
         This modifies the builder in place, and should be called immediately
         after `analyze_projection`.
-
-        Parameters
-        ----------
-        find_first_dataset : `str` or ``...``
-            Name of the dataset type that needs a find-first search.  ``...``
-            is used to indicate the dataset types in a union dataset query.
         """
         raise NotImplementedError()
 
@@ -284,6 +283,47 @@ class QueryBuilder(ABC):
         """
         raise NotImplementedError()
 
+    def _needs_collection_key_field(
+        self, dataset_search: ResolvedDatasetSearch, fields_for_dataset: set[str]
+    ) -> bool:
+        """Return `True` if the ``collection_key`` dataset field is needed to
+        provide uniqueness for rows.
+        """
+        # For a dataset search, we sometimes want just one row for each dataset
+        # and sometimes we need multiple rows, one for each collection that
+        # the dataset was found in.
+        #
+        # We need multiple rows if any of the following are true:
+        # - This is a find-first dataset search.  The rows will be ranked using
+        # a window function to determine the first collection containing a
+        # matching dataset, so we need a row for each collection to feed into
+        # the window.
+        # - The user requested dataset fields that differ depending on which
+        # collection the dataset was found in, so we need a row for each
+        # collection to get all the possible values for the dataset fields.
+        #
+        # To ensure that we keep the necessary rows after DISTINCT or GROUP BY
+        # is applied, we add a "collection_key" field that is unique for each
+        # collection.
+
+        # If there is only one collection, there will only be one row per
+        # dataset, so we don't need to disambiguate.
+        if len(dataset_search.collection_records) > 1:
+            if (
+                # We need a row for each collection, which will later
+                # be filtered down using the window function.
+                self.find_first_dataset is not None
+                # We might have multiple calibration collections containing the
+                # same dataset with the same timespan.
+                or "timespan" in fields_for_dataset
+                # The user specifically asked for a row for each collection we
+                # found the dataset in.
+                or "collection" in fields_for_dataset
+            ):
+                return True
+
+        return False
+
 
 class SingleSelectQueryBuilder(QueryBuilder):
     """An implementation of `QueryBuilder` for queries that are structured as
@@ -304,6 +344,9 @@ class SingleSelectQueryBuilder(QueryBuilder):
         or DISTINCT may be performed.
     final_columns : `.queries.tree.ColumnSet`
         Columns to include in the final query.
+    find_first_dataset : `str` or None
+        Name of the dataset type that needs a find-first search.
+        `None` means find-first is not used.
     """
 
     def __init__(
@@ -312,11 +355,13 @@ class SingleSelectQueryBuilder(QueryBuilder):
         *,
         projection_columns: qt.ColumnSet,
         final_columns: qt.ColumnSet,
+        find_first_dataset: str | None,
     ) -> None:
         super().__init__(
             tree_analysis=tree_analysis,
             projection_columns=projection_columns,
             final_columns=final_columns,
+            find_first_dataset=find_first_dataset,
         )
         assert not tree_analysis.union_datasets, "UnionQueryPlan should be used instead."
         self._select_builder = tree_analysis.initial_select_builder
@@ -359,13 +404,16 @@ class SingleSelectQueryBuilder(QueryBuilder):
         # or GROUP BY columns.
         for dataset_type, fields_for_dataset in self.projection_columns.dataset_fields.items():
             assert dataset_type is not qt.ANY_DATASET, "Union dataset in non-dataset-union query."
-            if len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+            if self._needs_collection_key_field(
+                self.joins_analysis.datasets[dataset_type], fields_for_dataset
+            ):
                 fields_for_dataset.add("collection_key")
 
-    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
+    def analyze_find_first(self) -> None:
         # Docstring inherited.
-        assert find_first_dataset is not qt.ANY_DATASET, "No dataset union in this query"
-        self.find_first = QueryFindFirstAnalysis(self.joins_analysis.datasets[find_first_dataset])
+        assert self.find_first_dataset is not qt.ANY_DATASET, "No dataset union in this query"
+        assert self.find_first_dataset is not None
+        self.find_first = QueryFindFirstAnalysis(self.joins_analysis.datasets[self.find_first_dataset])
         # If we're doing a find-first search and there's a calibration
         # collection in play, we need to make sure the rows coming out of
         # the base query have only one timespan for each data ID +
@@ -502,6 +550,10 @@ class UnionQueryBuilder(QueryBuilder):
         Columns to include in the final query.
     union_dataset_dimensions : `DimensionGroup`
         Dimensions of the dataset types that comprise the union.
+    find_first_dataset : `str` or ``...`` or None
+        Name of the dataset type that needs a find-first search.  ``...``
+        is used to indicate the dataset types in a union dataset query.
+        `None` means find-first is not used.
 
     Notes
     -----
@@ -522,11 +574,13 @@ class UnionQueryBuilder(QueryBuilder):
         projection_columns: qt.ColumnSet,
         final_columns: qt.ColumnSet,
         union_dataset_dimensions: DimensionGroup,
+        find_first_dataset: str | qt.AnyDatasetType | None,
     ):
         super().__init__(
             tree_analysis=tree_analysis,
             projection_columns=projection_columns,
             final_columns=final_columns,
+            find_first_dataset=find_first_dataset,
         )
         self._initial_select_builder: SqlSelectBuilder | None = tree_analysis.initial_select_builder
         self.union_dataset_dimensions = union_dataset_dimensions
@@ -580,15 +634,18 @@ class UnionQueryBuilder(QueryBuilder):
                     # If there is more than one collection for one union term,
                     # we need to add collection_key to all of them to keep the
                     # SELECT columns uniform.
-                    if len(union_term.datasets.collection_records) > 1:
+                    if self._needs_collection_key_field(union_term.datasets, fields_for_dataset):
                         fields_for_dataset.add("collection_key")
                         break
-            elif len(self.joins_analysis.datasets[dataset_type].collection_records) > 1:
+            elif self._needs_collection_key_field(
+                self.joins_analysis.datasets[dataset_type], fields_for_dataset
+            ):
                 fields_for_dataset.add("collection_key")
 
-    def analyze_find_first(self, find_first_dataset: str | qt.AnyDatasetType) -> None:
+    def analyze_find_first(self) -> None:
         # Docstring inherited.
-        if find_first_dataset is qt.ANY_DATASET:
+        assert self.find_first_dataset is not None
+        if self.find_first_dataset is qt.ANY_DATASET:
             for union_term in self.union_terms:
                 union_term.find_first = QueryFindFirstAnalysis(union_term.datasets)
                 # If we're doing a find-first search and there's a calibration
@@ -609,7 +666,7 @@ class UnionQueryBuilder(QueryBuilder):
             # like it'd be useful, so it's better not to have to maintain that
             # logic branch.
             raise NotImplementedError(
-                f"Additional dataset search {find_first_dataset!r} can only be joined into a "
+                f"Additional dataset search {self.find_first_dataset!r} can only be joined into a "
                 "union dataset query as a constraint in data IDs, not as a find-first result."
             )
 
