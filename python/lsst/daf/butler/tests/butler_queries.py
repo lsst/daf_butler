@@ -698,7 +698,6 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler = self.make_butler("base.yaml", "spatial.yaml")
         butler.registry.defaults = RegistryDefaults(instrument="Cam1", skymap="SkyMap1")
         with butler.query() as query:
-
             data_ids = list(query.data_ids(["visit", "detector", "patch"]).where(visit=1, detector=1))
             self.assertCountEqual(
                 [(data_id["tract"], data_id["patch"]) for data_id in data_ids], [(0, 0), (0, 2)]
@@ -941,7 +940,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 list(query.where("patch.region OVERLAPS POINT(0.335, -91)").data_ids(["patch"]))
 
             # Negative ra values are allowed.
-            _check_visit_id(query.where(f"POINT({ra-360}, {dec}) OVERLAPS visit_detector_region.region"))
+            _check_visit_id(query.where(f"POINT({ra - 360}, {dec}) OVERLAPS visit_detector_region.region"))
 
             # Substitute ra and dec values via bind instead of literals in the
             # string.
@@ -1298,15 +1297,15 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # Materialize a spatial-join, which should prevent the creation
             # of a spatial join in the downstream query.
             self.check_detector_records(
-                query.join_dimensions(["visit", "detector", "tract"]).materialize()
+                query.join_dimensions(["visit", "detector", "tract"])
+                .materialize()
                 # The patch constraint here should do nothing, because only the
                 # spatial join from the materialization should exist.  The
                 # behavior is surprising no matter what here, and the
                 # recommendation to users is to add an explicit overlap
                 # expression any time it's not obvious what the default is.
-                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2, patch=5).dimension_records(
-                    "detector"
-                ),
+                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2, patch=5)
+                .dimension_records("detector"),
                 [1, 2],
                 has_postprocessing=True,
             )

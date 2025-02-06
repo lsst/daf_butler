@@ -282,9 +282,9 @@ class _DataCoordinateRowConverter:
         ctx: ResultPageConverterContext,
         include_dimension_records: bool,
     ):
-        assert (
-            list(dimensions.data_coordinate_keys) == ctx.column_order.dimension_key_names
-        ), "Dimension keys in result row should be in same order as those specified by the result spec"
+        assert list(dimensions.data_coordinate_keys) == ctx.column_order.dimension_key_names, (
+            "Dimension keys in result row should be in same order as those specified by the result spec"
+        )
 
         self._dimensions = dimensions
         self._column_order = ctx.column_order

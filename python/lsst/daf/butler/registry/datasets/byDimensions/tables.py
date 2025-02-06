@@ -635,9 +635,9 @@ class DynamicTables:
         table : `sqlalchemy.Table`
             SQLAlchemy table object.
         """
-        assert (
-            self.calibs_name is not None
-        ), "Dataset type should be checked to be calibration by calling code."
+        assert self.calibs_name is not None, (
+            "Dataset type should be checked to be calibration by calling code."
+        )
         table = cache.get(self.calibs_name)
         if table is not None:
             return table

@@ -36,6 +36,7 @@ We've opted for the rather more obscure "ddl" as the name of this module
 instead of "schema" because the latter is too overloaded; in most SQL
 databases, a "schema" is also another term for a namespace.
 """
+
 from __future__ import annotations
 
 __all__ = (

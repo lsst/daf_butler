@@ -459,7 +459,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             )
             with self._db.query(data_id_sql) as sql_result:
                 data_id_row = sql_result.mappings().fetchone()
-            assert data_id_row is not None, "Data ID should be present if dataset is." ""
+            assert data_id_row is not None, "Data ID should be present if dataset is."
             data_id = DataCoordinate.from_required_values(
                 record.dataset_type.dimensions,
                 tuple(data_id_row[dimension] for dimension in record.dataset_type.dimensions.required),
@@ -562,9 +562,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         dataset_type, dataset_type_id = self._cache.get(name)
         if dataset_type is not None:
             tables = self._cache.get_by_dimensions(dataset_type.dimensions)
-            assert (
-                dataset_type_id is not None and tables is not None
-            ), "Dataset type cache population is incomplete."
+            assert dataset_type_id is not None and tables is not None, (
+                "Dataset type cache population is incomplete."
+            )
             return _DatasetRecordStorage(
                 dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
             )
@@ -577,9 +577,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 dataset_type, dataset_type_id = self._cache.get(name)
             if dataset_type is not None:
                 tables = self._cache.get_by_dimensions(dataset_type.dimensions)
-                assert (
-                    dataset_type_id is not None and tables is not None
-                ), "Dataset type cache population is incomplete."
+                assert dataset_type_id is not None and tables is not None, (
+                    "Dataset type cache population is incomplete."
+                )
                 return _DatasetRecordStorage(
                     dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
                 )
@@ -1582,8 +1582,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         sql_projection.distinct = (
             # If there are multiple collections, this subquery might have
             # non-unique rows.
-            len(collections) > 1
-            and not fields
+            len(collections) > 1 and not fields
         )
         return sql_projection
 

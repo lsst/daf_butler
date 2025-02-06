@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Module containing classes used with deferring dataset loading."""
+
 from __future__ import annotations
 
 __all__ = ("DeferredDatasetHandle",)

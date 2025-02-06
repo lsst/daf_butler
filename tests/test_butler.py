@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Tests for Butler."""
+
 from __future__ import annotations
 
 import json

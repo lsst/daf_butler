@@ -85,9 +85,9 @@ def convert_expression_string_to_predicate(
         return Predicate.from_bool(True)
     converter = _ConversionVisitor(context, universe)
     predicate = tree.visit(converter)
-    assert isinstance(
-        predicate, Predicate
-    ), "The grammar should guarantee that we get a predicate back at the top level."
+    assert isinstance(predicate, Predicate), (
+        "The grammar should guarantee that we get a predicate back at the top level."
+    )
 
     return predicate
 
@@ -289,7 +289,7 @@ def _make_literal(value: LiteralValue) -> _ColExpr:
 
 
 def _to_timespan_bound(value: _VisitorResult, node: Node) -> astropy.time.Time | None:
-    match (value):
+    match value:
         case _ColExpr(value=expr) if expr.expression_type == "datetime":
             return expr.value
         case _Null():

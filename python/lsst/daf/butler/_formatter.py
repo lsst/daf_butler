@@ -742,7 +742,6 @@ class FormatterV2:
                         self.name(),
                     ),
                 ):
-
                     if self.can_read_from_local_file:
                         result = self.read_from_local_file(
                             local_uri.ospath, component=component, expected_size=expected_size

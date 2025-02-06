@@ -689,7 +689,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         table = self._tables.collection_chain
 
         func: sqlalchemy.Function
-        match (begin_or_end):
+        match begin_or_end:
             case "begin":
                 func = sqlalchemy.func.min(table.c.position)
             case "end":

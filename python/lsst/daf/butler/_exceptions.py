@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Specialized Butler exceptions."""
+
 __all__ = (
     "ButlerUserError",
     "CalibrationLookupError",
@@ -228,9 +229,9 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     UnknownButlerUserError,
 )
 _USER_ERROR_MAPPING = {e.error_type: e for e in _USER_ERROR_TYPES}
-assert len(_USER_ERROR_MAPPING) == len(
-    _USER_ERROR_TYPES
-), "Subclasses of ButlerUserError must have unique 'error_type' property"
+assert len(_USER_ERROR_MAPPING) == len(_USER_ERROR_TYPES), (
+    "Subclasses of ButlerUserError must have unique 'error_type' property"
+)
 
 
 def create_butler_user_error(error_type: str, message: str) -> ButlerUserError:

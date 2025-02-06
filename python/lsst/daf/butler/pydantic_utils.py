@@ -186,9 +186,9 @@ class DeferredValidation(Generic[_T]):
     def __init_subclass__(cls) -> None:
         # We override __init_subclass__ to grab the type argument to the
         # DeferredValidation base class, since that's the wrapped type.
-        assert (
-            cls.__base__ is DeferredValidation
-        ), "Indirect subclasses of DeferredValidation are not allowed."
+        assert cls.__base__ is DeferredValidation, (
+            "Indirect subclasses of DeferredValidation are not allowed."
+        )
         try:
             # This uses some typing internals that are not as stable as the
             # rest of Python, so it's the messiest aspect of this class, but

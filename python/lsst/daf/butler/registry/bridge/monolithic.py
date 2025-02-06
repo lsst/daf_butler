@@ -215,9 +215,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         if records_table is None:
             raise ValueError("This implementation requires a records table.")
 
-        assert isinstance(
-            records_table, ByNameOpaqueTableStorage
-        ), f"Records table must support hidden attributes. Got {type(records_table)}."
+        assert isinstance(records_table, ByNameOpaqueTableStorage), (
+            f"Records table must support hidden attributes. Got {type(records_table)}."
+        )
 
         if record_class is None:
             raise ValueError("Record class must be provided if records table is given.")

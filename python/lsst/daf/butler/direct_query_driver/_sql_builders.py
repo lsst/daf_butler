@@ -688,7 +688,6 @@ def make_table_spec(
 
 
 def _make_table_indices(dimensions: DimensionGroup) -> list[ddl.IndexSpec]:
-
     index_columns: list[SortedSequenceSet] = []
     for dimension in dimensions.required:
         minimal_group = dimensions.universe[dimension].minimal_group.required

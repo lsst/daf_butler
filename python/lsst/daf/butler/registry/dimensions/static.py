@@ -1100,9 +1100,9 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 # out (generally this will require a dataset using that skypix
                 # dimension to be joined in, unless this is the common skypix
                 # system).
-                assert (
-                    element.name in self.dimensions
-                ), "QueryTree guarantees dimensions are expanded when constraints are added."
+                assert element.name in self.dimensions, (
+                    "QueryTree guarantees dimensions are expanded when constraints are added."
+                )
                 skypix = element
             case _:
                 raise NotImplementedError(

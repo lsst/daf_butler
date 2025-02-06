@@ -185,7 +185,6 @@ class ParquetFormatter(FormatterV2):
         return arrow_table
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
-
         if isinstance(in_memory_dataset, pa.Schema):
             pq.write_metadata(in_memory_dataset, uri.ospath)
             return

@@ -101,8 +101,8 @@ class DatasetTypeConfig(pydantic.BaseModel):
     """Value for the ``obs_collection`` column, if specified it overrides
     global value in `ObsCoreConfig`."""
 
-    extra_columns: None | (
-        dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig]
+    extra_columns: (
+        None | (dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig])
     ) = None
     """Description for additional columns, optional.
 
@@ -152,8 +152,8 @@ class ObsCoreConfig(pydantic.BaseModel):
     """Mapping of instrument name to facility name. Takes precedence over
     the ``facility_name``."""
 
-    extra_columns: None | (
-        dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig]
+    extra_columns: (
+        None | (dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig])
     ) = None
     """Description for additional columns, optional.
 

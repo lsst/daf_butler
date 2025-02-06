@@ -199,10 +199,12 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
                     allow_duplicate_overlaps=input.allow_duplicate_overlaps,
                 )
             elif input.type == "upload":
-                driver.upload_data_coordinates(
-                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
-                    [tuple(r) for r in input.rows],
-                    key=input.key,
-                ),
+                (
+                    driver.upload_data_coordinates(
+                        DimensionGroup.from_simple(input.dimensions, butler.dimensions),
+                        [tuple(r) for r in input.rows],
+                        key=input.key,
+                    ),
+                )
 
         yield _QueryContext(driver=driver, tree=tree)
