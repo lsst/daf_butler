@@ -34,6 +34,7 @@ from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation, sql
 from lsst.sphgeom import Region
 

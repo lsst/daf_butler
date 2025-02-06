@@ -59,9 +59,10 @@ from typing import TYPE_CHECKING, Any
 
 import astropy.time
 import sqlalchemy
+from sqlalchemy.dialects.postgresql import UUID
+
 from lsst.sphgeom import Region
 from lsst.utils.iteration import ensure_iterable
-from sqlalchemy.dialects.postgresql import UUID
 
 from . import time_utils
 from ._config import Config

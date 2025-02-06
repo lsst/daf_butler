@@ -40,6 +40,7 @@ from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
+
     from lsst.resources import ResourcePathExpression
 
 

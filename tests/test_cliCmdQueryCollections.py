@@ -31,6 +31,8 @@ import os
 import unittest
 
 from astropy.table import Table
+from numpy import array
+
 from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
@@ -38,7 +40,6 @@ from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.script import queryCollections
 from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
-from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

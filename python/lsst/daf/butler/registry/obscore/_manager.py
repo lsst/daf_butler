@@ -37,6 +37,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
 from lsst.daf.relation import Join
 from lsst.sphgeom import Region

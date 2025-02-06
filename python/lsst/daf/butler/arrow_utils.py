@@ -45,6 +45,7 @@ from typing import Any, ClassVar, final
 
 import astropy.time
 import pyarrow as pa
+
 from lsst.sphgeom import Region
 
 from ._timespan import Timespan

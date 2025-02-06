@@ -33,8 +33,9 @@ import os
 from typing import Any, ClassVar
 
 import yaml
-from lsst.resources import ResourcePath
 from pydantic import TypeAdapter, ValidationError
+
+from lsst.resources import ResourcePath
 
 from ._config import Config
 from ._utilities.thread_safe_cache import ThreadSafeCache

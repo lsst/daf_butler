@@ -35,8 +35,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from random import Random
 
-import lsst.sphgeom
 import pydantic
+
+import lsst.sphgeom
 from lsst.daf.butler import (
     Config,
     DataCoordinate,

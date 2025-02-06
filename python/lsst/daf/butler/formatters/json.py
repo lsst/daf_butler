@@ -34,8 +34,9 @@ import dataclasses
 import json
 from typing import Any
 
-from lsst.resources import ResourcePath
 from pydantic_core import from_json
+
+from lsst.resources import ResourcePath
 
 from .typeless import TypelessFormatter
 

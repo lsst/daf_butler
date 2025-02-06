@@ -32,9 +32,10 @@ __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
+
 import lsst.sphgeom
 from lsst.utils.classes import immutable
-from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic

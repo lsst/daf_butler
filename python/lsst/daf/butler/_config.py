@@ -44,9 +44,10 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, ClassVar, cast
 
 import yaml
+from yaml.representer import Representer
+
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
-from yaml.representer import Representer
 
 yaml.add_representer(defaultdict, Representer.represent_dict)
 

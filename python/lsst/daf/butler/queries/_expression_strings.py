@@ -31,6 +31,7 @@ from collections.abc import Set
 from typing import Literal, NamedTuple, TypeAlias
 
 import astropy.time
+
 import lsst.sphgeom
 
 from .._exceptions import InvalidQueryError

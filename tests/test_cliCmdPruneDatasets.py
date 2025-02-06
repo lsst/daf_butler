@@ -31,10 +31,11 @@ import unittest
 from itertools import chain
 from unittest.mock import patch
 
+from astropy.table import Table
+
 # Tests require the SqlRegistry
 import lsst.daf.butler.registry.sql_registry
 import lsst.daf.butler.script
-from astropy.table import Table
 from lsst.daf.butler import CollectionInfo, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (

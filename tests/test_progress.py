@@ -31,6 +31,7 @@ import unittest
 from contextlib import contextmanager
 
 import click
+
 from lsst.daf.butler.cli.progress import ClickProgressHandler
 from lsst.daf.butler.cli.utils import clickResultMsg
 from lsst.daf.butler.progress import Progress, ProgressHandler

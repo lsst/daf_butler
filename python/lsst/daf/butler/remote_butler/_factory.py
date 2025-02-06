@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("RemoteButlerFactory",)
 
 import httpx
+
 from lsst.daf.butler.repo_relocation import replaceRoot
 
 from .._butler_config import ButlerConfig

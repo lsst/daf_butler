@@ -34,6 +34,7 @@ import dataclasses
 from typing import Any
 
 import yaml
+
 from lsst.resources import ResourcePath
 
 from .typeless import TypelessFormatter

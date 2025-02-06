@@ -34,6 +34,7 @@ from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 import sqlalchemy
+
 from lsst.daf.relation import (
     BinaryOperationRelation,
     Calculation,

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
 import sqlalchemy
+
 from lsst.daf.relation import Relation, sql
 
 from .... import ddl

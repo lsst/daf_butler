@@ -38,6 +38,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import sqlalchemy
+
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
 from lsst.utils.iteration import ensure_iterable

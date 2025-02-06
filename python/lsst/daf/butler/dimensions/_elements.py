@@ -37,8 +37,9 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias, Union, cast
 
 import pydantic
-from lsst.utils.classes import cached_getter
 from pydantic_core import core_schema
+
+from lsst.utils.classes import cached_getter
 
 from .. import arrow_utils, column_spec, ddl, pydantic_utils
 from .._named import NamedValueAbstractSet, NamedValueSet

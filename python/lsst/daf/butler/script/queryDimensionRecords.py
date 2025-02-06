@@ -32,6 +32,7 @@ from operator import attrgetter
 from typing import Any
 
 from astropy.table import Table
+
 from lsst.sphgeom import Region
 
 from .._butler import Butler

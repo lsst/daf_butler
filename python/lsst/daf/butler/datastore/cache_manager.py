@@ -51,8 +51,9 @@ from collections.abc import ItemsView, Iterable, Iterator, KeysView, ValuesView
 from random import Random
 from typing import TYPE_CHECKING, Self
 
-from lsst.resources import ResourcePath
 from pydantic import BaseModel, PrivateAttr
+
+from lsst.resources import ResourcePath
 
 from .._config import Config, ConfigSubset
 from .._config_support import processLookupConfigs

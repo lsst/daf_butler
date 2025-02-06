@@ -47,6 +47,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 import pydantic
+
 from lsst.sphgeom import IntersectionRegion, Region
 
 from .._exceptions import DimensionNameError

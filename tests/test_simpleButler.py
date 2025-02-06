@@ -41,6 +41,7 @@ except ImportError:
     np = None
 
 import astropy.time
+
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,

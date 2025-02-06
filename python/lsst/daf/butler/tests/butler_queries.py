@@ -39,8 +39,9 @@ from uuid import UUID
 
 import astropy.coordinates
 import astropy.time
-from lsst.sphgeom import LonLat, Region
 from numpy import int64
+
+from lsst.sphgeom import LonLat, Region
 
 from .._butler import Butler
 from .._collection_type import CollectionType

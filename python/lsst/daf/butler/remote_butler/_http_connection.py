@@ -38,8 +38,9 @@ from typing import TypeVar
 from uuid import uuid4
 
 import httpx
-from lsst.daf.butler import __version__
 from pydantic import BaseModel, ValidationError
+
+from lsst.daf.butler import __version__
 
 from ._authentication import get_authentication_headers
 from ._errors import deserialize_butler_user_error

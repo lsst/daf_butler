@@ -5,9 +5,10 @@ import time
 import unittest
 
 import httpx
+from testcontainers.core.container import DockerContainer
+
 from lsst.daf.butler.remote_butler import RemoteButlerFactory
 from lsst.daf.butler.tests.utils import MetricTestRepo
-from testcontainers.core.container import DockerContainer
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

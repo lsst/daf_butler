@@ -47,6 +47,7 @@ from typing import Any
 
 import click
 import yaml
+
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name

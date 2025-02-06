@@ -31,8 +31,9 @@ __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from typing import TYPE_CHECKING
 
-from lsst.utils.db_auth import DbAuth, DbAuthNotFoundError
 from sqlalchemy.engine import url
+
+from lsst.utils.db_auth import DbAuth, DbAuthNotFoundError
 
 if TYPE_CHECKING:
     from ._config import RegistryConfig

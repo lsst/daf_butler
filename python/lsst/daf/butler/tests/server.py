@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app

@@ -33,6 +33,7 @@ from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo

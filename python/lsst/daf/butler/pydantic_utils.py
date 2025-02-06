@@ -39,8 +39,9 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeA
 
 import pydantic
 from astropy.time import Time
-from lsst.sphgeom import Region
 from pydantic_core import core_schema
+
+from lsst.sphgeom import Region
 
 from .time_utils import TimeConverter
 

@@ -34,6 +34,7 @@ from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 import pydantic
+
 from lsst.utils import doImportType
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef

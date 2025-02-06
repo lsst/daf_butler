@@ -30,6 +30,7 @@ __all__ = ("AstropyTableFormatter",)
 from typing import Any
 
 import astropy.table
+
 from lsst.daf.butler import FormatterV2
 from lsst.resources import ResourcePath
 

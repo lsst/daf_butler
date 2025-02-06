@@ -35,6 +35,7 @@ from typing import NamedTuple
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+
 from lsst.daf.butler import Butler, DataCoordinate, DimensionGroup
 from lsst.daf.butler.remote_butler.server_models import (
     DatasetRefResultModel,

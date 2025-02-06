@@ -36,8 +36,9 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 
 import pydantic
 from deprecated.sphinx import deprecated
-from lsst.utils.classes import cached_getter, immutable
 from pydantic_core import core_schema
+
+from lsst.utils.classes import cached_getter, immutable
 
 from .. import pydantic_utils
 from .._named import NamedValueAbstractSet, NamedValueSet

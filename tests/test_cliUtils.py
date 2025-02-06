@@ -31,6 +31,7 @@ import unittest
 from unittest.mock import MagicMock
 
 import click
+
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 from lsst.daf.butler.cli.utils import (
     LogCliRunner,

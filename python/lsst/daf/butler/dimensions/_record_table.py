@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, final, overload
 
 import pyarrow as pa
 import pyarrow.compute as pc
+
 from lsst.utils.iteration import chunk_iterable
 
 if TYPE_CHECKING:

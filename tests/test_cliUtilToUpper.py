@@ -30,6 +30,7 @@
 import unittest
 
 import click
+
 from lsst.daf.butler.cli.utils import LogCliRunner, to_upper
 
 

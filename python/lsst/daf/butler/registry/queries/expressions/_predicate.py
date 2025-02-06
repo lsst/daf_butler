@@ -37,6 +37,7 @@ from typing import Any, cast
 
 import astropy.time
 import astropy.utils.exceptions
+
 from lsst.daf.relation import (
     ColumnContainer,
     ColumnExpression,

@@ -30,6 +30,8 @@ import unittest
 
 import astropy.time
 import sqlalchemy
+from sqlalchemy.schema import Column
+
 from lsst.daf.butler import (
     ColumnTypeInfo,
     DataCoordinate,
@@ -44,7 +46,6 @@ from lsst.daf.butler.registry.queries.expressions.normalForm import NormalForm, 
 from lsst.daf.butler.registry.queries.expressions.parser import ParserYacc
 from lsst.daf.butler.timespan_database_representation import TimespanDatabaseRepresentation
 from lsst.daf.relation import ColumnContainer, ColumnExpression
-from sqlalchemy.schema import Column
 
 
 class FakeDatasetRecordStorageManager:

@@ -39,6 +39,7 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import pydantic
+
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._butler_config import ButlerConfig

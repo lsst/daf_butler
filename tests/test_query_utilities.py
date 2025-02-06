@@ -35,6 +35,7 @@ import unittest
 from collections.abc import Iterable, Set
 
 import astropy.time
+
 from lsst.daf.butler import DimensionUniverse, InvalidQueryError, Timespan
 from lsst.daf.butler.dimensions import DimensionElement, DimensionGroup
 from lsst.daf.butler.queries import tree as qt

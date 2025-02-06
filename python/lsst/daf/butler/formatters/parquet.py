@@ -58,6 +58,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.delegates.arrowtable import _checkArrowCompatibleType
 from lsst.resources import ResourcePath

@@ -47,6 +47,7 @@ from types import EllipsisType
 from typing import Any, Self
 
 from deprecated.sphinx import deprecated
+
 from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._dataset_ref import DatasetRef

@@ -60,6 +60,7 @@ from functools import partial
 from typing import Any
 
 import click
+
 from lsst.daf.butler import CollectionType
 
 from ..cliLog import CliLog

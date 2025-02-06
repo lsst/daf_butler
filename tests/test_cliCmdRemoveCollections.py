@@ -32,6 +32,8 @@ import unittest
 from collections.abc import Sequence
 
 from astropy.table import Table
+from numpy import array
+
 from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd._remove_collections import (
@@ -51,7 +53,6 @@ from lsst.daf.butler.tests.utils import (
     readTable,
     removeTestTempDir,
 )
-from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

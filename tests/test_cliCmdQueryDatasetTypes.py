@@ -30,12 +30,13 @@
 import unittest
 
 from astropy.table import Table as AstropyTable
+from numpy import array
+
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
-from numpy import array
 
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):

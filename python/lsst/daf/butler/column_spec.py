@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypeAlias, 
 import astropy.time
 import pyarrow as pa
 import pydantic
+
 from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl

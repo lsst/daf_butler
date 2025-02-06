@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
 import sqlalchemy
+
 from lsst.daf.relation import ColumnTag, Relation, Sort, UnaryOperation, UnaryOperationRelation, sql
 
 from ..._column_tags import is_timespan_column

@@ -49,10 +49,11 @@ from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
 
 from deprecated.sphinx import deprecated
+from sqlalchemy.exc import IntegrityError
+
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
-from sqlalchemy.exc import IntegrityError
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig

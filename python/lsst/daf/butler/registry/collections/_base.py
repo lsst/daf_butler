@@ -36,6 +36,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, Literal, NamedTuple, TypeVar, cast
 
 import sqlalchemy
+
 from lsst.utils.iteration import chunk_iterable
 
 from ..._collection_type import CollectionType

@@ -41,6 +41,7 @@ from collections import namedtuple
 from typing import Any, TypeAlias
 
 import sqlalchemy
+
 from lsst.utils.classes import immutable
 
 from .... import ddl

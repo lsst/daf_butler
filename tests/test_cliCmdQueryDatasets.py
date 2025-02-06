@@ -31,11 +31,12 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
+from numpy import array
+
 from lsst.daf.butler import CollectionType, InvalidQueryError, StorageClassFactory, script
 from lsst.daf.butler.tests import addDatasetType
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from lsst.resources import ResourcePath
-from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

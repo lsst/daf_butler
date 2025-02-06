@@ -41,6 +41,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, BinaryIO
 
 import yaml
+
 from lsst.resources import ResourceHandleProtocol
 
 from .._formatter import Formatter, FormatterV2

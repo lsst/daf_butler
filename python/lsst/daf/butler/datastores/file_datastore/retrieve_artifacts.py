@@ -36,6 +36,8 @@ import zipfile
 from collections.abc import Iterable
 from typing import ClassVar, Literal, Protocol, Self
 
+from pydantic import BaseModel
+
 from lsst.daf.butler import (
     DatasetIdFactory,
     DatasetRef,
@@ -44,7 +46,6 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel
 
 _LOG = logging.getLogger(__name__)
 

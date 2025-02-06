@@ -76,6 +76,7 @@ import click
 import click.exceptions
 import click.testing
 import yaml
+
 from lsst.utils.iteration import ensure_iterable
 
 from .._config import Config
@@ -83,6 +84,7 @@ from .cliLog import CliLog
 
 if TYPE_CHECKING:
     from astropy.table import Table
+
     from lsst.daf.butler import Dimension
 
 log = logging.getLogger(__name__)

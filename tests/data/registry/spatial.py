@@ -49,11 +49,13 @@ import os.path
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
-import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
 import numpy as np
 import yaml
 from astropy.time import Time
 from astropy.wcs import WCS
+from matplotlib import pyplot
+
+import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
 from lsst.sphgeom import (
     ConvexPolygon,
     HtmPixelization,
@@ -65,7 +67,6 @@ from lsst.sphgeom import (
     UnitVector3d,
     Vector3d,
 )
-from matplotlib import pyplot
 
 # Pixelization for which one pixel defines the overall area of interest.
 PARENT_PIX = Mq3cPixelization(6)

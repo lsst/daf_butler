@@ -47,6 +47,7 @@ from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import Any
 
 import astropy.time
+
 from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,

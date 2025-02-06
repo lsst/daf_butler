@@ -31,6 +31,8 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
+from numpy import array
+
 from lsst.daf.butler import Butler, StorageClassFactory
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
@@ -41,7 +43,6 @@ from lsst.daf.butler.tests.utils import (
     readTable,
     removeTestTempDir,
 )
-from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

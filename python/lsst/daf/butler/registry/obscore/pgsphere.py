@@ -33,9 +33,10 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.sphgeom import ConvexPolygon, LonLat, Region
 from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.types import UserDefinedType
+
+from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
 from ... import ddl
 from ._spatial import MissingDatabaseError, RegionTypeError, SpatialObsCorePlugin

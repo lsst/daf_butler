@@ -30,6 +30,7 @@
 import unittest
 
 from astropy.time import Time
+
 from lsst.daf.butler import ddl, time_utils
 
 

@@ -50,8 +50,9 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetProvenance, StorageClass, StorageClassDelegate
 from pydantic import BaseModel
+
+from lsst.daf.butler import DatasetProvenance, StorageClass, StorageClassDelegate
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Butler, Datastore, FormatterFactory

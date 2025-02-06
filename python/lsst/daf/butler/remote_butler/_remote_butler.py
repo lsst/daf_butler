@@ -37,6 +37,7 @@ from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from deprecated.sphinx import deprecated
+
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     ArtifactIndexInfo,
     ZipIndex,

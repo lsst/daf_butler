@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import sqlalchemy
+
 from lsst.daf.butler import (
     Butler,
     Config,
