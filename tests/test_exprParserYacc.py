@@ -30,6 +30,7 @@
 import unittest
 
 import astropy.time
+
 from lsst.daf.butler.registry.queries.expressions.parser import ParseError, ParserYacc, TreeVisitor, exprTree
 from lsst.daf.butler.registry.queries.expressions.parser.parserYacc import _parseTimeString
 

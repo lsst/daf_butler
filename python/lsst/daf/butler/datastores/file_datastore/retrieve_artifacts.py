@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips", "ZipIndex")
+__all__ = ("ZipIndex", "determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips")
 
 import logging
 import tempfile
@@ -35,6 +35,8 @@ import uuid
 import zipfile
 from collections.abc import Iterable
 from typing import ClassVar, Literal, Protocol, Self
+
+from pydantic import BaseModel
 
 from lsst.daf.butler import (
     DatasetIdFactory,
@@ -44,7 +46,6 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel
 
 _LOG = logging.getLogger(__name__)
 

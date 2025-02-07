@@ -27,8 +27,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "PrecisionLogFormatter",
     "CliLog",
+    "PrecisionLogFormatter",
 )
 
 import datetime

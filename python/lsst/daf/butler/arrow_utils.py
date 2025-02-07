@@ -28,15 +28,15 @@
 from __future__ import annotations
 
 __all__ = (
-    "ToArrow",
-    "RegionArrowType",
-    "RegionArrowScalar",
-    "TimespanArrowType",
-    "TimespanArrowScalar",
-    "DateTimeArrowType",
     "DateTimeArrowScalar",
-    "UUIDArrowType",
+    "DateTimeArrowType",
+    "RegionArrowScalar",
+    "RegionArrowType",
+    "TimespanArrowScalar",
+    "TimespanArrowType",
+    "ToArrow",
     "UUIDArrowScalar",
+    "UUIDArrowType",
 )
 
 import uuid
@@ -45,6 +45,7 @@ from typing import Any, ClassVar, final
 
 import astropy.time
 import pyarrow as pa
+
 from lsst.sphgeom import Region
 
 from ._timespan import Timespan

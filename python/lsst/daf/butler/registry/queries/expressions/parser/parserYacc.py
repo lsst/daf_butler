@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
+__all__ = ["ParseError", "ParserEOFError", "ParserYacc", "ParserYaccError"]
 
 import functools
 import re

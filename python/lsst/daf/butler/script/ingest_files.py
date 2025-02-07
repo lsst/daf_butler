@@ -33,6 +33,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from astropy.table import Table
+
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 

@@ -56,8 +56,9 @@ from typing import (
 )
 
 import pydantic
-from lsst.utils.classes import immutable
 from pydantic import StrictStr
+
+from lsst.utils.classes import immutable
 
 from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType

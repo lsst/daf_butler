@@ -38,6 +38,8 @@ from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from sqlalchemy import BigInteger, String
+
 from lsst.daf.butler import (
     Config,
     DatasetDatastoreRecords,
@@ -105,7 +107,6 @@ from lsst.utils.iteration import chunk_iterable
 # For VERBOSE logging usage.
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
-from sqlalchemy import BigInteger, String
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey

@@ -49,6 +49,7 @@ from logging import DEBUG, INFO, WARNING
 from typing import TYPE_CHECKING, Any
 
 import click
+
 from lsst.daf.butler.cli.butler import UncachedButlerCLI
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.opt import (

@@ -28,10 +28,10 @@
 from __future__ import annotations
 
 __all__ = (
-    "ResultSpecBase",
     "DataCoordinateResultSpec",
-    "DimensionRecordResultSpec",
     "DatasetRefResultSpec",
+    "DimensionRecordResultSpec",
+    "ResultSpecBase",
 )
 
 from abc import ABC, abstractmethod
@@ -237,8 +237,7 @@ class GeneralResultSpec(ResultSpecBase):
         if self.find_first:
             if len(self.dataset_fields) != 1:
                 raise InvalidQueryError(
-                    "General query with find_first=True cannot have results from multiple "
-                    "dataset searches."
+                    "General query with find_first=True cannot have results from multiple dataset searches."
                 )
             (dataset_type,) = self.dataset_fields.keys()
             return dataset_type

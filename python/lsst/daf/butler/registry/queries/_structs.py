@@ -34,6 +34,7 @@ from collections.abc import Iterable, Mapping, Set
 from typing import Any
 
 import astropy.time
+
 from lsst.daf.relation import ColumnExpression, ColumnTag, Predicate, SortTerm
 from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.classes import cached_getter, immutable

@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("interpret_identifier", "IdentifierContext")
+__all__ = ("IdentifierContext", "interpret_identifier")
 
 import itertools
 from collections.abc import Mapping, Set

@@ -69,9 +69,9 @@ class TestQueryRelationsTests(unittest.TestCase):
         # will be no overall results.
         data_file = os.path.normpath(os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
         cls.butler = create_populated_sqlite_registry(data_file)
-        assert (
-            cls.butler.dimensions.commonSkyPix.name == "htm7"
-        ), "If this changes, update the skypix levels below to have one below and one above."
+        assert cls.butler.dimensions.commonSkyPix.name == "htm7", (
+            "If this changes, update the skypix levels below to have one below and one above."
+        )
         cls.htm7 = 222340
         cls.htm11 = 56919188
         cls.instrument = "HSC"

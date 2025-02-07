@@ -32,9 +32,10 @@ __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
+
 import lsst.sphgeom
 from lsst.utils.classes import immutable
-from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
@@ -206,9 +207,7 @@ class SerializedDimensionRecord(BaseModel):
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples.
         _recItems = {
-            k: (
-                v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v))  # noqa: E721
-            )  # type: ignore
+            k: (v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v)))  # type: ignore
             for k, v in record.items()
         }
 

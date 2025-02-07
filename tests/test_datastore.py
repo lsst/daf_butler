@@ -39,8 +39,9 @@ import uuid
 from collections.abc import Callable, Iterator
 from typing import Any, cast
 
-import lsst.utils.tests
 import yaml
+
+import lsst.utils.tests
 from lsst.daf.butler import (
     Config,
     DataCoordinate,

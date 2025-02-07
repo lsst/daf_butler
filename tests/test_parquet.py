@@ -57,6 +57,7 @@ except ImportError:
 try:
     import boto3
     import botocore
+
     from lsst.resources.s3utils import clean_test_environment_for_s3
 
     try:

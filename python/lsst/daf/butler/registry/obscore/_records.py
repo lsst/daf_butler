@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import astropy.time
+
 from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
 from lsst.utils.introspection import find_outside_stacklevel, get_full_type_name
 

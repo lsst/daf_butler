@@ -29,13 +29,13 @@
 __all__ = (
     "collection_argument",
     "collections_argument",
+    "destination_argument",
     "dimensions_argument",
     "directory_argument",
     "element_argument",
     "glob_argument",
     "locations_argument",
     "repo_argument",
-    "destination_argument",
 )
 
 

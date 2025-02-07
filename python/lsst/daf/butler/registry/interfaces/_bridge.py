@@ -26,7 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge", "FakeDatasetRef", "DatasetIdRef")
+__all__ = ("DatasetIdRef", "DatastoreRegistryBridge", "DatastoreRegistryBridgeManager", "FakeDatasetRef")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable

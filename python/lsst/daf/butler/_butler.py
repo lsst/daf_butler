@@ -272,8 +272,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 "/path/to/repo",
                 run="u/alice/DM-50000/a",
                 collections=[
-                    "u/alice/DM-50000/a", "u/bob/DM-49998", "HSC/defaults"
-                ]
+                    "u/alice/DM-50000/a",
+                    "u/bob/DM-49998",
+                    "HSC/defaults",
+                ],
             )
 
         This butler will `put` new datasets to the run ``u/alice/DM-50000/a``.
@@ -1422,8 +1424,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             with butler.export("exports.yaml") as export:
                 # Export all flats, but none of the dimension element rows
                 # (i.e. data ID information) associated with them.
-                export.saveDatasets(butler.registry.queryDatasets("flat"),
-                                    elements=())
+                export.saveDatasets(
+                    butler.registry.queryDatasets("flat"), elements=()
+                )
                 # Export all datasets that start with "deepCoadd_" and all of
                 # their associated data ID information.
                 export.saveDatasets(butler.registry.queryDatasets("deepCoadd_*"))

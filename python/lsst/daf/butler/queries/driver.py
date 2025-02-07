@@ -28,12 +28,12 @@
 from __future__ import annotations
 
 __all__ = (
+    "DataCoordinateResultPage",
+    "DatasetRefResultPage",
+    "DimensionRecordResultPage",
+    "GeneralResultPage",
     "QueryDriver",
     "ResultPage",
-    "DataCoordinateResultPage",
-    "DimensionRecordResultPage",
-    "DatasetRefResultPage",
-    "GeneralResultPage",
 )
 
 import dataclasses

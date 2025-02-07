@@ -32,6 +32,7 @@ import unittest
 
 import numpy
 from astropy.table import Table
+
 from lsst.daf.butler import Butler, DatasetType
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 

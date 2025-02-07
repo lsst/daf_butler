@@ -28,8 +28,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "FormatterTest",
     "DoNothingFormatter",
+    "FormatterTest",
     "LenientYamlFormatter",
     "MetricsExampleFormatter",
     "MultipleExtensionsFormatter",
@@ -41,6 +41,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, BinaryIO
 
 import yaml
+
 from lsst.resources import ResourceHandleProtocol
 
 from .._formatter import Formatter, FormatterV2

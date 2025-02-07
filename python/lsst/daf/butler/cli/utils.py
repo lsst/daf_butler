@@ -27,31 +27,31 @@
 from __future__ import annotations
 
 __all__ = (
-    "astropyTablesToStr",
-    "printAstropyTables",
-    "textTypeStr",
+    "ButlerCommand",
     "LogCliRunner",
-    "clickResultMsg",
-    "command_test_env",
-    "addArgumentHelp",
-    "split_commas",
-    "split_kv",
-    "to_upper",
-    "unwrap",
-    "option_section",
-    "MWPath",
-    "MWOption",
     "MWArgument",
-    "OptionSection",
-    "MWOptionDecorator",
     "MWArgumentDecorator",
     "MWCommand",
-    "ButlerCommand",
-    "OptionGroup",
     "MWCtxObj",
-    "yaml_presets",
-    "sortAstropyTable",
+    "MWOption",
+    "MWOptionDecorator",
+    "MWPath",
+    "OptionGroup",
+    "OptionSection",
+    "addArgumentHelp",
+    "astropyTablesToStr",
     "catch_and_exit",
+    "clickResultMsg",
+    "command_test_env",
+    "option_section",
+    "printAstropyTables",
+    "sortAstropyTable",
+    "split_commas",
+    "split_kv",
+    "textTypeStr",
+    "to_upper",
+    "unwrap",
+    "yaml_presets",
 )
 
 
@@ -76,6 +76,7 @@ import click
 import click.exceptions
 import click.testing
 import yaml
+
 from lsst.utils.iteration import ensure_iterable
 
 from .._config import Config
@@ -83,6 +84,7 @@ from .cliLog import CliLog
 
 if TYPE_CHECKING:
     from astropy.table import Table
+
     from lsst.daf.butler import Dimension
 
 log = logging.getLogger(__name__)

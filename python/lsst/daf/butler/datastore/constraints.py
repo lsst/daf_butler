@@ -31,7 +31,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
+__all__ = ("Constraints", "ConstraintsConfig", "ConstraintsValidationError")
 
 import logging
 from typing import TYPE_CHECKING

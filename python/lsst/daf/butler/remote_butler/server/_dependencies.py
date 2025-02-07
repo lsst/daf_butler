@@ -28,6 +28,7 @@
 from typing import Annotated
 
 from fastapi import Depends
+
 from lsst.daf.butler import LabeledButlerFactory
 
 from ._factory import Factory

@@ -27,7 +27,6 @@
 
 """Unit tests for daf_butler CLI remove-runs subcommand."""
 
-
 import os
 import unittest
 

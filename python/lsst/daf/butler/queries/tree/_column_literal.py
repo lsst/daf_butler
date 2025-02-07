@@ -44,6 +44,7 @@ from typing import Literal, TypeAlias, Union, final
 import astropy.coordinates
 import astropy.time
 import erfa
+
 import lsst.sphgeom
 
 from ..._timespan import Timespan

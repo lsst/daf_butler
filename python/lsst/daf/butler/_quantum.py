@@ -27,13 +27,14 @@
 
 from __future__ import annotations
 
-__all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
+__all__ = ("DimensionRecordsAccumulator", "Quantum", "SerializedQuantum")
 
 import sys
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 import pydantic
+
 from lsst.utils import doImportType
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef

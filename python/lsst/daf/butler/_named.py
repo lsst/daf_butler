@@ -27,13 +27,13 @@
 from __future__ import annotations
 
 __all__ = (
+    "NameLookupMapping",
+    "NameMappingSetView",
     "NamedKeyDict",
     "NamedKeyMapping",
     "NamedValueAbstractSet",
     "NamedValueMutableSet",
     "NamedValueSet",
-    "NameLookupMapping",
-    "NameMappingSetView",
 )
 
 import contextlib

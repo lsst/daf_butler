@@ -29,8 +29,8 @@ from __future__ import annotations
 
 __all__ = (
     "DataCoordinateIterable",
-    "DataCoordinateSet",
     "DataCoordinateSequence",
+    "DataCoordinateSet",
 )
 
 from abc import abstractmethod

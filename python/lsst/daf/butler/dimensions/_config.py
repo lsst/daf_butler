@@ -34,6 +34,7 @@ from collections.abc import Mapping, Sequence, Set
 from typing import Any, ClassVar, Literal, Union, final
 
 import pydantic
+
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.sphgeom import PixelizationABC
 from lsst.utils.doImport import doImportType

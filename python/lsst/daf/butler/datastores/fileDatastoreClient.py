@@ -1,8 +1,10 @@
-__all__ = ("get_dataset_as_python_object", "FileDatastoreGetPayload")
+__all__ = ("FileDatastoreGetPayload", "get_dataset_as_python_object")
 
 from typing import Any, Literal
 
 import pydantic
+from pydantic import AnyHttpUrl
+
 from lsst.daf.butler import DatasetRef, Location
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -15,7 +17,6 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     generate_datastore_get_information,
     get_dataset_as_python_object_from_get_info,
 )
-from pydantic import AnyHttpUrl
 
 
 class FileDatastoreGetPayloadFileInfo(pydantic.BaseModel):

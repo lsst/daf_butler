@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import sqlalchemy
+
 from lsst.daf.butler import ddl
 from lsst.utils.iteration import ensure_iterable
 

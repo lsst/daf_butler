@@ -42,6 +42,7 @@ from typing import Any
 
 import astropy.time
 import sqlalchemy
+
 from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
 from ..._timespan import Timespan

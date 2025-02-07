@@ -31,7 +31,7 @@
 
 from __future__ import annotations
 
-__all__ = ["OpaqueTableStorageManager", "OpaqueTableStorage"]
+__all__ = ["OpaqueTableStorage", "OpaqueTableStorageManager"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping

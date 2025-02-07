@@ -28,13 +28,13 @@
 from __future__ import annotations
 
 __all__ = (
-    "Formatter",
-    "FormatterV2",
-    "FormatterV1inV2",
-    "FormatterFactory",
-    "FormatterParameter",
-    "FormatterNotImplementedError",
     "FileIntegrityError",
+    "Formatter",
+    "FormatterFactory",
+    "FormatterNotImplementedError",
+    "FormatterParameter",
+    "FormatterV1inV2",
+    "FormatterV2",
 )
 
 import contextlib
@@ -742,7 +742,6 @@ class FormatterV2:
                         self.name(),
                     ),
                 ):
-
                     if self.can_read_from_local_file:
                         result = self.read_from_local_file(
                             local_uri.ospath, component=component, expected_size=expected_size

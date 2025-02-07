@@ -31,6 +31,7 @@ import unittest
 from unittest.mock import MagicMock
 
 import click
+
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 from lsst.daf.butler.cli.utils import (
     LogCliRunner,
@@ -183,7 +184,7 @@ class MWOptionTest(unittest.TestCase):
             result = self.runner.invoke(cmd, ["--help"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             expectedOutput = f"""Options:
-  --things TEXT{' ...' if numberOfArgs != 1 else ''}"""
+  --things TEXT{" ..." if numberOfArgs != 1 else ""}"""
             self.assertIn(expectedOutput, result.output)
 
 

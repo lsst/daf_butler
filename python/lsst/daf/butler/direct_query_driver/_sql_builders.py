@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SqlJoinsBuilder", "SqlSelectBuilder", "SqlColumns", "make_table_spec")
+__all__ = ("SqlColumns", "SqlJoinsBuilder", "SqlSelectBuilder", "make_table_spec")
 
 import dataclasses
 import itertools
@@ -688,7 +688,6 @@ def make_table_spec(
 
 
 def _make_table_indices(dimensions: DimensionGroup) -> list[ddl.IndexSpec]:
-
     index_columns: list[SortedSequenceSet] = []
     for dimension in dimensions.required:
         minimal_group = dimensions.universe[dimension].minimal_group.required

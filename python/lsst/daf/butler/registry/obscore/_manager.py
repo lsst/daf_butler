@@ -37,6 +37,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
 from lsst.daf.relation import Join
 from lsst.sphgeom import Region
@@ -173,9 +174,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.tagged_collection: str | None = None
         self.run_patterns: list[re.Pattern] = []
         if config.collection_type is ConfigCollectionType.TAGGED:
-            assert (
-                config.collections is not None and len(config.collections) == 1
-            ), "Exactly one collection name required for tagged type."
+            assert config.collections is not None and len(config.collections) == 1, (
+                "Exactly one collection name required for tagged type."
+            )
             self.tagged_collection = config.collections[0]
         elif config.collection_type is ConfigCollectionType.RUN:
             if config.collections:

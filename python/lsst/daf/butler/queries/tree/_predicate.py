@@ -28,11 +28,11 @@
 from __future__ import annotations
 
 __all__ = (
+    "ComparisonOperator",
+    "LogicalNotOperand",
     "Predicate",
     "PredicateLeaf",
-    "LogicalNotOperand",
     "PredicateOperands",
-    "ComparisonOperator",
 )
 
 import itertools

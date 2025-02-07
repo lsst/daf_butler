@@ -38,10 +38,11 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
-    import lsst.daf.butler.remote_butler._query_results
-    import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
+
+    import lsst.daf.butler.remote_butler._query_results
+    import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app

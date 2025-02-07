@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Tests for Butler."""
+
 from __future__ import annotations
 
 import json
@@ -47,6 +48,7 @@ from typing import TYPE_CHECKING, Any, cast
 try:
     import boto3
     import botocore
+
     from lsst.resources.s3utils import clean_test_environment_for_s3
 
     try:
@@ -67,6 +69,7 @@ except ImportError:
     create_test_server = None
 
 import astropy.time
+
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,

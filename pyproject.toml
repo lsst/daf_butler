@@ -131,6 +131,7 @@ target-version = ["py311"]
 [tool.isort]
 profile = "black"
 line_length = 110
+known_first_party = ["lsst"]
 
 [tool.lsst_versions]
 write_to = "python/lsst/daf/butler/version.py"
@@ -194,22 +195,32 @@ select = [
     "W",  # pycodestyle
     "D",  # pydocstyle
     "UP",  # pyupgrade
+    "I",  # isort
+    "RUF022",  # sort __all__
 ]
 # Commented out to suppress "unused noqa" in jenkins which has older ruff not
 # generating E721.
-#extend-select = [
-#    "RUF100", # Warn about unused noqa
-#]
+extend-select = [
+    "RUF100", # Warn about unused noqa
+]
 
 [tool.ruff.lint.per-file-ignores]
 # parserYacc docstrings can not be fixed. Docstrings are used to define grammar.
 "python/lsst/daf/butler/registry/queries/expressions/parser/parserYacc.py" = ["D401", "D403"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lsst"]
 
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 79
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+[tool.ruff.format]
+docstring-code-format = true
+# Formatter does not know about indenting.
+docstring-code-line-length = 69
 
 [tool.numpydoc_validation]
 checks = [

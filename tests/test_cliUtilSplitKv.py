@@ -32,6 +32,7 @@ from functools import partial
 from unittest.mock import MagicMock
 
 import click
+
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, split_kv
 
 

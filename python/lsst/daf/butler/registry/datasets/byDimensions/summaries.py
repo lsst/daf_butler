@@ -36,6 +36,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Generic, TypeVar
 
 import sqlalchemy
+
 from lsst.utils.iteration import chunk_iterable
 
 from ...._collection_type import CollectionType

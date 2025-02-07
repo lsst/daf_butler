@@ -31,10 +31,11 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
+from numpy import array
+
 from lsst.daf.butler import Butler, DatasetType, script
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, removeTestTempDir
-from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

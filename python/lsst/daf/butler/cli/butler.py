@@ -27,8 +27,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "LoaderCLI",
     "ButlerCLI",
+    "LoaderCLI",
     "cli",
     "main",
 )
@@ -47,6 +47,7 @@ from typing import Any
 
 import click
 import yaml
+
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name

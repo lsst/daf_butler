@@ -35,6 +35,7 @@ from contextlib import contextmanager
 
 import astropy.time
 import sqlalchemy
+
 from lsst.daf.butler import Butler, ButlerConfig, StorageClassFactory, Timespan, ddl
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.direct_butler import DirectButler

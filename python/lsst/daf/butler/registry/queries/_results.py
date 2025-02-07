@@ -28,10 +28,10 @@ from __future__ import annotations
 
 __all__ = (
     "ChainedDatasetQueryResults",
+    "DataCoordinateQueryResults",
     "DatabaseDataCoordinateQueryResults",
     "DatabaseDimensionRecordQueryResults",
     "DatabaseParentDatasetQueryResults",
-    "DataCoordinateQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",
@@ -47,6 +47,7 @@ from types import EllipsisType
 from typing import Any, Self
 
 from deprecated.sphinx import deprecated
+
 from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._dataset_ref import DatasetRef

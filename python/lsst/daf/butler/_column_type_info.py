@@ -36,6 +36,7 @@ from typing import cast
 
 import astropy.time
 import sqlalchemy
+
 from lsst.daf.relation import ColumnTag, sql
 
 from . import ddl

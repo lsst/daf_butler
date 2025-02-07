@@ -40,6 +40,7 @@ except ImportError:
     erfa = None
 
 import pydantic
+
 from lsst.daf.butler import Timespan
 from lsst.daf.butler.time_utils import TimeConverter
 

@@ -29,9 +29,9 @@ from __future__ import annotations
 
 __all__ = (
     "DeferredValidation",
-    "get_universe_from_context",
     "SerializableRegion",
     "SerializableTime",
+    "get_universe_from_context",
 )
 
 from types import EllipsisType
@@ -39,8 +39,9 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeA
 
 import pydantic
 from astropy.time import Time
-from lsst.sphgeom import Region
 from pydantic_core import core_schema
+
+from lsst.sphgeom import Region
 
 from .time_utils import TimeConverter
 
@@ -185,9 +186,9 @@ class DeferredValidation(Generic[_T]):
     def __init_subclass__(cls) -> None:
         # We override __init_subclass__ to grab the type argument to the
         # DeferredValidation base class, since that's the wrapped type.
-        assert (
-            cls.__base__ is DeferredValidation
-        ), "Indirect subclasses of DeferredValidation are not allowed."
+        assert cls.__base__ is DeferredValidation, (
+            "Indirect subclasses of DeferredValidation are not allowed."
+        )
         try:
             # This uses some typing internals that are not as stable as the
             # rest of Python, so it's the messiest aspect of this class, but

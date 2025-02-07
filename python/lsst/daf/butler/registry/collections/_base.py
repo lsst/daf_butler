@@ -36,6 +36,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, Literal, NamedTuple, TypeVar, cast
 
 import sqlalchemy
+
 from lsst.utils.iteration import chunk_iterable
 
 from ..._collection_type import CollectionType
@@ -688,7 +689,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         table = self._tables.collection_chain
 
         func: sqlalchemy.Function
-        match (begin_or_end):
+        match begin_or_end:
             case "begin":
                 func = sqlalchemy.func.min(table.c.position)
             case "end":

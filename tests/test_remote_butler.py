@@ -29,6 +29,8 @@ import os
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from lsst.daf.butler import Butler
 from lsst.daf.butler._exceptions import UnknownButlerUserError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
@@ -37,10 +39,10 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
 from lsst.daf.butler.registry.tests import RegistryTests
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.resources import ResourcePath
-from pydantic import ValidationError
 
 try:
     import httpx
+
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
 
     remote_butler_import_fail_message = ""

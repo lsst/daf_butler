@@ -35,6 +35,7 @@ from typing import Protocol, TypeVar
 from fastapi import HTTPException
 from fastapi.concurrency import contextmanager_in_threadpool, iterate_in_threadpool
 from fastapi.responses import StreamingResponse
+
 from lsst.daf.butler.remote_butler.server_models import (
     QueryErrorResultModel,
     QueryExecuteResultData,

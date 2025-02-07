@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("LookupKey", "processLookupConfigs", "processLookupConfigList")
+__all__ = ("LookupKey", "processLookupConfigList", "processLookupConfigs")
 
 import logging
 import re

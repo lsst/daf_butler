@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo", "SerializedStoredFileInfo")
+__all__ = ("SerializedStoredFileInfo", "StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
 from collections.abc import Iterable, Mapping
@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import pydantic
+
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name

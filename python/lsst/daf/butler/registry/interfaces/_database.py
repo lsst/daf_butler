@@ -30,10 +30,10 @@ from ... import ddl, time_utils
 
 __all__ = [
     "Database",
-    "DatabaseMetadata",
-    "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "DatabaseInsertMode",
+    "DatabaseMetadata",
+    "ReadOnlyDatabaseError",
     "SchemaAlreadyDefinedError",
     "StaticTablesContext",
 ]
@@ -197,7 +197,8 @@ class StaticTablesContext:
         we cannot represent this with type annotations.
         """
         return specs._make(  # type: ignore
-            self.addTable(name, spec) for name, spec in zip(specs._fields, specs, strict=True)  # type: ignore
+            self.addTable(name, spec)
+            for name, spec in zip(specs._fields, specs, strict=True)  # type: ignore
         )
 
     def addInitializer(self, initializer: Callable[[Database], None]) -> None:
@@ -1418,9 +1419,9 @@ class Database(ABC):
                         f"unique constraint for table {table.name}."
                     )
                 elif bad:
-                    assert (
-                        compared is not None
-                    ), "Should not be able to get inconsistencies without comparing."
+                    assert compared is not None, (
+                        "Should not be able to get inconsistencies without comparing."
+                    )
                     if inserted:
                         raise RuntimeError(
                             f"Conflict ({bad}) in sync after successful insert; this is "

@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
+__all__ = ("StorageClass", "StorageClassConfig", "StorageClassFactory")
 
 import builtins
 import itertools

@@ -28,8 +28,8 @@ from __future__ import annotations
 
 __all__ = (
     "CheckVisitor",
-    "InspectionVisitor",
     "InspectionSummary",
+    "InspectionVisitor",
 )
 
 import dataclasses
@@ -45,6 +45,7 @@ from .parser import Node, TreeVisitor
 
 if TYPE_CHECKING:
     import astropy.time
+
     from lsst.daf.relation import ColumnTag
 
 

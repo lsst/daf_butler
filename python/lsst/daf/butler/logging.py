@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler", "ButlerLogRecord", "JsonLogFormatter")
+__all__ = ("ButlerLogRecord", "ButlerLogRecordHandler", "ButlerLogRecords", "ButlerMDC", "JsonLogFormatter")
 
 import datetime
 import logging
@@ -37,9 +37,10 @@ from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
 from typing import IO, Any, ClassVar, overload
 
+from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
+
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""

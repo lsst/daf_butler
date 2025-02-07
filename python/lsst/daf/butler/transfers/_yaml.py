@@ -39,6 +39,7 @@ from typing import IO, TYPE_CHECKING, Any
 
 import astropy.time
 import yaml
+
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel

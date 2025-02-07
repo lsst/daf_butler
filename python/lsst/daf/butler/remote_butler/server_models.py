@@ -32,9 +32,9 @@ __all__ = [
     "DatasetTypeName",
     "FindDatasetRequestModel",
     "FindDatasetResponseModel",
-    "GetFileResponseModel",
     "GetCollectionInfoResponseModel",
     "GetCollectionSummaryResponseModel",
+    "GetFileResponseModel",
 ]
 
 from collections.abc import Iterable
@@ -42,6 +42,7 @@ from typing import Annotated, Any, Literal, NewType, Self, TypeAlias
 from uuid import UUID
 
 import pydantic
+
 from lsst.daf.butler import (
     CollectionInfo,
     CollectionType,

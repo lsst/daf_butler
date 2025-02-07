@@ -28,19 +28,20 @@
 from __future__ import annotations
 
 __all__ = (
+    "StaticDatasetTablesTuple",
     "addDatasetForeignKey",
     "makeCalibTableName",
     "makeCalibTableSpec",
     "makeStaticTableSpecs",
     "makeTagTableName",
     "makeTagTableSpec",
-    "StaticDatasetTablesTuple",
 )
 
 from collections import namedtuple
 from typing import Any, TypeAlias
 
 import sqlalchemy
+
 from lsst.utils.classes import immutable
 
 from .... import ddl
@@ -634,9 +635,9 @@ class DynamicTables:
         table : `sqlalchemy.Table`
             SQLAlchemy table object.
         """
-        assert (
-            self.calibs_name is not None
-        ), "Dataset type should be checked to be calibration by calling code."
+        assert self.calibs_name is not None, (
+            "Dataset type should be checked to be calibration by calling code."
+        )
         table = cache.get(self.calibs_name)
         if table is not None:
             return table

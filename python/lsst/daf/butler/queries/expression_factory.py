@@ -27,13 +27,14 @@
 
 from __future__ import annotations
 
-__all__ = ("ExpressionFactory", "ExpressionProxy", "ScalarExpressionProxy", "TimespanProxy", "RegionProxy")
+__all__ = ("ExpressionFactory", "ExpressionProxy", "RegionProxy", "ScalarExpressionProxy", "TimespanProxy")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import astropy.time
+
 from lsst.sphgeom import Region
 
 from .._exceptions import InvalidQueryError

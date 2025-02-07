@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Support for reading Arrow tables."""
+
 from __future__ import annotations
 
 __all__ = ["ArrowTableDelegate"]
@@ -34,6 +35,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
+
 from lsst.daf.butler import StorageClassDelegate
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable

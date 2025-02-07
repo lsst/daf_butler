@@ -32,6 +32,7 @@ from operator import attrgetter
 from typing import Any
 
 from astropy.table import Table
+
 from lsst.sphgeom import Region
 
 from .._butler import Butler
@@ -83,7 +84,6 @@ def queryDimensionRecords(
     butler = Butler.from_config(repo, without_datastore=True)
 
     with butler.query() as query:
-
         if datasets:
             query_collections = collections or "*"
             dataset_types = butler.registry.queryDatasetTypes(datasets)

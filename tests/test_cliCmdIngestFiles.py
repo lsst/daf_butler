@@ -32,6 +32,7 @@ import os
 import unittest
 
 from astropy.table import Table
+
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg

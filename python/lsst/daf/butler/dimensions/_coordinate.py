@@ -47,6 +47,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 import pydantic
+
 from lsst.sphgeom import IntersectionRegion, Region
 
 from .._exceptions import DimensionNameError
@@ -365,9 +366,9 @@ class DataCoordinate:
             ``dimensions.implied`` is empty. ``dataId.hasRecords()`` will
             return `True` if and only if ``dimensions`` is empty.
         """
-        assert len(dimensions.required) == len(
-            values
-        ), f"Inconsistency between dimensions {dimensions.required} and required values {values}."
+        assert len(dimensions.required) == len(values), (
+            f"Inconsistency between dimensions {dimensions.required} and required values {values}."
+        )
         if not dimensions:
             return DataCoordinate.make_empty(dimensions.universe)
         if not dimensions.implied:
@@ -399,9 +400,9 @@ class DataCoordinate:
             ``dataId.hasRecords()`` will only return `True` if ``dimensions``
             is empty.
         """
-        assert len(dimensions) == len(
-            values
-        ), f"Inconsistency between dimensions {dimensions.data_coordinate_keys} and full values {values}."
+        assert len(dimensions) == len(values), (
+            f"Inconsistency between dimensions {dimensions.data_coordinate_keys} and full values {values}."
+        )
         if not dimensions:
             return DataCoordinate.make_empty(dimensions.universe)
         return _FullTupleDataCoordinate(dimensions, values)

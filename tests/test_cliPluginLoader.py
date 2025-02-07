@@ -35,6 +35,7 @@ from unittest.mock import patch
 
 import click
 import yaml
+
 from lsst.daf.butler.cli import butler, cmd
 from lsst.daf.butler.cli.butler import UncachedButlerCLI
 from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env

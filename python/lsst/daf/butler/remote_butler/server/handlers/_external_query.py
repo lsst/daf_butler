@@ -35,6 +35,7 @@ from typing import NamedTuple
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+
 from lsst.daf.butler import Butler, DataCoordinate, DimensionGroup
 from lsst.daf.butler.remote_butler.server_models import (
     DatasetRefResultModel,
@@ -198,10 +199,12 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
                     allow_duplicate_overlaps=input.allow_duplicate_overlaps,
                 )
             elif input.type == "upload":
-                driver.upload_data_coordinates(
-                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
-                    [tuple(r) for r in input.rows],
-                    key=input.key,
-                ),
+                (
+                    driver.upload_data_coordinates(
+                        DimensionGroup.from_simple(input.dimensions, butler.dimensions),
+                        [tuple(r) for r in input.rows],
+                        key=input.key,
+                    ),
+                )
 
         yield _QueryContext(driver=driver, tree=tree)

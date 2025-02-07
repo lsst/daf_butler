@@ -1448,20 +1448,20 @@ class DirectQueryDriver(QueryDriver):
         # dealt with instead) if materializations start having dataset fields.
         if union_dataset_type_name is None:
             dataset_type = self.get_dataset_type(cast(str, resolved_search.name))
-            assert (
-                dataset_type.name not in joins_builder.fields
-            ), "Dataset fields have unexpectedly already been joined in."
-            assert (
-                dataset_type.name not in joins_builder.timespans
-            ), "Dataset timespan has unexpectedly already been joined in."
+            assert dataset_type.name not in joins_builder.fields, (
+                "Dataset fields have unexpectedly already been joined in."
+            )
+            assert dataset_type.name not in joins_builder.timespans, (
+                "Dataset timespan has unexpectedly already been joined in."
+            )
         else:
             dataset_type = self.get_dataset_type(union_dataset_type_name)
-            assert (
-                qt.ANY_DATASET not in joins_builder.fields
-            ), "Union dataset fields have unexpectedly already been joined in."
-            assert (
-                qt.ANY_DATASET not in joins_builder.timespans
-            ), "Union dataset timespan has unexpectedly already been joined in."
+            assert qt.ANY_DATASET not in joins_builder.fields, (
+                "Union dataset fields have unexpectedly already been joined in."
+            )
+            assert qt.ANY_DATASET not in joins_builder.timespans, (
+                "Union dataset timespan has unexpectedly already been joined in."
+            )
 
         joins_builder.join(
             self.managers.datasets.make_joins_builder(
@@ -1520,7 +1520,7 @@ class _Cursor:
         cursor = self._context.__enter__()
         try:
             self._iterator = cursor.partitions()
-        except:  # noqa: E722
+        except BaseException:
             self.close(*sys.exc_info())
             raise
 
@@ -1560,6 +1560,6 @@ class _Cursor:
 
             postprocessed_rows = self._postprocessing.apply(raw_page)
             return self._page_converter.convert(postprocessed_rows)
-        except:  # noqa: E722
+        except BaseException:
             self.close(*sys.exc_info())
             raise

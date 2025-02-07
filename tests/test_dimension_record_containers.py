@@ -31,6 +31,7 @@ import unittest
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 from lsst.daf.butler import DimensionRecordSet, DimensionRecordTable
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 

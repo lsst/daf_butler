@@ -31,6 +31,7 @@ import unittest
 
 import pydantic
 from astropy.time import Time
+
 from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion, SerializableTime
 from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 

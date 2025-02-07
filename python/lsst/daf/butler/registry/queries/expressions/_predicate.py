@@ -26,7 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("make_string_expression_predicate", "ExpressionTypeError")
+__all__ = ("ExpressionTypeError", "make_string_expression_predicate")
 
 import builtins
 import datetime
@@ -37,6 +37,7 @@ from typing import Any, cast
 
 import astropy.time
 import astropy.utils.exceptions
+
 from lsst.daf.relation import (
     ColumnContainer,
     ColumnExpression,
@@ -227,9 +228,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                     dtype=b.int | b.float | b.str | astropy.time.Time | datetime.datetime
                 ) as lhs,
                 ColumnExpression() as rhs,
-            ] if (
-                lhs.dtype is rhs.dtype
-            ):
+            ] if lhs.dtype is rhs.dtype:
                 return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
             # Allow comparisons between datetime expressions and
             # astropy.time.Time literals/binds (only), by coercing the
@@ -323,9 +322,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 "+" | "-" | "*",
                 ColumnExpression(dtype=b.int | b.float) as lhs,
                 ColumnExpression() as rhs,
-            ] if (
-                lhs.dtype is rhs.dtype
-            ):
+            ] if lhs.dtype is rhs.dtype:
                 return lhs.method(self.OPERATOR_MAP[operator], rhs, dtype=lhs.dtype)
             case ["/", ColumnExpression(dtype=b.float) as lhs, ColumnExpression(dtype=b.float) as rhs]:
                 return lhs.method("__truediv__", rhs, dtype=b.float)
@@ -345,9 +342,9 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 )
             case ["%", ColumnExpression(dtype=b.int) as lhs, ColumnExpression(dtype=b.int) as rhs]:
                 return lhs.method("__mod__", rhs, dtype=b.int)
-        assert (
-            lhs.dtype is not None and rhs.dtype is not None
-        ), "Expression converter should not yield untyped nodes."
+        assert lhs.dtype is not None and rhs.dtype is not None, (
+            "Expression converter should not yield untyped nodes."
+        )
         raise ExpressionTypeError(
             f"Invalid types {lhs.dtype.__name__}, {rhs.dtype.__name__} for binary operator {operator!r} "
             f"in expression {node!s}."

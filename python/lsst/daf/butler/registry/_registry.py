@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Registry", "CollectionArgType")
+__all__ = ("CollectionArgType", "Registry")
 
 import contextlib
 import logging

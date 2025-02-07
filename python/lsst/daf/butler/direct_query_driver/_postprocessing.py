@@ -33,6 +33,7 @@ from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, ClassVar
 
 import sqlalchemy
+
 from lsst.sphgeom import Region
 
 from .._exceptions import CalibrationLookupError

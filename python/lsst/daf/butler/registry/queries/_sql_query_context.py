@@ -34,6 +34,7 @@ from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 import sqlalchemy
+
 from lsst.daf.relation import (
     BinaryOperationRelation,
     Calculation,
@@ -128,9 +129,9 @@ class SqlQueryContext(QueryContext):
             with self._db.query(sql_executable) as sql_result:
                 return cast(int, sql_result.scalar_one())
         elif (rows := relation.payload) is not None:
-            assert isinstance(
-                rows, iteration.MaterializedRowIterable
-            ), "Query guarantees that only materialized payloads are attached to its relations."
+            assert isinstance(rows, iteration.MaterializedRowIterable), (
+                "Query guarantees that only materialized payloads are attached to its relations."
+            )
             return len(rows)
         elif discard:
             n = 0
@@ -154,9 +155,9 @@ class SqlQueryContext(QueryContext):
             with self._db.query(sql_executable) as sql_result:
                 return sql_result.one_or_none() is not None
         elif (rows := relation.payload) is not None:
-            assert isinstance(
-                rows, iteration.MaterializedRowIterable
-            ), "Query guarantees that only materialized payloads are attached to its relations."
+            assert isinstance(rows, iteration.MaterializedRowIterable), (
+                "Query guarantees that only materialized payloads are attached to its relations."
+            )
             return bool(rows)
         elif execute:
             for _ in self.fetch_iterable(relation):

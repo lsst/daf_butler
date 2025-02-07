@@ -30,6 +30,7 @@ import random
 import unittest
 
 import astropy.time
+
 from lsst.daf.butler.registry.queries.expressions.normalForm import (
     NormalForm,
     NormalFormExpression,

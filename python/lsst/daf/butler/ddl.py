@@ -36,17 +36,18 @@ We've opted for the rather more obscure "ddl" as the name of this module
 instead of "schema" because the latter is too overloaded; in most SQL
 databases, a "schema" is also another term for a namespace.
 """
+
 from __future__ import annotations
 
 __all__ = (
-    "TableSpec",
+    "GUID",
+    "AstropyTimeNsecTai",
+    "Base64Bytes",
+    "Base64Region",
     "FieldSpec",
     "ForeignKeySpec",
     "IndexSpec",
-    "Base64Bytes",
-    "Base64Region",
-    "AstropyTimeNsecTai",
-    "GUID",
+    "TableSpec",
 )
 
 import logging
@@ -59,9 +60,10 @@ from typing import TYPE_CHECKING, Any
 
 import astropy.time
 import sqlalchemy
+from sqlalchemy.dialects.postgresql import UUID
+
 from lsst.sphgeom import Region
 from lsst.utils.iteration import ensure_iterable
-from sqlalchemy.dialects.postgresql import UUID
 
 from . import time_utils
 from ._config import Config

@@ -33,6 +33,7 @@ import unittest
 
 import click
 import yaml
+
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
 from lsst.daf.butler.cli.opt import options_file_option

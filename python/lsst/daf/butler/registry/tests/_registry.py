@@ -712,12 +712,12 @@ class RegistryTests(ABC):
                 self.assertEqual(ref2.id, ref1.id)
 
                 # Cannot import to different run with the same ID
-                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=ref1.id, run=f"run{run+1}")
+                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=ref1.id, run=f"run{run + 1}")
                 with self.assertRaises(ConflictingDefinitionError):
                     registry._importDatasets([ref])
 
                 ref = DatasetRef(
-                    datasetTypeBias, dataIdBias1, run=f"run{run+1}", id_generation_mode=idGenMode
+                    datasetTypeBias, dataIdBias1, run=f"run{run + 1}", id_generation_mode=idGenMode
                 )
                 if idGenMode is DatasetIdGenEnum.DATAID_TYPE:
                     # Cannot import same DATAID_TYPE ref into a new run

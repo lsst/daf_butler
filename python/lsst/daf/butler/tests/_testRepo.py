@@ -28,12 +28,12 @@
 from __future__ import annotations
 
 __all__ = [
-    "makeTestRepo",
-    "makeTestCollection",
-    "addDatasetType",
-    "expandUniqueId",
     "DatastoreMock",
     "addDataIdValue",
+    "addDatasetType",
+    "expandUniqueId",
+    "makeTestCollection",
+    "makeTestRepo",
 ]
 
 import random
@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import sqlalchemy
+
 from lsst.daf.butler import (
     Butler,
     Config,

@@ -156,7 +156,7 @@ class Query(QueryBase):
                 query = query.where(
                     x.instrument == "LSSTCam",
                     x.visit.day_obs > 20240701,
-                    x.any(x.band == 'u', x.band == 'y'),
+                    x.any(x.band == "u", x.band == "y"),
                 )
 
         As shown above, the returned object also has an

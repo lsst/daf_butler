@@ -28,24 +28,24 @@
 from __future__ import annotations
 
 __all__ = (
+    "ArrowAstropySchema",
+    "ArrowNumpySchema",
+    "DataFrameSchema",
     "ParquetFormatter",
-    "arrow_to_pandas",
+    "add_pandas_index_to_astropy",
+    "arrow_schema_to_pandas_index",
     "arrow_to_astropy",
     "arrow_to_numpy",
     "arrow_to_numpy_dict",
-    "pandas_to_arrow",
-    "pandas_to_astropy",
+    "arrow_to_pandas",
     "astropy_to_arrow",
     "astropy_to_pandas",
-    "add_pandas_index_to_astropy",
+    "compute_row_group_size",
+    "numpy_dict_to_arrow",
     "numpy_to_arrow",
     "numpy_to_astropy",
-    "numpy_dict_to_arrow",
-    "arrow_schema_to_pandas_index",
-    "DataFrameSchema",
-    "ArrowAstropySchema",
-    "ArrowNumpySchema",
-    "compute_row_group_size",
+    "pandas_to_arrow",
+    "pandas_to_astropy",
 )
 
 import collections.abc
@@ -58,6 +58,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.delegates.arrowtable import _checkArrowCompatibleType
 from lsst.resources import ResourcePath
@@ -184,7 +185,6 @@ class ParquetFormatter(FormatterV2):
         return arrow_table
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
-
         if isinstance(in_memory_dataset, pa.Schema):
             pq.write_metadata(in_memory_dataset, uri.ospath)
             return

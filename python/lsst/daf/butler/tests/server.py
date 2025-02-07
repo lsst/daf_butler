@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
@@ -24,7 +25,7 @@ except ImportError:
     # moto v4 and earlier
     from moto import mock_s3 as mock_aws  # type: ignore
 
-__all__ = ("create_test_server", "TestServerInstance", "TEST_REPOSITORY_NAME")
+__all__ = ("TEST_REPOSITORY_NAME", "TestServerInstance", "create_test_server")
 
 
 TEST_REPOSITORY_NAME = "testrepo"

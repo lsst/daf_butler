@@ -33,6 +33,7 @@ import unittest
 from contextlib import contextmanager
 
 import sqlalchemy
+
 from lsst.daf.butler import Butler, Config, ddl
 from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase

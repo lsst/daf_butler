@@ -33,6 +33,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
 from ... import ddl

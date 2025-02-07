@@ -33,6 +33,7 @@ from typing import cast
 
 import astropy.time
 import sqlalchemy
+
 from lsst.daf.butler import (
     CollectionType,
     Config,

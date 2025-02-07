@@ -30,8 +30,8 @@ from __future__ import annotations
 __all__ = [
     "ButlerVersionsManager",
     "IncompatibleVersionError",
-    "MissingManagerError",
     "ManagerMismatchError",
+    "MissingManagerError",
 ]
 
 import logging

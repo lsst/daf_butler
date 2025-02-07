@@ -34,7 +34,6 @@ from typing import Any, Protocol, Self, TypeVar, overload
 
 
 class Copyable(Protocol):
-
     def copy(self) -> Self: ...
 
 
