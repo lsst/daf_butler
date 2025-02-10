@@ -33,6 +33,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from lsst.daf.butler import DimensionRecordSet, DimensionRecordTable
+from lsst.daf.butler.arrow_utils import TimespanArrowType
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
 DIMENSION_DATA_FILES = [
@@ -210,6 +211,15 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual(len(table1), 12)
         self.assertEqual([len(batch) for batch in table1.to_arrow().to_batches()], [5, 5, 2])
         self.assertEqual(list(table1), list(self.records["patch"]))
+
+    def test_arrow_timespan_nulls(self):
+        """Test that null values for Timespan can be round-tripped through
+        arrow.
+        """
+        schema = pa.schema([pa.field("timespan", TimespanArrowType(), nullable=True)])
+        table = pa.Table.from_pylist([{"timespan": None}], schema=schema)
+        output_value = table.to_pylist()[0]["timespan"]
+        self.assertIsNone(output_value)
 
     def test_record_set_const(self):
         """Test attributes and methods of `DimensionRecordSet` that do not

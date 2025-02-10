@@ -516,8 +516,13 @@ class TimespanArrowScalar(pa.ExtensionScalar):
     Use the standard `as_py` method to convert to an actual timespan.
     """
 
-    def as_py(self) -> Timespan:
-        return Timespan(None, None, _nsec=(self.value["begin_nsec"].as_py(), self.value["end_nsec"].as_py()))
+    def as_py(self) -> Timespan | None:
+        if self.value is None:
+            return None
+        else:
+            return Timespan(
+                None, None, _nsec=(self.value["begin_nsec"].as_py(), self.value["end_nsec"].as_py())
+            )
 
 
 @final
