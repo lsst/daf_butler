@@ -387,7 +387,8 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         self.assertEqual(visitor.spatial_joins, [("tract", "visit", PredicateVisitFlags(0))])
         self.assertFalse(visitor.spatial_constraints)
         self.assertFalse(visitor.temporal_dimension_joins)
-        # Add a "join operand" whose dimensions include both spatial families.
+        # Add a "join operand" whose dimensions include both spatial families
+        # with the most fine-grained dimensions in the query.
         # This blocks an automatic join from being created, because we assume
         # that join operand (e.g. a materialization or dataset search) already
         # encodes some spatial join.
@@ -395,7 +396,7 @@ class OverlapsVisitorTestCase(unittest.TestCase):
             ["visit", "detector", "patch"],
             qt.Predicate.from_bool(True),
             "True",
-            join_operands=[self.universe.conform(["tract", "visit_detector_region"])],
+            join_operands=[self.universe.conform(["patch", "visit_detector_region"])],
         )
         self.assertFalse(visitor.spatial_joins)
         self.assertFalse(visitor.spatial_constraints)
@@ -429,12 +430,13 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         self.assertFalse(visitor.spatial_constraints)
         self.assertFalse(visitor.temporal_dimension_joins)
         # Add a "join operand" whose dimensions includes two spatial families,
-        # with a predicate that joins the third in.
+        # with the most fine-grained dimensions in the query, and a predicate
+        # that joins the third in.
         visitor = self.run_visitor(
             ["visit", "patch", "htm7"],
             x.tract.region.overlaps(x.htm7.region),
             "tract.region OVERLAPS htm7.region",
-            join_operands=[self.universe.conform(["visit", "tract"])],
+            join_operands=[self.universe.conform(["visit", "patch"])],
         )
         self.assertEqual(
             visitor.spatial_joins,

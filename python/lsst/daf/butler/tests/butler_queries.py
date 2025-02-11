@@ -1370,12 +1370,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records(
                 query.join_dimensions(["visit", "detector", "tract"])
                 .materialize()
-                # The patch constraint here should do nothing, because only the
-                # spatial join from the materialization should exist.  The
-                # behavior is surprising no matter what here, and the
-                # recommendation to users is to add an explicit overlap
-                # expression any time it's not obvious what the default is.
-                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2, patch=5)
+                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2)
                 .dimension_records("detector"),
                 [1, 2],
                 has_postprocessing=True,

@@ -216,7 +216,16 @@ class OverlapsVisitor(SimplePredicateVisitor):
         if result is None:
             result = predicate
         for join_operand_dimensions in join_operands:
-            self.add_join_operand_connections(join_operand_dimensions)
+            self._add_join_operand_connections(
+                join_operand_dimensions.spatial,
+                self._spatial_connections,
+                join_operand_dimensions,
+            )
+            self._add_join_operand_connections(
+                join_operand_dimensions.temporal,
+                self._temporal_connections,
+                join_operand_dimensions,
+            )
         result = result.logical_and(self._add_automatic_joins("spatial", self._spatial_connections))
         result = result.logical_and(self._add_automatic_joins("temporal", self._temporal_connections))
         return result
@@ -241,11 +250,21 @@ class OverlapsVisitor(SimplePredicateVisitor):
                 raise AssertionError(f"Unexpected column type {a.column_type} for overlap.")
         return None
 
-    def add_join_operand_connections(self, operand_dimensions: DimensionGroup) -> None:
+    def _add_join_operand_connections(
+        self,
+        families: Iterable[TopologicalFamily],
+        connections: _NaiveDisjointSet[TopologicalFamily],
+        operand_dimensions: DimensionGroup,
+    ) -> None:
         """Add overlap connections implied by a table or subquery.
 
         Parameters
         ----------
+        families : `~collections.abc.Iterable` [ `TpologicalFamily` ]
+            Iterable of spatial or temporal families in this operand's
+            dimensions.
+        connections : `_NaiveDisjointSet`
+            Relationships between spatial or temporal families to update.
         operand_dimensions : `DimensionGroup`
             Dimensions of of the table or subquery.
 
@@ -259,10 +278,14 @@ class OverlapsVisitor(SimplePredicateVisitor):
         association between non-overlapping things that we'd want to respect by
         *not* adding a more restrictive automatic join.
         """
-        for a_family, b_family in itertools.pairwise(operand_dimensions.spatial):
-            self._spatial_connections.merge(a_family, b_family)
-        for a_family, b_family in itertools.pairwise(operand_dimensions.temporal):
-            self._temporal_connections.merge(a_family, b_family)
+        for a_family, b_family in itertools.pairwise(families):
+            a_element = a_family.choose(self.dimensions)
+            b_element = b_family.choose(self.dimensions)
+            if (
+                a_element.name in operand_dimensions.elements
+                and b_element.name in operand_dimensions.elements
+            ):
+                connections.merge(a_family, b_family)
 
     def _add_automatic_joins(
         self,
