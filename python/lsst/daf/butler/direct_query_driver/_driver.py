@@ -1124,7 +1124,7 @@ class DirectQueryDriver(QueryDriver):
                                 select_builder.joins.fields[logical_table][field]
                             )
                 else:
-                    _LOG.warning(
+                    _LOG.debug(
                         "Adding %d fields to GROUP BY because this database backend does not support the "
                         "ANY_VALUE aggregate function (or equivalent).  This may result in a poor query "
                         "plan.  Materializing the query first sometimes avoids this problem.  This warning "
