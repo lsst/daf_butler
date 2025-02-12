@@ -278,7 +278,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
         association between non-overlapping things that we'd want to respect by
         *not* adding a more restrictive automatic join.
         """
-        for a_family, b_family in itertools.pairwise(families):
+        for a_family, b_family in itertools.combinations(families, 2):
             a_element = a_family.choose(self.dimensions)
             b_element = b_family.choose(self.dimensions)
             if (
