@@ -33,6 +33,7 @@ import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DatasetProvenance,
     DatasetRef,
     DatasetType,
     DimensionConfig,
@@ -754,6 +755,96 @@ class DatasetRefTestCase(unittest.TestCase):
 
         new_refs = container.to_refs(universe=self.universe)
         self.assertEqual(new_refs, [ref1, ref2])
+
+    def test_dataset_provenance(self) -> None:
+        """Test that dataset provenance can be stored."""
+        dimensions = self.universe.conform(("instrument", "visit"))
+        ref1 = DatasetRef(self.datasetType, self.dataId, run="somerun")
+        ref2 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, dimensions=dimensions),
+            run="run",
+        )
+        ref3 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=22, dimensions=dimensions),
+            run="run",
+        )
+
+        quantum_id = uuid.uuid4()
+        prov = DatasetProvenance(quantum_id=quantum_id)
+        prov.add_input(ref2)
+        prov.add_input(ref3)
+        prov.add_input(ref2)  # no-op which should leave ref2 still ahead of ref3 in output.
+        extra_id = uuid.uuid4()
+        prov.add_extra_provenance(
+            ref2.id, {"extra_string": "value", "extra_number": 42, "extra_id": extra_id}
+        )
+
+        with self.assertRaises(ValueError):
+            prov.add_extra_provenance(ref1.id, {"extra": 42})
+
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid.instrument": "DummyCam",
+            "dataid.visit": 42,
+            "run": "somerun",
+            "quantum": quantum_id,
+            "input.0.datasettype": "test",
+            "input.0.run": "run",
+            "input.0.id": ref2.id,
+            "input.0.extra_number": 42,
+            "input.0.extra_string": "value",
+            "input.0.extra_id": extra_id,
+            "input.1.datasettype": "test",
+            "input.1.run": "run",
+            "input.1.id": ref3.id,
+        }
+
+        prov_dict = prov.to_flat_dict(ref1, sep=".")
+        self.assertEqual(prov_dict, expected)
+
+        prov_dict = prov.to_flat_dict(ref1, prefix="", sep=".", simple_types=True)
+        self.assertEqual(prov_dict["id"], str(ref1.id))
+        self.assertEqual(prov_dict["quantum"], str(quantum_id))
+        self.assertEqual(prov_dict["input.0.id"], str(ref2.id))
+        self.assertEqual(prov_dict["input.0.extra_id"], str(extra_id))
+
+        # Use a prefix and different separator.
+        prov_dict = prov.to_flat_dict(ref1, prefix="LSST BUTLER 🔭", sep=" ")
+        self.assertIn("LSST BUTLER 🔭 RUN", prov_dict)
+        self.assertIn("LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER", prov_dict)
+        self.assertEqual(prov_dict["LSST BUTLER 🔭 RUN"], "somerun")
+        self.assertEqual(prov_dict["LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER"], 42)
+
+        prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→")
+
+        self.assertIn("🔭 LSST BUTLER→run", prov_dict)
+        self.assertIn("🔭 LSST BUTLER→input→0→extra_number", prov_dict)
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→run"], "somerun")
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→input→0→extra_number"], 42)
+
+        prov_dict = prov.to_flat_dict(None, prefix="butler", sep=" ")
+        self.assertNotIn("butler run", prov_dict)
+        self.assertIn("butler quantum", prov_dict)
+
+        # Check that an empty provenance returns empty dict.
+        prov2 = DatasetProvenance()
+        prov_dict = prov2.to_flat_dict(None)
+        self.assertEqual(prov_dict, {})
+
+        # Check that an empty provenance with a ref returns info just for
+        # that ref.
+        prov_dict = prov2.to_flat_dict(ref1, prefix="", sep=".")
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid.instrument": "DummyCam",
+            "dataid.visit": 42,
+            "run": "somerun",
+        }
+        self.assertEqual(prov_dict, expected)
 
 
 class ZipIndexTestCase(unittest.TestCase):
