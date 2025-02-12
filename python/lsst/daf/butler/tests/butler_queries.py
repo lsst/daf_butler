@@ -1009,6 +1009,77 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     bind={"my_point": array_point},
                 )
 
+    def test_auto_spatial_joins(self) -> None:
+        """Test the addition of automatic spatial joins in the presence and
+        absence of datasets with dimensions that cross spatial families.
+        """
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+        # Set default governor data ID values both to test that code path and
+        # to keep us from having to repeat them in every 'where' call below.
+        butler.registry.defaults = RegistryDefaults(instrument="Cam1", skymap="SkyMap1")
+        # Add some datasets with {tract, visit, detector} dimensions.
+        # These will cover all {visit, detector}s that overlap tract=0.
+        cat = DatasetType(
+            "cat",
+            dimensions=butler.dimensions.conform(["visit", "detector", "tract"]),
+            storageClass="ArrowTable",
+        )
+        butler.registry.registerDatasetType(cat)
+        butler.collections.register("run1")
+        butler.registry.insertDatasets(
+            cat,
+            [
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 1, "detector": 1, "tract": 0},
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 1, "detector": 2, "tract": 0},
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 1, "detector": 3, "tract": 0},
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 1, "detector": 4, "tract": 0},
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 2, "detector": 1, "tract": 0},
+                {"instrument": "Cam1", "skymap": "SkyMap1", "visit": 2, "detector": 2, "tract": 0},
+            ],
+            run="run1",
+        )
+        with butler.query() as query:
+            # When we query for just these dimensions with that dataset type
+            # included, we shouldn't need a spatial join, because we assume
+            # it's embedded in the rows of that dataset search.
+            q1 = query.join_dataset_search(cat, "run1").data_ids(["visit", "detector", "tract"])
+            # If there's no explicit spatial join, there's no postprocessing,
+            # and hence we can do an exact count with discard=False.
+            self.assertEqual(q1.count(exact=True, discard=False), 6)
+            self.assertCountEqual(
+                [(row["visit"], row["detector"], row["tract"]) for row in q1],
+                [
+                    (1, 1, 0),
+                    (1, 2, 0),
+                    (1, 3, 0),
+                    (1, 4, 0),
+                    (2, 1, 0),
+                    (2, 2, 0),
+                ],
+            )
+            # When we query for these dimensions and another one that wants
+            # a more precise spatial join, we should get that more precise
+            # spatial join.
+            q1 = query.join_dataset_search(cat, "run1").data_ids(["visit", "detector", "tract", "patch"])
+            self.assertCountEqual(
+                [(row["visit"], row["detector"], row["tract"], row["patch"]) for row in q1],
+                [
+                    (1, 1, 0, 0),
+                    (1, 1, 0, 2),
+                    (1, 2, 0, 0),
+                    (1, 2, 0, 1),
+                    (1, 2, 0, 2),
+                    (1, 2, 0, 3),
+                    (1, 3, 0, 2),
+                    (1, 3, 0, 4),
+                    (1, 4, 0, 2),
+                    (1, 4, 0, 3),
+                    (2, 1, 0, 4),
+                    (2, 2, 0, 4),
+                    (2, 2, 0, 5),
+                ],
+            )
+
     def test_common_skypix_overlaps(self) -> None:
         """Test spatial overlap queries that return htm7 records."""
         butler = self.make_butler("base.yaml", "spatial.yaml")
@@ -1299,12 +1370,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records(
                 query.join_dimensions(["visit", "detector", "tract"])
                 .materialize()
-                # The patch constraint here should do nothing, because only the
-                # spatial join from the materialization should exist.  The
-                # behavior is surprising no matter what here, and the
-                # recommendation to users is to add an explicit overlap
-                # expression any time it's not obvious what the default is.
-                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2, patch=5)
+                .where(skymap="SkyMap1", tract=0, instrument="Cam1", visit=2)
                 .dimension_records("detector"),
                 [1, 2],
                 has_postprocessing=True,
