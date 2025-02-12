@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ["ParseError", "ParserEOFError", "ParserYacc", "ParserYaccError"]
+__all__ = ["ParseError", "ParserEOFError", "ParserYacc", "ParserYaccError", "YaccProduction"]
 
 import functools
 import re
@@ -68,6 +68,7 @@ class YaccProduction(Protocol):
     """Protocol for YaccProduction defined in ``ply.yacc``."""
 
     lexer: Any
+    value: Any
 
     def __getitem__(self, n: int) -> Any: ...
     def __setitem__(self, n: int, v: Any) -> None: ...
