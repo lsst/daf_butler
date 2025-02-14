@@ -804,12 +804,16 @@ class DatasetRefTestCase(unittest.TestCase):
 
         prov_dict = prov.to_flat_dict(ref1, sep=".")
         self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
         prov_dict = prov.to_flat_dict(ref1, prefix="", sep=".", simple_types=True)
         self.assertEqual(prov_dict["id"], str(ref1.id))
         self.assertEqual(prov_dict["quantum"], str(quantum_id))
         self.assertEqual(prov_dict["input.0.id"], str(ref2.id))
         self.assertEqual(prov_dict["input.0.extra_id"], str(extra_id))
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
         # Use a prefix and different separator.
         prov_dict = prov.to_flat_dict(ref1, prefix="LSST BUTLER 🔭", sep=" ")
@@ -817,6 +821,8 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIn("LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER", prov_dict)
         self.assertEqual(prov_dict["LSST BUTLER 🔭 RUN"], "somerun")
         self.assertEqual(prov_dict["LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER"], 42)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
         prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→")
 
@@ -824,14 +830,20 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIn("🔭 LSST BUTLER→input→0→extra_number", prov_dict)
         self.assertEqual(prov_dict["🔭 LSST BUTLER→run"], "somerun")
         self.assertEqual(prov_dict["🔭 LSST BUTLER→input→0→extra_number"], 42)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
         prov_dict = prov.to_flat_dict(None, prefix="butler", sep=" ")
         self.assertNotIn("butler run", prov_dict)
         self.assertIn("butler quantum", prov_dict)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
-        # Check that an empty provenance returns empty dict.
+        # Check that an empty provenance returns empty dict with no ref.
         prov2 = DatasetProvenance()
         prov_dict = prov2.to_flat_dict(None)
+        self.assertEqual(prov_dict, {})
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
         # Check that an empty provenance with a ref returns info just for
@@ -845,6 +857,32 @@ class DatasetRefTestCase(unittest.TestCase):
             "run": "somerun",
         }
         self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        # Test with empty provenance with ref that has no dataId.
+        datasetType = DatasetType("empty", self.universe.empty, self.parentStorageClass)
+        empty_ref = DatasetRef(datasetType, {}, "empty_run")
+        prov3 = DatasetProvenance()
+        prov_dict = prov3.to_flat_dict(empty_ref)
+        expected = {
+            "id": empty_ref.id,
+            "datasettype": "empty",
+            "run": "empty_run",
+        }
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        prov_dict = prov3.to_flat_dict(empty_ref, prefix="xyz", sep="-")
+        expected = {
+            "xyz-id": empty_ref.id,
+            "xyz-datasettype": "empty",
+            "xyz-run": "empty_run",
+        }
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
 
 
 class ZipIndexTestCase(unittest.TestCase):

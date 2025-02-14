@@ -777,8 +777,6 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
 
-        _checkAstropyTableEquality(tab1, tab2)
-
         # Check that minimal provenance was written by default.
         expected = {
             "lsst.butler.id": str(put_ref.id),
@@ -787,6 +785,8 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         }
 
         self.assertEqual(tab2.meta, expected)
+
+        _checkAstropyTableEquality(tab1, tab2)
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
     def testWriteReadAstropyTableProvenance(self):
@@ -2434,6 +2434,9 @@ def _checkAstropyTableEquality(table1, table2, skip_units=False, has_bigendian=F
             # Only check type matches, force to little-endian.
             assert table1.dtype[name].newbyteorder(">") == table2.dtype[name].newbyteorder(">")
 
+    # Strip provenance before comparison.
+    DatasetProvenance.strip_provenance_from_flat_dict(table1.meta)
+    DatasetProvenance.strip_provenance_from_flat_dict(table2.meta)
     assert table1.meta == table2.meta
     if not skip_units:
         for name in table1.columns:
