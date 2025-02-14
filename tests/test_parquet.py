@@ -819,7 +819,19 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "lsst.butler.input.0.datasettype": "astropy_parquet",
         }
         self.assertEqual(tab2.meta, expected)
-        _checkAstropyTableEquality(tab1, tab2)
+
+        # Put the dataset again, with different provenance and ensure
+        # that the previous provenance was stripped.
+        self.butler.collections.register("new_run")
+        put_ref3 = self.butler.put(tab2, self.datasetType, dataId={}, run="new_run")
+
+        # tab2 will have been updated in place.
+        expected = {
+            "lsst.butler.id": str(put_ref3.id),
+            "lsst.butler.run": "new_run",
+            "lsst.butler.datasettype": "data",
+        }
+        self.assertEqual(tab2.meta, expected)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteReadNumpyTableLossless(self):
