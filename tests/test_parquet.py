@@ -35,6 +35,7 @@ import os
 import posixpath
 import shutil
 import unittest
+import uuid
 
 try:
     import pyarrow as pa
@@ -81,6 +82,7 @@ except ImportError:
 from lsst.daf.butler import (
     Butler,
     Config,
+    DatasetProvenance,
     DatasetRef,
     DatasetType,
     FileDataset,
@@ -771,10 +773,52 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
     def testWriteReadAstropyTableLossless(self):
         tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-        self.butler.put(tab1, self.datasetType, dataId={})
+        put_ref = self.butler.put(tab1, self.datasetType, dataId={})
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
 
+        _checkAstropyTableEquality(tab1, tab2)
+
+        # Check that minimal provenance was written by default.
+        expected = {
+            "lsst.butler.id": str(put_ref.id),
+            "lsst.butler.run": "test_run",
+            "lsst.butler.datasettype": "data",
+        }
+
+        self.assertEqual(tab2.meta, expected)
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableProvenance(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        # Create a ref for provenance.
+        astropy_type = DatasetType(
+            "astropy_parquet",
+            dimensions=(),
+            storageClass="ArrowAstropy",
+            universe=self.butler.dimensions,
+        )
+        self.butler.registry.registerDatasetType(astropy_type)
+        input_ref = DatasetRef(astropy_type, {}, run="other_run")
+        quantum_id = uuid.uuid4()
+        provenance = DatasetProvenance(quantum_id=quantum_id)
+        provenance.add_input(input_ref)
+
+        put_ref = self.butler.put(tab1, self.datasetType, dataId={}, provenance=provenance)
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+
+        expected = {
+            "lsst.butler.id": str(put_ref.id),
+            "lsst.butler.run": "test_run",
+            "lsst.butler.datasettype": "data",
+            "lsst.butler.quantum": str(quantum_id),
+            "lsst.butler.input.0.id": str(input_ref.id),
+            "lsst.butler.input.0.run": "other_run",
+            "lsst.butler.input.0.datasettype": "astropy_parquet",
+        }
+        self.assertEqual(tab2.meta, expected)
         _checkAstropyTableEquality(tab1, tab2)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
