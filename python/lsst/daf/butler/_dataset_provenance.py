@@ -136,13 +136,33 @@ class DatasetProvenance(pydantic.BaseModel):
         :id: UUID of the given dataset.
         :run: Run of the given dataset.
         :datasettype: Dataset type of the given dataset.
-        :dataid x: An entry for each required dimension in the data ID.
+        :dataid x: An entry for each required dimension, "x", in the data ID.
 
         Each input dataset will have the ``id``, ``run``, and ``datasettype``
         keys as defined above (but no ``dataid`` key) with an ``input N``
         prefix where ``N`` starts counting at 0.
 
         The quantum ID, if present, will use key ``quantum``.
+
+        Examples
+        --------
+        >>> provenance.to_flat_dict(
+        ...     ref, prefix="lsst.butler", sep=".", simple_types=True
+        ... )
+        {
+            "lsst.butler.id": "ae0fa83d-cc89-41dd-9680-f97ede49f01e",
+            "lsst.butler.run": "test_run",
+            "lsst.butler.datasettype": "data",
+            "lsst.butler.dataid.detector": 10,
+            "lsst.butler.dataid.instrument": "LSSTCam",
+            "lsst.butler.quantum": "d93a735b-08f0-477d-bc95-2cc32d6d898b",
+            "lsst.butler.input.0.id": "3dfd7ba5-5e35-4565-9d87-4b33880ed06c",
+            "lsst.butler.input.0.run": "other_run",
+            "lsst.butler.input.0.datasettype": "astropy_parquet",
+            "lsst.butler.input.1.id": "7a99f6e9-4035-3d68-842e-58ecce1dc935",
+            "lsst.butler.input.1.run": "other_run",
+            "lsst.butler.input.1.datasettype": "astropy_parquet",
+        }
 
         Raises
         ------
