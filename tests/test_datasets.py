@@ -884,6 +884,32 @@ class DatasetRefTestCase(unittest.TestCase):
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="abc")
+
+        # Dictionary with inconsistent prefixes and separators.
+        test_dicts = (
+            {
+                "xyz-dataid.instrument": "LATISS",
+            },
+            {
+                "xyz-dataid-detector": 10,
+                "abc-dataid-instrument": "LATISS",
+            },
+            {
+                "abc.input.0.id": "id",
+                "xyz.input.0.run": "run",
+                "abc.dataid.instrument": "latiss",
+            },
+            {
+                "abc.input.0.id": "id0",
+                "abc input 0 id": "id1",
+            },
+        )
+        for prov_dict in test_dicts:
+            with self.assertRaises(ValueError):
+                DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+
 
 class ZipIndexTestCase(unittest.TestCase):
     """Test that a ZipIndex can be read."""

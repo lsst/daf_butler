@@ -832,6 +832,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "lsst.butler.datasettype": "data",
         }
         self.assertEqual(tab2.meta, expected)
+        null_prov, prov_ref = DatasetProvenance.from_flat_dict(tab2.meta, self.butler)
+        self.assertEqual(prov_ref, put_ref3)
+        self.assertEqual(null_prov, DatasetProvenance())
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteReadNumpyTableLossless(self):

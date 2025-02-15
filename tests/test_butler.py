@@ -2166,6 +2166,15 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertEqual(prov_from_prov.quantum_id, prov.quantum_id)
         self.assertEqual(prov_from_prov.extras, prov.extras)
 
+        # Force a bad ID into the dict.
+        prov_dict["id"] = uuid.uuid4()
+        with self.assertRaises(ValueError):
+            DatasetProvenance.from_flat_dict(prov_dict, butler)
+        del prov_dict["id"]
+        prov_dict["input 0 id"] = uuid.uuid4()
+        with self.assertRaises(ValueError):
+            DatasetProvenance.from_flat_dict(prov_dict, butler)
+
         # Check that simple types can be reconstructed with non-standard
         # separators.
         prov_dict = prov.to_flat_dict(metric_ref2, prefix="XYZ", sep="😎", simple_types=True)
