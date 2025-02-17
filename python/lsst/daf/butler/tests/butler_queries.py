@@ -2396,7 +2396,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(butler.query_datasets("a", collections=collection, skymap="SkyMap1"), [ref_a])
         # In the second case there is a dataset of a different type that is
         # inconsistent with the constraint in the collection:
-        self.assertEqual(butler.query_datasets("b", collections=collection, skymap="Cam2"), [ref_b])
+        self.assertEqual(butler.query_datasets("b", collections=collection, instrument="Cam2"), [ref_b])
 
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
