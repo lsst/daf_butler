@@ -469,7 +469,7 @@ def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
-        table.pprint_all()
+        table.pprint_all(align="<")
     else:
         print("No results. Try --help for more information.")
 
