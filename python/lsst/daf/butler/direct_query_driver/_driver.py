@@ -1358,7 +1358,11 @@ class DirectQueryDriver(QueryDriver):
                     f"No datasets of type {result.name!r} in collection {collection_record.name!r}."
                 )
                 rejected = True
-            for governor in constraint_data_id.keys() & collection_summary.governors.keys():
+            for governor in (
+                constraint_data_id.keys()
+                & collection_summary.governors.keys()
+                & dataset_search.dimensions.names
+            ):
                 if constraint_data_id[governor] not in collection_summary.governors[governor]:
                     result.messages.append(
                         f"No datasets with {governor}={constraint_data_id[governor]!r} "
