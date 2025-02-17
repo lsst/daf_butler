@@ -28,9 +28,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from fnmatch import fnmatch
 from typing import Literal
 
-from astropy.table import Table
+from astropy.table import Column, Table, hstack, vstack
 
 from .._butler import Butler
 from .._butler_collections import CollectionInfo
@@ -42,6 +43,8 @@ def _getTable(
     glob: Iterable[str],
     collection_type: Iterable[CollectionType],
     inverse: bool,
+    show_dataset_types: bool = False,
+    exclude_dataset_types: Iterable[str] = [],
 ) -> Table:
     """Run queryCollections and return the results in Table form.
 
@@ -60,6 +63,11 @@ def _getTable(
         True if parent CHAINED datasets of each dataset should be listed in the
         description column, False if children of CHAINED datasets should be
         listed.
+    show_dataset_types : `bool`
+        If `True`, also show the dataset types present within each collection.
+    exclude_dataset_types : `~collections.abc.Iterable` [ `str` ]
+        A glob-style iterable of dataset types to exclude.
+        Only has an effect if `show_dataset_types` is True.
 
     Returns
     -------
@@ -72,21 +80,65 @@ def _getTable(
         names=("Name", typeCol, descriptionCol),
         dtype=(str, str, str),
     )
+    if show_dataset_types:
+        table.add_column(Column(name="Dataset Types", dtype=str))
     butler = Butler.from_config(repo)
+
+    def addDatasetTypes(collection_table: Table, collection: str, dataset_types: list[str]) -> Table:
+        if dataset_types[0] == "":
+            cinfo = butler.collections.get_info(collection, include_summary=True)
+            dataset_types = [""] if not cinfo.dataset_types else list(cinfo.dataset_types)
+        if exclude_dataset_types:
+            dataset_types = [
+                dt
+                for dt in dataset_types
+                if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+            ]
+            dataset_types = [""] if not dataset_types else dataset_types
+        types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+        collection_table = hstack([collection_table, types_table]).filled("")
+        return collection_table
+
+    def addCollection(info: CollectionInfo, relation: str) -> None:
+        try:
+            info_relatives = getattr(info, relation)
+        except AttributeError:
+            info_relatives = []
+        # Parent results can be returned in a non-deterministic order, so sort
+        # them to make the output deterministic.
+        if relation == "parents":
+            info_relatives = sorted(info_relatives)
+        if info_relatives:
+            collection_table = Table([[info.name], [info.type.name]], names=("Name", typeCol))
+            description_table = Table(names=(descriptionCol,), dtype=(str,))
+            for info_relative in info_relatives:
+                relative_table = Table([[info_relative]], names=(descriptionCol,))
+                if show_dataset_types:
+                    relative_table = addDatasetTypes(relative_table, info_relative, [""])
+                description_table = vstack([description_table, relative_table])
+            collection_table = hstack([collection_table, description_table]).filled("")
+            for row in collection_table:
+                table.add_row(row)
+        else:
+            collection_table = Table(
+                [[info.name], [info.type.name], [""]], names=("Name", typeCol, descriptionCol)
+            )
+            if show_dataset_types:
+                collection_table = addDatasetTypes(collection_table, info.name, [""])
+            for row in collection_table:
+                table.add_row(row)
+
     collections = sorted(
         butler.collections.query_info(
-            glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
+            glob or "*",
+            collection_types=frozenset(collection_type),
+            include_parents=inverse,
+            include_summary=show_dataset_types,
         )
     )
     if inverse:
         for info in collections:
-            if info.parents:
-                first = True
-                for parentName in sorted(info.parents):
-                    table.add_row((info.name if first else "", info.type.name if first else "", parentName))
-                    first = False
-            else:
-                table.add_row((info.name, info.type.name, ""))
+            addCollection(info, "parents")
         # If none of the datasets has a parent dataset then remove the
         # description column.
         if not any(c for c in table[descriptionCol]):
@@ -94,15 +146,12 @@ def _getTable(
     else:
         for info in collections:
             if info.type == CollectionType.CHAINED:
-                if info.children:
-                    first = True
-                    for child in info.children:
-                        table.add_row((info.name if first else "", info.type.name if first else "", child))
-                        first = False
-                else:
-                    table.add_row((info.name, info.type.name, ""))
+                addCollection(info, "children")
             else:
-                table.add_row((info.name, info.type.name, ""))
+                addCollection(info, "self")
+                # new_row = [info.name, info.type.name]
+                # new_row.extend([""] * (len(table.colnames) - len(new_row)))
+                # table.add_row(new_row)
         # If there aren't any CHAINED datasets in the results then remove the
         # description column.
         if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
@@ -116,6 +165,8 @@ def _getTree(
     glob: Iterable[str],
     collection_type: Iterable[CollectionType],
     inverse: bool,
+    show_dataset_types: bool = False,
+    exclude_dataset_types: Iterable[str] = [],
 ) -> Table:
     """Run queryCollections and return the results in a table representing tree
     form.
@@ -134,6 +185,11 @@ def _getTree(
         True if parent CHAINED datasets of each dataset should be listed in the
         description column, False if children of CHAINED datasets should be
         listed.
+    show_dataset_types : `bool`
+        If `True`, also show the dataset types present within each collection.
+    exclude_dataset_types : `~collections.abc.Iterable` [ `str` ]
+        A glob-style iterable of dataset types to exclude.
+        Only has an effect if `show_dataset_types` is True.
 
     Returns
     -------
@@ -144,23 +200,44 @@ def _getTree(
         names=("Name", "Type"),
         dtype=(str, str),
     )
+    if show_dataset_types:
+        table.add_column(Column(name="Dataset Types", dtype=str))
     butler = Butler.from_config(repo, without_datastore=True)
 
     def addCollection(info: CollectionInfo, level: int = 0) -> None:
-        table.add_row(("  " * level + info.name, info.type.name))
+        collection_table = Table([["  " * level + info.name], [info.type.name]], names=["Name", "Type"])
+        if show_dataset_types:
+            dataset_types = [""] if not info.dataset_types else info.dataset_types
+            if exclude_dataset_types:
+                dataset_types = [
+                    dt
+                    for dt in dataset_types
+                    if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                ]
+                dataset_types = [""] if not dataset_types else dataset_types
+            dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+            collection_table = hstack([collection_table, dataset_types_table]).filled("")
+        for row in collection_table:
+            table.add_row(row)
+
         if inverse:
             assert info.parents is not None  # For mypy.
             for pname in sorted(info.parents):
-                pinfo = butler.collections.get_info(pname, include_parents=inverse)
+                pinfo = butler.collections.get_info(
+                    pname, include_parents=inverse, include_summary=show_dataset_types
+                )
                 addCollection(pinfo, level + 1)
         else:
             if info.type == CollectionType.CHAINED:
                 for name in info.children:
-                    cinfo = butler.collections.get_info(name)
+                    cinfo = butler.collections.get_info(name, include_summary=show_dataset_types)
                     addCollection(cinfo, level + 1)
 
     collections = butler.collections.query_info(
-        glob or "*", collection_types=frozenset(collection_type), include_parents=inverse
+        glob or "*",
+        collection_types=frozenset(collection_type),
+        include_parents=inverse,
+        include_summary=show_dataset_types,
     )
     for collection in sorted(collections):
         addCollection(collection)
@@ -168,20 +245,73 @@ def _getTree(
 
 
 def _getList(
-    repo: str, glob: Iterable[str], collection_type: Iterable[CollectionType], flatten_chains: bool
+    repo: str,
+    glob: Iterable[str],
+    collection_type: Iterable[CollectionType],
+    flatten_chains: bool,
+    show_dataset_types: bool = False,
+    exclude_dataset_types: Iterable[str] = [],
 ) -> Table:
     """Return collection results as a table representing a flat list of
     collections.
+
+    Parameters
+    ----------
+    repo : `str`
+        Butler repository location.
+    glob : `collections.abc.Iterable` of `str`
+        Wildcards to pass to ``queryCollections``.
+    collection_type
+        Same as `queryCollections`
+    flatten_chains : `bool`
+        If `True`, flatten the tree of CHAINED datasets.
+    show_dataset_types : `bool`
+        If `True`, also show the dataset types present within each collection.
+    exclude_dataset_types : `~collections.abc.Iterable` [ `str` ]
+        A glob-style iterable of dataset types to exclude.
+        Only has an effect if `show_dataset_types` is True.
+
+    Returns
+    -------
+    collections : `astropy.table.Table`
+        Same as `queryCollections`
     """
+    table = Table(
+        names=("Name", "Type"),
+        dtype=(str, str),
+    )
+    if show_dataset_types:
+        table.add_column(Column(name="Dataset Types", dtype=str))
     butler = Butler.from_config(repo)
+
+    def addCollection(info: CollectionInfo) -> None:
+        collection_table = Table([[info.name], [info.type.name]], names=["Name", "Type"])
+        if show_dataset_types:
+            dataset_types = [""] if not info.dataset_types else info.dataset_types
+            if exclude_dataset_types:
+                dataset_types = [
+                    dt
+                    for dt in dataset_types
+                    if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                ]
+                dataset_types = [""] if not dataset_types else dataset_types
+            dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+            collection_table = hstack([collection_table, dataset_types_table]).filled("")
+        for row in collection_table:
+            table.add_row(row)
+
     collections = list(
         butler.collections.query_info(
-            glob or "*", collection_types=frozenset(collection_type), flatten_chains=flatten_chains
+            glob or "*",
+            collection_types=frozenset(collection_type),
+            flatten_chains=flatten_chains,
+            include_summary=show_dataset_types,
         )
     )
-    names = [c.name for c in collections]
-    types = [c.type.name for c in collections]
-    return Table((names, types), names=("Name", "Type"))
+    for collection in collections:
+        addCollection(collection)
+
+    return table
 
 
 def queryCollections(
@@ -189,6 +319,8 @@ def queryCollections(
     glob: Iterable[str],
     collection_type: Iterable[CollectionType],
     chains: Literal["INVERSE-TABLE", "TABLE", "TREE", "INVERSE-TREE", "FLATTEN", "NO-CHILDREN"],
+    show_dataset_types: bool = False,
+    exclude_dataset_types: Iterable[str] = [],
 ) -> Table:
     """Get the collections whose names match an expression.
 
@@ -206,6 +338,11 @@ def queryCollections(
     chains : `str`
         Affects contents and formatting of results, see
         ``cli.commands.query_collections``.
+    show_dataset_types : `bool`, optional
+        If `True`, include the dataset types present within each collection.
+    exclude_dataset_types : `~collections.abc.Iterable` [ `str` ], optional
+        A glob-style iterable of dataset types to exclude.
+        Only has an effect if `show_dataset_types` is True.
 
     Returns
     -------
@@ -213,10 +350,10 @@ def queryCollections(
         A table containing information about collections.
     """
     if (inverse := chains == "INVERSE-TABLE") or chains == "TABLE":
-        return _getTable(repo, glob, collection_type, inverse)
+        return _getTable(repo, glob, collection_type, inverse, show_dataset_types, exclude_dataset_types)
     elif (inverse := chains == "INVERSE-TREE") or chains == "TREE":
-        return _getTree(repo, glob, collection_type, inverse)
+        return _getTree(repo, glob, collection_type, inverse, show_dataset_types, exclude_dataset_types)
     elif chains == "FLATTEN" or chains == "NO-CHILDREN":
         flatten = chains == "FLATTEN"
-        return _getList(repo, glob, collection_type, flatten)
+        return _getList(repo, glob, collection_type, flatten, show_dataset_types, exclude_dataset_types)
     raise RuntimeError(f"Value for --chains not recognized: {chains}")

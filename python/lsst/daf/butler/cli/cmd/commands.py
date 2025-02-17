@@ -424,6 +424,21 @@ def prune_datasets(**kwargs: Any) -> None:
         case_sensitive=False,
     ),
 )
+@click.option(
+    "-t",
+    "--show-dataset-types",
+    is_flag=True,
+    help="Also show the dataset types registered within each collection.",
+)
+@click.option(
+    "--exclude-dataset-types",
+    type=click.STRING,
+    multiple=True,
+    default=["*_config,*_log,*_metadata,packages"],
+    callback=split_commas,
+    show_default=True,
+    help="Dataset types (comma-separated) to exclude. Only valid with --show-dataset-types.",
+)
 @options_file_option()
 def query_collections(*args: Any, **kwargs: Any) -> None:
     """Get the collections whose names match an expression."""
