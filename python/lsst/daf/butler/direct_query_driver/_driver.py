@@ -469,7 +469,7 @@ class DirectQueryDriver(QueryDriver):
             Column expressions to sort by.
         find_first_dataset : `str`, ``ANY_DATASET``, or `None`, optional
             Name of a dataset type for which only one result row for each data
-            ID should be returned, with the colletions searched in order.
+            ID should be returned, with the collections searched in order.
             ``ANY_DATASET`` is used to represent the search for all dataset
             types with a particular set of dimensions in ``tree.any_dataset``.
         analyze_only : `bool`, optional
@@ -538,7 +538,7 @@ class DirectQueryDriver(QueryDriver):
           with the same dimensions as a UNION ALL combination of SELECTs, in
           which each component SELECT has the joins/projection/find-first
           structure.  This cannot be implemented as a sequence of
-          `SingleSelectQueryBuilder` objets, however, since the need for the
+          `SingleSelectQueryBuilder` objects, however, since the need for the
           terms to share a single `Postprocessing` object and column list means
           that they are not independent.
 
@@ -724,7 +724,7 @@ class DirectQueryDriver(QueryDriver):
         Parameters
         ----------
         dimensions : `DimensionGroup`
-            Dimnensions of the union dataset types in this query.
+            Dimensions of the union dataset types in this query.
         collection_analysis : `CollectionAnalysis`
             Information about the collections appearing in this collection.
 
@@ -964,7 +964,7 @@ class DirectQueryDriver(QueryDriver):
         needs_validity_match_count : `bool`
             Whether this query needs a COUNT column to track the number of
             datasets for each data ID and dataset type.  If this is `False` but
-            ``postprocessing.check_valdity_match_count`` is `True`, a dummy
+            ``postprocessing.check_validity_match_count`` is `True`, a dummy
             count column that is just "1" should be added, because the check
             is needed only for some other SELECT term in a UNION ALL.
         find_first_dataset : `str` or ``ANY_DATASET`` or `None`
@@ -994,7 +994,7 @@ class DirectQueryDriver(QueryDriver):
         ]
 
         # Many of our fields derive their uniqueness from the unique_key
-        # fields: if rows are uniqe over the 'unique_key' fields, then they're
+        # fields: if rows are unique over the 'unique_key' fields, then they're
         # automatically unique over these 'derived_fields'.  We just remember
         # these as pairs of (logical_table, field) for now.
         derived_fields: list[tuple[str | qt.AnyDatasetType, str]] = []
@@ -1358,7 +1358,11 @@ class DirectQueryDriver(QueryDriver):
                     f"No datasets of type {result.name!r} in collection {collection_record.name!r}."
                 )
                 rejected = True
-            for governor in constraint_data_id.keys() & collection_summary.governors.keys():
+            for governor in (
+                constraint_data_id.keys()
+                & collection_summary.governors.keys()
+                & dataset_search.dimensions.names
+            ):
                 if constraint_data_id[governor] not in collection_summary.governors[governor]:
                     result.messages.append(
                         f"No datasets with {governor}={constraint_data_id[governor]!r} "

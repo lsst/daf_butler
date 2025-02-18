@@ -2373,6 +2373,31 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             ["51352db4-a47a-447c-b12d-a50b206b17cd", "60c8a65c-7290-4c38-b1de-e3b1cdcf872d"],
         )
 
+    def test_irrelevant_governor_constraints(self) -> None:
+        """Test that constraining an irrelevant governor dimension doesn't
+        break dataset queries.
+        """
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        a = DatasetType("a", {"detector"}, "StructuredDataDict", universe=butler.dimensions)
+        b = DatasetType("b", {"tract"}, "StructuredDataDict", universe=butler.dimensions)
+        butler.registry.registerDatasetType(a)
+        butler.registry.registerDatasetType(b)
+        collection = "run1"
+        butler.collections.register(collection)
+        (ref_a,) = butler.registry.insertDatasets(a, [{"instrument": "Cam1", "detector": 2}], run=collection)
+        (ref_b,) = butler.registry.insertDatasets(b, [{"skymap": "SkyMap1", "tract": 1}], run=collection)
+        # First, some sanity-check query that's mostly to check the test setup.
+        self.assertEqual(butler.query_datasets("a", collections=collection), [ref_a])
+        self.assertEqual(butler.query_datasets("b", collections=collection), [ref_b])
+        # Now check that we can get both with an irrelevant constraint.
+        # In the first case, there is a dataset of a different type that is
+        # consistent with the constraint in the collection:
+        self.assertEqual(butler.query_datasets("a", collections=collection, skymap="SkyMap1"), [ref_a])
+        # In the second case there is a dataset of a different type that is
+        # inconsistent with the constraint in the collection:
+        self.assertEqual(butler.query_datasets("b", collections=collection, instrument="Cam2"), [ref_b])
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []
