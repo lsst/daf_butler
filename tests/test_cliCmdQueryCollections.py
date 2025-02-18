@@ -61,7 +61,14 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_minimal(self):
         """Test only required parameters, and omit optional parameters."""
-        self.run_test(["query-collections", "here", "--chains", "TABLE"], self.makeExpected(repo="here"))
+        self.run_test(
+            ["query-collections", "here", "--chains", "TABLE"],
+            self.makeExpected(
+                repo="here",
+                show_dataset_types=False,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
 
     def test_all(self):
         """Test all parameters"""
@@ -82,6 +89,10 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
                 glob=("foo*",),
                 collection_type=(CollectionType.TAGGED, CollectionType.RUN),
                 chains="TABLE",
+                show_dataset_types=False,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
             ),
         )
 
