@@ -246,7 +246,7 @@ class DatasetProvenance(pydantic.BaseModel):
         return f"{prefix}{k}"
 
     @staticmethod
-    def _find_prefix_and_sep(prov_dict: Mapping) -> tuple[str, str] | tuple[None, None]:
+    def _find_prefix_and_sep(prov_dict: Mapping[str, Any]) -> tuple[str, str] | tuple[None, None]:
         """Given a mapping try to determine the prefix and separator for
         provenance keys.
 
@@ -332,7 +332,7 @@ class DatasetProvenance(pydantic.BaseModel):
         return prefixes.pop(), separators.pop()
 
     @classmethod
-    def _find_provenance_keys_in_flat_dict(cls, prov_dict: Mapping) -> dict[str, str]:
+    def _find_provenance_keys_in_flat_dict(cls, prov_dict: Mapping[str, Any]) -> dict[str, str]:
         """Find the provenance keys in a dictionary.
 
         Parameters
@@ -385,7 +385,7 @@ class DatasetProvenance(pydantic.BaseModel):
         return prov_keys
 
     @classmethod
-    def strip_provenance_from_flat_dict(cls, prov_dict: MutableMapping) -> None:
+    def strip_provenance_from_flat_dict(cls, prov_dict: MutableMapping[str, Any]) -> None:
         """Remove provenance keys from a mapping that had been populated
         by `to_flat_dict`.
 
@@ -400,7 +400,7 @@ class DatasetProvenance(pydantic.BaseModel):
         return
 
     @classmethod
-    def from_flat_dict(cls, prov_dict: Mapping, butler: Butler) -> tuple[Self, DatasetRef | None]:
+    def from_flat_dict(cls, prov_dict: Mapping[str, Any], butler: Butler) -> tuple[Self, DatasetRef | None]:
         """Create a provenance object from a provenance dictionary.
 
         Parameters
