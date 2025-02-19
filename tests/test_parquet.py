@@ -779,9 +779,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
         # Check that minimal provenance was written by default.
         expected = {
-            "lsst.butler.id": str(put_ref.id),
-            "lsst.butler.run": "test_run",
-            "lsst.butler.datasettype": "data",
+            "LSST.BUTLER.ID": str(put_ref.id),
+            "LSST.BUTLER.RUN": "test_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
         }
 
         self.assertEqual(tab2.meta, expected)
@@ -810,13 +810,13 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
 
         expected = {
-            "lsst.butler.id": str(put_ref.id),
-            "lsst.butler.run": "test_run",
-            "lsst.butler.datasettype": "data",
-            "lsst.butler.quantum": str(quantum_id),
-            "lsst.butler.input.0.id": str(input_ref.id),
-            "lsst.butler.input.0.run": "other_run",
-            "lsst.butler.input.0.datasettype": "astropy_parquet",
+            "LSST.BUTLER.ID": str(put_ref.id),
+            "LSST.BUTLER.RUN": "test_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
+            "LSST.BUTLER.QUANTUM": str(quantum_id),
+            "LSST.BUTLER.INPUT.0.ID": str(input_ref.id),
+            "LSST.BUTLER.INPUT.0.RUN": "other_run",
+            "LSST.BUTLER.INPUT.0.DATASETTYPE": "astropy_parquet",
         }
         self.assertEqual(tab2.meta, expected)
 
@@ -827,9 +827,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
         # tab2 will have been updated in place.
         expected = {
-            "lsst.butler.id": str(put_ref3.id),
-            "lsst.butler.run": "new_run",
-            "lsst.butler.datasettype": "data",
+            "LSST.BUTLER.ID": str(put_ref3.id),
+            "LSST.BUTLER.RUN": "new_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
         }
         self.assertEqual(tab2.meta, expected)
         null_prov, prov_ref = DatasetProvenance.from_flat_dict(tab2.meta, self.butler)
