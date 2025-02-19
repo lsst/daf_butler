@@ -107,6 +107,7 @@ class DatasetProvenance(pydantic.BaseModel):
         prefix: str = "",
         sep: str = ".",
         simple_types: bool = False,
+        use_upper: bool | None = None,
     ) -> dict[str, int | str | bool | float | uuid.UUID | DataIdValue]:
         """Return provenance as a flattened dictionary.
 
@@ -127,6 +128,11 @@ class DatasetProvenance(pydantic.BaseModel):
             `False`, UUIDs will be returned as `uuid.UUID`. Complex types
             found in `DatasetProvenance.extras` will be cast to a `str`
             if `True`.
+        use_upper : `bool` or `None`, optional
+            If `None` the case of the keys matches the case of the first
+            character of the prefix (defined by whether `str.isupper()` returns
+            true, else they will be lower case). If `False` the case will be
+            lower case, and if `True` the case will be upper case.
 
         Returns
         -------
@@ -136,11 +142,6 @@ class DatasetProvenance(pydantic.BaseModel):
 
         Notes
         -----
-        The provenance keys created by this method are defined below. The
-        case of the keys will match the case of the first character of the
-        prefix (defined by whether `str.isupper()` returns true, else they will
-        be lower case).
-
         Keys from the given dataset (all optional if no dataset is given):
 
         :id: UUID of the given dataset.
@@ -188,7 +189,7 @@ class DatasetProvenance(pydantic.BaseModel):
 
         def _make_key(*keys: str | int) -> str:
             """Make the key in the correct form with simpler API."""
-            return self._make_provenance_key(prefix, sep, *keys)
+            return self._make_provenance_key(prefix, sep, use_upper, *keys)
 
         prov: dict[str, int | float | str | bool | uuid.UUID | DataIdValue] = {}
         if ref is not None:
@@ -217,7 +218,7 @@ class DatasetProvenance(pydantic.BaseModel):
         return prov
 
     @staticmethod
-    def _make_provenance_key(prefix: str, sep: str, *keys: str | int) -> str:
+    def _make_provenance_key(prefix: str, sep: str, use_upper: bool | None, *keys: str | int) -> str:
         """Construct provenance key from prefix and separator.
 
         Parameters
@@ -227,6 +228,9 @@ class DatasetProvenance(pydantic.BaseModel):
         sep : `str`
             Separator to use to represent hierarchy. Must be a single
             character.
+        use_upper : `bool` or `None`
+            If `True` use upper case for provenance keys, if `False` use lower
+            case, if `None` match the case of the prefix.
         keys : `tuple` of `str` | `int`
             Components of key to combine with prefix and separator.
 
@@ -237,7 +241,8 @@ class DatasetProvenance(pydantic.BaseModel):
             prefix (defaulting to lower case if the first character of
             prefix has no case).
         """
-        use_upper = prefix[0].isupper() if prefix else False
+        if use_upper is None:
+            use_upper = prefix[0].isupper() if prefix else False
         if prefix:
             prefix += sep
         k = sep.join(str(kk) for kk in keys)

@@ -843,6 +843,15 @@ class DatasetRefTestCase(unittest.TestCase):
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
+        # Prefix has no case but force upper.
+        prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→", use_upper=True)
+        self.assertIn("🔭 LSST BUTLER→RUN", prov_dict)
+        self.assertIn("🔭 LSST BUTLER→INPUT→0→EXTRA_NUMBER", prov_dict)
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→RUN"], "somerun")
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→INPUT→0→EXTRA_NUMBER"], 42)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
         prov_dict = prov.to_flat_dict(None, prefix="butler", sep=" ")
         self.assertNotIn("butler run", prov_dict)
         self.assertIn("butler quantum", prov_dict)
