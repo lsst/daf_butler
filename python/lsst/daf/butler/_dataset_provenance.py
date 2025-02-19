@@ -31,17 +31,20 @@ __all__ = ("DatasetProvenance",)
 
 import re
 import uuid
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeAlias
 
 import pydantic
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef
+from .dimensions import DataIdValue
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping
 
     from ._butler import Butler
-    from .dimensions import DataIdValue
+
+# Types that can be stored in a provenance dictionary.
+_PROV_TYPES: TypeAlias = str | int | float | bool | DataIdValue | uuid.UUID
 
 
 class DatasetProvenance(pydantic.BaseModel):
@@ -51,7 +54,7 @@ class DatasetProvenance(pydantic.BaseModel):
     """The input datasets."""
     quantum_id: uuid.UUID | None = None
     """Identifier of the Quantum that was executed."""
-    extras: dict[uuid.UUID, dict[str, Any]] = pydantic.Field(default_factory=dict)
+    extras: dict[uuid.UUID, dict[str, _PROV_TYPES]] = pydantic.Field(default_factory=dict)
     """Extra provenance information associated with a particular dataset."""
     _uuids: set[uuid.UUID] = pydantic.PrivateAttr(default_factory=set)
 
@@ -75,7 +78,7 @@ class DatasetProvenance(pydantic.BaseModel):
         self._uuids.add(ref.id)
         self.inputs.append(ref.to_simple())
 
-    def add_extra_provenance(self, dataset_id: uuid.UUID, extra: dict[str, Any]) -> None:
+    def add_extra_provenance(self, dataset_id: uuid.UUID, extra: dict[str, _PROV_TYPES]) -> None:
         """Attach extra provenance to a specific dataset.
 
         Parameters
@@ -84,7 +87,8 @@ class DatasetProvenance(pydantic.BaseModel):
             The ID of the dataset to receive this provenance.
         extra : `dict` [ `str`, `typing.Any` ]
             The extra provenance information as a dictionary. The values
-            must be simple Python scalars.
+            must be simple Python scalars or scalars that can be serialized
+            by Pydantic and convert to a simple string value.
 
         Notes
         -----
@@ -108,7 +112,7 @@ class DatasetProvenance(pydantic.BaseModel):
         sep: str = ".",
         simple_types: bool = False,
         use_upper: bool | None = None,
-    ) -> dict[str, int | str | bool | float | uuid.UUID | DataIdValue]:
+    ) -> dict[str, _PROV_TYPES]:
         """Return provenance as a flattened dictionary.
 
         Parameters
@@ -191,7 +195,7 @@ class DatasetProvenance(pydantic.BaseModel):
             """Make the key in the correct form with simpler API."""
             return self._make_provenance_key(prefix, sep, use_upper, *keys)
 
-        prov: dict[str, int | float | str | bool | uuid.UUID | DataIdValue] = {}
+        prov: dict[str, _PROV_TYPES] = {}
         if ref is not None:
             prov[_make_key("id")] = ref.id if not simple_types else str(ref.id)
             prov[_make_key("run")] = ref.run
