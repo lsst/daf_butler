@@ -782,6 +782,10 @@ class DatasetRefTestCase(unittest.TestCase):
         )
 
         with self.assertRaises(ValueError):
+            prov.add_extra_provenance(ref2.id, {"extra_string": "value", "extra_number": 42, "id": extra_id})
+
+        with self.assertRaises(ValueError):
+            # Unknown dataset.
             prov.add_extra_provenance(ref1.id, {"extra": 42})
 
         expected = {

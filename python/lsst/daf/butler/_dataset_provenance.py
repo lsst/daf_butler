@@ -85,9 +85,18 @@ class DatasetProvenance(pydantic.BaseModel):
         extra : `dict` [ `str`, `typing.Any` ]
             The extra provenance information as a dictionary. The values
             must be simple Python scalars.
+
+        Notes
+        -----
+        The keys in the extra provenance can not include provenance keys of
+        ``run``, ``id``, or ``datasettype`` (in upper or lower case).
         """
         if dataset_id not in self._uuids:
             raise ValueError(f"The given dataset ID {dataset_id} is not known to this provenance instance.")
+        extra_keys = {k.lower() for k in extra.keys()}
+        if overlap := (extra_keys & {"run", "id", "datasettype"}):
+            raise ValueError(f"Extra provenance includes a reserved provenance key: {overlap}")
+
         self.extras.setdefault(dataset_id, {}).update(extra)
 
     def to_flat_dict(
