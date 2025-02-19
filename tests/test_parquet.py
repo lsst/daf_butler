@@ -156,7 +156,7 @@ def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
         ("ddd", "f8"),
         ("f", "i8"),
         ("strcol", "U10"),
-        ("bytecol", "a10"),
+        ("bytecol", "S10"),
         ("dtn", "datetime64[ns]"),
         ("dtu", "datetime64[us]"),
     ]
