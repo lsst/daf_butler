@@ -815,17 +815,23 @@ class DatasetRefTestCase(unittest.TestCase):
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
-        # Use a prefix and different separator.
-        prov_dict = prov.to_flat_dict(ref1, prefix="LSST BUTLER 🔭", sep=" ")
-        self.assertIn("LSST BUTLER 🔭 RUN", prov_dict)
-        self.assertIn("LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER", prov_dict)
-        self.assertEqual(prov_dict["LSST BUTLER 🔭 RUN"], "somerun")
-        self.assertEqual(prov_dict["LSST BUTLER 🔭 INPUT 0 EXTRA_NUMBER"], 42)
-        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
-        self.assertEqual(prov_dict, {})
+        for prefix, sep in (
+            ("LSST BUTLER 🔭", " "),  # Unicode in prefix.
+            ("LSST*BUTLER 🔭", " "),  # regex character.
+            ("LSST*BUTLER", "+"),  # two regex characters.
+            ("LSST_BUTLER", "\\"),  # backslash for extra difficulty.
+            ("LSST BUTLER 🔭", "→"),  # Unicode separator.
+        ):
+            prov_dict = prov.to_flat_dict(ref1, prefix=prefix, sep=sep)
+            self.assertIn(f"{prefix}{sep}RUN", prov_dict)
+            self.assertIn(f"{prefix}{sep}INPUT{sep}0{sep}EXTRA_NUMBER", prov_dict)
+            self.assertEqual(prov_dict[f"{prefix}{sep}RUN"], "somerun")
+            self.assertEqual(prov_dict[f"{prefix}{sep}INPUT{sep}0{sep}EXTRA_NUMBER"], 42)
+            DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+            self.assertEqual(prov_dict, {})
 
+        # Prefix has no case so lower case assumed.
         prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→")
-
         self.assertIn("🔭 LSST BUTLER→run", prov_dict)
         self.assertIn("🔭 LSST BUTLER→input→0→extra_number", prov_dict)
         self.assertEqual(prov_dict["🔭 LSST BUTLER→run"], "somerun")
@@ -847,13 +853,13 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(prov_dict, {})
 
         # Check that an empty provenance with a ref returns info just for
-        # that ref.
-        prov_dict = prov2.to_flat_dict(ref1, prefix="", sep=".")
+        # that ref. Use separator that needs escaping in a regex.
+        prov_dict = prov2.to_flat_dict(ref1, prefix="", sep="*")
         expected = {
             "id": ref1.id,
             "datasettype": "test",
-            "dataid.instrument": "DummyCam",
-            "dataid.visit": 42,
+            "dataid*instrument": "DummyCam",
+            "dataid*visit": 42,
             "run": "somerun",
         }
         self.assertEqual(prov_dict, expected)
@@ -874,18 +880,26 @@ class DatasetRefTestCase(unittest.TestCase):
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
-        prov_dict = prov3.to_flat_dict(empty_ref, prefix="xyz", sep="-")
+        prov_dict = prov3.to_flat_dict(empty_ref, prefix="x-yz", sep="-")
         expected = {
-            "xyz-id": empty_ref.id,
-            "xyz-datasettype": "empty",
-            "xyz-run": "empty_run",
+            "x-yz-id": empty_ref.id,
+            "x-yz-datasettype": "empty",
+            "x-yz-run": "empty_run",
         }
         self.assertEqual(prov_dict, expected)
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
 
         with self.assertRaises(ValueError):
-            prov3.to_flat_dict(empty_ref, sep="abc")
+            prov3.to_flat_dict(empty_ref, sep="##")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="a")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="1")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="_")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="Σ")
 
         # Dictionary with inconsistent prefixes and separators.
         test_dicts = (

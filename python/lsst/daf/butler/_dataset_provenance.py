@@ -110,7 +110,8 @@ class DatasetProvenance(pydantic.BaseModel):
             A prefix to use for each key in the provenance dictionary.
         sep : `str`, optional
             Separator to use to represent hierarchy. Must be a single
-            character.
+            character. Can not be a number, letter, or underscore (to avoid
+            confusion with provenance keys themselves).
         simple_types : `bool`, optional
             If `True` only simple Python types will be used in the returned
             dictionary, specifically UUIDs will be returned as `str`. If
@@ -169,6 +170,12 @@ class DatasetProvenance(pydantic.BaseModel):
         ValueError
             Raised if the separator is not a single character.
         """
+        if len(sep) != 1:
+            raise ValueError(f"Separator for provenance keys must be a single character. Got {sep!r}.")
+        if re.match(r"[_\w\d]$", sep):
+            raise ValueError(
+                f"Separator for provenance keys can not be word character or underscore. Got {sep!r}."
+            )
 
         def _make_key(*keys: str | int) -> str:
             """Make the key in the correct form with simpler API."""
@@ -221,8 +228,6 @@ class DatasetProvenance(pydantic.BaseModel):
             prefix (defaulting to lower case if the first character of
             prefix has no case).
         """
-        if len(sep) != 1:
-            raise ValueError(f"Separator for provenance keys must be a single character. Got {sep!r}.")
         use_upper = prefix[0].isupper() if prefix else False
         if prefix:
             prefix += sep
@@ -348,16 +353,19 @@ class DatasetProvenance(pydantic.BaseModel):
 
         core_provenance = tuple(f"{prefix}{k}".lower() for k in ("run", "id", "datasettype", "quantum"))
 
+        # Need to escape the prefix and separator for regex usage.
+        esc_sep = re.escape(sep)
+        esc_prefix = re.escape(prefix)
         prov_keys: dict[str, str] = {}
         for k in list(prov_dict):
             # the input provenance can include extra keys that we cannot
             # know so have to match solely on INPUT N.
             found_key = False
-            if re.match(rf"{prefix}input{sep}(\d+){sep}(.*)$", k, flags=re.IGNORECASE):
+            if re.match(rf"{esc_prefix}input{esc_sep}(\d+){esc_sep}(.*)$", k, flags=re.IGNORECASE):
                 found_key = True
             elif k.lower() in core_provenance:
                 found_key = True
-            elif re.match(f"{prefix}dataid{sep}[a-z_]+$", k, flags=re.IGNORECASE):
+            elif re.match(f"{esc_prefix}dataid{esc_sep}[a-z_]+$", k, flags=re.IGNORECASE):
                 found_key = True
 
             if found_key:
