@@ -35,6 +35,7 @@ import os
 import posixpath
 import shutil
 import unittest
+import uuid
 
 try:
     import pyarrow as pa
@@ -81,6 +82,7 @@ except ImportError:
 from lsst.daf.butler import (
     Butler,
     Config,
+    DatasetProvenance,
     DatasetRef,
     DatasetType,
     FileDataset,
@@ -154,7 +156,7 @@ def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
         ("ddd", "f8"),
         ("f", "i8"),
         ("strcol", "U10"),
-        ("bytecol", "a10"),
+        ("bytecol", "S10"),
         ("dtn", "datetime64[ns]"),
         ("dtu", "datetime64[us]"),
     ]
@@ -771,11 +773,68 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
     def testWriteReadAstropyTableLossless(self):
         tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
-        self.butler.put(tab1, self.datasetType, dataId={})
+        put_ref = self.butler.put(tab1, self.datasetType, dataId={})
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
 
+        # Check that minimal provenance was written by default.
+        expected = {
+            "LSST.BUTLER.ID": str(put_ref.id),
+            "LSST.BUTLER.RUN": "test_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
+        }
+
+        self.assertEqual(tab2.meta, expected)
+
         _checkAstropyTableEquality(tab1, tab2)
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteReadAstropyTableProvenance(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        # Create a ref for provenance.
+        astropy_type = DatasetType(
+            "astropy_parquet",
+            dimensions=(),
+            storageClass="ArrowAstropy",
+            universe=self.butler.dimensions,
+        )
+        self.butler.registry.registerDatasetType(astropy_type)
+        input_ref = DatasetRef(astropy_type, {}, run="other_run")
+        quantum_id = uuid.uuid4()
+        provenance = DatasetProvenance(quantum_id=quantum_id)
+        provenance.add_input(input_ref)
+
+        put_ref = self.butler.put(tab1, self.datasetType, dataId={}, provenance=provenance)
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+
+        expected = {
+            "LSST.BUTLER.ID": str(put_ref.id),
+            "LSST.BUTLER.RUN": "test_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
+            "LSST.BUTLER.QUANTUM": str(quantum_id),
+            "LSST.BUTLER.INPUT.0.ID": str(input_ref.id),
+            "LSST.BUTLER.INPUT.0.RUN": "other_run",
+            "LSST.BUTLER.INPUT.0.DATASETTYPE": "astropy_parquet",
+        }
+        self.assertEqual(tab2.meta, expected)
+
+        # Put the dataset again, with different provenance and ensure
+        # that the previous provenance was stripped.
+        self.butler.collections.register("new_run")
+        put_ref3 = self.butler.put(tab2, self.datasetType, dataId={}, run="new_run")
+
+        # tab2 will have been updated in place.
+        expected = {
+            "LSST.BUTLER.ID": str(put_ref3.id),
+            "LSST.BUTLER.RUN": "new_run",
+            "LSST.BUTLER.DATASETTYPE": "data",
+        }
+        self.assertEqual(tab2.meta, expected)
+        null_prov, prov_ref = DatasetProvenance.from_flat_dict(tab2.meta, self.butler)
+        self.assertEqual(prov_ref, put_ref3)
+        self.assertEqual(null_prov, DatasetProvenance())
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteReadNumpyTableLossless(self):
@@ -2390,6 +2449,9 @@ def _checkAstropyTableEquality(table1, table2, skip_units=False, has_bigendian=F
             # Only check type matches, force to little-endian.
             assert table1.dtype[name].newbyteorder(">") == table2.dtype[name].newbyteorder(">")
 
+    # Strip provenance before comparison.
+    DatasetProvenance.strip_provenance_from_flat_dict(table1.meta)
+    DatasetProvenance.strip_provenance_from_flat_dict(table2.meta)
     assert table1.meta == table2.meta
     if not skip_units:
         for name in table1.columns:

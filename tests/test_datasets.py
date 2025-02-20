@@ -33,6 +33,7 @@ import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DatasetProvenance,
     DatasetRef,
     DatasetType,
     DimensionConfig,
@@ -754,6 +755,187 @@ class DatasetRefTestCase(unittest.TestCase):
 
         new_refs = container.to_refs(universe=self.universe)
         self.assertEqual(new_refs, [ref1, ref2])
+
+    def test_dataset_provenance(self) -> None:
+        """Test that dataset provenance can be stored."""
+        dimensions = self.universe.conform(("instrument", "visit"))
+        ref1 = DatasetRef(self.datasetType, self.dataId, run="somerun")
+        ref2 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, dimensions=dimensions),
+            run="run",
+        )
+        ref3 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=22, dimensions=dimensions),
+            run="run",
+        )
+
+        quantum_id = uuid.uuid4()
+        prov = DatasetProvenance(quantum_id=quantum_id)
+        prov.add_input(ref2)
+        prov.add_input(ref3)
+        prov.add_input(ref2)  # no-op which should leave ref2 still ahead of ref3 in output.
+        extra_id = uuid.uuid4()
+        prov.add_extra_provenance(
+            ref2.id, {"extra_string": "value", "extra_number": 42, "extra_id": extra_id}
+        )
+
+        with self.assertRaises(ValueError):
+            prov.add_extra_provenance(ref2.id, {"extra_string": "value", "extra_number": 42, "id": extra_id})
+
+        with self.assertRaises(ValueError):
+            # Unknown dataset.
+            prov.add_extra_provenance(ref1.id, {"extra": 42})
+
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid.instrument": "DummyCam",
+            "dataid.visit": 42,
+            "run": "somerun",
+            "quantum": quantum_id,
+            "input.0.datasettype": "test",
+            "input.0.run": "run",
+            "input.0.id": ref2.id,
+            "input.0.extra_number": 42,
+            "input.0.extra_string": "value",
+            "input.0.extra_id": extra_id,
+            "input.1.datasettype": "test",
+            "input.1.run": "run",
+            "input.1.id": ref3.id,
+        }
+
+        prov_dict = prov.to_flat_dict(ref1, sep=".")
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        prov_dict = prov.to_flat_dict(ref1, prefix="", sep=".", simple_types=True)
+        self.assertEqual(prov_dict["id"], str(ref1.id))
+        self.assertEqual(prov_dict["quantum"], str(quantum_id))
+        self.assertEqual(prov_dict["input.0.id"], str(ref2.id))
+        self.assertEqual(prov_dict["input.0.extra_id"], str(extra_id))
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        for prefix, sep in (
+            ("LSST BUTLER 🔭", " "),  # Unicode in prefix.
+            ("LSST*BUTLER 🔭", " "),  # regex character.
+            ("LSST*BUTLER", "+"),  # two regex characters.
+            ("LSST_BUTLER", "\\"),  # backslash for extra difficulty.
+            ("LSST BUTLER 🔭", "→"),  # Unicode separator.
+        ):
+            prov_dict = prov.to_flat_dict(ref1, prefix=prefix, sep=sep)
+            self.assertIn(f"{prefix}{sep}RUN", prov_dict)
+            self.assertIn(f"{prefix}{sep}INPUT{sep}0{sep}EXTRA_NUMBER", prov_dict)
+            self.assertEqual(prov_dict[f"{prefix}{sep}RUN"], "somerun")
+            self.assertEqual(prov_dict[f"{prefix}{sep}INPUT{sep}0{sep}EXTRA_NUMBER"], 42)
+            DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+            self.assertEqual(prov_dict, {})
+
+        # Prefix has no case so lower case assumed.
+        prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→")
+        self.assertIn("🔭 LSST BUTLER→run", prov_dict)
+        self.assertIn("🔭 LSST BUTLER→input→0→extra_number", prov_dict)
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→run"], "somerun")
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→input→0→extra_number"], 42)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        # Prefix has no case but force upper.
+        prov_dict = prov.to_flat_dict(ref1, prefix="🔭 LSST BUTLER", sep="→", use_upper=True)
+        self.assertIn("🔭 LSST BUTLER→RUN", prov_dict)
+        self.assertIn("🔭 LSST BUTLER→INPUT→0→EXTRA_NUMBER", prov_dict)
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→RUN"], "somerun")
+        self.assertEqual(prov_dict["🔭 LSST BUTLER→INPUT→0→EXTRA_NUMBER"], 42)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        prov_dict = prov.to_flat_dict(None, prefix="butler", sep=" ")
+        self.assertNotIn("butler run", prov_dict)
+        self.assertIn("butler quantum", prov_dict)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        # Check that an empty provenance returns empty dict with no ref.
+        prov2 = DatasetProvenance()
+        prov_dict = prov2.to_flat_dict(None)
+        self.assertEqual(prov_dict, {})
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        # Check that an empty provenance with a ref returns info just for
+        # that ref. Use separator that needs escaping in a regex.
+        prov_dict = prov2.to_flat_dict(ref1, prefix="", sep="*")
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid*instrument": "DummyCam",
+            "dataid*visit": 42,
+            "run": "somerun",
+        }
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        # Test with empty provenance with ref that has no dataId.
+        datasetType = DatasetType("empty", self.universe.empty, self.parentStorageClass)
+        empty_ref = DatasetRef(datasetType, {}, "empty_run")
+        prov3 = DatasetProvenance()
+        prov_dict = prov3.to_flat_dict(empty_ref)
+        expected = {
+            "id": empty_ref.id,
+            "datasettype": "empty",
+            "run": "empty_run",
+        }
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        prov_dict = prov3.to_flat_dict(empty_ref, prefix="x-yz", sep="-")
+        expected = {
+            "x-yz-id": empty_ref.id,
+            "x-yz-datasettype": "empty",
+            "x-yz-run": "empty_run",
+        }
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="##")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="a")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="1")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="_")
+        with self.assertRaises(ValueError):
+            prov3.to_flat_dict(empty_ref, sep="Σ")
+
+        # Dictionary with inconsistent prefixes and separators.
+        test_dicts = (
+            {
+                "xyz-dataid.instrument": "LATISS",
+            },
+            {
+                "xyz-dataid-detector": 10,
+                "abc-dataid-instrument": "LATISS",
+            },
+            {
+                "abc.input.0.id": "id",
+                "xyz.input.0.run": "run",
+                "abc.dataid.instrument": "latiss",
+            },
+            {
+                "abc.input.0.id": "id0",
+                "abc input 0 id": "id1",
+            },
+        )
+        for prov_dict in test_dicts:
+            with self.assertRaises(ValueError):
+                DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
 
 
 class ZipIndexTestCase(unittest.TestCase):

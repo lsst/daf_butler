@@ -2151,9 +2151,39 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Put with provenance.
         prov = DatasetProvenance(quantum_id=uuid.uuid4())
         prov.add_input(metric_ref)
+        prov.add_extra_provenance(metric_ref.id, {"answer": 42})
         metric_ref2 = butler.put(metric, datasetType, visit=423, instrument="DummyCamComp", provenance=prov)
         metric_3 = butler.get(metric_ref2)
         self.assertEqual(metric_3.provenance, prov)
+
+        # Check that we can extract provenance from dict form.
+        prov_dict = prov.to_flat_dict(metric_ref2)
+        prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
+        self.assertEqual(ref_from_prov, metric_ref2)
+        # Direct __eq__ of the provenance does not work because one side
+        # includes dimension records.
+        self.assertEqual({ref.id for ref in prov_from_prov.inputs}, {ref.id for ref in prov.inputs})
+        self.assertEqual(prov_from_prov.quantum_id, prov.quantum_id)
+        self.assertEqual(prov_from_prov.extras, prov.extras)
+
+        # Force a bad ID into the dict.
+        prov_dict["id"] = uuid.uuid4()
+        with self.assertRaises(ValueError):
+            DatasetProvenance.from_flat_dict(prov_dict, butler)
+        del prov_dict["id"]
+        prov_dict["input 0 id"] = uuid.uuid4()
+        with self.assertRaises(ValueError):
+            DatasetProvenance.from_flat_dict(prov_dict, butler)
+
+        # Check that simple types can be reconstructed with non-standard
+        # separators.
+        prov_dict = prov.to_flat_dict(metric_ref2, prefix="XYZ", sep="😎", simple_types=True)
+        prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
+        self.assertEqual(ref_from_prov, metric_ref2)
+        self.assertEqual({ref.id for ref in prov_from_prov.inputs}, {ref.id for ref in prov.inputs})
+
+        with self.assertRaises(ValueError):
+            DatasetProvenance.from_flat_dict({"unknown": 42}, butler)
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):

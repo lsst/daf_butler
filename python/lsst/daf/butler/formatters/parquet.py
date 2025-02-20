@@ -59,8 +59,8 @@ from typing import TYPE_CHECKING, Any, cast
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from lsst.daf.butler import FormatterV2
-from lsst.daf.butler.delegates.arrowtable import _checkArrowCompatibleType
+from lsst.daf.butler import DatasetProvenance, FormatterV2
+from lsst.daf.butler.delegates.arrowtable import _add_arrow_provenance, _checkArrowCompatibleType
 from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
@@ -183,6 +183,9 @@ class ParquetFormatter(FormatterV2):
         )
 
         return arrow_table
+
+    def add_provenance(self, in_memory_dataset: Any, provenance: DatasetProvenance | None = None) -> Any:
+        return _add_arrow_provenance(in_memory_dataset, self.dataset_ref, provenance)
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
         if isinstance(in_memory_dataset, pa.Schema):

@@ -36,12 +36,14 @@ from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 
-from lsst.daf.butler import StorageClassDelegate
+from lsst.daf.butler import DatasetProvenance, StorageClassDelegate
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
 if TYPE_CHECKING:
     import pandas
+
+    from lsst.daf.butler import DatasetRef
 
 
 class ArrowTableDelegate(StorageClassDelegate):
@@ -205,6 +207,29 @@ class ArrowTableDelegate(StorageClassDelegate):
             allColumns.extend(dataset.index.names)
 
         return allColumns
+
+    def add_provenance(
+        self, in_memory_dataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None
+    ) -> Any:
+        return _add_arrow_provenance(in_memory_dataset, ref, provenance)
+
+
+def _add_arrow_provenance(
+    in_memory_dataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None
+) -> Any:
+    # Add provenance as a flat dict. For now only do this for Astropy
+    # tables which have an implemented mechanism for round tripping
+    # metadata.
+    type_string = _checkArrowCompatibleType(in_memory_dataset)
+    if type_string == "astropy":
+        provenance = provenance if provenance is not None else DatasetProvenance()
+        prov_dict = provenance.to_flat_dict(ref, prefix="LSST.BUTLER", sep=".", simple_types=True)
+
+        # Strip any previous provenance.
+        DatasetProvenance.strip_provenance_from_flat_dict(in_memory_dataset.meta)
+
+        in_memory_dataset.meta.update(prov_dict)
+    return in_memory_dataset
 
 
 def _checkArrowCompatibleType(dataset: Any) -> str | None:
