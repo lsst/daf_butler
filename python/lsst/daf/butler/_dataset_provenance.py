@@ -78,14 +78,14 @@ class DatasetProvenance(pydantic.BaseModel):
         self._uuids.add(ref.id)
         self.inputs.append(ref.to_simple())
 
-    def add_extra_provenance(self, dataset_id: uuid.UUID, extra: dict[str, _PROV_TYPES]) -> None:
+    def add_extra_provenance(self, dataset_id: uuid.UUID, extra: Mapping[str, _PROV_TYPES]) -> None:
         """Attach extra provenance to a specific dataset.
 
         Parameters
         ----------
         dataset_id : `uuid.UUID`
             The ID of the dataset to receive this provenance.
-        extra : `dict` [ `str`, `typing.Any` ]
+        extra : `~collections.abc.Mapping` [ `str`, `typing.Any` ]
             The extra provenance information as a dictionary. The values
             must be simple Python scalars or scalars that can be serialized
             by Pydantic and convert to a simple string value.
