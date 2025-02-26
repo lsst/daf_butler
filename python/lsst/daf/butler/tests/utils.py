@@ -208,8 +208,8 @@ class ButlerTestHelper:
             # Assert that they match.
             # Recommendation from Astropy Slack is to format the table into
             # lines for comparison. We do not compare column data types.
-            table1 = table.pformat_all()
-            expected1 = expected.pformat_all()
+            table1 = table.pformat()
+            expected1 = expected.pformat()
             original_max = self.maxDiff
             self.maxDiff = None  # This is required to get the full diff.
             try:
