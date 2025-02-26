@@ -123,7 +123,7 @@ def astropyTablesToStr(tables: list[Table]) -> str:
     ret = ""
     for table in tables:
         ret += "\n"
-        table.pformat_all()
+        table.pformat()
     ret += "\n"
     return ret
 
