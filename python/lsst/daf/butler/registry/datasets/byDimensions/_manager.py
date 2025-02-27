@@ -317,6 +317,16 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             raise ValueError(
                 f"Component dataset types can not be stored in registry. Rejecting {dataset_type.name}"
             )
+
+        # If database universe and dimension group universe are different it
+        # can cause unexpected effects.
+        if dataset_type.dimensions.universe is not self._dimensions.universe:
+            raise ValueError(
+                "Incompatible dimension universe versions - "
+                f"database universe: {self._dimensions.universe}, "
+                f"dataset type universe: {dataset_type.dimensions.universe}."
+            )
+
         record = self._fetch_dataset_type_record(dataset_type.name)
         if record is None:
             if (dynamic_tables := self._cache.get_by_dimensions(dataset_type.dimensions)) is None:

@@ -847,6 +847,16 @@ class SimpleButlerTests(TestCaseMixin):
         self.assertEqual(butler1.get_dataset_type("b"), b)
         # Register them in the opposite order in a new repo.
         butler2 = self.makeButler(writeable=True)
+        # Dataset types have to use correct universe and with RemoteButler
+        # each butler instance has its own universe instance.
+        a = DatasetType("a", ["instrument"], universe=butler2.dimensions, storageClass="StructuredDataDict")
+        b = DatasetType(
+            "b",
+            ["instrument"],
+            universe=butler2.dimensions,
+            storageClass="StructuredDataDict",
+            isCalibration=True,
+        )
         butler2.registry.registerDatasetType(b)
         butler2.registry.registerDatasetType(a)
         self.assertEqual(butler2.get_dataset_type("a"), a)
