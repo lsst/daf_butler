@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
+import logging
 import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
@@ -50,6 +51,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
     get_dataset_as_python_object,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.utils.timer import time_this
 
 from .._butler import Butler
 from .._butler_collections import ButlerCollections
@@ -93,6 +95,8 @@ if TYPE_CHECKING:
     from .._timespan import Timespan
     from ..dimensions import DataId
     from ..transfers import RepoExportContext
+
+_LOG = logging.getLogger(__name__)
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -289,7 +293,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 ref = ref.makeComponentRef(componentOverride)
         ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
-        return self._get_dataset_as_python_object(ref, model, parameters)
+        with time_this(_LOG, msg="Retrieving python object from file store"):
+            return self._get_dataset_as_python_object(ref, model, parameters)
 
     def _get_dataset_as_python_object(
         self,

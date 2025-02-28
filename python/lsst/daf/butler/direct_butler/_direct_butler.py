@@ -54,6 +54,7 @@ from sqlalchemy.exc import IntegrityError
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
+from lsst.utils.timer import time_this
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
@@ -1180,7 +1181,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             timespan=timespan,
             **kwargs,
         )
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        with time_this(_LOG, msg="Retrieving Python object from datastore"):
+            return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,
