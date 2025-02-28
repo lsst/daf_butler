@@ -75,7 +75,7 @@ from ..._exceptions import (
 from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
-from ...dimensions import DataCoordinate, DataCoordinateSet, SkyPixDimension
+from ...dimensions import DataCoordinate, DataCoordinateSet, DimensionUniverse, SkyPixDimension
 from .._collection_summary import CollectionSummary
 from .._config import RegistryConfig
 from .._exceptions import (
@@ -325,6 +325,17 @@ class RegistryTests(ABC):
         types = registry.queryDatasetTypes(["te*", "notarealdatasettype"], missing=missing)
         self.assertCountEqual([dt.name for dt in types], ["test", "testNoneTemplate"])
         self.assertEqual(missing, ["notarealdatasettype"])
+
+        # Trying to register a dataset type with different universe version or
+        # namespace will raise.
+        wrong_universes = (DimensionUniverse(version=-1), DimensionUniverse(namespace="🔭"))
+        for universe in wrong_universes:
+            storageClass = StorageClass("testDatasetType")
+            dataset_type = DatasetType(
+                "wrong_universe", ("instrument", "visit"), storageClass, universe=universe
+            )
+            with self.assertRaisesRegex(ValueError, "Incompatible dimension universe versions"):
+                registry.registerDatasetType(dataset_type)
 
     def testDatasetTypeCache(self):
         """Test for dataset type cache update logic after a cache miss."""
