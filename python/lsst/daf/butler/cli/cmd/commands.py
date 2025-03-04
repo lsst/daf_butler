@@ -638,6 +638,9 @@ def retrieve_artifacts(**kwargs: Any) -> None:
 @transfer_option()
 @register_dataset_types_option()
 @transfer_dimensions_option()
+@click.option(
+    "--dry-run/--no-dry-run", default=False, help="Enable dry run mode and do not transfer any datasets."
+)
 @options_file_option()
 def transfer_datasets(**kwargs: Any) -> None:
     """Transfer datasets from a source butler to a destination butler.
