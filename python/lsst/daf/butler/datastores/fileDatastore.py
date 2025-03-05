@@ -2649,6 +2649,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
+        log.verbose("transfer_from %s to %s", source_datastore.name, self.name)
         # Docstring inherited
         if type(self) is not type(source_datastore):
             raise TypeError(
@@ -2693,6 +2694,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # What we really want is all the records in the source datastore
         # associated with these refs. Or derived ones if they don't exist
         # in the source.
+        log.verbose("Looking up source datastore records in %s", source_datastore.name)
         source_records = source_datastore._get_stored_records_associated_with_refs(
             refs, ignore_datastore_records=True
         )
@@ -2726,6 +2728,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             source_records.update(found_records)
 
         # See if we already have these records
+        log.verbose(
+            "Looking up existing datastore records in target %s for %d refs", self.name, len(requested_ids)
+        )
         target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
 
         # The artifacts to register
@@ -2744,6 +2749,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         direct_transfers = []
 
         # Now can transfer the artifacts
+        log.verbose("Transferring artifacts")
         for ref in refs:
             if not self.constraints.isAcceptable(ref):
                 # This datastore should not be accepting this dataset.
@@ -2818,6 +2824,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # to difficulties if the dataset has previously been ingested
         # disassembled and is somehow now assembled, or vice versa.
         if not dry_run:
+            log.verbose("Registering datastore records in database")
             self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
@@ -2828,6 +2835,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 "" if n_skipped == 1 else "s",
             )
 
+        log.verbose(
+            "Finished transfer_from %s to %s with %d accepted, %d rejected",
+            source_datastore.name,
+            self.name,
+            len(accepted),
+            len(rejected),
+        )
         return accepted, rejected
 
     @transactional
