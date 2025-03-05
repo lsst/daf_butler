@@ -2726,6 +2726,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             source_records.update(found_records)
 
         # See if we already have these records
+        log.verbose("Looking up datastore records for %d refs", len(requested_ids))
         target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
 
         # The artifacts to register
@@ -2744,6 +2745,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         direct_transfers = []
 
         # Now can transfer the artifacts
+        log.verbose("Transferring artifacts")
         for ref in refs:
             if not self.constraints.isAcceptable(ref):
                 # This datastore should not be accepting this dataset.
@@ -2818,6 +2820,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # to difficulties if the dataset has previously been ingested
         # disassembled and is somehow now assembled, or vice versa.
         if not dry_run:
+            log.verbose("Registering datastore records in database")
             self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
@@ -2828,6 +2831,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 "" if n_skipped == 1 else "s",
             )
 
+        log.verbose("Finished transfer with %d accepted, %d rejected", len(accepted), len(rejected))
         return accepted, rejected
 
     @transactional
