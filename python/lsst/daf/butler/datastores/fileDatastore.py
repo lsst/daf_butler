@@ -2158,10 +2158,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     target_uri = to_transfer[cleaned_source_uri]
                     artifact_map[target_uri].append(ref.id)
 
-        # In theory can now parallelize the transfer
+        # Parallelize the transfer. Re-raise as a single exception if
+        # a FileExistsError is encountered anywhere.
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
-        for source_uri, target_uri in to_transfer.items():
-            target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
+        try:
+            ResourcePath.mtransfer(transfer, tuple(to_transfer.items()), overwrite=overwrite)
+        except* FileExistsError as egroup:
+            raise FileExistsError(
+                "Some files already exist in destination directory and overwrite is False"
+            ) from egroup
 
         # Transfer the Zip files and unpack them.
         zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path, overwrite)
