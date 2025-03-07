@@ -49,6 +49,7 @@ def transferDatasets(
     transfer: str,
     register_dataset_types: bool,
     transfer_dimensions: bool = True,
+    dry_run: bool = False,
 ) -> int:
     """Transfer datasets from run in source to dest.
 
@@ -84,6 +85,9 @@ def transferDatasets(
         Indicate whether dimensions should be transferred along with
         datasets. It can be more efficient to disable this if it is known
         that all dimensions exist.
+    dry_run : `bool`, optional
+        If `True` no transfers are done but the number of transfers that
+        would be done is reported.
     """
     source_butler = Butler.from_config(source, writeable=False)
     dest_butler = Butler.from_config(dest, writeable=True)
@@ -112,5 +116,6 @@ def transferDatasets(
         transfer=transfer,
         register_dataset_types=register_dataset_types,
         transfer_dimensions=transfer_dimensions,
+        dry_run=dry_run,
     )
     return len(transferred)
