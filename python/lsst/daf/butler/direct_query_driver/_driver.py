@@ -156,7 +156,7 @@ class DirectQueryDriver(QueryDriver):
         self._exit_stack: ExitStack | None = None
         self._raw_page_size = raw_page_size
         self._postprocessing_filter_factor = postprocessing_filter_factor
-        self._constant_rows_limit = constant_rows_limit
+        self._constant_rows_limit = min(constant_rows_limit, db.get_constant_rows_max())
         self._cursors: set[_Cursor] = set()
 
     def __enter__(self) -> None:
