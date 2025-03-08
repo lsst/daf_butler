@@ -398,6 +398,12 @@ class SqliteDatabase(Database):
         ]
         return sqlalchemy.sql.union_all(*selects).alias(name)
 
+    def get_constant_rows_max(self) -> int:
+        # Docstring inherited.
+        # This is the default SQLITE_MAX_COMPOUND_SELECT (see
+        # https://www.sqlite.org/limits.html):
+        return 500
+
     @property
     def has_distinct_on(self) -> bool:
         # Docstring inherited.

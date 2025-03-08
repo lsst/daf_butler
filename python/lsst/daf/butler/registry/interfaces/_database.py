@@ -1918,7 +1918,7 @@ class Database(ABC):
         This should reflect typical performance profiles (or a guess at these),
         not just hard database engine limits.
         """
-        return 100
+        return 1000
 
     @property
     @abstractmethod
