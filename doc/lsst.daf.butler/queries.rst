@@ -167,6 +167,8 @@ filter query results based on that property of datasets.
 
 Registry methods accepting user expressions also accept a ``bind`` parameter, which is a mapping from identifier name to its corresponding value.
 Identifiers appearing in user expressions will be replaced with the corresponding value from this mapping.
+Bind identifiers in expressions are specified with a preceding colon (e.g. ``:id``).
+Legacy format where bind identifiers can be specified without colon is still supported, but discouraged, and will be deprecated and removed in the future.
 Using the ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
 A partial example of comparing two approaches, without and with ``bind``:
 
@@ -186,7 +188,7 @@ A partial example of comparing two approaches, without and with ``bind``:
     # Same functionality using bind parameter
     result = butler.query_datasets(
         dataset_type,
-        where="instrument = instrument_name AND visit = visit_id",
+        where="instrument = :instrument_name AND visit = :visit_id",
         bind={"instrument_name": instrument_name, "visit_id": visit_id},
     )
 
@@ -201,7 +203,7 @@ An example of this feature:
     visit_ids = (12345, 12346, 12350)
     result = butler.query_datasets(
         dataset_type,
-        where="instrument = instrument_name AND visit IN (visit_ids)",
+        where="instrument = :instrument_name AND visit IN (:visit_ids)",
         bind={"instrument_name": instrument_name, "visit_ids": visit_ids},
     )
 
