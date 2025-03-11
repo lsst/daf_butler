@@ -2812,7 +2812,7 @@ class RegistryTests(ABC):
             self.assertEqual(len(datasets), expect_len)
 
             # same with bind using datetime or astropy Time
-            where = f"ingest_date {op} ingest_time"
+            where = f"ingest_date {op} :ingest_time"
             datasets = list(
                 registry.queryDatasets(..., collections=..., where=where, bind={"ingest_time": dt})
             )
@@ -2881,33 +2881,33 @@ class RegistryTests(ABC):
         # the expression.
 
         # t1 is before the start of i1, so this should not include i1.
-        self.assertEqual(ids[:i1], query("visit.timespan OVERLAPS (null, t1)"))
+        self.assertEqual(ids[:i1], query("visit.timespan OVERLAPS (null, :t1)"))
         # t2 is exactly at the start of i2, but ends are exclusive, so these
         # should not include i2.
-        self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
+        self.assertEqual(ids[i1:i2], query("(:t1, :t2) OVERLAPS visit.timespan"))
         if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
+            self.assertEqual(ids[:i2], query("visit.timespan < (:t2, :t4)"))
         # t3 is in the middle of i3, so this should include i3.
-        self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS ts23"))
+        self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS :ts23"))
         # This one should not include t3 by the same reasoning.
         if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (:t1, :t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
-        self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
+        self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', :t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
-        self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (t4, NULL)"))
+        self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (:t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
-        self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS t3"))
+        self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS :t3"))
         self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
         if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[:i2], query("visit.timespan < t2"))
-            self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
-            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
-            self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
+            self.assertEqual(ids[:i2], query("visit.timespan < :t2"))
+            self.assertEqual(ids[:i2], query(":t2 > visit.timespan"))
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > :t3"))
+            self.assertEqual(ids[i3 + 1 :], query(":t3 < visit.timespan"))
 
         # Empty timespans should not overlap anything.
-        self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
+        self.assertEqual([], query("visit.timespan OVERLAPS (:t3, :t2)"))
 
         # Make sure that expanded data IDs include the timespans.
         results = list(
@@ -2984,7 +2984,9 @@ class RegistryTests(ABC):
         self.load_data(butler, "base.yaml", "datasets.yaml")
         self.assertEqual(
             set(registry.queryDatasets("flat", band="r", collections=...)),
-            set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
+            set(
+                registry.queryDatasets("flat", where="band=:my_band", bind={"my_band": "r"}, collections=...)
+            ),
         )
 
     def testQueryIntRangeExpressions(self):
@@ -3223,7 +3225,7 @@ class RegistryTests(ABC):
             "(Dimension element name cannot be inferred in this context.)"
             "|(Unrecognized identifier 'timespan')",
         ):
-            list(registry.queryDataIds(["detector"], where="timespan.end < time", bind=bind))
+            list(registry.queryDataIds(["detector"], where="timespan.end < :time", bind=bind))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
@@ -3401,13 +3403,13 @@ class RegistryTests(ABC):
             Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap5'", exception=DataIdValueError),
             Test(
                 "tract,visit",
-                where="instrument=cam AND skymap=map",
+                where="instrument=:cam AND skymap=:map",
                 bind={"cam": "Cam1", "map": "SkyMap1"},
                 count=6,
             ),
             Test(
                 "tract,visit",
-                where="instrument=cam AND skymap=map",
+                where="instrument=:cam AND skymap=:map",
                 bind={"cam": "Cam", "map": "SkyMap"},
                 exception=DataIdValueError,
             ),
@@ -3541,7 +3543,7 @@ class RegistryTests(ABC):
 
         result = registry.queryDimensionRecords("detector", where="instrument='Cam1'")
         self.assertEqual(result.count(), 4)
-        result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})
+        result = registry.queryDimensionRecords("detector", where="instrument=:instr", bind={"instr": "Cam1"})
         self.assertTrue(result.any())
         self.assertEqual(result.count(), 4)
 
@@ -3568,7 +3570,7 @@ class RegistryTests(ABC):
                     DataIdValueError, "Unknown values specified for governor dimension"
                 ):
                     result = registry.queryDimensionRecords(
-                        "detector", where="instrument=instr", bind={"instr": "NotCam1"}
+                        "detector", where="instrument=:instr", bind={"instr": "NotCam1"}
                     )
                     result.count()
 

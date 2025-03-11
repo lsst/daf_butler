@@ -113,7 +113,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         """Test with bind parameters"""
         self.assertEqual(
             make_string_expression_predicate(
-                "a > b OR t in (x, y, z)",
+                ":a > :b OR :t in (:x, :y, :z)",
                 self.column_types.universe.empty,
                 column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20, "z": 30},
@@ -136,7 +136,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         """Test with bind parameter which is list/tuple/set inside IN rhs."""
         self.assertEqual(
             make_string_expression_predicate(
-                "a > b OR t in (x)",
+                ":a > :b OR :t in (:x)",
                 self.column_types.universe.empty,
                 column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": (10, 20, 30)},
@@ -160,7 +160,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         # of scalars and list.
         self.assertEqual(
             make_string_expression_predicate(
-                "a > b OR t in (x, y)",
+                ":a > :b OR :t in (:x, :y)",
                 self.column_types.universe.empty,
                 column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20},
@@ -181,7 +181,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         )
         self.assertEqual(
             make_string_expression_predicate(
-                "a > b OR t in (x, y)",
+                ":a > :b OR :t in (:x, :y)",
                 self.column_types.universe.empty,
                 column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": [10, 30], "y": 20},
@@ -203,7 +203,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         )
         self.assertEqual(
             make_string_expression_predicate(
-                "a > b OR t in (x, y)",
+                ":a > :b OR :t in (:x, :y)",
                 self.column_types.universe.empty,
                 column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": {20}},
