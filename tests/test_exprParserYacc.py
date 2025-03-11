@@ -31,7 +31,13 @@ import unittest
 
 import astropy.time
 
-from lsst.daf.butler.registry.queries.expressions.parser import ParseError, ParserYacc, TreeVisitor, exprTree
+from lsst.daf.butler.registry.queries.expressions.parser import (
+    ParseError,
+    ParserYacc,
+    ParserYaccError,
+    TreeVisitor,
+    exprTree,
+)
 from lsst.daf.butler.registry.queries.expressions.parser.parserYacc import _parseTimeString
 
 
@@ -56,6 +62,9 @@ class _Visitor(TreeVisitor):
     def visitIdentifier(self, name, node):
         return f"ID({name})"
 
+    def visitBind(self, name, node):
+        return f":({name})"
+
     def visitUnaryOp(self, operator, operand, node):
         return f"U({operator} {operand})"
 
@@ -72,8 +81,14 @@ class _Visitor(TreeVisitor):
     def visitParens(self, expression, node):
         return f"P({expression})"
 
+    def visitPointNode(self, expression, node):
+        return f"POINT({expression})"
 
-class ParserLexTestCase(unittest.TestCase):
+    def visitTupleNode(self, expression, node):
+        return f"TUPLE({expression})"
+
+
+class ParserYaccTestCase(unittest.TestCase):
     """A test case for ParserYacc"""
 
     def setUp(self):
@@ -143,6 +158,17 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree, exprTree.Identifier)
         self.assertEqual(tree.name, "a.b")
 
+    def testParseBind(self):
+        """Tests for bind name"""
+        parser = ParserYacc()
+
+        tree = parser.parse(":a")
+        self.assertIsInstance(tree, exprTree.BindName)
+        self.assertEqual(tree.name, "a")
+
+        with self.assertRaises(ParserYaccError):
+            tree = parser.parse(":1")
+
     def testParseParens(self):
         """Tests for identifiers"""
         parser = ParserYacc()
@@ -150,6 +176,11 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("(a)")
         self.assertIsInstance(tree, exprTree.Parens)
         self.assertIsInstance(tree.expr, exprTree.Identifier)
+        self.assertEqual(tree.expr.name, "a")
+
+        tree = parser.parse("(:a)")
+        self.assertIsInstance(tree, exprTree.Parens)
+        self.assertIsInstance(tree.expr, exprTree.BindName)
         self.assertEqual(tree.expr.name, "a")
 
     def testUnaryOps(self):
@@ -305,6 +336,22 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(len(tree.values), 1)
         self.assertIsInstance(tree.values[0], exprTree.Identifier)
 
+        # Test that bind can appear in RHS.
+        tree = parser.parse("a in (:in)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertEqual(len(tree.values), 1)
+        self.assertIsInstance(tree.values[0], exprTree.BindName)
+
+        tree = parser.parse("a not in (:a, :b, c, 1)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertEqual(len(tree.values), 4)
+        self.assertIsInstance(tree.values[0], exprTree.BindName)
+        self.assertIsInstance(tree.values[1], exprTree.BindName)
+        self.assertIsInstance(tree.values[2], exprTree.Identifier)
+        self.assertIsInstance(tree.values[3], exprTree.NumericLiteral)
+
         # parens on right hand side are required
         with self.assertRaises(ParseError):
             parser.parse("point(1, 2) in region1")
@@ -325,6 +372,22 @@ class ParserLexTestCase(unittest.TestCase):
             self.assertIsInstance(tree.rhs, exprTree.NumericLiteral)
             self.assertEqual(tree.lhs.name, "a")
             self.assertEqual(tree.rhs.value, "10")
+
+            tree = parser.parse(f"a {op} :b")
+            self.assertIsInstance(tree, exprTree.BinaryOp)
+            self.assertEqual(tree.op, op)
+            self.assertIsInstance(tree.lhs, exprTree.Identifier)
+            self.assertIsInstance(tree.rhs, exprTree.BindName)
+            self.assertEqual(tree.lhs.name, "a")
+            self.assertEqual(tree.rhs.name, "b")
+
+            tree = parser.parse(f":b {op} a")
+            self.assertIsInstance(tree, exprTree.BinaryOp)
+            self.assertEqual(tree.op, op)
+            self.assertIsInstance(tree.lhs, exprTree.BindName)
+            self.assertIsInstance(tree.rhs, exprTree.Identifier)
+            self.assertEqual(tree.lhs.name, "b")
+            self.assertEqual(tree.rhs.name, "a")
 
     def testBoolOps(self):
         """Tests for boolean operators"""
@@ -360,6 +423,15 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(len(tree.args), 1)
         self.assertIsInstance(tree.args[0], exprTree.Identifier)
         self.assertEqual(tree.args[0].name, "a")
+
+        tree = parser.parse("f2(:a, :b)")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "f2")
+        self.assertEqual(len(tree.args), 2)
+        self.assertIsInstance(tree.args[0], exprTree.BindName)
+        self.assertEqual(tree.args[0].name, "a")
+        self.assertIsInstance(tree.args[1], exprTree.BindName)
+        self.assertEqual(tree.args[1].name, "b")
 
         tree = parser.parse("anything_goes('a', x+y, ((a AND b) or (C = D)), NOT T < 42., Z IN (1,2,3,4))")
         self.assertIsInstance(tree, exprTree.FunctionCall)
@@ -404,7 +476,7 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(tree.items[1].value, "0.0")
 
         # any expression can appear in tuple
-        tree = parser.parse("(x+y, ((a AND b) or (C = D)))")
+        tree = parser.parse("(x+y, ((a AND :b) or (C = D)))")
         self.assertIsInstance(tree, exprTree.TupleNode)
         self.assertEqual(len(tree.items), 2)
         self.assertIsInstance(tree.items[0], exprTree.BinaryOp)
@@ -421,7 +493,7 @@ class ParserLexTestCase(unittest.TestCase):
         expression = (
             "((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
             "AND tract=8766 AND patch.cell_x > 5 AND "
-            "patch.cell_y < 4 AND band='i'"
+            "patch.cell_y < 4 AND band=:band"
         )
 
         tree = parser.parse(expression)
@@ -434,8 +506,8 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(tree.rhs.op, "=")
         self.assertIsInstance(tree.rhs.lhs, exprTree.Identifier)
         self.assertEqual(tree.rhs.lhs.name, "band")
-        self.assertIsInstance(tree.rhs.rhs, exprTree.StringLiteral)
-        self.assertEqual(tree.rhs.rhs.value, "i")
+        self.assertIsInstance(tree.rhs.rhs, exprTree.BindName)
+        self.assertEqual(tree.rhs.rhs.name, "band")
 
     def testException(self):
         """Test for exceptional cases"""
@@ -494,15 +566,15 @@ class ParserLexTestCase(unittest.TestCase):
         result = tree.visit(visitor)
         self.assertEqual(result, "P(B(ID(a) + ID(b)))")
 
-        tree = parser.parse("(A or B) and not (x + 3 > y)")
+        tree = parser.parse("(A or B) and not (x + 3 > :y)")
         result = tree.visit(visitor)
-        self.assertEqual(result, "B(P(B(ID(A) OR ID(B))) AND U(NOT P(B(B(ID(x) + N(3)) > ID(y)))))")
+        self.assertEqual(result, "B(P(B(ID(A) OR ID(B))) AND U(NOT P(B(B(ID(x) + N(3)) > :(y)))))")
 
-        tree = parser.parse("x in (1,2) AND y NOT IN (1.1, .25, 1e2) OR z in ('a', 'b')")
+        tree = parser.parse("x in (1,2) AND y NOT IN (1.1, .25, 1e2) OR :z in ('a', 'b')")
         result = tree.visit(visitor)
         self.assertEqual(
             result,
-            "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2)))) OR IN(ID(z) (S(a), S(b))))",
+            "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2)))) OR IN(:(z) (S(a), S(b))))",
         )
 
         tree = parser.parse("x in (1,2,5..15) AND y NOT IN (-100..100:10)")

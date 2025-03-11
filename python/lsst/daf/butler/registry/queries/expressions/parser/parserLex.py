@@ -128,6 +128,7 @@ class ParserLex:
         # 'DURATION_LITERAL',
         "QUALIFIED_IDENTIFIER",
         "SIMPLE_IDENTIFIER",
+        "BIND_NAME",
         "LPAREN",
         "RPAREN",
         "EQ",
@@ -219,6 +220,14 @@ class ParserLex:
             t.value = reserved
         else:
             t.type = "SIMPLE_IDENTIFIER"
+        return t
+
+    # we only support ASCII in identifier names
+    def t_BIND_NAME(self, t: LexToken) -> LexToken:
+        """[:][a-zA-Z_][a-zA-Z0-9_]*"""
+        # Drop colon to get the name.
+        t.value = t.value[1:]
+        t.type = "BIND_NAME"
         return t
 
     def t_error(self, t: LexToken) -> None:

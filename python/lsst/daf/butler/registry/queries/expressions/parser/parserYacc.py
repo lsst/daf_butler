@@ -47,6 +47,7 @@ except ImportError:
 
 from .exprTree import (
     BinaryOp,
+    BindName,
     Identifier,
     IsIn,
     Node,
@@ -59,7 +60,7 @@ from .exprTree import (
     UnaryOp,
     function_call,
 )
-from .parserLex import LexToken, ParserLex
+from .parserLex import LexToken, ParserLex, ParserLexError
 from .ply import yacc
 
 
@@ -223,8 +224,7 @@ class ParseError(ParserYaccError):
         self.pos = pos
         self.lineno = lineno
         self.posInLine = self._posInLine()
-        msg = "Syntax error at or near '{0}' (line: {1}, pos: {2})"
-        msg = msg.format(token, lineno, self.posInLine + 1)
+        msg = f"Syntax error at or near '{token}' (line: {lineno}, pos: {self.posInLine + 1})"
         ParserYaccError.__init__(self, msg)
 
     def _posInLine(self) -> int:
@@ -288,7 +288,11 @@ class ParserYacc:
         # make lexer
         if lexer is None:
             lexer = ParserLex.make_lexer()
-        tree = self.parser.parse(input=input, lexer=lexer, debug=debug, tracking=tracking)
+        try:
+            tree = self.parser.parse(input=input, lexer=lexer, debug=debug, tracking=tracking)
+        except ParserLexError as exc:
+            # Convert it into ParserYaccError
+            raise ParserYaccError(str(exc)) from exc
         return tree
 
     tokens = ParserLex.tokens[:]
@@ -371,13 +375,20 @@ class ParserYacc:
     def p_literal_or_id_list(cls, p: YaccProduction) -> None:
         """literal_or_id_list : literal_or_id_list COMMA literal
         | literal_or_id_list COMMA identifier
+        | literal_or_id_list COMMA bind_name
         | literal
         | identifier
+        | bind_name
         """
         if len(p) == 2:
             p[0] = [p[1]]
         else:
             p[0] = p[1] + [p[3]]
+
+    @classmethod
+    def p_bind_name(cls, p: YaccProduction) -> None:
+        """bind_name : BIND_NAME"""
+        p[0] = BindName(p[1])
 
     @classmethod
     def p_bit_expr(cls, p: YaccProduction) -> None:
@@ -395,17 +406,11 @@ class ParserYacc:
 
     @classmethod
     def p_simple_expr_lit(cls, p: YaccProduction) -> None:
-        """simple_expr : literal"""
-        p[0] = p[1]
-
-    @classmethod
-    def p_simple_expr_id(cls, p: YaccProduction) -> None:
-        """simple_expr : identifier"""
-        p[0] = p[1]
-
-    @classmethod
-    def p_simple_expr_function_call(cls, p: YaccProduction) -> None:
-        """simple_expr : function_call"""
+        """simple_expr : literal
+        | identifier
+        | bind_name
+        | function_call
+        """
         p[0] = p[1]
 
     @classmethod

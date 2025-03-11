@@ -212,16 +212,8 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
         if name in self.bind:
-            value = self.bind[name]
-            if isinstance(value, list | tuple | Set):
-                # This can happen on rhs of IN operator, if there is only one
-                # element in the list then take it.
-                if len(value) == 1:
-                    return TreeSummary(dataIdValue=next(iter(value)))
-                else:
-                    return TreeSummary()
-            else:
-                return TreeSummary(dataIdValue=value)
+            return self.visitBind(name, node)
+
         constant = categorizeConstant(name)
         if constant is ExpressionConstant.INGEST_DATE:
             return TreeSummary(hasIngestDate=True)
@@ -237,6 +229,20 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
             )
         else:
             return TreeSummary(dimensions=set(element.minimal_group.names), columns={element.name: {column}})
+
+    def visitBind(self, name: str, node: Node) -> TreeSummary:
+        if name not in self.bind:
+            raise UserExpressionError(f"Name {name!r} is not in the bind map.")
+        value = self.bind[name]
+        if isinstance(value, list | tuple | Set):
+            # This can happen on rhs of IN operator, if there is only one
+            # element in the list then take it.
+            if len(value) == 1:
+                return TreeSummary(dataIdValue=next(iter(value)))
+            else:
+                return TreeSummary()
+        else:
+            return TreeSummary(dataIdValue=value)
 
     def visitUnaryOp(self, operator: str, operand: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitUnaryOp
