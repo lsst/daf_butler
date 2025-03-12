@@ -1040,6 +1040,10 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitIdentifier
         return Opaque(node, PrecedenceTier.TOKEN)
 
+    def visitBind(self, name: str, node: Node) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitBind
+        return Opaque(node, PrecedenceTier.TOKEN)
+
     def visitUnaryOp(
         self,
         operator: str,

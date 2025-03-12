@@ -200,6 +200,29 @@ class ParserLexTestCase(unittest.TestCase):
         with self.assertRaises(ParserLexError):
             lexer.token()
 
+    def testNinds(self):
+        """Test for bind names"""
+        lexer = ParserLex.make_lexer()
+
+        lexer.input(":name :visit :in :___")
+        self._assertToken(lexer.token(), "BIND_NAME", "name")
+        self._assertToken(lexer.token(), "BIND_NAME", "visit")
+        self._assertToken(lexer.token(), "BIND_NAME", "in")
+        self._assertToken(lexer.token(), "BIND_NAME", "___")
+
+        lexer.input(":1")
+        with self.assertRaises(ParserLexError):
+            lexer.token()
+
+        lexer.input(":.id")
+        with self.assertRaises(ParserLexError):
+            lexer.token()
+
+        lexer.input(":id.")
+        self._assertToken(lexer.token(), "BIND_NAME", "id")
+        with self.assertRaises(ParserLexError):
+            lexer.token()
+
     def testExpression(self):
         """Test for more or less complete expression"""
         lexer = ParserLex.make_lexer()

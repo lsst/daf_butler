@@ -1422,7 +1422,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.queryDatasets(
                 datasetType,
                 collections=self.default_run,
-                where="day_obs = dayObs AND instrument = instr",
+                where="day_obs = :dayObs AND instrument = :instr",
                 bind={"dayObs": dayobs, "instr": "DummyCamComp"},
             )
         )
@@ -1430,7 +1430,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.queryDatasets(
                 datasetType,
                 collections=self.default_run,
-                where="exposure.day_obs = dayObs AND instrument = instr",
+                where="exposure.day_obs = :dayObs AND instrument = :instr",
                 bind={"dayObs": dayobs, "instr": "DummyCamComp"},
             )
         )

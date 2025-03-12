@@ -28,6 +28,7 @@
 
 import random
 import unittest
+from typing import Any
 
 import astropy.time
 
@@ -44,7 +45,8 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     boolean values for identifiers.
     """
 
-    def __init__(self, **kwargs: bool):
+    def __init__(self, binds: dict[str, Any] = {}, **kwargs: bool):
+        self.binds = binds
         self.values = kwargs
 
     def init(self, form: NormalForm) -> None:
@@ -65,6 +67,10 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     def visitIdentifier(self, name: str, node: Node) -> bool:
         # Docstring inherited from TreeVisitor.visitIdentifier
         return self.values[name]
+
+    def visitBind(self, name: str, node: Node) -> bool:
+        # Docstring inherited from TreeVisitor.visitIdentifier
+        return self.binds[name]
 
     def visitUnaryOp(
         self,
@@ -108,6 +114,12 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> bool:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         raise NotImplementedError()
+
+    def visitPointNode(self, ra: float, dec: float, node: Node) -> bool:
+        raise NotImplementedError("Not implemented for bool operations")
+
+    def visitTupleNode(self, items: tuple, node: Node) -> bool:
+        raise NotImplementedError("Not implemented for bool operations")
 
 
 class NormalFormExpressionTestCase(unittest.TestCase):

@@ -353,25 +353,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
     def visitIdentifier(self, name: str, node: Node) -> VisitorResult:
         # Docstring inherited.
         if name in self.bind:
-            value = self.bind[name]
-            if isinstance(value, list | tuple | Set):
-                elements = []
-                all_dtypes = set()
-                for item in value:
-                    dtype = type(item)
-                    all_dtypes.add(dtype)
-                    elements.append(ColumnExpression.literal(item, dtype=dtype))
-                if len(all_dtypes) > 1:
-                    raise ExpressionTypeError(
-                        f"Mismatched types in bind iterable: {value} has a mix of {all_dtypes}."
-                    )
-                elif not elements:
-                    # Empty container
-                    return ColumnContainer.sequence([])
-                else:
-                    (dtype,) = all_dtypes
-                    return ColumnContainer.sequence(elements, dtype=dtype)
-            return ColumnExpression.literal(value, dtype=type(value))
+            return self.visitBind(name, node)
         tag: ColumnTag
         match categorizeConstant(name):
             case ExpressionConstant.INGEST_DATE:
@@ -402,6 +384,31 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             tag = DimensionKeyColumnTag(element.name)
             assert isinstance(element, Dimension)
             return ColumnExpression.reference(tag, element.primaryKey.getPythonType())
+
+    def visitBind(self, name: str, node: Node) -> VisitorResult:
+        # Docstring inherited.
+        if name not in self.bind:
+            raise UserExpressionError(f"Name {name!r} is not in the bind map.")
+
+        value = self.bind[name]
+        if isinstance(value, list | tuple | Set):
+            elements = []
+            all_dtypes = set()
+            for item in value:
+                dtype = type(item)
+                all_dtypes.add(dtype)
+                elements.append(ColumnExpression.literal(item, dtype=dtype))
+            if len(all_dtypes) > 1:
+                raise ExpressionTypeError(
+                    f"Mismatched types in bind iterable: {value} has a mix of {all_dtypes}."
+                )
+            elif not elements:
+                # Empty container
+                return ColumnContainer.sequence([])
+            else:
+                (dtype,) = all_dtypes
+                return ColumnContainer.sequence(elements, dtype=dtype)
+        return ColumnExpression.literal(value, dtype=type(value))
 
     def visitIsIn(
         self, lhs: VisitorResult, values: list[VisitorResult], not_in: bool, node: Node

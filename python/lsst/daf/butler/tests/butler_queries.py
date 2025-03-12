@@ -219,7 +219,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records(results.where(_x.detector.raft == "B", instrument="Cam1"), [3, 4])
             self.check_detector_records_returned(
                 butler.query_dimension_records(
-                    "detector", where="detector.raft = R", bind={"R": "B"}, instrument="Cam1"
+                    "detector", where="detector.raft = :R", bind={"R": "B"}, instrument="Cam1"
                 ),
                 ids=[3, 4],
             )
@@ -572,10 +572,10 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Check that WHERE accepts astropy time
         with butler.query() as query:
             query = query.join_dataset_search("flat", "imported_g")
-            query1 = query.where("flat.ingest_date < before_ingest", bind={"before_ingest": before_ingest})
+            query1 = query.where("flat.ingest_date < :before_ingest", bind={"before_ingest": before_ingest})
             rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 0)
-            query1 = query.where("flat.ingest_date >= before_ingest", bind={"before_ingest": before_ingest})
+            query1 = query.where("flat.ingest_date >= :before_ingest", bind={"before_ingest": before_ingest})
             rows = list(query1.general(dimensions))
             self.assertEqual(len(rows), 3)
             # Same with a time in string literal.
@@ -736,7 +736,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records_returned(
                 butler.query_dimension_records(
                     "detector",
-                    where="visit_detector_region.region OVERLAPS region",
+                    where="visit_detector_region.region OVERLAPS :region",
                     bind={"region": htm7.pixelization.pixel(253954)},
                     visit=1,
                 ),
@@ -788,7 +788,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records_returned(
                 butler.query_dimension_records(
                     "detector",
-                    where="visit_detector_region.region OVERLAPS region",
+                    where="visit_detector_region.region OVERLAPS :region",
                     bind={"region": htm7.pixelization.pixel(253954)},
                 ),
                 ids=[1, 2, 3, 4],
@@ -846,7 +846,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records_returned(
                 butler.query_dimension_records(
                     "detector",
-                    where="visit_detector_region.region OVERLAPS region",
+                    where="visit_detector_region.region OVERLAPS :region",
                     bind={"region": patch_record.region},
                 ),
                 ids=[1, 2, 3],
@@ -880,7 +880,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records_returned(
                 butler.query_dimension_records(
                     "detector",
-                    where="visit_detector_region.region OVERLAPS region",
+                    where="visit_detector_region.region OVERLAPS :region",
                     bind={"region": patch_record.region},
                     order_by="-detector",
                     limit=2,
@@ -900,7 +900,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records_returned(
                 butler.query_dimension_records(
                     "detector",
-                    where="visit_detector_region.region OVERLAPS region",
+                    where="visit_detector_region.region OVERLAPS :region",
                     bind={"region": patch_record.region},
                     detector=4,
                     explain=False,
@@ -946,20 +946,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # string.
             _check_visit_id(
                 query.where(
-                    "visit_detector_region.region OVERLAPS POINT(ra, dec)", bind={"ra": ra, "dec": dec}
+                    "visit_detector_region.region OVERLAPS POINT(:ra, :dec)", bind={"ra": ra, "dec": dec}
                 )
             )
 
             # Bind in a point object instead of specifying ra/dec separately.
             _check_visit_id(
                 query.where(
-                    "visit_detector_region.region OVERLAPS my_point",
+                    "visit_detector_region.region OVERLAPS :my_point",
                     bind={"my_point": LonLat.fromDegrees(ra, dec)},
                 )
             )
             _check_visit_id(
                 query.where(
-                    "visit_detector_region.region OVERLAPS my_point",
+                    "visit_detector_region.region OVERLAPS :my_point",
                     bind={"my_point": astropy.coordinates.SkyCoord(ra, dec, frame="icrs", unit="deg")},
                 )
             )
@@ -967,7 +967,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             # handled.
             _check_visit_id(
                 query.where(
-                    "visit_detector_region.region OVERLAPS my_point",
+                    "visit_detector_region.region OVERLAPS :my_point",
                     bind={
                         "my_point": astropy.coordinates.SkyCoord(
                             ra, dec, frame="icrs", unit="deg"
@@ -1005,7 +1005,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
             with self.assertRaisesRegex(ValueError, "Astropy SkyCoord contained an array of points"):
                 query.where(
-                    "visit_detector_region.region OVERLAPS my_point",
+                    "visit_detector_region.region OVERLAPS :my_point",
                     bind={"my_point": array_point},
                 )
 
@@ -1587,7 +1587,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     for record in butler.query_dimension_records(
                         # In the middle of the timespan.
                         "visit",
-                        where="visit.timespan OVERLAPS(ts)",
+                        where="visit.timespan OVERLAPS(:ts)",
                         bind={"ts": astropy.time.Time("2021-09-09T03:02:30", format="isot", scale="tai")},
                     )
                 ],
@@ -1673,7 +1673,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
             self.check_detector_records_returned(
                 butler.query_dimension_records(
-                    "detector", where="detector IN (det)", bind={"det": [1, 3, 4]}
+                    "detector", where="detector IN (:det)", bind={"det": [1, 3, 4]}
                 ),
                 [1, 3, 4],
             )
@@ -1873,7 +1873,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             with butler.query() as query:
                 results = query.datasets("calexp", collections=run)
                 results = results.where(
-                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(POS)",
+                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(:POS)",
                     bind={"POS": Region.from_ivoa_pos(pos)},
                 )
                 refs = list(results)
@@ -1883,7 +1883,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     "calexp",
                     collections=run,
                     instrument="HSC",
-                    where="visit_detector_region.region OVERLAPS(POS)",
+                    where="visit_detector_region.region OVERLAPS(:POS)",
                     bind={"POS": Region.from_ivoa_pos(pos)},
                     explain=False,
                 )
@@ -1906,20 +1906,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
             # Use a time during the middle of a visit.
             v_903334 = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)", bind={"ts": v_903334_mid}
+                "instrument = 'HSC' and visit.timespan OVERLAPS(:ts)", bind={"ts": v_903334_mid}
             )
             self.assertEqual(len(list(v_903334)), 4)
 
             # Timespan covering first half of the data.
             first_half = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(t1, t2)",
+                "instrument = 'HSC' and visit.timespan OVERLAPS(:t1, :t2)",
                 bind={"t1": v_903334_pre, "t2": v_904014_pre},
             )
             self.assertEqual(len(list(first_half)), 17)
 
             # Query using a timespan object.
             with_ts = results.where(
-                "instrument = 'HSC' and visit.timespan OVERLAPS(ts)",
+                "instrument = 'HSC' and visit.timespan OVERLAPS(:ts)",
                 bind={"ts": Timespan(v_904014_pre, v_904014_post)},
             )
             self.assertEqual(len(list(with_ts)), 16)
@@ -2136,7 +2136,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertCountEqual(
             butler.query_data_ids(
                 ["detector"],
-                where="(instrument='Cam1' OR instrument='Cam2') AND visit.region OVERLAPS region",
+                where="(instrument='Cam1' OR instrument='Cam2') AND visit.region OVERLAPS :region",
                 bind={"region": Region.from_ivoa_pos("CIRCLE 320. -0.25 10.")},
                 explain=False,
             ),
@@ -2236,7 +2236,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(names, ["Aa"])
 
         result = butler.query_dimension_records(
-            "detector", where="instrument='Cam1' and detector=an_integer", bind={"an_integer": int64(2)}
+            "detector", where="instrument='Cam1' and detector=:an_integer", bind={"an_integer": int64(2)}
         )
         names = [x.full_name for x in result]
         self.assertEqual(names, ["Ab"])
@@ -2284,7 +2284,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         # bind values work.
         results = butler._query_all_datasets(
-            "*", where="detector=my_bind and instrument='Cam1'", bind={"my_bind": 1}, find_first=False
+            "*", where="detector=:my_bind and instrument='Cam1'", bind={"my_bind": 1}, find_first=False
         )
         self.assertCountEqual(detector_1_ids, _ref_uuids(results))
 

@@ -256,6 +256,29 @@ class Identifier(Node):
         return "{name}".format(**vars(self))
 
 
+class BindName(Node):
+    """Node representing a bind name.
+
+    Value of the bind is its name, which is a simple identifier.
+
+    Parameters
+    ----------
+    name : str
+        Bind name.
+    """
+
+    def __init__(self, name: str):
+        Node.__init__(self)
+        self.name = name
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        return visitor.visitBind(self.name, self)
+
+    def __str__(self) -> str:
+        return "{name}".format(**vars(self))
+
+
 class RangeLiteral(Node):
     """Node representing range literal appearing in `IN` list.
 

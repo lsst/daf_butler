@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ["TreeVisitor"]
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class TreeVisitor(Generic[T]):
+class TreeVisitor(Generic[T], ABC):
     """Definition of interface for visitor classes.
 
     Visitors and tree node classes implement Visitor pattern for tree
@@ -117,6 +117,18 @@ class TreeVisitor(Generic[T]):
         ----------
         name : `str`
             Identifier name.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitBind(self, name: str, node: Node) -> T:
+        """Visit BindName node.
+
+        Parameters
+        ----------
+        name : `str`
+            Bind name.
         node : `Node`
             Corresponding tree node, mostly useful for diagnostics.
         """
