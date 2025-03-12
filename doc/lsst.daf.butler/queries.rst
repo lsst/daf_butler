@@ -168,7 +168,7 @@ filter query results based on that property of datasets.
 Registry methods accepting user expressions also accept a ``bind`` parameter, which is a mapping from identifier name to its corresponding value.
 Identifiers appearing in user expressions will be replaced with the corresponding value from this mapping.
 Bind identifiers in expressions are specified with a preceding colon (e.g. ``:id``).
-Legacy format where bind identifiers can be specified without colon is still supported, but discouraged, and will be deprecated and removed in the future.
+The legacy format where bind identifiers can be specified without a colon is still supported, but discouraged, and will be deprecated and removed in the future.
 Using the ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
 A partial example of comparing two approaches, without and with ``bind``:
 
