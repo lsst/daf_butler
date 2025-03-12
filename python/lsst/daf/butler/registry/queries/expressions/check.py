@@ -234,15 +234,18 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         if name not in self.bind:
             raise UserExpressionError(f"Name {name!r} is not in the bind map.")
         value = self.bind[name]
-        if isinstance(value, list | tuple | Set):
-            # This can happen on rhs of IN operator, if there is only one
-            # element in the list then take it.
-            if len(value) == 1:
-                return TreeSummary(dataIdValue=next(iter(value)))
-            else:
-                return TreeSummary()
-        else:
-            return TreeSummary(dataIdValue=value)
+        match value:
+            case list() | tuple() | Set():
+                # This can happen on rhs of IN operator, if there is only one
+                # element in the list then take it.
+                match len(value):
+                    case 1:
+                        (value,) = value
+                        return TreeSummary(dataIdValue=value)
+                    case _:
+                        return TreeSummary()
+            case _:
+                return TreeSummary(dataIdValue=value)
 
     def visitUnaryOp(self, operator: str, operand: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitUnaryOp
