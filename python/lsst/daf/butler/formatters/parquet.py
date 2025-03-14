@@ -1222,8 +1222,10 @@ def _append_numpy_string_metadata(metadata: dict[bytes, str], name: str, dtype: 
 
     if dtype.type is np.str_:
         metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize // 4)
+        metadata[f"table::len::{name}".encode()] = str(dtype.itemsize // 4)
     elif dtype.type is np.bytes_:
         metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize)
+        metadata[f"table::len::{name}".encode()] = str(dtype.itemsize)
 
 
 def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype: np.dtype) -> None:
