@@ -72,7 +72,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
 from ..datastore import Datastore, NullDatastore
 from ..datastores.file_datastore.retrieve_artifacts import ZipIndex, retrieve_and_zip
-from ..dimensions import DataCoordinate, Dimension
+from ..dimensions import DataCoordinate, Dimension, DimensionGroup
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
 from ..queries import Query
@@ -1977,12 +1977,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 filtered_count,
             )
 
-        # Importing requires that we group the refs by dataset type and run
+        # Importing requires that we group the refs by dimension group and run
         # before doing the import.
         source_dataset_types = set()
         grouped_refs: defaultdict[_RefGroup, list[DatasetRef]] = defaultdict(list)
         for ref in source_refs:
-            grouped_refs[_RefGroup(ref.datasetType.name, ref.run)].append(ref)
+            grouped_refs[_RefGroup(ref.datasetType.dimensions, ref.run)].append(ref)
             source_dataset_types.add(ref.datasetType)
 
         # Check to see if the dataset type in the source butler has
@@ -2098,7 +2098,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # where Postgres can deadlock due to the unique index on collection
             # name. (See DM-47543).
             groups = sorted(grouped_refs.items(), key=lambda item: item[0].run)
-            for (datasetType, run), refs_to_import in progress.iter_item_chunks(
+            for (dimension_group, run), refs_to_import in progress.iter_item_chunks(
                 groups, desc="Importing to registry by run and dataset type"
             ):
                 if run not in handled_collections:
@@ -2117,10 +2117,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
                 n_refs = len(refs_to_import)
                 _LOG.verbose(
-                    "Importing %d ref%s of dataset type %s into run %s",
+                    "Importing %d ref%s with dimensions %s into run %s",
                     n_refs,
                     "" if n_refs == 1 else "s",
-                    datasetType,
+                    dimension_group.names,
                     run,
                 )
 
@@ -2385,5 +2385,5 @@ class _RefGroup(NamedTuple):
     `Butler.transfer_from`.
     """
 
-    dataset_type: str
+    dimensions: DimensionGroup
     run: str
