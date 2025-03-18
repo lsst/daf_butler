@@ -698,19 +698,30 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             for dataId, row in zip(data_id_list, rows, strict=True)
         ]
 
-    def import_(
-        self,
-        dataset_type: DatasetType,
-        run: RunRecord,
-        data_ids: Mapping[DatasetId, DataCoordinate],
-    ) -> list[DatasetRef]:
+    def import_(self, run: RunRecord, refs: list[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
-        if not data_ids:
+        if not refs:
             # Just in case an empty mapping is provided we want to avoid
             # adding dataset type to summary tables.
-            return []
-        if (storage := self._find_storage(dataset_type.name)) is None:
-            raise MissingDatasetTypeError(f"Dataset type {dataset_type.name!r} has not been registered.")
+            return
+        assert all(ref.run == run.name for ref in refs), (
+            "Run names in refs must match the run we are inserting into"
+        )
+
+        dataset_types = {ref.datasetType for ref in refs}
+        dimensions = _ensure_dimension_groups_match(dataset_types)
+        dataset_type_storage: dict[str, _DatasetRecordStorage] = {}
+        for dt in dataset_types:
+            if (storage := self._find_storage(dt.name)) is None:
+                raise MissingDatasetTypeError(f"Dataset type {dt.name!r} has not been registered.")
+            dataset_type_storage[dt.name] = storage
+
+        dynamic_tables = self._cache.get_by_dimensions(dimensions)
+        assert dynamic_tables is not None, (
+            "Table cache should have been populated when looking up dataset types"
+        )
+        tags_table = self._get_tags_table(dynamic_tables)
+
         # Current timestamp, type depends on schema version.
         if self._use_astropy_ingest_date:
             # Astropy `now()` precision should be the same as `now()` which
@@ -718,25 +729,25 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             timestamp = sqlalchemy.sql.literal(astropy.time.Time.now(), type_=ddl.AstropyTimeNsecTai)
         else:
             timestamp = sqlalchemy.sql.literal(datetime.datetime.now(datetime.UTC))
+
         # We'll insert all new rows into a temporary table
-        table_spec = makeTagTableSpec(
-            storage.dataset_type.dimensions, type(self._collections), constraints=False
-        )
+        table_spec = makeTagTableSpec(dimensions, type(self._collections), constraints=False)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
-        proto_ags_row = {
-            "dataset_type_id": storage.dataset_type_id,
-            collection_fkey_name: run.key,
-        }
         tmpRows = [
-            dict(proto_ags_row, dataset_id=dataset_id, **data_id.required)
-            for dataset_id, data_id in data_ids.items()
+            {
+                "dataset_type_id": dataset_type_storage[ref.datasetType.name].dataset_type_id,
+                collection_fkey_name: run.key,
+                "dataset_id": ref.id,
+                **ref.dataId.required,
+            }
+            for ref in refs
         ]
         with self._db.transaction(for_temp_tables=True), self._db.temporary_table(table_spec) as tmp_tags:
             # store all incoming data in a temporary table
             self._db.insert(tmp_tags, *tmpRows)
             # There are some checks that we want to make for consistency
             # of the new datasets with existing ones.
-            self._validate_import(storage, tmp_tags, run)
+            self._validate_import(dimensions, tags_table, tmp_tags, run)
             # Before we merge temporary table into dataset/tags we need to
             # drop datasets which are already there (and do not conflict).
             self._db.deleteWhere(
@@ -753,27 +764,23 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     timestamp.label("ingest_date"),
                 ),
             )
-            refs = [
-                DatasetRef(
-                    datasetType=dataset_type,
-                    id=dataset_id,
-                    dataId=dataId,
-                    run=run.name,
-                )
-                for dataset_id, dataId in data_ids.items()
-            ]
             # Update the summary tables for this collection in case this
             # is the first time this dataset type or these governor values
             # will be inserted there.
             summary = CollectionSummary()
             summary.add_datasets(refs)
-            self._summaries.update(run, [storage.dataset_type_id], summary)
+            self._summaries.update(
+                run, [storage.dataset_type_id for storage in dataset_type_storage.values()], summary
+            )
             # Copy from temp table into tags table.
-            self._db.insert(self._get_tags_table(storage.dynamic_tables), select=tmp_tags.select())
-        return refs
+            self._db.insert(tags_table, select=tmp_tags.select())
 
     def _validate_import(
-        self, storage: _DatasetRecordStorage, tmp_tags: sqlalchemy.schema.Table, run: RunRecord
+        self,
+        dimensions: DimensionGroup,
+        tags: sqlalchemy.schema.Table,
+        tmp_tags: sqlalchemy.schema.Table,
+        run: RunRecord,
     ) -> None:
         """Validate imported refs against existing datasets.
 
@@ -793,7 +800,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             Raise if new datasets conflict with existing ones.
         """
         dataset = self._static.dataset
-        tags = self._get_tags_table(storage.dynamic_tables)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
 
         # Check that existing datasets have the same dataset type and
@@ -820,23 +826,16 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             if (row := result.first()) is not None:
                 existing_run = self._collections[row.run].name
                 new_run = self._collections[row.new_run].name
-                if row.dataset_type_id == storage.dataset_type_id:
-                    if row.new_dataset_type_id == storage.dataset_type_id:
-                        raise ConflictingDefinitionError(
-                            f"Current run {existing_run!r} and new run {new_run!r} do not agree for "
-                            f"dataset {row.dataset_id}."
-                        )
-                    else:
-                        raise ConflictingDefinitionError(
-                            f"Dataset {row.dataset_id} was provided with type {storage.dataset_type.name!r} "
-                            f"in run {new_run!r}, but was already defined with type ID {row.dataset_type_id} "
-                            f"in run {run!r}."
-                        )
+                if row.dataset_type_id == row.new_dataset_type_id:
+                    raise ConflictingDefinitionError(
+                        f"Current run {existing_run!r} and new run {new_run!r} do not agree for "
+                        f"dataset {row.dataset_id}."
+                    )
                 else:
                     raise ConflictingDefinitionError(
                         f"Dataset {row.dataset_id} was provided with type ID {row.new_dataset_type_id} "
-                        f"in run {new_run!r}, but was already defined with type "
-                        f"{storage.dataset_type.name!r} in run {run!r}."
+                        f"in run {new_run!r}, but was already defined with type ID "
+                        f"{row.dataset_type_id} in run {run!r}."
                     )
 
         # Check that matching dataset in tags table has the same DataId.
@@ -845,20 +844,14 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 tags.columns.dataset_id,
                 tags.columns.dataset_type_id.label("type_id"),
                 tmp_tags.columns.dataset_type_id.label("new_type_id"),
-                *[tags.columns[dim] for dim in storage.dataset_type.dimensions.required],
-                *[
-                    tmp_tags.columns[dim].label(f"new_{dim}")
-                    for dim in storage.dataset_type.dimensions.required
-                ],
+                *[tags.columns[dim] for dim in dimensions.required],
+                *[tmp_tags.columns[dim].label(f"new_{dim}") for dim in dimensions.required],
             )
             .select_from(tags.join(tmp_tags, tags.columns.dataset_id == tmp_tags.columns.dataset_id))
             .where(
                 sqlalchemy.sql.or_(
                     tags.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
-                    *[
-                        tags.columns[dim] != tmp_tags.columns[dim]
-                        for dim in storage.dataset_type.dimensions.required
-                    ],
+                    *[tags.columns[dim] != tmp_tags.columns[dim] for dim in dimensions.required],
                 )
             )
             .limit(1)
@@ -874,9 +867,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # Check that matching run+dataId have the same dataset ID.
         query = (
             sqlalchemy.sql.select(
-                *[tags.columns[dim] for dim in storage.dataset_type.dimensions.required],
+                *[tags.columns[dim] for dim in dimensions.required],
                 tags.columns.dataset_id,
                 tmp_tags.columns.dataset_id.label("new_dataset_id"),
+                tmp_tags.columns.dataset_type_id.label("new_dataset_type_id"),
                 tags.columns[collection_fkey_name],
                 tmp_tags.columns[collection_fkey_name].label(f"new_{collection_fkey_name}"),
             )
@@ -886,10 +880,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     sqlalchemy.sql.and_(
                         tags.columns.dataset_type_id == tmp_tags.columns.dataset_type_id,
                         tags.columns[collection_fkey_name] == tmp_tags.columns[collection_fkey_name],
-                        *[
-                            tags.columns[dim] == tmp_tags.columns[dim]
-                            for dim in storage.dataset_type.dimensions.required
-                        ],
+                        *[tags.columns[dim] == tmp_tags.columns[dim] for dim in dimensions.required],
                     ),
                 )
             )
@@ -899,11 +890,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         with self._db.query(query) as result:
             # only include the first one in the exception message
             if (row := result.first()) is not None:
-                data_id = {dim: getattr(row, dim) for dim in storage.dataset_type.dimensions.required}
+                data_id = {dim: getattr(row, dim) for dim in dimensions.required}
                 existing_collection = self._collections[getattr(row, collection_fkey_name)].name
                 new_collection = self._collections[getattr(row, f"new_{collection_fkey_name}")].name
                 raise ConflictingDefinitionError(
-                    f"Dataset with type {storage.dataset_type.name!r} and data ID {data_id} "
+                    f"Dataset with type ID {row.new_dataset_type_id} and data ID {data_id} "
                     f"has ID {row.dataset_id} in existing collection {existing_collection!r} "
                     f"but ID {row.new_dataset_id} in new collection {new_collection!r}."
                 )
@@ -1674,3 +1665,15 @@ def _create_case_expression_for_collections(
         return sqlalchemy.cast(sqlalchemy.null(), sqlalchemy.String)
 
     return sqlalchemy.case(mapping, value=id_column)
+
+
+def _ensure_dimension_groups_match(dataset_types: Iterable[DatasetType]) -> DimensionGroup:
+    dimensions = set(dt.dimensions for dt in dataset_types)
+    assert len(dimensions) > 0, "At least one dataset type is required"
+    if len(dimensions) != 1:
+        raise DatasetTypeError(
+            "Dataset types have more than one dimension group.\n"
+            f"Dataset types: {dataset_types}\n"
+            f"Dimension groups: {dimensions}"
+        )
+    return dimensions.pop()

@@ -81,7 +81,6 @@ from ..registry import (
     NoDefaultCollectionError,
     OrphanedRecordError,
     RegistryConfig,
-    RegistryConsistencyError,
     RegistryDefaults,
     queries,
 )
@@ -1169,17 +1168,15 @@ class SqlRegistry:
 
         progress = Progress("daf.butler.Registry.importDatasets", level=logging.DEBUG)
         if expand:
-            data_ids = {
-                dataset.id: self.expandDataId(dataset.dataId, dimensions=datasetType.dimensions)
+            datasets = [
+                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=datasetType.dimensions))
                 for dataset in progress.wrap(datasets, f"Expanding {datasetType.name} data IDs")
-            }
-        else:
-            data_ids = {dataset.id: dataset.dataId for dataset in datasets}
+            ]
 
         try:
-            refs = list(self._managers.datasets.import_(datasetType, runRecord, data_ids))
+            self._managers.datasets.import_(runRecord, datasets)
             if self._managers.obscore:
-                self._managers.obscore.add_datasets(refs)
+                self._managers.obscore.add_datasets(datasets)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 "A database constraint failure was triggered by inserting "
@@ -1189,14 +1186,7 @@ class SqlRegistry:
                 "and dataset type already exists, but it may also mean a "
                 "dimension row is missing."
             ) from err
-        # Check that imported dataset IDs match the input
-        for imported_ref, input_ref in zip(refs, datasets, strict=True):
-            if imported_ref.id != input_ref.id:
-                raise RegistryConsistencyError(
-                    "Imported dataset ID differs from input dataset ID, "
-                    f"input ref: {input_ref}, imported ref: {imported_ref}"
-                )
-        return refs
+        return datasets
 
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         """Retrieve a Dataset entry.

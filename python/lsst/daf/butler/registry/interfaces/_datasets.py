@@ -424,29 +424,16 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def import_(
-        self,
-        dataset_type: DatasetType,
-        run: RunRecord,
-        data_ids: Mapping[DatasetId, DataCoordinate],
-    ) -> list[DatasetRef]:
+    def import_(self, run: RunRecord, refs: list[DatasetRef]) -> None:
         """Insert one or more dataset entries into the database.
 
         Parameters
         ----------
-        dataset_type : `DatasetType`
-            Type of dataset to import.  Also used as the dataset type for
-            the returned refs.
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             these datasets will be associated with.
-        data_ids : `~collections.abc.Mapping`
-            Mapping from dataset ID to data ID.
-
-        Returns
-        -------
-        datasets : `list` [ `DatasetRef` ]
-            References to the inserted or existing datasets.
+        refs : `list` [ `DatasetRef ` ]
+            List of datasets to be be inserted.
         """
         raise NotImplementedError()
 
