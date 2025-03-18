@@ -2131,11 +2131,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 else:
                     imported_refs = refs_to_import
 
-                # Check all the UUIDs were imported, ignoring dataset type
-                # storage class differences.
-                imported_uuids = set(ref.id for ref in imported_refs)
-                uuids_to_import = set(ref.id for ref in refs_to_import)
-                assert set(imported_uuids) == set(uuids_to_import)
                 n_imported += len(imported_refs)
 
             assert len(source_refs) == n_imported
