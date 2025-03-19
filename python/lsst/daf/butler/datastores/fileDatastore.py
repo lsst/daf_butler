@@ -2158,10 +2158,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     target_uri = to_transfer[cleaned_source_uri]
                     artifact_map[target_uri].append(ref.id)
 
-        # In theory can now parallelize the transfer
+        # Parallelize the transfer. Re-raise as a single exception if
+        # a FileExistsError is encountered anywhere.
         log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
-        for source_uri, target_uri in to_transfer.items():
-            target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
+        try:
+            ResourcePath.mtransfer(transfer, tuple(to_transfer.items()), overwrite=overwrite)
+        except* FileExistsError as egroup:
+            raise FileExistsError(
+                "Some files already exist in destination directory and overwrite is False"
+            ) from egroup
 
         # Transfer the Zip files and unpack them.
         zipped_artifacts = unpack_zips(zips_to_transfer, requested_ids, destination, preserve_path, overwrite)
@@ -2748,6 +2753,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Record each time we have done a "direct" transfer.
         direct_transfers = []
 
+        # Keep track of all the file transfers that are required.
+        from_to: list[tuple[ResourcePath, ResourcePath]] = []
+
         # Now can transfer the artifacts
         log.verbose("Transferring artifacts")
         for ref in refs:
@@ -2796,20 +2804,27 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                             info = info.update(path=target_location.pathInStore.path)
 
                     # Need to transfer it to the new location.
-                    # Assume we should always overwrite. If the artifact
-                    # is there this might indicate that a previous transfer
-                    # was interrupted but was not able to be rolled back
-                    # completely (eg pre-emption) so follow Datastore default
-                    # and overwrite. Do not copy if we are in dry-run mode.
-                    if not dry_run:
-                        target_location.uri.transfer_from(
-                            source_location.uri,
-                            transfer=transfer,
-                            overwrite=True,
-                            transaction=self._transaction,
-                        )
+                    from_to.append((source_location.uri, target_location.uri))
 
                 artifacts.append((ref, info))
+
+        # Do the file transfers in bulk.
+        # Assume we should always overwrite. If the artifact
+        # is there this might indicate that a previous transfer
+        # was interrupted but was not able to be rolled back
+        # completely (eg pre-emption) so follow Datastore default
+        # and overwrite. Do not copy if we are in dry-run mode.
+        if dry_run:
+            log.info("Would be copying %d file artifacts", len(from_to))
+        else:
+            log.verbose("Copying %d file artifacts", len(from_to))
+            with time_this(log, msg="Transferring datasets into datastore", level=VERBOSE):
+                ResourcePath.mtransfer(
+                    transfer,
+                    from_to,
+                    overwrite=True,
+                    transaction=self._transaction,
+                )
 
         if direct_transfers:
             log.info(
