@@ -432,12 +432,10 @@ class _ToArrowDateTime(ToArrow):
 
 @final
 class UUIDArrowType(pa.ExtensionType):
-    """An Arrow extension type for `astropy.time.Time`, stored as TAI
-    nanoseconds since 1970-01-01.
-    """
+    """An Arrow extension type for `uuid.UUID`, stored as 16 bytes."""
 
     def __init__(self) -> None:
-        super().__init__(_ToArrowTimespan.storage_type, "astropy.time.Time")
+        super().__init__(_ToArrowUUID.storage_type, "uuid.UUID")
 
     def __arrow_ext_serialize__(self) -> bytes:
         return b""
@@ -458,7 +456,7 @@ class UUIDArrowScalar(pa.ExtensionScalar):
     instance.
     """
 
-    def as_py(self) -> astropy.time.Time:
+    def as_py(self) -> uuid.UUID:
         return uuid.UUID(bytes=self.value.as_py())
 
 
