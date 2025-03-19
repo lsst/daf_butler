@@ -41,6 +41,7 @@ import shutil
 import string
 import tempfile
 import unittest
+import unittest.mock
 import uuid
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
@@ -1823,8 +1824,7 @@ class FileDatastoreButlerTests(ButlerTests):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         butler = self.create_empty_butler(writeable=True)
         # Load registry data with dimensions to hang datasets off of.
-        registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
-        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
+        butler.import_(filename=_get_test_data_path("base.yaml"))
         # Add some RUN-type collections.
         run1 = "run1"
         butler.collections.register(run1)
@@ -2873,6 +2873,64 @@ class PosixDatastoreTransfers(unittest.TestCase):
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]
             self.target_butler.transfer_from(self.source_butler, to_transfer)
 
+    def test_shared_dimension_group(self):
+        """Test internal logic that divides dataset types by dimension group
+        when doing registry updates.
+        """
+        self.create_butlers()
+        self.source_butler.import_(filename=_get_test_data_path("base.yaml"), without_datastore=True)
+        self.source_butler.import_(filename=_get_test_data_path("datasets.yaml"), without_datastore=True)
+
+        source_butler = self.source_butler
+        target_butler = self.target_butler
+
+        # Create a dataset type with the same dimensions as the 'bias' dataset
+        # type from base.yaml
+        dataset_type = DatasetType(
+            "test_type", ["instrument", "detector"], "int", universe=source_butler.dimensions
+        )
+        source_butler.registry.registerDatasetType(dataset_type)
+        # This has the same data ID as one of the bias datasets in
+        # datasets.yaml.
+        test_ref = source_butler.registry.insertDatasets(
+            "test_type", [{"instrument": "Cam1", "detector": 2}], run="imported_g"
+        )[0]
+
+        biases = source_butler.query_datasets("bias", ["imported_g", "imported_r"])
+        flats = source_butler.query_datasets("flat", ["imported_g", "imported_r"])
+        refs = [test_ref, *biases, *flats]
+
+        # Test setup will be even more convoluted if we want the datastore to
+        # actually transfer files.  For testing the dimension group behavior,
+        # we really only care about the registry.
+        with unittest.mock.patch.object(target_butler._datastore, "transfer_from") as mock:
+            mock.return_value = (set(refs), set())
+            target_butler.transfer_from(
+                source_butler,
+                refs,
+                transfer=None,
+                register_dataset_types=True,
+                skip_missing=False,
+                transfer_dimensions=True,
+            )
+
+        transferred_test_ref = target_butler.find_dataset(
+            "test_type", {"instrument": "Cam1", "detector": 2}, collections="imported_g"
+        )
+        self.assertEqual(transferred_test_ref.id, test_ref.id)
+
+        transferred_bias = target_butler.find_dataset(
+            "bias", {"instrument": "Cam1", "detector": 2}, collections="imported_g"
+        )
+        self.assertEqual(transferred_bias.id, uuid.UUID("51352db4-a47a-447c-b12d-a50b206b17cd"))
+
+        transferred_flat = target_butler.find_dataset(
+            "flat",
+            {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-R1", "band": "r"},
+            collections="imported_r",
+        )
+        self.assertEqual(transferred_flat.id, uuid.UUID("c1296796-56c5-4acf-9b49-40d920c6f840"))
+
 
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     """Test transfers using a chained datastore."""
@@ -3031,6 +3089,11 @@ class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
 def setup_module(module: types.ModuleType) -> None:
     """Set up the module for pytest."""
     clean_environment()
+
+
+def _get_test_data_path(filename: str) -> str:
+    registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
+    return os.path.join(registryDataDir, filename)
 
 
 if __name__ == "__main__":
