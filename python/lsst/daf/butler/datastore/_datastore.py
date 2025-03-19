@@ -137,6 +137,10 @@ class DatastoreTransaction:
     ----------
     parent : `DatastoreTransaction`, optional
         The parent transaction (if any).
+
+    Notes
+    -----
+    This transaction object must be thread safe.
     """
 
     Event: ClassVar[type] = Event
