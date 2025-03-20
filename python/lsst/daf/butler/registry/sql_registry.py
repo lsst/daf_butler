@@ -1506,18 +1506,13 @@ class SqlRegistry:
         if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
             for element_name in dataId.dimensions.elements:
                 records[element_name] = dataId.records[element_name]
-        keys = dict(standardized.mapping)
+        keys: dict[str, str | int] = dict(standardized.mapping)
         for element_name in standardized.dimensions.lookup_order:
             element = self.dimensions[element_name]
             record = records.get(element_name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
                 if element_name in self.dimensions.dimensions.names and keys.get(element_name) is None:
-                    if element_name in standardized.dimensions.required:
-                        raise DimensionNameError(
-                            f"No value or null value for required dimension {element_name}."
-                        )
-                    keys[element_name] = None
-                    record = None
+                    raise DimensionNameError(f"No value or null value for dimension {element_name}.")
                 else:
                     record = self._managers.dimensions.fetch_one(
                         element_name,
@@ -1534,9 +1529,9 @@ class SqlRegistry:
                             f"but {element_name} implies {d.name}={value!r}."
                         )
             else:
-                if element_name in standardized.dimensions.required:
+                if element_name in standardized.dimensions.names:
                     raise DataIdValueError(
-                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
+                        f"Could not fetch record for dimension {element.name} via keys {keys}."
                     )
                 if element.defines_relationships:
                     raise InconsistentDataIdError(
@@ -1544,9 +1539,6 @@ class SqlRegistry:
                         "but it is marked as defining relationships; this means one or more dimensions are "
                         "have inconsistent values.",
                     )
-                for d in element.implied:
-                    keys.setdefault(d.name, None)
-                    records.setdefault(d.name, None)
         return DataCoordinate.standardize(keys, dimensions=standardized.dimensions).expanded(records=records)
 
     def insertDimensionData(
