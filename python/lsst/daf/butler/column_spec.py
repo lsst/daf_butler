@@ -138,7 +138,7 @@ class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
 
     def deserialize(self, value: Any) -> Any:
         # Docstring inherited.
-        return value if value is None else self._type_adapter.validate_python(value)
+        return value if value is None else self._type_adapter.validate_python(value, strict=True)
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
