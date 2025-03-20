@@ -54,7 +54,7 @@ from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
-from .pydantic_utils import SerializableRegion, SerializableTime
+from .pydantic_utils import SerializableBytesHex, SerializableRegion, SerializableTime
 
 if TYPE_CHECKING:
     from .name_shrinker import NameShrinker
@@ -312,7 +312,7 @@ class HashColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableBytesHex))
 
 
 @final
