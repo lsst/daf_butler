@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = (
     "DeferredValidation",
+    "SerializableBytesHex",
     "SerializableRegion",
     "SerializableTime",
     "get_universe_from_context",
@@ -289,6 +290,31 @@ An object annotated with this type is always an `lsst.sphgeom.Region` instance
 in Python, but unlike `lsst.sphgeom.Region` itself it can be used as a type
 in Pydantic models and type adapters, resulting in the field being saved as
 a hex encoding of the sphgeom-encoded bytes.
+"""
+
+
+def _deserialize_bytes_hex(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> Region:
+    if isinstance(value, bytes):
+        return value
+
+    string = handler(value)
+    return bytes.fromhex(string)
+
+
+SerializableBytesHex: TypeAlias = Annotated[
+    bytes,
+    pydantic.GetPydanticSchema(lambda _, h: h(str)),
+    pydantic.WrapValidator(_deserialize_bytes_hex),
+    pydantic.PlainSerializer(bytes.hex),
+    pydantic.WithJsonSchema(
+        {
+            "type": "string",
+            "description": "A hex-encoded byte string.",
+            "media": {"binaryEncoding": "base16"},
+        }
+    ),
+]
+"""A Pydantic-annotated version `bytes` that serializes as hex.
 """
 
 
