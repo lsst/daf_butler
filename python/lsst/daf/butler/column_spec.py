@@ -125,18 +125,6 @@ class ColumnValueSerializer(ABC):
         raise NotImplementedError
 
 
-class _DefaultColumnValueSerializer(ColumnValueSerializer):
-    """Default implementation of serializer for basic types."""
-
-    def serialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
-
-    def deserialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
-
-
 class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
     """Implementation of serializer that uses pydantic type adapter."""
 
@@ -258,7 +246,7 @@ class IntColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(int))
 
 
 @final
@@ -282,7 +270,7 @@ class StringColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(str))
 
 
 @final
@@ -330,7 +318,7 @@ class FloatColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(float))
 
 
 @final
@@ -347,7 +335,7 @@ class BoolColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(bool))
 
 
 @final
