@@ -433,7 +433,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             The record object describing the `~CollectionType.RUN` collection
             these datasets will be associated with.
         refs : `list` [ `DatasetRef` ]
-            List of datasets to be be inserted.
+            List of datasets to be be inserted.  All of the ``DatasetRef``
+            ``run`` attributes must match the ``run`` parameter.
         """
         raise NotImplementedError()
 
