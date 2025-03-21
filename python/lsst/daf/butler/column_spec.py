@@ -250,6 +250,14 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
     def __str__(self) -> str:
         return "\n".join(self.display())
 
+    @property
+    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
+        """A low-level Pydantic schema for this column type."""
+        result = self.serializer().pydantic_core_schema
+        if self.nullable:
+            result = pydantic_core.core_schema.nullable_schema(result)
+        return result
+
 
 def make_dict_pydantic_core_schema(columns: Iterable[ColumnSpec]) -> pydantic_core.core_schema.CoreSchema:
     """Return a `pydantic_core` schema for a `typing.TypedDict` with names and
@@ -269,7 +277,7 @@ def make_dict_pydantic_core_schema(columns: Iterable[ColumnSpec]) -> pydantic_co
     return pydantic_core.core_schema.typed_dict_schema(
         {
             spec.name: pydantic_core.core_schema.TypedDictField(
-                schema=spec.serializer().pydantic_core_schema, type="typed-dict-field"
+                schema=spec.pydantic_core_schema, type="typed-dict-field"
             )
             for spec in columns
         }
@@ -293,9 +301,7 @@ def make_tuple_pydantic_core_schema(
         A low-level Pydantic schema that can be used to construct a validator,
         serializer or JSON schema.
     """
-    return pydantic_core.core_schema.tuple_schema(
-        [spec.serializer().pydantic_core_schema for spec in columns]
-    )
+    return pydantic_core.core_schema.tuple_schema([spec.pydantic_core_schema for spec in columns])
 
 
 def make_dict_validator(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaValidator:
