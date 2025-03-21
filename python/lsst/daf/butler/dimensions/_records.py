@@ -325,7 +325,7 @@ class DimensionRecord:
     def __eq__(self, other: Any) -> bool:
         if type(other) is not type(self):
             return False
-        return self.dataId == other.dataId
+        return all(getattr(self, name) == getattr(other, name) for name in self.__slots__)
 
     def __hash__(self) -> int:
         return hash(self.dataId.required_values)
