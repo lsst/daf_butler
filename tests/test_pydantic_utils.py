@@ -28,11 +28,17 @@
 from __future__ import annotations
 
 import unittest
+import uuid
 
 import pydantic
 from astropy.time import Time
 
-from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion, SerializableTime
+from lsst.daf.butler.pydantic_utils import (
+    DeferredValidation,
+    SerializableBytesHex,
+    SerializableRegion,
+    SerializableTime,
+)
 from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 
 
@@ -133,6 +139,21 @@ class SerializableExtensionsTestCase(unittest.TestCase):
         python_roundtripped = adapter.validate_python(adapter.dump_python(time))
         self.assertIsInstance(json_roundtripped, Time)
         self.assertEqual(python_roundtripped, time)
+        with self.assertRaises(ValueError):
+            adapter.validate_python("one")
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
+
+    def test_bytes_hex(self) -> None:
+        b1 = uuid.uuid4().bytes
+        adapter = pydantic.TypeAdapter(SerializableBytesHex)
+        self.assertEqual(adapter.json_schema()["media"]["binaryEncoding"], "base16")
+        json_roundtripped = adapter.validate_json(adapter.dump_json(b1))
+        self.assertIsInstance(json_roundtripped, bytes)
+        self.assertEqual(json_roundtripped, b1)
+        python_roundtripped = adapter.validate_python(adapter.dump_python(b1))
+        self.assertIsInstance(json_roundtripped, bytes)
+        self.assertEqual(python_roundtripped, b1)
         with self.assertRaises(ValueError):
             adapter.validate_python("one")
         with self.assertRaises(ValueError):

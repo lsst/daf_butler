@@ -135,7 +135,7 @@ class ColumnSetTestCase(unittest.TestCase):
         self.assertEqual(columns.get_column_spec("bias", "collection").nullable, False)
         self.assertEqual(columns.get_column_spec("bias", "timespan").name, "bias:timespan")
         self.assertEqual(columns.get_column_spec("bias", "timespan").type, "timespan")
-        self.assertEqual(columns.get_column_spec("bias", "timespan").nullable, False)
+        self.assertEqual(columns.get_column_spec("bias", "timespan").nullable, True)
         self.assertEqual(columns.get_column_spec("bias", "ingest_date").name, "bias:ingest_date")
         self.assertEqual(columns.get_column_spec("bias", "ingest_date").type, "datetime")
         self.assertEqual(columns.get_column_spec("bias", "ingest_date").nullable, True)

@@ -27,17 +27,20 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecordFactory", "DimensionRecordSet")
+__all__ = ("DimensionRecordFactory", "DimensionRecordSet", "DimensionRecordSetDeserializer")
 
 from collections.abc import Collection, Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, final
+from typing import TYPE_CHECKING, Any, Protocol, Self, TypeAlias, final
 
 from ._coordinate import DataCoordinate, DataIdValue
-from ._records import DimensionRecord
+from ._records import DimensionRecord, SerializedKeyValueDimensionRecord
 
 if TYPE_CHECKING:
     from ._elements import DimensionElement
     from ._universe import DimensionUniverse
+
+
+SerializedDimensionRecordSetMapping: TypeAlias = dict[str, list[SerializedKeyValueDimensionRecord]]
 
 
 class DimensionRecordFactory(Protocol):
@@ -483,3 +486,113 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
 
     def __deepcopy__(self, memo: dict[str, Any]) -> DimensionRecordSet:
         return DimensionRecordSet(self.element, _by_required_values=self._by_required_values.copy())
+
+    def serialize_records(self) -> list[SerializedKeyValueDimensionRecord]:
+        """Serialize the records to a list.
+
+        Returns
+        -------
+        raw_records : `list` [ `list` ]
+            Serialized records, in the form returned by
+            `DimensionRecord.serialize_key_value`.
+
+        Notes
+        -----
+        This does not include the dimension element shared by all of the
+        records, on the assumption that this is usually more conveniently saved
+        separately (e.g. as the key of a dictionary of which the list of
+        records is a value).
+        """
+        return [record.serialize_key_value() for record in self]
+
+    def deserialize_records(self, raw_records: Iterable[SerializedKeyValueDimensionRecord]) -> None:
+        """Deserialize records and add them to this set.
+
+        Parameters
+        ----------
+        raw_records : `~collections.abc.Iterable` [ `list` ]
+            Serialized records, as returned by `serialize_records` or repeated
+            calls to `DimensionRecord.serialize_key_value`.
+
+        Notes
+        -----
+        The caller is responsible for ensuring that the serialized records have
+        the same dimension element as this set, as this cannot be checked.
+        Mismatches will probably result in a (confusing) type-validation error,
+        but are not guaranteed to.
+        """
+        deserializer = DimensionRecordSetDeserializer.from_raw(self.element, raw_records)
+        self.update(deserializer)
+
+
+class DimensionRecordSetDeserializer:
+    """A helper class for deserializing sets of dimension records, with support
+    for only fully deserializing certain records.
+
+    The `from_raw` factory method should generally be used instead of calling
+    the constructor directly.
+
+    Parameters
+    ----------
+    element : `DimensionElement`
+        Dimension element that defines all records.
+    mapping : `dict` [ `tuple`, `list` ]
+        A dictionary that maps the data ID required-values `tuple` for reach
+        record to the remainder of its raw serialization (i.e. an item in this
+        `dict` is a pair returned by `DimensionRecord.deserialize_key`).  This
+        `dict` will be used directly to back the deserializer, not copied.
+
+    Notes
+    -----
+    The keys (data ID required-values tuples) of all rows are deserialized
+    immediately, but the remaining fields are deserialized only on demand; use
+    `__iter__` to deserialize all records or `__getitem__` to deserialize only
+    a few.  An instance should really only be used for a single iteration or
+    multiple `__getitem__` calls, as each call will re-deserialize the records
+    in play; deserialized records are not cached.
+
+    The caller is responsible for ensuring that the serialized records are for
+    the given dimension element, as this cannot be checked. Mismatches will
+    probably result in a (confusing) type-validation error, but are not
+    guaranteed to.
+    """
+
+    def __init__(
+        self,
+        element: DimensionElement,
+        mapping: dict[tuple[DataIdValue, ...], SerializedKeyValueDimensionRecord],
+    ):
+        self.element = element
+        self._mapping = mapping
+
+    @classmethod
+    def from_raw(
+        cls, element: DimensionElement, raw_records: Iterable[SerializedKeyValueDimensionRecord]
+    ) -> Self:
+        """Construct from raw serialized records.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Dimension element that defines all records.
+        raw_records : `~collections.abc.Iterable` [ `list` ]
+            Serialized records, as returned by
+            `DimensionRecordSet.serialize_records` or repeated calls to
+            `DimensionRecord.serialize_key_value`.
+
+        Returns
+        -------
+        deserializer : `DimensionRecordSetDeserializer`
+            New deserializer instance.
+        """
+        return cls(element=element, mapping=dict(map(element.RecordClass.deserialize_key, raw_records)))
+
+    def __len__(self) -> int:
+        return len(self._mapping)
+
+    def __iter__(self) -> Iterator[DimensionRecord]:
+        deserialize = self.element.RecordClass.deserialize_value
+        return (deserialize(k, v) for k, v in self._mapping.items())
+
+    def __getitem__(self, key: tuple[DataIdValue, ...]) -> DimensionRecord:
+        return self.element.RecordClass.deserialize_value(key, self._mapping[key])

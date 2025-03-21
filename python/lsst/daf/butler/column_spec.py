@@ -39,22 +39,30 @@ __all__ = (
     "StringColumnSpec",
     "TimespanColumnSpec",
     "UUIDColumnSpec",
+    "make_dict_pydantic_core_schema",
+    "make_dict_serializer",
+    "make_dict_validator",
+    "make_tuple_pydantic_core_schema",
+    "make_tuple_serializer",
+    "make_tuple_validator",
 )
 
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
 
 import astropy.time
 import pyarrow as pa
 import pydantic
+import pydantic_core.core_schema
 
 from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
-from .pydantic_utils import SerializableRegion, SerializableTime
+from .pydantic_utils import SerializableBytesHex, SerializableRegion, SerializableTime
 
 if TYPE_CHECKING:
     from .name_shrinker import NameShrinker
@@ -124,17 +132,11 @@ class ColumnValueSerializer(ABC):
         """
         raise NotImplementedError
 
-
-class _DefaultColumnValueSerializer(ColumnValueSerializer):
-    """Default implementation of serializer for basic types."""
-
-    def serialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
-
-    def deserialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
+    @property
+    @abstractmethod
+    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
+        """The `pydantic_core` schema for this column type."""
+        raise NotImplementedError()
 
 
 class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
@@ -151,6 +153,11 @@ class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
     def deserialize(self, value: Any) -> Any:
         # Docstring inherited.
         return value if value is None else self._type_adapter.validate_python(value)
+
+    @property
+    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
+        # Docstring inherited.
+        return self._type_adapter.core_schema
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
@@ -243,6 +250,157 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
     def __str__(self) -> str:
         return "\n".join(self.display())
 
+    @property
+    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
+        """A low-level Pydantic schema for this column type."""
+        result = self.serializer().pydantic_core_schema
+        if self.nullable:
+            result = pydantic_core.core_schema.nullable_schema(result)
+        return result
+
+
+def make_dict_pydantic_core_schema(columns: Iterable[ColumnSpec]) -> pydantic_core.core_schema.CoreSchema:
+    """Return a `pydantic_core` schema for a `typing.TypedDict` with names and
+    value types defined by an iterable of `ColumnSpec` objects.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    schema : `pydantic_core.core_schema.CoreSchema`
+        A low-level Pydantic schema that can be used to construct a validator,
+        serializer or JSON schema.
+    """
+    return pydantic_core.core_schema.typed_dict_schema(
+        {
+            spec.name: pydantic_core.core_schema.TypedDictField(
+                schema=spec.pydantic_core_schema, type="typed-dict-field"
+            )
+            for spec in columns
+        }
+    )
+
+
+def make_tuple_pydantic_core_schema(
+    columns: Iterable[ColumnSpec],
+) -> pydantic_core.core_schema.CoreSchema:
+    """Return a `pydantic_core` schema for a `tuple` with and types defined by
+    an iterable of `ColumnSpec` objects.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    schema : `pydantic_core.core_schema.CoreSchema`
+        A low-level Pydantic schema that can be used to construct a validator,
+        serializer or JSON schema.
+    """
+    return pydantic_core.core_schema.tuple_schema([spec.pydantic_core_schema for spec in columns])
+
+
+def make_dict_validator(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaValidator:
+    """Return a low-level Pydantic validator for `dict` objects with keys and
+    value types defined by an iterable of `ColumnSpec`.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    validator : `pydantic_core.SchemaValidator`
+        A low-level validator that can be used to convert JSON strings or raw
+        Python dictionaries into validated dictionaries with known value types.
+
+    Notes
+    -----
+    This provides similar functionality to the validation methods on a
+    `pydantic.TypeAdapter` constructed from a `TypedDict`, but with the types
+    set by runtime code (i.e. the `ColumnSpec` objects) rather than a static
+    type.
+    """
+    return pydantic_core.SchemaValidator(make_dict_pydantic_core_schema(columns))
+
+
+def make_tuple_validator(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaValidator:
+    """Return a low-level Pydantic validator for `tuple` objects with element
+    types defined by an iterable of `ColumnSpec`.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    validator : `pydantic_core.SchemaValidator`
+        A low-level validator that can be used to convert JSON strings or raw
+        Python dictionaries into validated tuples with known element types.
+
+    Notes
+    -----
+    This provides similar functionality to the validation methods on a
+    `pydantic.TypeAdapter` constructed from a `tuple`, but with the types set
+    by runtime code (i.e. the `ColumnSpec` objects) rather than a static type.
+    """
+    return pydantic_core.SchemaValidator(make_tuple_pydantic_core_schema(columns))
+
+
+def make_dict_serializer(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaSerializer:
+    """Return a low-level Pydantic serializer for `dict` objects with keys and
+    value types defined by an iterable of `ColumnSpec`.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    serializer : `pydantic_core.SchemaSerializer`
+        A low-level serializer that can be used to convert dictionaries with
+        known value types into JSON strings or raw Python dictionaries.
+
+    Notes
+    -----
+    This provides similar functionality to the serialization methods on a
+    `pydantic.TypeAdapter` constructed from a `TypedDict`, but with the types
+    set by runtime code (i.e. the `ColumnSpec` objects) rather than a static
+    type.
+    """
+    return pydantic_core.SchemaSerializer(make_dict_pydantic_core_schema(columns))
+
+
+def make_tuple_serializer(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaSerializer:
+    """Return a low-level Pydantic serializer for `tuple` objects with element
+    types defined by an iterable of `ColumnSpec`.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    serializer : `pydantic_core.SchemaSerializer`
+        A low-level serializer that can be used to convert tuples with known
+        element types into JSON strings or raw Python dictionaries.
+
+    Notes
+    -----
+    This provides similar functionality to the serialization methods on a
+    `pydantic.TypeAdapter` constructed from a `tuple`, but with the types set
+    by runtime code (i.e. the `ColumnSpec` objects) rather than a static type.
+    """
+    return pydantic_core.SchemaSerializer(make_tuple_pydantic_core_schema(columns))
+
 
 @final
 class IntColumnSpec(_BaseColumnSpec):
@@ -258,7 +416,7 @@ class IntColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(int))
 
 
 @final
@@ -282,7 +440,7 @@ class StringColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(str))
 
 
 @final
@@ -312,7 +470,7 @@ class HashColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableBytesHex))
 
 
 @final
@@ -330,7 +488,7 @@ class FloatColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(float))
 
 
 @final
@@ -347,7 +505,7 @@ class BoolColumnSpec(_BaseColumnSpec):
 
     def serializer(self) -> ColumnValueSerializer:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(bool))
 
 
 @final
