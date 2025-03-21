@@ -27,17 +27,28 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecord", "SerializedDimensionRecord")
+__all__ = ("DimensionRecord", "SerializedDimensionRecord", "SerializedKeyValueDimensionRecord")
 
+import itertools
 from collections.abc import Hashable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
-from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
+import pydantic_core
+from pydantic import (
+    BaseModel,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    create_model,
+)
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
 
 from .._timespan import Timespan
+from ..column_spec import make_tuple_serializer, make_tuple_validator
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._elements import Dimension, DimensionElement
@@ -47,6 +58,23 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
     from ._schema import DimensionElementFields
     from ._universe import DimensionUniverse
+
+
+DataIdKey: TypeAlias = str
+"""Type annotation alias for the keys that can be used to index a
+DataCoordinate.
+"""
+
+# Pydantic will cast int to str if str is first in the Union.
+DataIdValue: TypeAlias = int | str
+"""Type annotation alias for the values that can be present in a
+DataCoordinate or other data ID.
+"""
+
+SerializedKeyValueDimensionRecord: TypeAlias = list[Any]
+"""Type annotation alias for the serialized form of DimensionRecord used in
+container serialization (e.g. `DimensionRecordSet`).
+"""
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, mapping: dict[str, Any]) -> DimensionRecord:
@@ -70,7 +98,23 @@ def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionReco
         slots.append("region")
     if definition.temporal:
         slots.append("timespan")
-    d = {"definition": definition, "__slots__": tuple(slots), "fields": fields}
+
+    key_validator = make_tuple_validator(definition.schema.required)
+    value_validator = make_tuple_validator(
+        itertools.chain(definition.schema.implied, definition.schema.remainder)
+    )
+    value_serializer = make_tuple_serializer(
+        itertools.chain(definition.schema.implied, definition.schema.remainder)
+    )
+
+    d = {
+        "definition": definition,
+        "__slots__": tuple(slots),
+        "fields": fields,
+        "_key_validator": key_validator,
+        "_value_validator": value_validator,
+        "_value_serializer": value_serializer,
+    }
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
@@ -268,6 +312,10 @@ class DimensionRecord:
     __slots__ = ("dataId",)
 
     _serializedType: ClassVar[type[BaseModel]] = SerializedDimensionRecord
+
+    _key_validator: ClassVar[pydantic_core.SchemaValidator]
+    _value_validator: ClassVar[pydantic_core.SchemaValidator]
+    _value_serializer: ClassVar[pydantic_core.SchemaSerializer]
 
     def __init__(self, **kwargs: Any):
         # Accept either the dimension name or the actual name of its primary
@@ -489,6 +537,86 @@ class DimensionRecord:
                 results["datetime_begin"] = timespan.begin
                 results["datetime_end"] = timespan.end
         return results
+
+    def serialize_key_value(self) -> SerializedKeyValueDimensionRecord:
+        """Serialize this record to a `list` that can be sliced into a key
+        (data ID values) / value (everything else) pair.
+
+        Returns
+        -------
+        raw : `list`
+            List of values with JSON-compatible types.
+
+        Notes
+        -----
+        Unlike `to_simple` / `from_simple`, this serialization approach does
+        not encode the `definition` element in the serialized form.  This is
+        expected to be serialized separately (e.g. as part of a homogeneous set
+        of dimension records).
+        """
+        key = list(self.dataId.required_values)
+        value = []
+        for name in self.definition.schema.implied.names:
+            value.append(getattr(self, name))
+        for name in self.definition.schema.remainder.names:
+            value.append(getattr(self, name))
+        return key + self._value_serializer.to_python(tuple(value), mode="json")
+
+    @classmethod
+    def deserialize_key(
+        cls, raw: SerializedKeyValueDimensionRecord
+    ) -> tuple[tuple[DataIdValue, ...], SerializedKeyValueDimensionRecord]:
+        """Deserialize just the key slice of the raw `list` serializeation of a
+        dimension record.
+
+        Parameters
+        ----------
+        raw : `list`
+            Serialized list with JSON-compatible types, as returned by
+            `serialize_key_value`.
+
+        Returns
+        -------
+        key : `tuple`
+            Validated tuple of required data ID values that uniquely identify
+            this record, extracted from the head of ``raw``.
+        raw_value : `list`
+            Remaining unvalidated fields.
+        """
+        n = len(cls.definition.minimal_group.required)
+        validator = cls._key_validator
+        return validator.validate_python(raw[:n]), raw[n:]
+
+    @classmethod
+    def deserialize_value(
+        cls, key: tuple[DataIdValue, ...], raw_value: SerializedKeyValueDimensionRecord
+    ) -> DimensionRecord:
+        """Deserialize the value slice of the raw `list` form of serialized
+        dimension record.
+
+        Parameters
+        ----------
+        key : `tuple`
+            Validated tuple of required data ID values that uniquely identify
+            this record, as returned by `deserialize_key`.
+        raw_value : `list`
+            Serialized list with JSON-compatible types, with just the non-key
+            items, as returned by `deserialize_key`.
+
+        Returns
+        -------
+        record : `DimensionRecord`
+            A fully-validated `DimensionRecord` with this subclass.
+        """
+        from ._coordinate import DataCoordinate
+
+        result = object.__new__(cls)  # bypass the usual __init__
+        result.dataId = DataCoordinate.from_required_values(cls.definition.minimal_group, key)
+        validator = cls._value_validator
+        value = validator.validate_python(raw_value)
+        for name, val in zip(cls.definition.schema.names, key + value):
+            setattr(result, name, val)
+        return result
 
     # DimensionRecord subclasses are dynamically created, so static type
     # checkers can't know about them or their attributes.  To avoid having to
