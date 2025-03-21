@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import copy
+import json
 import os
 import unittest
 
@@ -375,6 +376,22 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertNotIn(record2, set1)
         self.assertEqual(set1, set2)
         self.assertFalse(set1)
+
+    def test_record_key_value_serialization(self):
+        """Test DimensionRecord.serialize_key_value, deserialize_key, and
+        deserialize_value.
+        """
+        for element, records in self.records.items():
+            with self.subTest(element=element):
+                for record1 in records:
+                    raw1 = record1.serialize_key_value()
+                    self.assertIsInstance(raw1, list)
+                    raw2 = json.loads(json.dumps(raw1))
+                    self.assertEqual(raw1, raw2)
+                    key, raw_value = record1.definition.RecordClass.deserialize_key(raw2)
+                    self.assertEqual(key, record1.dataId.required_values)
+                    record2 = record1.definition.RecordClass.deserialize_value(key, raw_value)
+                    self.assertEqual(record1, record2)
 
 
 if __name__ == "__main__":

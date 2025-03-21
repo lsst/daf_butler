@@ -55,22 +55,11 @@ from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._group import DimensionGroup
-from ._records import DimensionRecord, SerializedDimensionRecord
+from ._records import DataIdKey, DataIdValue, DimensionRecord, SerializedDimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._universe import DimensionUniverse
-
-DataIdKey: TypeAlias = str
-"""Type annotation alias for the keys that can be used to index a
-DataCoordinate.
-"""
-
-# Pydantic will cast int to str if str is first in the Union.
-DataIdValue: TypeAlias = int | str
-"""Type annotation alias for the values that can be present in a
-DataCoordinate or other data ID.
-"""
 
 SerializedDataId: TypeAlias = dict[str, DataIdValue]
 """Simplified model for serializing the ``mapping`` property of
