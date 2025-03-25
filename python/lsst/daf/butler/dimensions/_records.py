@@ -33,7 +33,7 @@ import itertools
 from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
-import pydantic_core
+import pydantic
 from pydantic import (
     BaseModel,
     Field,
@@ -48,7 +48,7 @@ import lsst.sphgeom
 from lsst.utils.classes import immutable
 
 from .._timespan import Timespan
-from ..column_spec import make_tuple_serializer, make_tuple_validator
+from ..column_spec import make_tuple_type_adapter
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._elements import Dimension, DimensionElement
@@ -99,11 +99,8 @@ def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionReco
     if definition.temporal:
         slots.append("timespan")
 
-    key_validator = make_tuple_validator(definition.schema.required)
-    value_validator = make_tuple_validator(
-        itertools.chain(definition.schema.implied, definition.schema.remainder)
-    )
-    value_serializer = make_tuple_serializer(
+    key_type_adapter = make_tuple_type_adapter(definition.schema.required)
+    value_type_adapter = make_tuple_type_adapter(
         itertools.chain(definition.schema.implied, definition.schema.remainder)
     )
 
@@ -111,9 +108,8 @@ def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionReco
         "definition": definition,
         "__slots__": tuple(slots),
         "fields": fields,
-        "_key_validator": key_validator,
-        "_value_validator": value_validator,
-        "_value_serializer": value_serializer,
+        "_key_type_adapter": key_type_adapter,
+        "_value_type_adapter": value_type_adapter,
     }
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
@@ -313,9 +309,8 @@ class DimensionRecord:
 
     _serializedType: ClassVar[type[BaseModel]] = SerializedDimensionRecord
 
-    _key_validator: ClassVar[pydantic_core.SchemaValidator]
-    _value_validator: ClassVar[pydantic_core.SchemaValidator]
-    _value_serializer: ClassVar[pydantic_core.SchemaSerializer]
+    _key_type_adapter: ClassVar[pydantic.TypeAdapter[tuple[Any, ...]]]
+    _value_type_adapter: ClassVar[pydantic.TypeAdapter[tuple[Any, ...]]]
 
     def __init__(self, **kwargs: Any):
         # Accept either the dimension name or the actual name of its primary
@@ -560,7 +555,7 @@ class DimensionRecord:
             value.append(getattr(self, name))
         for name in self.definition.schema.remainder.names:
             value.append(getattr(self, name))
-        return key + self._value_serializer.to_python(tuple(value), mode="json")
+        return key + self._value_type_adapter.dump_python(tuple(value), mode="json")
 
     @classmethod
     def deserialize_key(
@@ -584,8 +579,7 @@ class DimensionRecord:
             Remaining unvalidated fields.
         """
         n = len(cls.definition.minimal_group.required)
-        validator = cls._key_validator
-        return validator.validate_python(raw[:n]), raw[n:]
+        return cls._key_type_adapter.validate_python(raw[:n]), raw[n:]
 
     @classmethod
     def deserialize_value(
@@ -612,8 +606,7 @@ class DimensionRecord:
 
         result = object.__new__(cls)  # bypass the usual __init__
         result.dataId = DataCoordinate.from_required_values(cls.definition.minimal_group, key)
-        validator = cls._value_validator
-        value = validator.validate_python(raw_value)
+        value = cls._value_type_adapter.validate_python(raw_value)
         for name, val in zip(cls.definition.schema.names, key + value):
             setattr(result, name, val)
         return result

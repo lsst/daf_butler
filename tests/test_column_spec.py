@@ -88,20 +88,18 @@ class ColumnSpecTestCase(unittest.TestCase):
         """Test that we can use ColumnSpec to create validators and serializers
         for tuples with a specific sequence of types.
         """
-        serializer = cs.make_tuple_serializer(self.specs.values())
-        py0 = serializer.to_python(tuple(self.data[0].values()))
-        json0 = serializer.to_json(tuple(self.data[0].values()))
-        validator = cs.make_tuple_validator(self.specs.values())
-        self.assertEqual(validator.validate_python(py0), tuple(self.data[0].values()))
-        self.assertEqual(validator.validate_json(json0), tuple(self.data[0].values()))
+        type_adapter = cs.make_tuple_type_adapter(self.specs.values())
+        py0 = type_adapter.dump_python(tuple(self.data[0].values()))
+        json0 = type_adapter.dump_json(tuple(self.data[0].values()))
+        self.assertEqual(type_adapter.validate_python(py0), tuple(self.data[0].values()))
+        self.assertEqual(type_adapter.validate_json(json0), tuple(self.data[0].values()))
 
     def test_serialize_dict(self) -> None:
         """Test that we can use ColumnSpec to create validators and serializers
         for dict with a specific mapping of types.
         """
-        serializer = cs.make_dict_serializer(self.specs.values())
-        py0 = serializer.to_python(self.data[0])
-        json0 = serializer.to_json(self.data[0])
-        validator = cs.make_dict_validator(self.specs.values())
-        self.assertEqual(validator.validate_python(py0), self.data[0])
-        self.assertEqual(validator.validate_json(json0), self.data[0])
+        type_adapter = cs.make_dict_type_adapter(self.specs.values())
+        py0 = type_adapter.dump_python(self.data[0])
+        json0 = type_adapter.dump_json(self.data[0])
+        self.assertEqual(type_adapter.validate_python(py0), self.data[0])
+        self.assertEqual(type_adapter.validate_json(json0), self.data[0])

@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-from ....column_spec import make_tuple_serializer
+from ....column_spec import make_tuple_type_adapter
 from ....queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
@@ -81,10 +81,10 @@ def convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResult
 def _convert_general_result(page: GeneralResultPage) -> GeneralResultModel:
     """Convert GeneralResultPage to a serializable model."""
     columns = page.spec.get_result_columns()
-    serializer = make_tuple_serializer(
+    row_type_adapter = make_tuple_type_adapter(
         [columns.get_column_spec(column.logical_table, column.field) for column in columns]
     )
-    rows = [serializer.to_python(row, mode="json") for row in page.rows]
+    rows = [row_type_adapter.dump_python(row, mode="json") for row in page.rows]
     dimension_records = None
     if page.dimension_records is not None:
         dimension_records = {

@@ -39,24 +39,30 @@ __all__ = (
     "StringColumnSpec",
     "TimespanColumnSpec",
     "UUIDColumnSpec",
-    "make_dict_pydantic_core_schema",
-    "make_dict_serializer",
-    "make_dict_validator",
-    "make_tuple_pydantic_core_schema",
-    "make_tuple_serializer",
-    "make_tuple_validator",
+    "make_dict_type_adapter",
+    "make_tuple_type_adapter",
 )
 
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    ClassVar,
+    Literal,
+    Optional,
+    TypeAlias,
+    TypedDict,
+    Union,
+    final,
+)
 
 import astropy.time
 import pyarrow as pa
 import pydantic
-import pydantic_core.core_schema
 
 from lsst.sphgeom import Region
 
@@ -132,12 +138,6 @@ class ColumnValueSerializer(ABC):
         """
         raise NotImplementedError
 
-    @property
-    @abstractmethod
-    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
-        """The `pydantic_core` schema for this column type."""
-        raise NotImplementedError()
-
 
 class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
     """Implementation of serializer that uses pydantic type adapter."""
@@ -154,14 +154,11 @@ class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
         # Docstring inherited.
         return value if value is None else self._type_adapter.validate_python(value)
 
-    @property
-    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
-        # Docstring inherited.
-        return self._type_adapter.core_schema
-
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
     """Base class for descriptions of table columns."""
+
+    pytype: ClassVar[type]
 
     name: str = pydantic.Field(description="""Name of the column.""")
 
@@ -207,7 +204,6 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def serializer(self) -> ColumnValueSerializer:
         """Return object that converts values of this column to or from
         serializable format.
@@ -217,7 +213,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         serializer : `ColumnValueSerializer`
             A converter instance.
         """
-        raise NotImplementedError()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.annotated_type))
 
     def display(self, level: int = 0, tab: str = "  ") -> list[str]:
         """Return a human-reader-focused string description of this column as
@@ -251,17 +247,29 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         return "\n".join(self.display())
 
     @property
-    def pydantic_core_schema(self) -> pydantic_core.core_schema.CoreSchema:
-        """A low-level Pydantic schema for this column type."""
-        result = self.serializer().pydantic_core_schema
+    def annotated_type(self) -> Any:
+        """Return a Pydantic-friendly type annotation for this column type.
+
+        Since this is a runtime object and most type annotations must be
+        static, this is really only useful for `pydantic.TypeAdapter`
+        construction and dynamic `pydantic.create_model` construction.
+        """
+        base = self._get_base_annotated_type()
         if self.nullable:
-            result = pydantic_core.core_schema.nullable_schema(result)
-        return result
+            return Optional[base]
+        return base
+
+    @abstractmethod
+    def _get_base_annotated_type(self) -> Any:
+        """Return the base annotated type (not taking into account `nullable`)
+        for this column type.
+        """
+        raise NotImplementedError()
 
 
-def make_dict_pydantic_core_schema(columns: Iterable[ColumnSpec]) -> pydantic_core.core_schema.CoreSchema:
-    """Return a `pydantic_core` schema for a `typing.TypedDict` with names and
-    value types defined by an iterable of `ColumnSpec` objects.
+def make_dict_type_adapter(columns: Iterable[ColumnSpec]) -> pydantic.TypeAdapter[dict[str, Any]]:
+    """Return a `pydantic.TypeAdapter` for a `typing.TypedDict` with types
+    defined by an iterable of `ColumnSpec` objects.
 
     Parameters
     ----------
@@ -270,25 +278,22 @@ def make_dict_pydantic_core_schema(columns: Iterable[ColumnSpec]) -> pydantic_co
 
     Returns
     -------
-    schema : `pydantic_core.core_schema.CoreSchema`
-        A low-level Pydantic schema that can be used to construct a validator,
-        serializer or JSON schema.
+    adapter : `pydantic.TypeAdapter`
+        A Pydantic type adapter for the `dict` representation of a row with
+        the given columns.
     """
-    return pydantic_core.core_schema.typed_dict_schema(
-        {
-            spec.name: pydantic_core.core_schema.TypedDictField(
-                schema=spec.pydantic_core_schema, type="typed-dict-field"
-            )
-            for spec in columns
-        }
+    # Static type-checkers don't like this runtime use of static-typing
+    # constructs, but that's how Pydantic works.
+    return pydantic.TypeAdapter(
+        TypedDict("Row", {spec.name: spec.annotated_type for spec in columns})  # type: ignore
     )
 
 
-def make_tuple_pydantic_core_schema(
+def make_tuple_type_adapter(
     columns: Iterable[ColumnSpec],
-) -> pydantic_core.core_schema.CoreSchema:
-    """Return a `pydantic_core` schema for a `tuple` with and types defined by
-    an iterable of `ColumnSpec` objects.
+) -> pydantic.TypeAdapter[tuple[Any, ...]]:
+    """Return a `pydantic.TypeAdapter` for a `tuple` with types defined by an
+    iterable of `ColumnSpec` objects.
 
     Parameters
     ----------
@@ -297,109 +302,13 @@ def make_tuple_pydantic_core_schema(
 
     Returns
     -------
-    schema : `pydantic_core.core_schema.CoreSchema`
-        A low-level Pydantic schema that can be used to construct a validator,
-        serializer or JSON schema.
+    adapter : `pydantic.TypeAdapter`
+        A Pydantic type adapter for the `tuple` representation of a row with
+        the given columns.
     """
-    return pydantic_core.core_schema.tuple_schema([spec.pydantic_core_schema for spec in columns])
-
-
-def make_dict_validator(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaValidator:
-    """Return a low-level Pydantic validator for `dict` objects with keys and
-    value types defined by an iterable of `ColumnSpec`.
-
-    Parameters
-    ----------
-    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
-        Iterable of column specifications.
-
-    Returns
-    -------
-    validator : `pydantic_core.SchemaValidator`
-        A low-level validator that can be used to convert JSON strings or raw
-        Python dictionaries into validated dictionaries with known value types.
-
-    Notes
-    -----
-    This provides similar functionality to the validation methods on a
-    `pydantic.TypeAdapter` constructed from a `TypedDict`, but with the types
-    set by runtime code (i.e. the `ColumnSpec` objects) rather than a static
-    type.
-    """
-    return pydantic_core.SchemaValidator(make_dict_pydantic_core_schema(columns))
-
-
-def make_tuple_validator(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaValidator:
-    """Return a low-level Pydantic validator for `tuple` objects with element
-    types defined by an iterable of `ColumnSpec`.
-
-    Parameters
-    ----------
-    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
-        Iterable of column specifications.
-
-    Returns
-    -------
-    validator : `pydantic_core.SchemaValidator`
-        A low-level validator that can be used to convert JSON strings or raw
-        Python dictionaries into validated tuples with known element types.
-
-    Notes
-    -----
-    This provides similar functionality to the validation methods on a
-    `pydantic.TypeAdapter` constructed from a `tuple`, but with the types set
-    by runtime code (i.e. the `ColumnSpec` objects) rather than a static type.
-    """
-    return pydantic_core.SchemaValidator(make_tuple_pydantic_core_schema(columns))
-
-
-def make_dict_serializer(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaSerializer:
-    """Return a low-level Pydantic serializer for `dict` objects with keys and
-    value types defined by an iterable of `ColumnSpec`.
-
-    Parameters
-    ----------
-    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
-        Iterable of column specifications.
-
-    Returns
-    -------
-    serializer : `pydantic_core.SchemaSerializer`
-        A low-level serializer that can be used to convert dictionaries with
-        known value types into JSON strings or raw Python dictionaries.
-
-    Notes
-    -----
-    This provides similar functionality to the serialization methods on a
-    `pydantic.TypeAdapter` constructed from a `TypedDict`, but with the types
-    set by runtime code (i.e. the `ColumnSpec` objects) rather than a static
-    type.
-    """
-    return pydantic_core.SchemaSerializer(make_dict_pydantic_core_schema(columns))
-
-
-def make_tuple_serializer(columns: Iterable[ColumnSpec]) -> pydantic_core.SchemaSerializer:
-    """Return a low-level Pydantic serializer for `tuple` objects with element
-    types defined by an iterable of `ColumnSpec`.
-
-    Parameters
-    ----------
-    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
-        Iterable of column specifications.
-
-    Returns
-    -------
-    serializer : `pydantic_core.SchemaSerializer`
-        A low-level serializer that can be used to convert tuples with known
-        element types into JSON strings or raw Python dictionaries.
-
-    Notes
-    -----
-    This provides similar functionality to the serialization methods on a
-    `pydantic.TypeAdapter` constructed from a `tuple`, but with the types set
-    by runtime code (i.e. the `ColumnSpec` objects) rather than a static type.
-    """
-    return pydantic_core.SchemaSerializer(make_tuple_pydantic_core_schema(columns))
+    # Static type-checkers don't like this runtime use of static-typing
+    # constructs, but that's how Pydantic works.
+    return pydantic.TypeAdapter(tuple[*[spec.annotated_type for spec in columns]])  # type: ignore
 
 
 @final
@@ -414,9 +323,9 @@ class IntColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(int))
+        return pydantic.StrictInt
 
 
 @final
@@ -438,9 +347,9 @@ class StringColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(str))
+        return pydantic.StrictStr
 
 
 @final
@@ -468,9 +377,9 @@ class HashColumnSpec(_BaseColumnSpec):
             nullable=self.nullable,
         )
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableBytesHex))
+        return SerializableBytesHex
 
 
 @final
@@ -486,9 +395,9 @@ class FloatColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(float))
+        return pydantic.StrictFloat
 
 
 @final
@@ -503,9 +412,9 @@ class BoolColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(bool))
+        return pydantic.StrictBool
 
 
 @final
@@ -521,9 +430,9 @@ class UUIDColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
+        return uuid.UUID
 
 
 @final
@@ -544,9 +453,9 @@ class RegionColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableRegion))
+        return SerializableRegion
 
 
 @final
@@ -563,9 +472,9 @@ class TimespanColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
+        return Timespan
 
 
 @final
@@ -583,9 +492,9 @@ class DateTimeColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableTime))
+        return SerializableTime
 
 
 ColumnSpec = Annotated[
