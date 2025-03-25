@@ -39,7 +39,6 @@ __all__ = (
     "StringColumnSpec",
     "TimespanColumnSpec",
     "UUIDColumnSpec",
-    "make_dict_type_adapter",
     "make_tuple_type_adapter",
 )
 
@@ -55,7 +54,6 @@ from typing import (
     Literal,
     Optional,
     TypeAlias,
-    TypedDict,
     Union,
     final,
 )
@@ -265,28 +263,6 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         for this column type.
         """
         raise NotImplementedError()
-
-
-def make_dict_type_adapter(columns: Iterable[ColumnSpec]) -> pydantic.TypeAdapter[dict[str, Any]]:
-    """Return a `pydantic.TypeAdapter` for a `typing.TypedDict` with types
-    defined by an iterable of `ColumnSpec` objects.
-
-    Parameters
-    ----------
-    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
-        Iterable of column specifications.
-
-    Returns
-    -------
-    adapter : `pydantic.TypeAdapter`
-        A Pydantic type adapter for the `dict` representation of a row with
-        the given columns.
-    """
-    # Static type-checkers don't like this runtime use of static-typing
-    # constructs, but that's how Pydantic works.
-    return pydantic.TypeAdapter(
-        TypedDict("Row", {spec.name: spec.annotated_type for spec in columns})  # type: ignore
-    )
 
 
 def make_tuple_type_adapter(

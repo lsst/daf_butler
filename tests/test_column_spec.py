@@ -93,13 +93,3 @@ class ColumnSpecTestCase(unittest.TestCase):
         json0 = type_adapter.dump_json(tuple(self.data[0].values()))
         self.assertEqual(type_adapter.validate_python(py0), tuple(self.data[0].values()))
         self.assertEqual(type_adapter.validate_json(json0), tuple(self.data[0].values()))
-
-    def test_serialize_dict(self) -> None:
-        """Test that we can use ColumnSpec to create validators and serializers
-        for dict with a specific mapping of types.
-        """
-        type_adapter = cs.make_dict_type_adapter(self.specs.values())
-        py0 = type_adapter.dump_python(self.data[0])
-        json0 = type_adapter.dump_json(self.data[0])
-        self.assertEqual(type_adapter.validate_python(py0), self.data[0])
-        self.assertEqual(type_adapter.validate_json(json0), self.data[0])
