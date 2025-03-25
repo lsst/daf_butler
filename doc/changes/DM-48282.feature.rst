@@ -1,5 +1,0 @@
-Modified the Obscore ``RecordFactory`` to support per-universe subclass discovery using entry points.
-
-* Added ``RecordFactory.get_record_type_from_universe`` to obtain the correct factory class.
-* Renamed ``ExposureRegionFactory`` to ``DerivedRegionFactory`` to make it clearer that this class is not solely used for exposures but the usage can change with universe.
-* Added ``RecordFactory.region_dimension`` to return the dimension that would be needed to obtain a region for this universe.

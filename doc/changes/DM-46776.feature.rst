@@ -1,7 +1,0 @@
-* Added ``Butler.retrieve_artifacts_zip`` and ``QuantumBackedButler.retrieve_artifacts_zip`` methods to retrieve the dataset artifacts and store them into a zip file.
-* Added ``Butler.ingest_zip`` to ingest the contents of a Zip file.
-* Added ``SerializedDatasetRefContainerV1`` class to allow a collection of ``DatasetRef`` to be serialized efficiently.
-  JSON serializations made using this class will be supported.
-* Added ``--zip`` parameter to ``butler retrieve-artifacts``.
-* Changed ``Butler.retrieveArtifacts`` to always write a JSON index file describing where the artifacts came from.
-* Added a ``butler ingest-zip`` command-line tool for ingesting zip files created by ``butler retrieve-artifacts``.
