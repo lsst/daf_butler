@@ -1,4 +1,0 @@
-* Added new class ``DatasetProvenance`` for tracking the provenance of an individual dataset.
-* Modified ``Butler.put()`` to accept an optional ``DatasetProvenance``.
-* Added ``add_provenance`` methods to ``FormatterV2`` and ``StorageClassDelegate``.
-  These methods will now be called with the provenance object during ``Butler.put()`` to allow the in-memory dataset to be updated prior to writing.

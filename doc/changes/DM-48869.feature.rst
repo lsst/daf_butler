@@ -1,2 +1,0 @@
-* Added new methods to ``DatasetProvenance`` for serializing provenance to a flat dictionary and recovering provenance from that dictionary.
-* Modifed ``ParquetFormatter`` to write provenance metadata to Astropy tables.

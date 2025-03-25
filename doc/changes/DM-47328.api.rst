@@ -1,1 +1,0 @@
-Added ``QuantumBackedButler.retrieve_artifacts`` method to allow dataset artifacts to be retrieved from a graph.
