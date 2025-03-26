@@ -383,7 +383,7 @@ class _ToArrowTimespan(ToArrow):
         # Docstring inherited.
         return TimespanArrowType()
 
-    def append(self, value: Timespan | None, column: list[pa.StructScalar | None]) -> None:
+    def append(self, value: Timespan | None, column: list[dict[str, int] | None]) -> None:
         # Docstring inherited.
         column.append({"begin_nsec": value.nsec[0], "end_nsec": value.nsec[1]} if value is not None else None)
 
@@ -432,12 +432,10 @@ class _ToArrowDateTime(ToArrow):
 
 @final
 class UUIDArrowType(pa.ExtensionType):
-    """An Arrow extension type for `astropy.time.Time`, stored as TAI
-    nanoseconds since 1970-01-01.
-    """
+    """An Arrow extension type for `uuid.UUID`, stored as 16 bytes."""
 
     def __init__(self) -> None:
-        super().__init__(_ToArrowTimespan.storage_type, "astropy.time.Time")
+        super().__init__(_ToArrowUUID.storage_type, "uuid.UUID")
 
     def __arrow_ext_serialize__(self) -> bytes:
         return b""
@@ -458,7 +456,7 @@ class UUIDArrowScalar(pa.ExtensionScalar):
     instance.
     """
 
-    def as_py(self) -> astropy.time.Time:
+    def as_py(self) -> uuid.UUID:
         return uuid.UUID(bytes=self.value.as_py())
 
 

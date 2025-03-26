@@ -40,6 +40,7 @@ import httpx
 
 from ...butler import Butler
 from .._dataset_type import DatasetType
+from ..column_spec import make_tuple_type_adapter
 from ..dimensions import (
     DataCoordinate,
     DataIdValue,
@@ -275,13 +276,10 @@ def _convert_general_result(spec: GeneralResultSpec, model: GeneralResultModel) 
             )
 
     columns = spec.get_result_columns()
-    serializers = [
-        columns.get_column_spec(column.logical_table, column.field).serializer() for column in columns
-    ]
-    rows = [
-        tuple(serializer.deserialize(value) for value, serializer in zip(row, serializers, strict=True))
-        for row in model.rows
-    ]
+    row_type_adapter = make_tuple_type_adapter(
+        [columns.get_column_spec(column.logical_table, column.field) for column in columns]
+    )
+    rows = [row_type_adapter.validate_python(row) for row in model.rows]
 
     universe = spec.dimensions.universe
     dimension_records = None

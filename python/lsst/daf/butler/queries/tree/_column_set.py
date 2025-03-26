@@ -361,7 +361,7 @@ class ColumnSet:
                     name=qualified_name, nullable=False, length=column_spec.COLLECTION_NAME_MAX_LENGTH
                 )
             case "timespan":
-                return column_spec.TimespanColumnSpec.model_construct(name=qualified_name, nullable=False)
+                return column_spec.TimespanColumnSpec.model_construct(name=qualified_name, nullable=True)
         raise AssertionError(f"Unrecognized column identifiers: {logical_table}, {field}.")
 
     def _get_dimension_keys(self) -> Set[str]:

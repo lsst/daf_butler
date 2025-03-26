@@ -26,13 +26,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import copy
+import json
 import os
 import unittest
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pydantic
 
-from lsst.daf.butler import DimensionRecordSet, DimensionRecordTable
+from lsst.daf.butler import (
+    DimensionRecordSet,
+    DimensionRecordSetDeserializer,
+    DimensionRecordTable,
+    SerializedKeyValueDimensionRecord,
+)
 from lsst.daf.butler.arrow_utils import TimespanArrowType
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
@@ -56,6 +63,10 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         }
         cls.universe = butler.dimensions
         cls.data_ids = list(butler.registry.queryDataIds(["visit", "patch"]).expanded())
+
+    def assert_record_sets_equal(self, a: DimensionRecordSet, b: DimensionRecordSet) -> None:
+        self.assertEqual(a, b)  # only checks data ID equality
+        self.assertCountEqual(list(a), list(b))
 
     def test_record_table_schema_visit(self):
         """Test that the Arrow schema for 'visit' has the right types,
@@ -375,6 +386,40 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertNotIn(record2, set1)
         self.assertEqual(set1, set2)
         self.assertFalse(set1)
+
+    def test_record_key_value_serialization(self):
+        """Test DimensionRecord.serialize_key_value, deserialize_key, and
+        deserialize_value.
+        """
+        for element, records in self.records.items():
+            with self.subTest(element=element):
+                for record1 in records:
+                    raw1 = record1.serialize_key_value()
+                    self.assertIsInstance(raw1, list)
+                    raw2 = json.loads(json.dumps(raw1))
+                    self.assertEqual(raw1, raw2)
+                    key, raw_value = record1.definition.RecordClass.deserialize_key(raw2)
+                    self.assertEqual(key, record1.dataId.required_values)
+                    record2 = record1.definition.RecordClass.deserialize_value(key, raw_value)
+                    self.assertEqual(record1, record2)
+
+    def test_record_set_serialization(self):
+        """Test DimensionRecordSet.serialize_records and deserialize_records,
+        as well as DimensionRecordSetDeserializer.
+        """
+        adapter = pydantic.TypeAdapter(list[SerializedKeyValueDimensionRecord])
+        for element, records in self.records.items():
+            with self.subTest(element=element):
+                rs1 = DimensionRecordSet(element, records, universe=self.universe)
+                raw = adapter.validate_json(adapter.dump_json(rs1.serialize_records()))
+                rs2 = DimensionRecordSet(element, universe=self.universe)
+                rs2.deserialize_records(raw)
+                self.assert_record_sets_equal(rs1, rs2)
+                deserializer = DimensionRecordSetDeserializer.from_raw(self.universe[element], raw)
+                self.assertEqual(len(deserializer), len(records))
+                for record1 in rs1:
+                    record2 = deserializer[record1.dataId.required_values]
+                    self.assertEqual(record1, record2)
 
 
 if __name__ == "__main__":

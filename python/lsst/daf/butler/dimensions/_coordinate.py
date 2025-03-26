@@ -44,7 +44,7 @@ __all__ = (
 import numbers
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, overload
 
 import pydantic
 
@@ -55,24 +55,13 @@ from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._group import DimensionGroup
-from ._records import DimensionRecord, SerializedDimensionRecord
+from ._records import DataIdKey, DataIdValue, DimensionRecord, SerializedDimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._universe import DimensionUniverse
 
-DataIdKey = str
-"""Type annotation alias for the keys that can be used to index a
-DataCoordinate.
-"""
-
-# Pydantic will cast int to str if str is first in the Union.
-DataIdValue = int | str | None
-"""Type annotation alias for the values that can be present in a
-DataCoordinate or other data ID.
-"""
-
-SerializedDataId = dict[str, DataIdValue]
+SerializedDataId: TypeAlias = dict[str, DataIdValue]
 """Simplified model for serializing the ``mapping`` property of
 `DataCoordinate`.
 """
@@ -247,7 +236,7 @@ class DataCoordinate:
         # Some backends cannot handle numpy.int64 type which is a subclass of
         # numbers.Integral; convert that to int.
         for k, v in new_mapping.items():
-            if isinstance(v, numbers.Integral):
+            if isinstance(v, numbers.Integral):  # type: ignore
                 new_mapping[k] = int(v)  # type: ignore
         if defaults is not None:
             for k, v in defaults.mapping.items():

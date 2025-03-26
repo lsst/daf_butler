@@ -39,12 +39,24 @@ __all__ = (
     "StringColumnSpec",
     "TimespanColumnSpec",
     "UUIDColumnSpec",
+    "make_tuple_type_adapter",
 )
 
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
+from collections.abc import Iterable
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    ClassVar,
+    Literal,
+    Optional,
+    TypeAlias,
+    Union,
+    final,
+)
 
 import astropy.time
 import pyarrow as pa
@@ -54,7 +66,7 @@ from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
-from .pydantic_utils import SerializableRegion, SerializableTime
+from .pydantic_utils import SerializableBytesHex, SerializableRegion, SerializableTime
 
 if TYPE_CHECKING:
     from .name_shrinker import NameShrinker
@@ -125,18 +137,6 @@ class ColumnValueSerializer(ABC):
         raise NotImplementedError
 
 
-class _DefaultColumnValueSerializer(ColumnValueSerializer):
-    """Default implementation of serializer for basic types."""
-
-    def serialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
-
-    def deserialize(self, value: Any) -> Any:
-        # Docstring inherited.
-        return value
-
-
 class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
     """Implementation of serializer that uses pydantic type adapter."""
 
@@ -155,6 +155,8 @@ class _TypeAdapterColumnValueSerializer(ColumnValueSerializer):
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
     """Base class for descriptions of table columns."""
+
+    pytype: ClassVar[type]
 
     name: str = pydantic.Field(description="""Name of the column.""")
 
@@ -200,7 +202,6 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def serializer(self) -> ColumnValueSerializer:
         """Return object that converts values of this column to or from
         serializable format.
@@ -210,7 +211,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         serializer : `ColumnValueSerializer`
             A converter instance.
         """
-        raise NotImplementedError()
+        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.annotated_type))
 
     def display(self, level: int = 0, tab: str = "  ") -> list[str]:
         """Return a human-reader-focused string description of this column as
@@ -243,6 +244,48 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
     def __str__(self) -> str:
         return "\n".join(self.display())
 
+    @property
+    def annotated_type(self) -> Any:
+        """Return a Pydantic-friendly type annotation for this column type.
+
+        Since this is a runtime object and most type annotations must be
+        static, this is really only useful for `pydantic.TypeAdapter`
+        construction and dynamic `pydantic.create_model` construction.
+        """
+        base = self._get_base_annotated_type()
+        if self.nullable:
+            return Optional[base]
+        return base
+
+    @abstractmethod
+    def _get_base_annotated_type(self) -> Any:
+        """Return the base annotated type (not taking into account `nullable`)
+        for this column type.
+        """
+        raise NotImplementedError()
+
+
+def make_tuple_type_adapter(
+    columns: Iterable[ColumnSpec],
+) -> pydantic.TypeAdapter[tuple[Any, ...]]:
+    """Return a `pydantic.TypeAdapter` for a `tuple` with types defined by an
+    iterable of `ColumnSpec` objects.
+
+    Parameters
+    ----------
+    columns : `~collections.abc.Iterable` [ `ColumnSpec` ]
+        Iterable of column specifications.
+
+    Returns
+    -------
+    adapter : `pydantic.TypeAdapter`
+        A Pydantic type adapter for the `tuple` representation of a row with
+        the given columns.
+    """
+    # Static type-checkers don't like this runtime use of static-typing
+    # constructs, but that's how Pydantic works.
+    return pydantic.TypeAdapter(tuple[*[spec.annotated_type for spec in columns]])  # type: ignore
+
 
 @final
 class IntColumnSpec(_BaseColumnSpec):
@@ -256,9 +299,9 @@ class IntColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return pydantic.StrictInt
 
 
 @final
@@ -280,9 +323,9 @@ class StringColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return pydantic.StrictStr
 
 
 @final
@@ -310,9 +353,9 @@ class HashColumnSpec(_BaseColumnSpec):
             nullable=self.nullable,
         )
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return SerializableBytesHex
 
 
 @final
@@ -328,9 +371,9 @@ class FloatColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return pydantic.StrictFloat
 
 
 @final
@@ -345,9 +388,9 @@ class BoolColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _DefaultColumnValueSerializer()
+        return pydantic.StrictBool
 
 
 @final
@@ -363,9 +406,9 @@ class UUIDColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
+        return uuid.UUID
 
 
 @final
@@ -386,9 +429,9 @@ class RegionColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableRegion))
+        return SerializableRegion
 
 
 @final
@@ -405,9 +448,9 @@ class TimespanColumnSpec(_BaseColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(self.pytype))
+        return Timespan
 
 
 @final
@@ -425,9 +468,9 @@ class DateTimeColumnSpec(_BaseColumnSpec):
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
 
-    def serializer(self) -> ColumnValueSerializer:
+    def _get_base_annotated_type(self) -> Any:
         # Docstring inherited.
-        return _TypeAdapterColumnValueSerializer(pydantic.TypeAdapter(SerializableTime))
+        return SerializableTime
 
 
 ColumnSpec = Annotated[

@@ -222,7 +222,7 @@ class DimensionRecordTable:
         array_columns = [
             converter.finish(column) for converter, column in zip(self._converters, list_columns)
         ]
-        return pa.record_batch(array_columns, arrow_schema)
+        return pa.record_batch(array_columns, schema=arrow_schema)
 
     def _get_record_at(self, table: pa.Table | pa.RecordBatch, index: int) -> DimensionRecord:
         """Construct a `DimensionRecord` from a row in the table.
