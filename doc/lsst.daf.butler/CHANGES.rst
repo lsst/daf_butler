@@ -1,5 +1,5 @@
-Butler v29.0.0 2025-03-25
-=========================
+Butler v29.0.0 (2025-03-25)
+===========================
 
 New Features
 ------------
@@ -66,8 +66,8 @@ Other Changes and Additions
   This is important for butler repositories containing data from multiple instruments and facilities. (`DM-46914 <https://rubinobs.atlassian.net/browse/DM-46914>`_)
 
 
-Butler v28.0.0 2024-11-20
-=========================
+Butler v28.0.0 (2024-11-20)
+===========================
 
 New Features
 ------------
@@ -203,8 +203,8 @@ An API Removal or Deprecation
   Using ``Butler.collections`` to get the list of default collections is now deprecated.  Use ``Butler.collections.defaults`` instead. (`DM-46599 <https://rubinobs.atlassian.net/browse/DM-46599>`_)
 
 
-Butler 27.0.0 2024-05-28
-========================
+Butler 27.0.0 (2024-05-28)
+==========================
 
 Now supports Python 3.12.
 
@@ -364,8 +364,8 @@ An API Removal or Deprecation
   * Removed the ``reconsitutedDimension`` parameter from ``Quantum.from_simple``. (`DM-40150 <https://rubinobs.atlassian.net/browse/DM-40150>`_)
 
 
-Butler v26.0.0 2023-09-22
-=========================
+Butler v26.0.0 (2023-09-22)
+===========================
 
 Now supports Python 3.11.
 
@@ -543,8 +543,8 @@ An API Removal or Deprecation
 - ``lsst.daf.butler.registry.DbAuth`` class has been moved to the ``lsst-utils`` package and can be imported from the ``lsst.utils.db_auth`` module. (`DM-40462 <https://rubinobs.atlassian.net/browse/DM-40462>`_)
 
 
-Butler v25.0.0 2023-02-27
-=========================
+Butler v25.0.0 (2023-02-27)
+===========================
 
 This is the last release that can access data repositories using integer dataset IDs.
 Please either recreate these repositories or convert them to use UUIDs using `the butler migrate tooling <https://github.com/lsst-dm/daf_butler_migrate>`_.
@@ -638,8 +638,8 @@ An API Removal or Deprecation
 - Removed deprecated filterLabel exposure component access. (`DM-27811 <https://rubinobs.atlassian.net/browse/DM-27811>`_)
 
 
-Butler v24.0.0 2022-08-26
-=========================
+Butler v24.0.0 (2022-08-26)
+===========================
 
 New Features
 ------------
@@ -763,8 +763,8 @@ An API Removal or Deprecation
   It functions identically to the ``filterLabel`` component, which has been deprecated. (`DM-27177 <https://rubinobs.atlassian.net/browse/DM-27177>`_)
 
 
-Butler v23.0.0 2021-12-10
-=========================
+Butler v23.0.0 (2021-12-10)
+===========================
 
 New Features
 ------------
@@ -865,8 +865,8 @@ Other Changes and Additions
 - Add ``split`` transfer mode that can be used when some files are inside the datastore and some files are outside the datastore.
   This is equivalent to using `None` and ``direct`` mode dynamically. (`DM-31251 <https://rubinobs.atlassian.net/browse/DM-31251>`_)
 
-Butler v22.0 2021-04-01
-=======================
+Butler v22.0 (2021-04-01)
+=========================
 
 New Features
 ------------
