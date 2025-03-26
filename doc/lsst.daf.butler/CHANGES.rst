@@ -1,5 +1,73 @@
-Butler v28.0.0 2024-11-20
-=========================
+Butler v29.0.0 (2025-03-25)
+===========================
+
+New Features
+------------
+
+- * Added new class ``DatasetProvenance`` for tracking the provenance of an individual dataset.
+  * Modified ``Butler.put()`` to accept an optional ``DatasetProvenance``.
+  * Added ``add_provenance`` methods to ``FormatterV2`` and ``StorageClassDelegate``.
+    These methods will now be called with the provenance object during ``Butler.put()`` to allow the in-memory dataset to be updated prior to writing. (`DM-35396 <https://rubinobs.atlassian.net/browse/DM-35396>`_)
+- * Added ``Butler.retrieve_artifacts_zip`` and ``QuantumBackedButler.retrieve_artifacts_zip`` methods to retrieve the dataset artifacts and store them into a zip file.
+  * Added ``Butler.ingest_zip`` to ingest the contents of a Zip file.
+  * Added ``SerializedDatasetRefContainerV1`` class to allow a collection of ``DatasetRef`` to be serialized efficiently.
+    JSON serializations made using this class will be supported.
+  * Added ``--zip`` parameter to ``butler retrieve-artifacts``.
+  * Changed ``Butler.retrieveArtifacts`` to always write a JSON index file describing where the artifacts came from.
+  * Added a ``butler ingest-zip`` command-line tool for ingesting zip files created by ``butler retrieve-artifacts``. (`DM-46776 <https://rubinobs.atlassian.net/browse/DM-46776>`_)
+- The ``DAF_BUTLER_PLUGINS`` environment variable should no longer be set if packages use ``pip install`` and have been upgraded to use entry points.
+  Butler can now read the subcommands from ``pipe_base`` and ``daf_butler_migrate`` automatically.
+  Setting the environment variable for these packages will result in an error. (`DM-47143 <https://rubinobs.atlassian.net/browse/DM-47143>`_)
+- Added two new APIs for handling Butler dataset URIs.
+  ``Butler.parse_dataset_uri`` parses a URI and returns the butler repository label and associated UUID.
+  ``Butler.get_dataset_from_uri`` will parse a URI and attempt to retrieve the ``DatasetRef``.
+  URIs should be in the form of IVOA identifiers as described in `DMTN-302 <https://dmtn-302.lsst.io>`_.
+  Deprecated ``butler://`` URIs are still supported but should not be used in new systems. (`DM-47325 <https://rubinobs.atlassian.net/browse/DM-47325>`_)
+- Added a ``--chains NO-CHILDREN`` mode to the ``butler query-collections`` CLI,
+  which returns results without recursing into ``CHAINED`` collections. (`DM-47768 <https://rubinobs.atlassian.net/browse/DM-47768>`_)
+- Added ``lsst.daf.butler.formatters.parquet.add_pandas_index_to_astropy()`` function which stores special metadata that will be used to create a pandas DataFrame index if the table is read as a ``DataFrame``. (`DM-48141 <https://rubinobs.atlassian.net/browse/DM-48141>`_)
+- Modified the Obscore ``RecordFactory`` to support per-universe subclass discovery using entry points.
+
+  * Added ``RecordFactory.get_record_type_from_universe`` to obtain the correct factory class.
+  * Renamed ``ExposureRegionFactory`` to ``DerivedRegionFactory`` to make it clearer that this class is not solely used for exposures but the usage can change with universe.
+  * Added ``RecordFactory.region_dimension`` to return the dimension that would be needed to obtain a region for this universe. (`DM-48282 <https://rubinobs.atlassian.net/browse/DM-48282>`_)
+- * Added new methods to ``DatasetProvenance`` for serializing provenance to a flat dictionary and recovering provenance from that dictionary.
+  * Modifed ``ParquetFormatter`` to write provenance metadata to Astropy tables. (`DM-48869 <https://rubinobs.atlassian.net/browse/DM-48869>`_)
+
+
+API Changes
+-----------
+
+- Added ``QuantumBackedButler.retrieve_artifacts`` method to allow dataset artifacts to be retrieved from a graph. (`DM-47328 <https://rubinobs.atlassian.net/browse/DM-47328>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed inserts with ``replace=True`` on dimensions with only primary key columns. (`DM-46631 <https://rubinobs.atlassian.net/browse/DM-46631>`_)
+- Fixed a bug where ``DatastoreCacheManager`` would raise  ``ValueError('badly formed hexadecimal UUID string')`` if files with unexpected names are present in the cache directory when trying to load a file from the cache. (`DM-46936 <https://rubinobs.atlassian.net/browse/DM-46936>`_)
+- Fixed a crash in the new Butler query system which happened in some conditions when using the find-first option with multiple collections. (`DM-47475 <https://rubinobs.atlassian.net/browse/DM-47475>`_)
+- Fixed a bug in which projections spatial-join queries (particularly those where the dimensions of the actual regions being compared are not in the query result rows) could return additional records where there actually was no overlap. (`DM-47947 <https://rubinobs.atlassian.net/browse/DM-47947>`_)
+- Fixed a bug where dataset fields like ``ingest_date`` were raising ``InvalidQueryError: Unrecognized identifier`` when used in a ``Butler.query_datasets`` ``where`` clause. (`DM-48094 <https://rubinobs.atlassian.net/browse/DM-48094>`_)
+- Fixed a query bug that could lead to unexpectedly coarse spatial joins.
+
+  When dataset search or other join operand had some dimensions from either side of a potential spatial join (e.g. ``{tract, visit}``), we had been blocking the addition of an automatic spatial join on the assumption that this would be embedded in that join operand.
+  But this is only desirable when the spatial join that would have been added actually the same one implied by that join operand's dimensions; if it's something more fine grained (e.g. ``{tract, patch, visit}``) we end up with result rows that relate dimensions (e.g. ``patch`` and ``visit``) that do not actually overlap.
+  Now automatic spatial joins are only blocked when the join operand includes all dimensions that would have participated in the automatic join. (`DM-48880 <https://rubinobs.atlassian.net/browse/DM-48880>`_)
+- Fixed a bug that could result in incorrectly empty query results when a data ID constraint was inconsistent with some dataset types in a collection, but not the on actually being queried for. (`DM-48974 <https://rubinobs.atlassian.net/browse/DM-48974>`_)
+- Added pyarrow metadata keywords for astropy table to fix warnings on read. (`DM-49509 <https://rubinobs.atlassian.net/browse/DM-49509>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Now support a type conversion field in file template format strings. (`DM-47976 <https://rubinobs.atlassian.net/browse/DM-47976>`_)
+- Modified ObsCore configuration to support ``facility_map`` lookup table to allow the facility to be associated with a specific instrument.
+  This is important for butler repositories containing data from multiple instruments and facilities. (`DM-46914 <https://rubinobs.atlassian.net/browse/DM-46914>`_)
+
+
+Butler v28.0.0 (2024-11-20)
+===========================
 
 New Features
 ------------
@@ -135,8 +203,8 @@ An API Removal or Deprecation
   Using ``Butler.collections`` to get the list of default collections is now deprecated.  Use ``Butler.collections.defaults`` instead. (`DM-46599 <https://rubinobs.atlassian.net/browse/DM-46599>`_)
 
 
-Butler 27.0.0 2024-05-28
-========================
+Butler 27.0.0 (2024-05-28)
+==========================
 
 Now supports Python 3.12.
 
@@ -296,8 +364,8 @@ An API Removal or Deprecation
   * Removed the ``reconsitutedDimension`` parameter from ``Quantum.from_simple``. (`DM-40150 <https://rubinobs.atlassian.net/browse/DM-40150>`_)
 
 
-Butler v26.0.0 2023-09-22
-=========================
+Butler v26.0.0 (2023-09-22)
+===========================
 
 Now supports Python 3.11.
 
@@ -475,8 +543,8 @@ An API Removal or Deprecation
 - ``lsst.daf.butler.registry.DbAuth`` class has been moved to the ``lsst-utils`` package and can be imported from the ``lsst.utils.db_auth`` module. (`DM-40462 <https://rubinobs.atlassian.net/browse/DM-40462>`_)
 
 
-Butler v25.0.0 2023-02-27
-=========================
+Butler v25.0.0 (2023-02-27)
+===========================
 
 This is the last release that can access data repositories using integer dataset IDs.
 Please either recreate these repositories or convert them to use UUIDs using `the butler migrate tooling <https://github.com/lsst-dm/daf_butler_migrate>`_.
@@ -570,8 +638,8 @@ An API Removal or Deprecation
 - Removed deprecated filterLabel exposure component access. (`DM-27811 <https://rubinobs.atlassian.net/browse/DM-27811>`_)
 
 
-Butler v24.0.0 2022-08-26
-=========================
+Butler v24.0.0 (2022-08-26)
+===========================
 
 New Features
 ------------
@@ -695,8 +763,8 @@ An API Removal or Deprecation
   It functions identically to the ``filterLabel`` component, which has been deprecated. (`DM-27177 <https://rubinobs.atlassian.net/browse/DM-27177>`_)
 
 
-Butler v23.0.0 2021-12-10
-=========================
+Butler v23.0.0 (2021-12-10)
+===========================
 
 New Features
 ------------
@@ -797,8 +865,8 @@ Other Changes and Additions
 - Add ``split`` transfer mode that can be used when some files are inside the datastore and some files are outside the datastore.
   This is equivalent to using `None` and ``direct`` mode dynamically. (`DM-31251 <https://rubinobs.atlassian.net/browse/DM-31251>`_)
 
-Butler v22.0 2021-04-01
-=======================
+Butler v22.0 (2021-04-01)
+=========================
 
 New Features
 ------------
