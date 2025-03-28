@@ -27,20 +27,21 @@
 
 from __future__ import annotations
 
-__all__ = ("FileDataset", "SerializedFileDatasetList")
+__all__ = ("FileDataset", "SerializedFileDataset")
 
-from collections.abc import Iterable
+import uuid
 from dataclasses import dataclass
-from itertools import groupby
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any
 
 import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from ._dataset_ref import DatasetId, DatasetRef
+from ._dataset_ref import DatasetRef, MinimalistSerializableDatasetRef
 from ._formatter import FormatterParameter
-from .dimensions import SerializedDataId
+
+if TYPE_CHECKING:
+    from ._butler import Butler
 
 
 @dataclass
@@ -93,91 +94,36 @@ class FileDataset:
             return NotImplemented
         return str(self.path) < str(other.path)
 
-
-class SerializedFileDatasetList(pydantic.BaseModel):
-    """Serializable list of `FileDataset` objects, with records sharing a
-    single dataset type and run collection.
-
-    Notes
-    -----
-    This is identical to the YAML export format that has existed for many
-    years.
-    """
-
-    type: Literal["dataset"]
-    dataset_type: str
-    run: str
-    records: list[SerializedFileDatasetRecord]
-
-    @staticmethod
-    def from_file_datasets(datasets: Iterable[FileDataset]) -> list[SerializedFileDatasetList]:
-        groups = groupby(sorted(datasets, key=_get_dataset_type_and_run), key=_get_dataset_type_and_run)
-        output = []
-        for key, group in groups:
-            output.append(
-                SerializedFileDatasetList.from_file_datasets_of_single_type_and_run(
-                    key.dataset_type, key.run, group
-                )
-            )
-
-        return output
-
-    @staticmethod
-    def from_file_datasets_of_single_type_and_run(
-        dataset_type_name: str, run: str, datasets: Iterable[FileDataset]
-    ) -> SerializedFileDatasetList:
-        return SerializedFileDatasetList(
-            type="dataset",
-            dataset_type=dataset_type_name,
-            run=run,
-            records=[SerializedFileDatasetRecord.from_file_dataset(dataset) for dataset in datasets],
-        )
-
-
-class SerializedFileDatasetRecord(pydantic.BaseModel):
-    """Inner record for `SerializedFileDatasetList` representing a single
-    `FileDataset`.
-    """
-
-    dataset_id: list[DatasetId]
-    data_id: list[SerializedDataId]
-    path: str
-    formatter: str | None = None
-
-    @staticmethod
-    def from_file_dataset(dataset: FileDataset) -> SerializedFileDatasetRecord:
-        if dataset.formatter is None:
+    def to_simple(self) -> SerializedFileDataset:
+        if self.formatter is None:
             formatter = None
-        elif isinstance(dataset.formatter, str):
-            formatter = dataset.formatter
+        elif isinstance(self.formatter, str):
+            formatter = self.formatter
         else:
-            formatter = dataset.formatter.name()
+            formatter = self.formatter.name()
 
-        sorted_refs = sorted(dataset.refs)
+        refs = {ref.id: MinimalistSerializableDatasetRef.from_dataset_ref(ref) for ref in self.refs}
 
-        return SerializedFileDatasetRecord(
-            dataset_id=[ref.id for ref in sorted_refs],
-            data_id=[dict(ref.dataId.required) for ref in sorted_refs],
-            path=str(dataset.path),
+        return SerializedFileDataset(
+            refs=refs,
+            path=str(self.path),
             formatter=formatter,
         )
 
+    @staticmethod
+    def from_simple(dataset: SerializedFileDataset, *, butler: Butler) -> FileDataset:
+        refs = [
+            ref.to_dataset_ref(
+                id, universe=butler.dimensions, dataset_type=butler.get_dataset_type(ref.dataset_type_name)
+            )
+            for id, ref in dataset.refs.items()
+        ]
+        return FileDataset(path=dataset.path, refs=refs, formatter=dataset.formatter)
 
-class _DatasetTypeAndRun(NamedTuple):
-    dataset_type: str
-    run: str
 
+class SerializedFileDataset(pydantic.BaseModel):
+    """Serializable format of `FileDataset` object."""
 
-def _get_dataset_type_and_run(dataset: FileDataset) -> _DatasetTypeAndRun:
-    """Return the dataset type and run collection associated with a
-    FileDataset.
-    """
-    assert len(dataset.refs) > 0, "Expected at least one DatasetRef in the list"
-    dataset_type_names = set()
-    runs = set()
-    for ref in dataset.refs:
-        dataset_type_names.add(ref.datasetType.name)
-        runs.add(ref.run)
-    assert len(dataset_type_names) == 1, "Expected all refs to share a single DatasetType"
-    assert len(runs) == 1, "Expected all refs to share a single run"
-    return _DatasetTypeAndRun(dataset_type=dataset_type_names.pop(), run=runs.pop())
+    refs: dict[uuid.UUID, MinimalistSerializableDatasetRef]
+    path: str
+    formatter: str | None = None
