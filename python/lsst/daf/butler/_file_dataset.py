@@ -30,18 +30,18 @@ from __future__ import annotations
 __all__ = ("FileDataset", "SerializedFileDataset")
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._dataset_ref import DatasetRef, MinimalistSerializableDatasetRef
+from ._dataset_type import DatasetType
 from ._formatter import FormatterParameter
-
-if TYPE_CHECKING:
-    from ._butler import Butler
+from .dimensions import DimensionUniverse
 
 
 @dataclass
@@ -111,10 +111,36 @@ class FileDataset:
         )
 
     @staticmethod
-    def from_simple(dataset: SerializedFileDataset, *, butler: Butler) -> FileDataset:
+    def from_simple(
+        dataset: SerializedFileDataset,
+        *,
+        universe: DimensionUniverse,
+        dataset_type_load_function: Callable[[str], DatasetType],
+    ) -> FileDataset:
+        """
+        Deserialize a `SerializedFileDataset` into a `FileDataset.
+
+        Parameters
+        ----------
+        dataset : `SerializedFileDataset`
+            Dataset to deserialize.
+        universe : `DimensionUniverse`
+            Dimension universe associated with the Butler where the dataset
+            will be used.
+        dataset_type_load_function : `Callable` [ [ `str` ], `DatasetType` ]
+            A callback function that takes a dataset type name as its only
+            parameter, and returns a corresponding `DatasetType` instance.  In
+            most common cases, you can pass `Butler.get_dataset_type` to
+            provide this callback.
+
+        Returns
+        -------
+        dataset : `FileDataset`
+            Deserialized `FileDataset` object.
+        """
         refs = [
             ref.to_dataset_ref(
-                id, universe=butler.dimensions, dataset_type=butler.get_dataset_type(ref.dataset_type_name)
+                id, universe=universe, dataset_type=dataset_type_load_function(ref.dataset_type_name)
             )
             for id, ref in dataset.refs.items()
         ]
