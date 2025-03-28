@@ -30,10 +30,12 @@ from ._column_expression import *
 from ._column_literal import *
 from ._column_reference import *
 from ._column_set import *
+from ._predicate import InQuery as _InQuery
 from ._predicate import LogicalNot as _LogicalNot
 from ._predicate import *
 from ._query_tree import *
 
+_InQuery.model_rebuild()
 _LogicalNot.model_rebuild()
 
 Predicate.model_rebuild()
