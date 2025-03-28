@@ -27,15 +27,21 @@
 
 from __future__ import annotations
 
-__all__ = ["FileDataset"]
+__all__ = ("FileDataset", "SerializedFileDataset")
 
+import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from ._dataset_ref import DatasetRef
+from ._dataset_ref import DatasetRef, MinimalistSerializableDatasetRef
 from ._formatter import FormatterParameter
+
+if TYPE_CHECKING:
+    from ._butler import Butler
 
 
 @dataclass
@@ -87,3 +93,37 @@ class FileDataset:
         if not isinstance(other, type(self)):
             return NotImplemented
         return str(self.path) < str(other.path)
+
+    def to_simple(self) -> SerializedFileDataset:
+        if self.formatter is None:
+            formatter = None
+        elif isinstance(self.formatter, str):
+            formatter = self.formatter
+        else:
+            formatter = self.formatter.name()
+
+        refs = {ref.id: MinimalistSerializableDatasetRef.from_dataset_ref(ref) for ref in self.refs}
+
+        return SerializedFileDataset(
+            refs=refs,
+            path=str(self.path),
+            formatter=formatter,
+        )
+
+    @staticmethod
+    def from_simple(dataset: SerializedFileDataset, *, butler: Butler) -> FileDataset:
+        refs = [
+            ref.to_dataset_ref(
+                id, universe=butler.dimensions, dataset_type=butler.get_dataset_type(ref.dataset_type_name)
+            )
+            for id, ref in dataset.refs.items()
+        ]
+        return FileDataset(path=dataset.path, refs=refs, formatter=dataset.formatter)
+
+
+class SerializedFileDataset(pydantic.BaseModel):
+    """Serializable format of `FileDataset` object."""
+
+    refs: dict[uuid.UUID, MinimalistSerializableDatasetRef]
+    path: str
+    formatter: str | None = None
