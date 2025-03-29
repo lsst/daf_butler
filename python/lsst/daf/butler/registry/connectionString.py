@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
+__all__ = ("ConnectionStringFactory",)
 
 from typing import TYPE_CHECKING
 
@@ -37,13 +37,6 @@ from lsst.utils.db_auth import DbAuth, DbAuthNotFoundError
 
 if TYPE_CHECKING:
     from ._config import RegistryConfig
-
-DB_AUTH_ENVVAR = "LSST_DB_AUTH"
-"""Default name of the environmental variable that will be used to locate DB
-credentials configuration file. """
-
-DB_AUTH_PATH = "~/.lsst/db-auth.yaml"
-"""Default path at which it is expected that DB credentials are found."""
 
 
 class ConnectionStringFactory:
@@ -60,7 +53,7 @@ class ConnectionStringFactory:
     keys = ("username", "password", "host", "port", "database")
 
     @classmethod
-    def fromConfig(cls, registryConfig: RegistryConfig) -> url.URL:
+    def fromConfig(cls, registryConfig: RegistryConfig, *, db_auth_path: str | None = None) -> url.URL:
         """Parse the `db`, and, if they exist, username, password, host, port
         and database keys from the given config.
 
@@ -76,6 +69,8 @@ class ConnectionStringFactory:
         ----------
         registryConfig : `RegistryConfig`
             Registry configuration.
+        db_auth_path : `str`, optional
+            An alternative location of DbAuth file, mostly useful for tests.
 
         Returns
         -------
@@ -122,7 +117,7 @@ class ConnectionStringFactory:
 
         # Ignore when credentials are not set up, or when no matches are found
         try:
-            dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
+            dbAuth = DbAuth(db_auth_path)
             auth = dbAuth.getAuth(
                 conStr.drivername, conStr.username, conStr.host, conStr.port, conStr.database
             )
