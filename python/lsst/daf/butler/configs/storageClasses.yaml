@@ -409,6 +409,9 @@ storageClasses:
     pytype: spectractor.fit.fitter.FitParameters
   ScarletModelData:
     pytype: lsst.scarlet.lite.io.ScarletModelData
+    parameters:
+      - blend_id
+    delegate: lsst.meas.extensions.scarlet.io.ScarletModelDelegate
   MetricMeasurementBundle:
     pytype: lsst.analysis.tools.interfaces.MetricMeasurementBundle
   MultipleCellCoadd:
