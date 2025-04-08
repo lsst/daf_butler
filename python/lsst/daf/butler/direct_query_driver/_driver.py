@@ -56,6 +56,7 @@ from ..queries.driver import (
     QueryDriver,
     ResultPage,
 )
+from ..queries.predicate_constraints_summary import PredicateConstraintsSummary
 from ..queries.result_specs import (
     DataCoordinateResultSpec,
     DatasetRefResultSpec,
@@ -68,7 +69,6 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.wildcards import CollectionWildcard
 from ._postprocessing import Postprocessing
-from ._predicate_constraints_summary import PredicateConstraintsSummary
 from ._query_analysis import (
     QueryCollectionAnalysis,
     QueryFindFirstAnalysis,
