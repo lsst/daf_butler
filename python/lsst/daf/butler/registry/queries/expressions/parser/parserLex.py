@@ -27,7 +27,7 @@
 
 """Module which defines PLY lexer for user expressions parsed by pre-flight."""
 
-__all__ = ["ParserLex", "ParserLexError"]
+__all__ = ["LexToken", "ParserLex", "ParserLexError"]
 
 import re
 from typing import Any, Protocol
