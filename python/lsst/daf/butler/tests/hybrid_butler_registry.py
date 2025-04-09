@@ -102,8 +102,11 @@ class HybridButlerRegistry(Registry):
     def refresh_collection_summaries(self) -> None:
         self._direct.refresh_collection_summaries()
 
-    def caching_context(self) -> contextlib.AbstractContextManager[None]:
-        return self._direct.caching_context()
+    @contextlib.contextmanager
+    def caching_context(self) -> Iterator[None]:
+        with self._direct.caching_context():
+            with self._remote.caching_context():
+                yield
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:

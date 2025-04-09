@@ -128,8 +128,9 @@ class RemoteButlerRegistry(Registry):
         # Docstring inherited from a base class.
         raise NotImplementedError()
 
-    def caching_context(self) -> contextlib.AbstractContextManager[None]:
-        raise NotImplementedError()
+    @contextlib.contextmanager
+    def caching_context(self) -> Iterator[None]:
+        yield
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
