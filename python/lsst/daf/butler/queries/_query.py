@@ -33,6 +33,8 @@ from collections.abc import Iterable, Mapping, Set
 from types import EllipsisType
 from typing import Any, final
 
+import astropy.table
+
 from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
@@ -49,6 +51,7 @@ from ._identifiers import IdentifierContext, interpret_identifier
 from .convert_args import convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
+from .predicate_constraints_summary import PredicateConstraintsSummary
 from .result_specs import (
     DataCoordinateResultSpec,
     DatasetRefResultSpec,
@@ -586,7 +589,7 @@ class Query(QueryBase):
         return query
 
     def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> Query:
-        """Return a new query that joins in an explicit table of data IDs.
+        """Return a new query that joins in an explicit iterable of data IDs.
 
         Parameters
         ----------
@@ -613,6 +616,50 @@ class Query(QueryBase):
         if dimensions is None:
             raise InvalidQueryError("Cannot upload an empty data coordinate set.")
         key = self._driver.upload_data_coordinates(dimensions, rows)
+        return Query(
+            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
+            driver=self._driver,
+        )
+
+    def join_data_coordinate_table(self, table: astropy.table.Table) -> Query:
+        """Return a new query that joins in an explicit table of data IDs.
+
+        Parameters
+        ----------
+        table : `astropy.table.Table`
+            A table of data IDs to join.  Columns must be dimension names, and
+            columns for dimensions whose values that are implied by others are
+            ignored.  If there is no column for a required dimension is missing
+            but is fully constrained to a literal by a previous `where` call, a
+            constant-valued column will be added.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with the data IDs joined in.
+        """
+        if not len(table):
+            raise InvalidQueryError("Cannot upload an empty data coordinate set.")
+        column_names = set(table.colnames)
+        dimensions = self._driver.universe.conform(column_names)
+        # To avoid numpy scalar types that will upset SQLAlchemy, we turn the
+        # columns we care about into lists of regular Python scalars.  We do
+        # this in dimensions.required order so we can zip the values of this
+        # dict later to make data ID 'required_values' tuples.
+        column_lists = {d: table[d].data.tolist() if d in column_names else None for d in dimensions.required}
+        if not column_names.issuperset(dimensions.required):
+            # If columns are missing, see if they're fixed by a previous
+            # `where` call or equivalent.
+            predicate_summary = PredicateConstraintsSummary(self._tree.predicate)
+            missing = dimensions.required - column_names
+            provided_by_predicate = predicate_summary.constraint_data_id.keys() & missing
+            missing -= provided_by_predicate
+            if missing:
+                raise InvalidQueryError(f"Data coordinate table is missing required dimension(s) {missing}.")
+            if provided_by_predicate:
+                for k in provided_by_predicate:
+                    column_lists[k] = [predicate_summary.constraint_data_id[k]] * len(table)
+        key = self._driver.upload_data_coordinates(dimensions, zip(*column_lists.values(), strict=True))
         return Query(
             tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
             driver=self._driver,
