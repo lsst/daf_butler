@@ -31,8 +31,8 @@ from typing import Any
 
 from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
-from ..queries import tree as qt
-from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, SimplePredicateVisitor
+from . import tree as qt
+from .visitors import ColumnExpressionVisitor, PredicateVisitFlags, SimplePredicateVisitor
 
 
 class PredicateConstraintsSummary:
