@@ -25,7 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for the public Butler._query interface and the Pydantic models that
+"""Tests for the public Butler.query interface and the Pydantic models that
 back it using a mock column-expression visitor and a mock QueryDriver
 implementation.
 
@@ -46,7 +46,9 @@ import uuid
 from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import Any
 
+import astropy.table
 import astropy.time
+import numpy as np
 
 from lsst.daf.butler import (
     CollectionType,
@@ -1474,6 +1476,42 @@ class QueryTestCase(unittest.TestCase):
                     DataCoordinate.standardize(instrument="DummyCam", universe=self.universe),
                 ]
             )
+
+    def test_join_data_coordinate_table(self) -> None:
+        """Test joining a data coordinates via a table."""
+        query = self.query()
+        x = query.expression_factory
+        self.assertFalse(query.constraint_dimensions)
+        query = query.where(x.skymap == "m")
+        self.assertEqual(query.constraint_dimensions, self.universe.conform(["skymap"]))
+        with self.assertRaises(InvalidQueryError):
+            # Cannot join a table with no rows.
+            query.join_data_coordinate_table(
+                astropy.table.Table({"instrument": np.array([]), "visit": np.array([])})
+            )
+        with self.assertRaises(InvalidQueryError):
+            # Cannot join a table with missing required dimensions.
+            query.join_data_coordinate_table(astropy.table.Table({"visit": np.array([1, 3, 5])}))
+        upload_table = astropy.table.Table({"tract": np.array([2, 5, 7], dtype=np.int64)})
+        raw_rows = frozenset([("m", 2), ("m", 5), ("m", 7)])
+        query = query.join_data_coordinate_table(upload_table)
+        self.assertEqual(query.constraint_dimensions, self.universe.conform(["skymap", "tract"]))
+        results = query.dimension_records("patch")
+        with self.assertRaises(_TestQueryExecution) as cm:
+            list(results)
+        tree = cm.exception.tree
+        driver = cm.exception.driver
+        self.assertEqual(str(tree.predicate), "skymap == 'm'")
+        self.assertEqual(tree.dimensions, self.universe.conform(["patch"]))
+        self.assertFalse(tree.materializations)
+        self.assertFalse(tree.datasets)
+        ((key, upload_dimensions),) = tree.data_coordinate_uploads.items()
+        self.assertEqual(upload_dimensions, self.universe.conform(["tract"]))
+        self.assertEqual(driver.data_coordinate_uploads[key], (upload_dimensions, raw_rows))
+        for row in driver.data_coordinate_uploads[key][1]:
+            for value in row:
+                # Make sure numpy scalar types have been cast to builtins.
+                self.assertIsInstance(value, (int, str))
 
     def test_dimension_record_iteration(self) -> None:
         """Tests for DimensionRecordQueryResult iteration."""
