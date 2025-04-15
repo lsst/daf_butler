@@ -42,11 +42,11 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 def modified_environment(**environ):
     """Temporarily set environment variables.
 
-    >>> with modified_environment(DAF_BUTLER_CONFIG_PATHS="/somewhere"):
-    ...     os.environ["DAF_BUTLER_CONFIG_PATHS"] == "/somewhere"
+    >>> with modified_environment(DAF_BUTLER_CONFIG_PATH="/somewhere"):
+    ...     os.environ["DAF_BUTLER_CONFIG_PATH"] == "/somewhere"
     True
 
-    >>> "DAF_BUTLER_CONFIG_PATHS" != "/somewhere"
+    >>> "DAF_BUTLER_CONFIG_PATH" != "/somewhere"
     True
 
     Parameters

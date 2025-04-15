@@ -1254,7 +1254,7 @@ class ConfigSubset(Config):
 
         Global defaults, at lowest priority, are found in the ``config``
         directory of the butler source tree. Additional defaults can be
-        defined using the environment variable ``$DAF_BUTLER_CONFIG_PATHS``
+        defined using the environment variable ``$DAF_BUTLER_CONFIG_PATH``
         which is a PATH-like variable where paths at the front of the list
         have priority over those later.
 
