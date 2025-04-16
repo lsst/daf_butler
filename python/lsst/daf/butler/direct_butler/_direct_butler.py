@@ -1607,10 +1607,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
-            # Somewhere to store pre-existing refs if we have an
-            # execution butler.
-            existingRefs: list[DatasetRef] = []
-
             for ref in dataset.refs:
                 group_key = (ref.datasetType, ref.run)
 
@@ -1623,21 +1619,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     )
 
                 groupedDataIds[group_key][ref.dataId] = dataset
-
-            if existingRefs:
-                if len(dataset.refs) != len(existingRefs):
-                    # Keeping track of partially pre-existing datasets is hard
-                    # and should generally never happen. For now don't allow
-                    # it.
-                    raise ConflictingDefinitionError(
-                        f"For dataset {dataset.path} some dataIds already exist"
-                        " in registry but others do not. This is not supported."
-                    )
-
-                # Store expanded form in the original FileDataset.
-                dataset.refs = existingRefs
-            else:
-                groupedData[group_key].append(dataset)
+            groupedData[group_key].append(dataset)
 
         # Now we can bulk-insert into Registry for each DatasetType.
         for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(
