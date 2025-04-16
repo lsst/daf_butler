@@ -72,6 +72,9 @@ class HybridButler(Butler):
         self = cast(HybridButler, super().__new__(cls))
         self._remote_butler = remote_butler
         self._direct_butler = direct_butler
+        # Force the dimension universes to match remote and direct.
+        with self._remote_butler._cache.access() as cache:
+            cache.dimensions = self._direct_butler.dimensions
         self._datastore = direct_butler._datastore
         self._registry = HybridButlerRegistry(direct_butler._registry, remote_butler.registry)
         return self
