@@ -1587,17 +1587,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _ingest_file_datasets(
         self,
         datasets: Sequence[FileDataset],
+        *,
+        dry_run: bool = False,
     ) -> None:
-        # Docstring inherited.
         if not datasets:
             return
 
         progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
-
-        # We need to reorganize all the inputs so that they are grouped
-        # by dataset type and run. Multiple refs in a single FileDataset
-        # are required to share the run and dataset type.
-        groupedData: MutableMapping[tuple[DatasetType, str], list[FileDataset]] = defaultdict(list)
 
         # Track DataIDs that are being ingested so we can spot issues early
         # with duplication. Retain previous FileDataset so we can report it.
@@ -1605,8 +1601,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             defaultdict(dict)
         )
 
-        # And the nested loop that populates it:
-        for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
+        # All the refs we need to import.
+        refs: list[DatasetRef] = []
+
+        for dataset in progress.wrap(datasets, desc="Validating dataIDs"):
             for ref in dataset.refs:
                 group_key = (ref.datasetType, ref.run)
 
@@ -1619,40 +1617,29 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     )
 
                 groupedDataIds[group_key][ref.dataId] = dataset
-            groupedData[group_key].append(dataset)
+            refs.extend(dataset.refs)
 
-        # Now we can bulk-insert into Registry for each DatasetType.
-        for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(
-            groupedData.items(), desc="Bulk-inserting datasets by type"
-        ):
-            refs_to_import = []
-            for dataset in grouped_datasets:
-                refs_to_import.extend(dataset.refs)
+        # Bulk insert.
+        import_info = self._prepare_for_import_refs(
+            self,
+            refs,
+            skip_missing=False,
+            register_dataset_types=True,
+            dry_run=dry_run,
+            transfer_dimensions=False,
+        )
 
-            n_refs = len(refs_to_import)
-            _LOG.verbose(
-                "Importing %d ref%s of dataset type %r into run %r",
-                n_refs,
-                "" if n_refs == 1 else "s",
-                datasetType.name,
-                this_run,
-            )
+        self._import_dimension_records(import_info.dimension_records, dry_run=dry_run)
+        imported_refs = self._import_grouped_refs(
+            import_info.grouped_refs, self, progress, dry_run=dry_run, expand_refs=True
+        )
 
-            # Import the refs and expand the DataCoordinates since we can't
-            # guarantee that they are expanded and Datastore will need
-            # the records.
-            imported_refs = self._registry._importDatasets(refs_to_import, expand=True)
+        # The expanded refs need to be attached back to the original
+        # FileDatasets for datastore to use.
+        id_to_ref = {ref.id: ref for ref in imported_refs}
 
-            # Since refs can come from an external butler, there is no
-            # guarantee that the DatasetType values match. Compare IDs.
-            assert {ref.id for ref in imported_refs} == {ref.id for ref in refs_to_import}
-
-            # Replace all the refs in the FileDataset with expanded versions.
-            # Pull them off in the order we put them on the list.
-            for dataset in grouped_datasets:
-                n_dataset_refs = len(dataset.refs)
-                dataset.refs = imported_refs[:n_dataset_refs]
-                del imported_refs[:n_dataset_refs]
+        for dataset in progress.wrap(datasets, desc="Re-attaching expanded refs"):
+            dataset.refs = [id_to_ref[ref.id] for ref in dataset.refs]
 
     @transactional
     def ingest(
@@ -1915,20 +1902,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return dimension_records
 
-    def transfer_from(
+    def _prepare_for_import_refs(
         self,
         source_butler: LimitedButler,
         source_refs: Iterable[DatasetRef],
-        transfer: str = "auto",
+        *,
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
         dry_run: bool = False,
-    ) -> collections.abc.Collection[DatasetRef]:
+    ) -> _ImportDatasetsInfo:
         # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
 
         # Will iterate through the refs multiple times so need to convert
         # to a list if this isn't a collection.
@@ -1936,7 +1922,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             source_refs = list(source_refs)
 
         original_count = len(source_refs)
-        _LOG.info("Transferring %d datasets into %s", original_count, str(self))
+        _LOG.info("Importing %d datasets into %s", original_count, str(self))
 
         # In some situations the datastore artifact may be missing
         # and we do not want that registry entry to be imported.
@@ -1978,7 +1964,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # might result in additional unwanted dataset types being
                 # registered.
                 try:
-                    if self._registry.registerDatasetType(datasetType):
+                    if not dry_run and self._registry.registerDatasetType(datasetType):
                         newly_registered_dataset_types.add(datasetType)
                 except ConflictingDefinitionError as e:
                     # Be safe and require that conversions be bidirectional
@@ -2058,86 +2044,132 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             dimension_records = self._extract_all_dimension_records_from_data_ids(
                 source_butler, dataIds, elements
             )
+        return _ImportDatasetsInfo(grouped_refs, dimension_records, artifact_existence)
 
+    def _import_dimension_records(
+        self,
+        dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]],
+        *,
+        dry_run: bool,
+    ) -> None:
+        """Import dimension records collected during import pre-process."""
+        if dimension_records and not dry_run:
+            _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
+            # Order matters.
+            for element in self.dimensions.sorted(dimension_records.keys()):
+                records = list(dimension_records[element].values())
+                # Assume that if the record is already present that we can
+                # use it without having to check that the record metadata
+                # is consistent.
+                self._registry.insertDimensionData(element, *records, skip_existing=True)
+
+    def _import_grouped_refs(
+        self,
+        grouped_refs: defaultdict[_RefGroup, list[DatasetRef]],
+        source_butler: LimitedButler,
+        progress: Progress,
+        *,
+        dry_run: bool = False,
+        expand_refs: bool = False,
+    ) -> list[DatasetRef]:
         handled_collections: set[str] = set()
+        n_to_import = 0
+        all_imported_refs: list[DatasetRef] = []
+        # Sort by run collection name to ensure Postgres takes locks in the
+        # same order between different processes, to mitigate an issue
+        # where Postgres can deadlock due to the unique index on collection
+        # name. (See DM-47543).
+        groups = sorted(grouped_refs.items(), key=lambda item: item[0].run)
+        for (dimension_group, run), refs_to_import in progress.iter_item_chunks(
+            groups, desc="Importing to registry by run and dataset type"
+        ):
+            if run not in handled_collections:
+                # May need to create output collection. If source butler
+                # has a registry, ask for documentation string.
+                run_doc = None
+                if registry := getattr(source_butler, "registry", None):
+                    run_doc = registry.getCollectionDocumentation(run)
+                if not dry_run:
+                    registered = self.collections.register(run, doc=run_doc)
+                else:
+                    registered = True
+                handled_collections.add(run)
+                if registered:
+                    _LOG.verbose("Creating output run %s", run)
+
+            n_refs = len(refs_to_import)
+            n_to_import += n_refs
+            _LOG.verbose(
+                "Importing %d ref%s with dimensions %s into run %s",
+                n_refs,
+                "" if n_refs == 1 else "s",
+                dimension_group.names,
+                run,
+            )
+
+            # Assume we are using UUIDs and the source refs will match
+            # those imported.
+            if not dry_run:
+                imported_refs = self._registry._importDatasets(refs_to_import, expand=expand_refs)
+            else:
+                imported_refs = refs_to_import
+
+            all_imported_refs.extend(imported_refs)
+
+        assert n_to_import == len(all_imported_refs)
+        _LOG.verbose("Imported %d datasets into destination butler", n_to_import)
+        return all_imported_refs
+
+    def transfer_from(
+        self,
+        source_butler: LimitedButler,
+        source_refs: Iterable[DatasetRef],
+        transfer: str = "auto",
+        skip_missing: bool = True,
+        register_dataset_types: bool = False,
+        transfer_dimensions: bool = False,
+        dry_run: bool = False,
+    ) -> collections.abc.Collection[DatasetRef]:
+        # Docstring inherited.
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+
+        progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
+
+        import_info = self._prepare_for_import_refs(
+            source_butler,
+            source_refs,
+            skip_missing=skip_missing,
+            register_dataset_types=register_dataset_types,
+            dry_run=dry_run,
+            transfer_dimensions=transfer_dimensions,
+        )
 
         # Do all the importing in a single transaction.
         with self.transaction():
-            if dimension_records and not dry_run:
-                _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
-                # Order matters.
-                for element in self.dimensions.sorted(dimension_records.keys()):
-                    records = [r for r in dimension_records[element].values()]
-                    # Assume that if the record is already present that we can
-                    # use it without having to check that the record metadata
-                    # is consistent.
-                    self._registry.insertDimensionData(element, *records, skip_existing=True)
-
-            n_imported = 0
-
-            # Sort by run collection name to ensure Postgres takes locks in the
-            # same order between different processes, to mitigate an issue
-            # where Postgres can deadlock due to the unique index on collection
-            # name. (See DM-47543).
-            groups = sorted(grouped_refs.items(), key=lambda item: item[0].run)
-            for (dimension_group, run), refs_to_import in progress.iter_item_chunks(
-                groups, desc="Importing to registry by run and dataset type"
-            ):
-                if run not in handled_collections:
-                    # May need to create output collection. If source butler
-                    # has a registry, ask for documentation string.
-                    run_doc = None
-                    if registry := getattr(source_butler, "registry", None):
-                        run_doc = registry.getCollectionDocumentation(run)
-                    if not dry_run:
-                        registered = self.collections.register(run, doc=run_doc)
-                    else:
-                        registered = True
-                    handled_collections.add(run)
-                    if registered:
-                        _LOG.verbose("Creating output run %s", run)
-
-                n_refs = len(refs_to_import)
-                _LOG.verbose(
-                    "Importing %d ref%s with dimensions %s into run %s",
-                    n_refs,
-                    "" if n_refs == 1 else "s",
-                    dimension_group.names,
-                    run,
-                )
-
-                # Assume we are using UUIDs and the source refs will match
-                # those imported.
-                if not dry_run:
-                    imported_refs = self._registry._importDatasets(refs_to_import)
-                else:
-                    imported_refs = refs_to_import
-
-                n_imported += len(imported_refs)
-
-            assert len(source_refs) == n_imported
-            _LOG.verbose("Imported %d datasets into destination butler", n_imported)
+            self._import_dimension_records(import_info.dimension_records, dry_run=dry_run)
+            imported_refs = self._import_grouped_refs(
+                import_info.grouped_refs, source_butler, progress, dry_run=dry_run
+            )
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
             accepted, rejected = self._datastore.transfer_from(
                 source_butler._datastore,
-                source_refs,
+                imported_refs,
                 transfer=transfer,
-                artifact_existence=artifact_existence,
+                artifact_existence=import_info.artifact_existence,
                 dry_run=dry_run,
             )
             if rejected:
                 # For now, accept the registry entries but not the files.
                 _LOG.warning(
-                    "%d datasets were rejected and %d accepted for dataset type %s in run %r.",
+                    "%d datasets were rejected and %d accepted for transfer.",
                     len(rejected),
                     len(accepted),
-                    datasetType,
-                    run,
                 )
 
-        return source_refs
+        return imported_refs
 
     def validateConfiguration(
         self,
@@ -2364,3 +2396,11 @@ class _RefGroup(NamedTuple):
 
     dimensions: DimensionGroup
     run: str
+
+
+class _ImportDatasetsInfo(NamedTuple):
+    """Information extracted from datasets to be imported."""
+
+    grouped_refs: defaultdict[_RefGroup, list[DatasetRef]]
+    dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]
+    artifact_existence: dict[ResourcePath, bool]
