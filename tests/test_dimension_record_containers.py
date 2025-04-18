@@ -35,9 +35,13 @@ import pyarrow.parquet as pq
 import pydantic
 
 from lsst.daf.butler import (
+    DataCoordinate,
+    DimensionDataAttacher,
+    DimensionDataExtractor,
     DimensionRecordSet,
     DimensionRecordSetDeserializer,
     DimensionRecordTable,
+    SerializableDimensionData,
     SerializedKeyValueDimensionRecord,
 )
 from lsst.daf.butler.arrow_utils import TimespanArrowType
@@ -56,13 +60,13 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
     def setUpClass(cls):
         # Create an in-memory SQLite database and Registry just to import the
         # YAML data.
-        butler = create_populated_sqlite_registry(*DIMENSION_DATA_FILES)
+        cls.butler = create_populated_sqlite_registry(*DIMENSION_DATA_FILES)
         cls.records = {
-            element: tuple(list(butler.registry.queryDimensionRecords(element)))
+            element: tuple(list(cls.butler.registry.queryDimensionRecords(element)))
             for element in ("visit", "skymap", "patch")
         }
-        cls.universe = butler.dimensions
-        cls.data_ids = list(butler.registry.queryDataIds(["visit", "patch"]).expanded())
+        cls.universe = cls.butler.dimensions
+        cls.data_ids = list(cls.butler.registry.queryDataIds(["visit", "patch"]).expanded())
 
     def assert_record_sets_equal(self, a: DimensionRecordSet, b: DimensionRecordSet) -> None:
         self.assertEqual(a, b)  # only checks data ID equality
@@ -420,6 +424,72 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
                 for record1 in rs1:
                     record2 = deserializer[record1.dataId.required_values]
                     self.assertEqual(record1, record2)
+
+    def test_extract_serialize_attach(self):
+        """Test serializing expanded data IDs by first extracting their
+        dimension records, serializing them in normalized form, and then
+        attaching the records to deserialized data IDs.
+        """
+        dimensions = self.universe.conform(["visit", "patch", "htm5"])
+        expanded_data_ids_1: list[DataCoordinate] = []
+        pixelization = dimensions.universe.skypix_dimensions["htm5"].pixelization
+        for data_id in self.data_ids:
+            for htm_begin, htm_end in pixelization.envelope(data_id.records["patch"].region):
+                for htm_id in range(htm_begin, htm_end):
+                    new_data_id = self.butler.registry.expandDataId(data_id, htm5=htm_id)
+                    self.assertEqual(new_data_id.dimensions, dimensions)
+                    expanded_data_ids_1.append(new_data_id)
+        extractor = DimensionDataExtractor.from_dimension_group(
+            dimensions,
+            ignore=["tract"],
+            ignore_cached=True,
+            include_skypix=False,
+        )
+        extractor.update(expanded_data_ids_1)
+        thin_data_ids = [
+            DataCoordinate.from_full_values(dimensions, data_id.full_values)
+            for data_id in expanded_data_ids_1
+        ]
+        model1 = SerializableDimensionData.from_record_sets(extractor.records.values())
+        self.assertEqual(model1.root.keys(), {"visit", "patch", "day_obs"})
+        # Delete one patch record from the model to probe more logic branches
+        # in the deserialization; like the tract records, we'll recover it by
+        # querying the butler.
+        del model1.root["patch"][-1]
+        model2 = SerializableDimensionData.model_validate_json(model1.model_dump_json())
+        with self.butler.query() as query:
+            attacher = DimensionDataAttacher(
+                deserializers=model2.make_deserializers(self.universe),
+                cache=query._driver._dimension_record_cache,
+                dimensions=dimensions,
+            )
+            expanded_data_ids_2 = attacher.attach(dimensions, thin_data_ids, query=query)
+        # This equality check is necessary but not sufficient for this test,
+        # because DataCoordinate equality doesn't look at records.
+        self.assertEqual(expanded_data_ids_1, expanded_data_ids_2)
+        for a, b in zip(expanded_data_ids_1, expanded_data_ids_2):
+            self.assertEqual(dict(a.records), dict(b.records))
+        # Caching in the attacher should ensure that there is only one copy
+        # of each dimension record in the new set.
+        all_values = {(data_id["tract"], data_id["patch"]) for data_id in expanded_data_ids_2}
+        all_identities = {
+            id(data_id.records["patch"]): data_id.records["patch"] for data_id in expanded_data_ids_2
+        }
+        self.assertGreater(len(all_values), 1)
+        self.assertEqual(len(all_identities), len(all_values), msg=str(all_identities))
+        # Attach data IDs with the same attacher again, after clearing out its
+        # deserializers.  The cached records should all be present, and it
+        # should work without any butler queries.
+        attacher.deserializers.clear()
+        expanded_data_ids_3 = attacher.attach(dimensions, thin_data_ids)
+        self.assertEqual(expanded_data_ids_1, expanded_data_ids_3)
+        for a, b in zip(expanded_data_ids_1, expanded_data_ids_3):
+            self.assertEqual(dict(a.records), dict(b.records))
+        # Delete a record and try again to check error-handling.
+        removed_patch_data_id = next(iter(attacher.records["patch"])).dataId
+        attacher.records["patch"].remove(removed_patch_data_id)
+        with self.assertRaisesRegex(LookupError, r"No dimension record.*patch.*"):
+            attacher.attach(dimensions, thin_data_ids)
 
 
 if __name__ == "__main__":
