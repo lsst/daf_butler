@@ -54,8 +54,7 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
 
     Notes
     -----
-    The nested `DimensionRecordSet` objects should never be modified in place
-    except when returned by the `modifying` context manager.
+    The nested `DimensionRecordSet` objects should never be modified in place.
     """
 
     def __init__(self, universe: DimensionUniverse, fetch: Callable[[], dict[str, DimensionRecordSet]]):
