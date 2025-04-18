@@ -27,17 +27,31 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecordFactory", "DimensionRecordSet", "DimensionRecordSetDeserializer")
+__all__ = (
+    "DimensionDataAttacher",
+    "DimensionDataExtractor",
+    "DimensionRecordFactory",
+    "DimensionRecordSet",
+    "DimensionRecordSetDeserializer",
+    "SerializableDimensionData",
+)
 
+import dataclasses
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Protocol, Self, TypeAlias, final
+
+import pydantic
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord, SerializedKeyValueDimensionRecord
 
 if TYPE_CHECKING:
+    from ..queries import Query
     from ._elements import DimensionElement
+    from ._group import DimensionGroup
     from ._universe import DimensionUniverse
+    from .record_cache import DimensionRecordCache
 
 
 SerializedDimensionRecordSetMapping: TypeAlias = dict[str, list[SerializedKeyValueDimensionRecord]]
@@ -596,3 +610,241 @@ class DimensionRecordSetDeserializer:
 
     def __getitem__(self, key: tuple[DataIdValue, ...]) -> DimensionRecord:
         return self.element.RecordClass.deserialize_value(key, self._mapping[key])
+
+
+@dataclasses.dataclass
+class DimensionDataExtractor:
+    """A helper class for extracting dimension records from expanded data IDs
+    (e.g. for normalized serialization).
+
+    Instances of this class must be initialized with empty sets (usually by one
+    of the class method factories) with all of the dimension elements that
+    should be extracted from the data IDs passed to `update_homogeneous` or
+    `update_heterogeneous`.  Dimension elements not included will not be
+    extracted (which may be useful).
+    """
+
+    records: dict[str, DimensionRecordSet] = dataclasses.field(default_factory=dict)
+
+    @classmethod
+    def from_element_names(
+        cls, element_names: Iterable[str], universe: DimensionUniverse
+    ) -> DimensionDataExtractor:
+        """Construct from an iterable of dimension element names.
+
+        Parameters
+        ----------
+        element_names : `~collections.abc.Iterable` [ `str` ]
+            Names of dimension elements to include.
+        universe : `DimensionUniverse`
+            Definitions of all dimensions.
+
+        Returns
+        -------
+        extractor : `DimensionDataExtractor`
+            New extractor.
+        """
+        return cls(
+            records={
+                element_name: DimensionRecordSet(element_name, universe=universe)
+                for element_name in element_names
+            }
+        )
+
+    @classmethod
+    def from_dimension_group(
+        cls, dimensions: DimensionGroup, ignore: Iterable[str] = ()
+    ) -> DimensionDataExtractor:
+        """Construct from a `DimensionGroup` and a set of dimension element
+        names to ignore.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions that span the set of elements whose elements are to be
+            extracted.
+        ignore : `~collections.abc.Iterable` [ `str` ], optional
+            Names of dimension elements that should not be extracted.
+
+        Returns
+        -------
+        extractor : `DimensionDataExtractor`
+            New extractor.
+        """
+        return cls.from_element_names(dimensions.elements - set(ignore), universe=dimensions.universe)
+
+    def update_homogeneous(self, dimensions: DimensionGroup, data_ids: Iterable[DataCoordinate]) -> None:
+        """Extract dimension records from an iterable of data IDs that have the
+        same dimensions.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of all data IDs.
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Data IDs to extract dimension records from.
+        """
+        raise NotImplementedError("TODO")
+
+    def update_heterogeneous(self, data_ids: Iterable[DataCoordinate]) -> None:
+        """Extract dimension records from an iterable of data IDs that do not
+        have the same dimensions.
+
+        Parameters
+        ----------
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Data IDs to extract dimension records from.
+        """
+        by_dimensions: defaultdict[DimensionGroup, set[DataCoordinate]] = defaultdict(set)
+        for data_id in data_ids:
+            by_dimensions[data_id.dimensions].add(data_id)
+        for dimensions, data_ids_for_dimensions in by_dimensions.items():
+            self.update_homogeneous(dimensions, data_ids_for_dimensions)
+
+
+class SerializableDimensionData(pydantic.RootModel):
+    """A pydantic model for normalized serialization of dimension records.
+
+    While dimension records are serialized directly via this model, they are
+    deserialized by constructing a `DimensionRecordSetDeserializer` from this
+    model, which allows full validation to be performed only on the records
+    that are actually loaded.
+    """
+
+    root: dict[str, list[SerializedKeyValueDimensionRecord]] = pydantic.Field(default_factory=dict)
+
+    @classmethod
+    def from_record_sets(cls, record_sets: Iterable[DimensionRecordSet]) -> SerializableDimensionData:
+        """Construct from an iterable of `DimensionRecordSet` objects.
+
+        Parameters
+        ----------
+        record_sets : `~collections.abc.Iterable` [ `DimensionRecordSet` ]
+            Sets of dimension records, each for a different dimension element.
+
+        Returns
+        -------
+        model : `SerializableDimensionData`
+            New model instance.
+        """
+        return cls.model_construct(
+            root={record_set.element.name: record_set.serialize_records() for record_set in record_sets}
+        )
+
+    def make_deserializers(self, universe: DimensionUniverse) -> list[DimensionRecordSetDeserializer]:
+        """Make objects from this model that handle the second phase of
+        deserialization.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Definitions of all dimensions.
+
+        Returns
+        -------
+        deserializers : `list` [ `DimensionRecordSetDeserializer` ]
+            A list of deserializers objects, one for each dimension element.
+        """
+        return [
+            DimensionRecordSetDeserializer.from_raw(universe[element_name], raw_records)
+            for element_name, raw_records in self.root.items()
+        ]
+
+
+@dataclasses.dataclass
+class DimensionDataAttacher:
+    """A helper class for attaching dimension records to data IDs."""
+
+    records: dict[str, DimensionRecordSet] = dataclasses.field(default_factory=dict)
+    """Regular dimension record sets, keyed by dimension element name."""
+
+    deserializers: dict[str, DimensionRecordSetDeserializer] = dataclasses.field(default_factory=dict)
+    """Serialized dimension records, keyed by dimension element name.
+
+    These are deserialized on demand and then added to `records`.  Every key in
+    this `dict` must correspond to a key in `records` (but the converse is not
+    true).
+    """
+
+    cache: DimensionRecordCache | None = None
+    """A cache of dimension records from a butler instance.
+
+    If present, this is assumed to have records for elements that are not in
+    ``records`` and ``deserializers``.
+    """
+
+    @classmethod
+    def from_deserializers(
+        cls,
+        deserializers: Iterable[DimensionRecordSetDeserializer],
+        cache: DimensionRecordCache | None = None,
+    ) -> DimensionDataAttacher:
+        """Construct from an iterable of `DimensionRecordSetDeserializer`
+        objects.
+
+        Parameters
+        ----------
+        deserializers : `~collections.abc.Iterable` [ \
+                `DimensionRecordSetDeserializer` ]
+            Objects holding partially-deserialized dimension records, one for
+            each dimension element.  An empty `DimensionRecordSet` is added
+            to `records` for each deserializer.
+        cache : `record_cache.DimensionRecordCache`, optional
+            Cache of dimension records from a butler instance.
+        """
+        result = cls(deserializers={d.element.name: d for d in deserializers}, cache=cache)
+        for deserializer in result.deserializers.values():
+            result.records[deserializer.element.name] = DimensionRecordSet(deserializer.element)
+        return result
+
+    def preload_all(self) -> None:
+        """Fully deserialize all dimension records in advance."""
+        for deserializer in self.deserializers.values():
+            self.records[deserializer.element.name].update(deserializer)
+
+    def attach(self, dimensions: DimensionGroup, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        """Attach dimension records to data IDs.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of all given data IDs.
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Data IDs to attach dimension records to (not in place; data
+            coordinates are immutable).  Must have full values (i.e. implied
+            as well as required dimensions).
+
+        Returns
+        -------
+        expanded : `list` [ `DataCoordinate` ]
+            Data IDs with dimension records attached, in the same order as the
+            original iterable.
+        """
+        return self.assemble(dimensions, [data_id.required_values for data_id in data_ids])
+
+    def assemble(
+        self,
+        dimensions: DimensionGroup,
+        full_values: Iterable[tuple[DataIdValue, ...]],
+        *,
+        query: Query | None = None,
+    ) -> list[DataCoordinate]:
+        """Construct data coordinates with attached dimension records.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of all given data IDs.
+        full_values : `~collections.abc.Iterable` [ `tuple` ]
+            The full-value tuples of the data IDs (required dimensions followed
+            by implied dimensions).
+        query : `.queries.Query`, optional
+            A butler query that can be used to fetch missing dimension records.
+
+        Returns
+        -------
+        expanded : `list` [ `DataCoordinate` ]
+            Data IDs with dimension records attached, in the same order as the
+            original iterable.
+        """
+        raise NotImplementedError("TODO")
