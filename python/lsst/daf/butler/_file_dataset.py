@@ -30,18 +30,18 @@ from __future__ import annotations
 __all__ = ("FileDataset", "SerializedFileDataset")
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any, TypeAlias
 
 import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._dataset_ref import DatasetRef, MinimalistSerializableDatasetRef
+from ._dataset_type import DatasetType
 from ._formatter import FormatterParameter
-
-if TYPE_CHECKING:
-    from ._butler import Butler
+from .dimensions import DimensionUniverse
 
 
 @dataclass
@@ -111,14 +111,20 @@ class FileDataset:
         )
 
     @staticmethod
-    def from_simple(dataset: SerializedFileDataset, *, butler: Butler) -> FileDataset:
+    def from_simple(
+        dataset: SerializedFileDataset, *, dataset_type_loader: DatasetTypeLoader, universe: DimensionUniverse
+    ) -> FileDataset:
         refs = [
-            ref.to_dataset_ref(
-                id, universe=butler.dimensions, dataset_type=butler.get_dataset_type(ref.dataset_type_name)
-            )
+            ref.to_dataset_ref(id, universe=universe, dataset_type=dataset_type_loader(ref.dataset_type_name))
             for id, ref in dataset.refs.items()
         ]
         return FileDataset(path=dataset.path, refs=refs, formatter=dataset.formatter)
+
+
+DatasetTypeLoader: TypeAlias = Callable[[str], DatasetType]
+"""Type signature for a function that takes a string dataset type name as its
+only parameter, and returns an instance of `DatasetType`.
+"""
 
 
 class SerializedFileDataset(pydantic.BaseModel):
