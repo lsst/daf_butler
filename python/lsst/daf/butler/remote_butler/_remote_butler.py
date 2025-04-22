@@ -187,14 +187,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         model = parse_model(response, GetUniverseResponseModel)
 
         config = DimensionConfig.from_simple(model.universe)
-        universe = DimensionUniverse(
-            config,
-            # The process-global cache internal to DimensionUniverse can mask
-            # problems in unit tests, since client and server live in the same
-            # process for these tests.  We are doing our own caching, so we
-            # don't benefit from it.  So just disable it.
-            use_cache=False,
-        )
+        universe = DimensionUniverse(config)
         with self._cache.access() as cache:
             if cache.dimensions is None:
                 cache.dimensions = universe

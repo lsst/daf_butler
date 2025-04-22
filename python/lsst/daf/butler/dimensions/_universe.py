@@ -31,6 +31,7 @@ __all__ = ["DimensionUniverse"]
 
 import logging
 import pickle
+import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
@@ -117,6 +118,13 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             else:
                 version = builder.version
 
+        if use_cache is not True:
+            warnings.warn(
+                "use_cache parameter is no longer supported and is ignored. Will be removed after v30.",
+                category=FutureWarning,
+                stacklevel=2,
+            )
+
         # Then a namespace.
         if namespace is None:
             if builder is None:
@@ -129,10 +137,9 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             namespace = _DEFAULT_NAMESPACE
 
         # See if an equivalent instance already exists.
-        if use_cache:
-            existing_instance = cls._instances.get((version, namespace))
-            if existing_instance is not None:
-                return existing_instance
+        existing_instance = cls._instances.get((version, namespace))
+        if existing_instance is not None:
+            return existing_instance
 
         # Ensure we have a builder, building one from config if necessary.
         if builder is None:
@@ -183,10 +190,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             if element.populated_by is not None:
                 self._populates[element.populated_by.name].add(element)
 
-        if use_cache:
-            return cls._instances.set_or_get((self._version, self._namespace), self)
-        else:
-            return self
+        return cls._instances.set_or_get((self._version, self._namespace), self)
 
     @property
     def version(self) -> int:

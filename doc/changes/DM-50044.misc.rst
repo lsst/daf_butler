@@ -1,0 +1,3 @@
+* Reorganized the code for ``Butler.ingest`` and ``Butler.ingest_zip`` to share the code from ``Butler.transfer_from`` in order to provide consistent error messages for incompatible dataset types and to allow a future possibility of registering dataset types and dimension records as part of ``ingest_zip``.
+* Removed the ``use_cache`` parameter from the ``DimensionUniverse`` constructor.
+  The universe is always cached and the remote butler now uses that cache and does not need to disable the cache.
