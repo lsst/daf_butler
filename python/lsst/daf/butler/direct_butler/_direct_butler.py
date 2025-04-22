@@ -1631,7 +1631,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         self._import_dimension_records(import_info.dimension_records, dry_run=dry_run)
         imported_refs = self._import_grouped_refs(
-            import_info.grouped_refs, self, progress, dry_run=dry_run, expand_refs=True
+            import_info.grouped_refs, None, progress, dry_run=dry_run, expand_refs=True
         )
 
         # The expanded refs need to be attached back to the original
@@ -2066,7 +2066,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _import_grouped_refs(
         self,
         grouped_refs: defaultdict[_RefGroup, list[DatasetRef]],
-        source_butler: LimitedButler,
+        source_butler: LimitedButler | None,
         progress: Progress,
         *,
         dry_run: bool = False,
@@ -2087,7 +2087,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # May need to create output collection. If source butler
                 # has a registry, ask for documentation string.
                 run_doc = None
-                if registry := getattr(source_butler, "registry", None):
+                if source_butler is not None and (registry := getattr(source_butler, "registry", None)):
                     run_doc = registry.getCollectionDocumentation(run)
                 if not dry_run:
                     registered = self.collections.register(run, doc=run_doc)

@@ -1018,6 +1018,10 @@ class ButlerTests(ButlerPutGetTests):
         formatter = doImportType("lsst.daf.butler.formatters.yaml.YamlFormatter")
         dataRoot = os.path.join(TESTDIR, "data", "basic")
         datasets = []
+        # Test one DatasetRef with a run that exists, and the other with a run
+        # that doesn't exist, to verify that run collections are created when
+        # required.
+        runs = {1: self.default_run, 2: "a/new/run"}
         for detector in (1, 2):
             detector_name = f"detector_{detector}"
             metricFile = os.path.join(dataRoot, f"{detector_name}.yaml")
@@ -1025,7 +1029,7 @@ class ButlerTests(ButlerPutGetTests):
                 {"instrument": "DummyCamComp", "visit": 423, "detector": detector}
             )
             # Create a DatasetRef for ingest
-            refIn = DatasetRef(datasetType, dataId, run=self.default_run)
+            refIn = DatasetRef(datasetType, dataId, run=runs[detector])
 
             datasets.append(FileDataset(path=metricFile, refs=[refIn], formatter=formatter))
 
@@ -1035,12 +1039,12 @@ class ButlerTests(ButlerPutGetTests):
         dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 423}
 
         metrics1 = butler.get(datasetTypeName, dataId1)
-        metrics2 = butler.get(datasetTypeName, dataId2)
+        metrics2 = butler.get(datasetTypeName, dataId2, collections="a/new/run")
         self.assertNotEqual(metrics1, metrics2)
 
         # Compare URIs
         uri1 = butler.getURI(datasetTypeName, dataId1)
-        uri2 = butler.getURI(datasetTypeName, dataId2)
+        uri2 = butler.getURI(datasetTypeName, dataId2, collections="a/new/run")
         self.assertFalse(self.are_uris_equivalent(uri1, uri2), f"Cf. {uri1} with {uri2}")
 
         # Now do a multi-dataset but single file ingest
