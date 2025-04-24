@@ -2398,6 +2398,16 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # inconsistent with the constraint in the collection:
         self.assertEqual(butler.query_datasets("b", collections=collection, instrument="Cam2"), [ref_b])
 
+    def test_inferred_primary_key(self) -> None:
+        """Test expressions that have an unqualified reference to a primary key
+        field whose dimension must be inferred from context.
+        """
+        butler = self.make_butler("base.yaml")
+        self.assertEqual(
+            butler.query_dimension_records("detector", instrument="Cam1", where="id=2"),
+            butler.query_dimension_records("detector", instrument="Cam1", detector=2),
+        )
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

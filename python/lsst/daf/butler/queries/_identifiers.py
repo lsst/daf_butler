@@ -128,7 +128,10 @@ def interpret_identifier(context: IdentifierContext, identifier: str) -> ColumnE
                 )
             elif element_matches:
                 element = dimensions.universe[element_matches.pop()]
-                return DimensionFieldReference.model_construct(element=element, field=identifier)
+                if isinstance(element, Dimension) and identifier == element.primary_key.name:
+                    return DimensionKeyReference(dimension=element)
+                else:
+                    return DimensionFieldReference.model_construct(element=element, field=identifier)
             elif dataset_matches:
                 return DatasetFieldReference.model_construct(
                     dataset_type=dataset_matches.pop(), field=cast(DatasetFieldName, identifier)
