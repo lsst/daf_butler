@@ -81,8 +81,8 @@ class _Visitor(TreeVisitor):
     def visitParens(self, expression, node):
         return f"P({expression})"
 
-    def visitPointNode(self, expression, node):
-        return f"POINT({expression})"
+    def visitPointNode(self, ra, dec, node):
+        return f"POINT({ra}, {dec})"
 
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
@@ -584,6 +584,10 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("time > T'2020-03-30'")
         result = tree.visit(visitor)
         self.assertEqual(result, "B(ID(time) > T(2020-03-30 00:00:00.000))")
+
+        tree = parser.parse("point(ra, :dec)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "POINT(ID(ra), :(dec))")
 
     def testParseTimeStr(self):
         """Test for _parseTimeString method"""
