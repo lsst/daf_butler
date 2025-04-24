@@ -1741,8 +1741,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             warn_limit = True
         with self.query() as query:
             result = (
-                query.where(data_id, where, bind=bind, **kwargs)
-                .data_ids(dimensions)
+                query.data_ids(dimensions)
+                .where(data_id, where, bind=bind, **kwargs)
                 .order_by(*ensure_iterable(order_by))
                 .limit(query_limit)
             )
@@ -1979,8 +1979,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             warn_limit = True
         with self.query() as query:
             result = (
-                query.where(data_id, where, bind=bind, **kwargs)
-                .dimension_records(element)
+                query.dimension_records(element)
+                .where(data_id, where, bind=bind, **kwargs)
                 .order_by(*ensure_iterable(order_by))
                 .limit(query_limit)
             )
