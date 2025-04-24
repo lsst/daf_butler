@@ -66,8 +66,11 @@ from ._named import NamedKeyDict
 from .datastore.stored_file_info import StoredDatastoreItemInfo
 from .dimensions import (
     DataCoordinate,
+    DimensionDataAttacher,
+    DimensionDataExtractor,
     DimensionGroup,
     DimensionUniverse,
+    SerializableDimensionData,
     SerializedDataCoordinate,
     SerializedDataId,
 )
@@ -938,6 +941,9 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
     compact_refs: dict[uuid.UUID, MinimalistSerializableDatasetRef]
     """Minimal dataset ref information indexed by UUID."""
 
+    dimension_records: SerializableDimensionData | None = None
+    """Dimension record information"""
+
     def __len__(self) -> int:
         """Return the number of datasets in the container."""
         return len(self.compact_refs)
@@ -957,6 +963,8 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
         universe: DimensionUniverse | None = None
         dataset_types: dict[str, SerializedDatasetType] = {}
         compact_refs: dict[uuid.UUID, MinimalistSerializableDatasetRef] = {}
+        data_ids: list[DataCoordinate] = []
+        dimensions: list[DimensionGroup] = []
         for ref in refs:
             simple_ref = ref.to_simple()
             dataset_type = simple_ref.datasetType
@@ -970,6 +978,24 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
             compact_refs[simple_ref.id] = MinimalistSerializableDatasetRef(
                 dataset_type_name=name, run=simple_ref.run, data_id=data_id.dataId
             )
+            if ref.dataId.hasRecords():
+                dimensions.append(ref.datasetType.dimensions)
+                data_ids.append(ref.dataId)
+
+        # Extract dimension record metadata if present.
+        dimension_records = None
+        if data_ids and len(compact_refs) == len(data_ids):
+            dimension_group = DimensionGroup.union(*dimensions, universe=universe)
+
+            # Records were attached to all refs. Store them.
+            extractor = DimensionDataExtractor.from_dimension_group(
+                dimension_group,
+                ignore_cached=False,
+                include_skypix=False,
+            )
+            extractor.update(data_ids)
+            dimension_records = SerializableDimensionData.from_record_sets(extractor.records.values())
+
         if universe:
             universe_version = universe.version
             universe_namespace = universe.namespace
@@ -982,6 +1008,7 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
             universe_namespace=universe_namespace,
             dataset_types=dataset_types,
             compact_refs=compact_refs,
+            dimension_records=dimension_records,
         )
 
     def to_refs(self, universe: DimensionUniverse) -> list[DatasetRef]:
@@ -1019,14 +1046,27 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
             name: DatasetType.from_simple(dtype, universe=universe)
             for name, dtype in self.dataset_types.items()
         }
+
+        # Dimension records can be attached if available.
+        # We assume that all dimension information was stored.
+        attacher = None
+        if self.dimension_records:
+            attacher = DimensionDataAttacher(
+                deserializers=self.dimension_records.make_deserializers(universe)
+            )
+
         refs: list[DatasetRef] = []
         for id_, minimal in self.compact_refs.items():
+            dataset_type = dataset_types[minimal.dataset_type_name]
             simple_data_id = SerializedDataCoordinate(dataId=minimal.data_id)
             data_id = DataCoordinate.from_simple(simple=simple_data_id, universe=universe)
+            if attacher:
+                data_ids = attacher.attach(dataset_type.dimensions, [data_id])
+                data_id = data_ids[0]
             ref = DatasetRef(
                 id=id_,
                 run=minimal.run,
-                datasetType=dataset_types[minimal.dataset_type_name],
+                datasetType=dataset_type,
                 dataId=data_id,
             )
             refs.append(ref)

@@ -169,6 +169,16 @@ class DimensionTestCase(unittest.TestCase):
         config = self.universe.dimensionConfig
         self.assertIsInstance(config, DimensionConfig)
 
+    def test_group_union(self) -> None:
+        """Test unions of DimensionGroups."""
+        a = self.universe.conform(["visit"])
+        b = self.universe.conform(["detector"])
+        self.assertIs(a.union(b), self.universe.conform(["visit", "detector"]))
+        self.assertIs(DimensionGroup.union(a, b), self.universe.conform(["visit", "detector"]))
+        self.assertIs(DimensionGroup.union(universe=self.universe), self.universe.empty)
+        with self.assertRaises(TypeError):
+            DimensionGroup.union()
+
     def testCompatibility(self):
         # Simple check that should always be true.
         self.assertTrue(self.universe.isCompatibleWith(self.universe))

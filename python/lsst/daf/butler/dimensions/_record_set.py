@@ -27,17 +27,31 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecordFactory", "DimensionRecordSet", "DimensionRecordSetDeserializer")
+__all__ = (
+    "DimensionDataAttacher",
+    "DimensionDataExtractor",
+    "DimensionRecordFactory",
+    "DimensionRecordSet",
+    "DimensionRecordSetDeserializer",
+    "SerializableDimensionData",
+)
 
+import dataclasses
 from collections.abc import Collection, Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Protocol, Self, TypeAlias, final
+
+import pydantic
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord, SerializedKeyValueDimensionRecord
 
 if TYPE_CHECKING:
+    from ..queries import Query
     from ._elements import DimensionElement
+    from ._group import DimensionGroup
+    from ._skypix import SkyPixDimension
     from ._universe import DimensionUniverse
+    from .record_cache import DimensionRecordCache
 
 
 SerializedDimensionRecordSetMapping: TypeAlias = dict[str, list[SerializedKeyValueDimensionRecord]]
@@ -596,3 +610,341 @@ class DimensionRecordSetDeserializer:
 
     def __getitem__(self, key: tuple[DataIdValue, ...]) -> DimensionRecord:
         return self.element.RecordClass.deserialize_value(key, self._mapping[key])
+
+
+@dataclasses.dataclass
+class DimensionDataExtractor:
+    """A helper class for extracting dimension records from expanded data IDs
+    (e.g. for normalized serialization).
+
+    Instances of this class must be initialized with empty sets (usually by one
+    of the class method factories) with all of the dimension elements that
+    should be extracted from the data IDs passed to `update_homogeneous` or
+    `update_heterogeneous`.  Dimension elements not included will not be
+    extracted (which may be useful).
+    """
+
+    records: dict[str, DimensionRecordSet] = dataclasses.field(default_factory=dict)
+
+    @classmethod
+    def from_element_names(
+        cls, element_names: Iterable[str], universe: DimensionUniverse
+    ) -> DimensionDataExtractor:
+        """Construct from an iterable of dimension element names.
+
+        Parameters
+        ----------
+        element_names : `~collections.abc.Iterable` [ `str` ]
+            Names of dimension elements to include.
+        universe : `DimensionUniverse`
+            Definitions of all dimensions.
+
+        Returns
+        -------
+        extractor : `DimensionDataExtractor`
+            New extractor.
+        """
+        return cls(
+            records={
+                element_name: DimensionRecordSet(element_name, universe=universe)
+                for element_name in element_names
+            }
+        )
+
+    @classmethod
+    def from_dimension_group(
+        cls,
+        dimensions: DimensionGroup,
+        *,
+        ignore: Iterable[str] = (),
+        ignore_cached: bool = False,
+        include_skypix: bool = False,
+    ) -> DimensionDataExtractor:
+        """Construct from a `DimensionGroup` and a set of dimension element
+        names to ignore.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions that span the set of elements whose elements are to be
+            extracted.
+        ignore : `~collections.abc.Iterable` [ `str` ], optional
+            Names of dimension elements that should not be extracted.
+        ignore_cached : `bool`, optional
+            If `True`, ignore all dimension elements for which
+            `DimensionElement.is_cached` is `True`.
+        include_skypix : `bool`, optional
+            If `True`, include skypix dimensions.  These are ignored by default
+            because they can always be recomputed from their IDs on-the-fly.
+
+        Returns
+        -------
+        extractor : `DimensionDataExtractor`
+            New extractor.
+        """
+        elements = set(dimensions.elements)
+        elements.difference_update(ignore)
+        if ignore_cached:
+            elements.difference_update([e for e in elements if dimensions.universe[e].is_cached])
+        if not include_skypix:
+            elements.difference_update(dimensions.skypix)
+        return cls.from_element_names(elements, universe=dimensions.universe)
+
+    def update(self, data_ids: Iterable[DataCoordinate]) -> None:
+        """Extract dimension records from an iterable of data IDs.
+
+        Parameters
+        ----------
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Data IDs to extract dimension records from.
+        """
+        for data_id in data_ids:
+            for element in data_id.dimensions.elements & self.records.keys():
+                if (record := data_id.records[element]) is not None:
+                    self.records[element].add(record)
+
+
+class SerializableDimensionData(pydantic.RootModel):
+    """A pydantic model for normalized serialization of dimension records.
+
+    While dimension records are serialized directly via this model, they are
+    deserialized by constructing a `DimensionRecordSetDeserializer` from this
+    model, which allows full validation to be performed only on the records
+    that are actually loaded.
+    """
+
+    root: dict[str, list[SerializedKeyValueDimensionRecord]] = pydantic.Field(default_factory=dict)
+
+    @classmethod
+    def from_record_sets(cls, record_sets: Iterable[DimensionRecordSet]) -> SerializableDimensionData:
+        """Construct from an iterable of `DimensionRecordSet` objects.
+
+        Parameters
+        ----------
+        record_sets : `~collections.abc.Iterable` [ `DimensionRecordSet` ]
+            Sets of dimension records, each for a different dimension element.
+
+        Returns
+        -------
+        model : `SerializableDimensionData`
+            New model instance.
+        """
+        return cls.model_construct(
+            root={record_set.element.name: record_set.serialize_records() for record_set in record_sets}
+        )
+
+    def make_deserializers(self, universe: DimensionUniverse) -> list[DimensionRecordSetDeserializer]:
+        """Make objects from this model that handle the second phase of
+        deserialization.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Definitions of all dimensions.
+
+        Returns
+        -------
+        deserializers : `list` [ `DimensionRecordSetDeserializer` ]
+            A list of deserializers objects, one for each dimension element.
+        """
+        return [
+            DimensionRecordSetDeserializer.from_raw(universe[element_name], raw_records)
+            for element_name, raw_records in self.root.items()
+        ]
+
+
+@dataclasses.dataclass
+class DimensionDataAttacher:
+    """A helper class for attaching dimension records to data IDs.
+
+    Parameters
+    ----------
+    records : `dict` [`str`, `DimensionRecordSet`], optional
+        Regular dimension record sets, keyed by dimension element name.  Not
+        copied, and may be modified in-place.
+    deserializers : `dict` [`str`, `DimensionRecordSetDeserializer`], optional
+        Partially-deserialized dimension records, keyed by dimension element
+        name.  Records will be fully deserialized on demand and then cached.
+    cache : `DimensionRecordCache`, optional
+        A cache of dimension records from a butler instance. If present, this
+        is assumed to have records for elements that are not in ``records`` and
+        ``deserializers``.
+    dimensions : `DimensionGroup`, optional
+        Dimensions for which empty record sets should be added when no other
+        source of records is given.  This allows data IDs with these dimensions
+        to have records attached by fetching them via the ``query`` argument
+        to the ``attach`` method, or by computing regions on the skypix
+        dimensions.
+    """
+
+    def __init__(
+        self,
+        *,
+        records: Iterable[DimensionRecordSet] = (),
+        deserializers: Iterable[DimensionRecordSetDeserializer] = (),
+        cache: DimensionRecordCache | None = None,
+        dimensions: DimensionGroup | None = None,
+    ):
+        self.records = {record_set.element.name: record_set for record_set in records}
+        self.deserializers = {}
+        for deserializer in deserializers:
+            self.deserializers[deserializer.element.name] = deserializer
+            if deserializer.element.name not in self.records:
+                self.records[deserializer.element.name] = DimensionRecordSet(deserializer.element)
+        self.cache = cache
+        if dimensions is not None:
+            for element in dimensions.elements:
+                if element not in self.records and (self.cache is None or element not in self.cache):
+                    self.records[element] = DimensionRecordSet(element, universe=dimensions.universe)
+
+    def attach(
+        self, dimensions: DimensionGroup, data_ids: Iterable[DataCoordinate], query: Query | None = None
+    ) -> list[DataCoordinate]:
+        """Attach dimension records to data IDs.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of all given data IDs.  All dimension elements must have
+            been referenced in at least one of the constructor arguments.
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Data IDs to attach dimension records to (not in place; data
+            coordinates are immutable).  Must have full values (i.e. implied
+            as well as required dimensions).
+        query : `.queries.Query`, optional
+            A butler query that can be used to look up missing dimension
+            records.  Records fetched via query are cached in the `records`
+            attribute.
+
+        Returns
+        -------
+        expanded : `list` [ `DataCoordinate` ]
+            Data IDs with dimension records attached, in the same order as the
+            original iterable.
+        """
+        incomplete: list[_InProgressRecordDicts] = []
+        lookup_helpers = [
+            _DimensionRecordLookupHelper.build(dimensions, element_name, self)
+            for element_name in dimensions.elements
+        ]
+        result: list[DataCoordinate] = []
+        for n, data_id in enumerate(data_ids):
+            records = _InProgressRecordDicts(n)
+            for lookup_helper in lookup_helpers:
+                lookup_helper.lookup(data_id.full_values, records)
+            if records.missing:
+                incomplete.append(records)
+            else:
+                data_id = data_id.expanded(records.done)
+            result.append(data_id)
+        if query is not None:
+            for lookup_helper in lookup_helpers:
+                lookup_helper.fetch_missing(query)
+            for records in incomplete:
+                for element, required_values in records.missing.items():
+                    records.done[element] = self.records[element].find_with_required_values(required_values)
+                result[records.index] = result[records.index].expanded(records.done)
+        else:
+            # Other logic branches also raise LookupError internally (e.g. in
+            # find_with_required_values); this one has a better message (i.e.
+            # about all failures, not just the first one) just because we
+            # happen to have any information at hand, while we don't in other
+            # branches.
+            for records in incomplete:
+                raise LookupError(
+                    f"No dimension record for element(s) {list(records.missing.keys())} "
+                    f"for data ID {result[records.index]}.  "
+                    f"{len(incomplete)} data ID{' was' if len(incomplete) == 1 else 's were'} "
+                    "missing at least one record."
+                )
+        return result
+
+
+@dataclasses.dataclass
+class _InProgressRecordDicts:
+    index: int  # Index of the data ID these are for in the result list.
+    done: dict[str, DimensionRecord] = dataclasses.field(default_factory=dict)
+    missing: dict[str, tuple[DataIdValue, ...]] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
+class _DimensionRecordLookupHelper:
+    # These are the indices of the dimension record's data ID's required_values
+    # tuple in the to-be-expanded data ID's full-values tuple.
+    indices: list[int]
+    record_set: DimensionRecordSet
+    missing: set[tuple[DataIdValue, ...]] = dataclasses.field(default_factory=set)
+
+    @property
+    def element(self) -> str:
+        return self.record_set.element.name
+
+    @staticmethod
+    def build(
+        dimensions: DimensionGroup, element: str, attacher: DimensionDataAttacher
+    ) -> _DimensionRecordLookupHelper:
+        indices = [
+            dimensions._data_coordinate_indices[k]
+            for k in dimensions.universe.elements[element].minimal_group.required
+        ]
+        if attacher.cache is not None and element in attacher.cache:
+            return _DimensionRecordLookupHelper(indices, attacher.cache[element])
+        elif element in dimensions.skypix:
+            return _SkyPixDimensionRecordLookupHelper(
+                indices,
+                attacher.records[element],
+                dimension=dimensions.universe.skypix_dimensions[element],
+            )
+        elif element in attacher.deserializers:
+            return _DeserializingDimensionRecordLookupHelper(
+                indices, attacher.records[element], deserializer=attacher.deserializers[element]
+            )
+        else:
+            return _DimensionRecordLookupHelper(indices, attacher.records[element])
+
+    def lookup(self, full_data_id_values: tuple[DataIdValue, ...], records: _InProgressRecordDicts) -> None:
+        required_values = tuple([full_data_id_values[i] for i in self.indices])
+        if (result := self.record_set._by_required_values.get(required_values)) is None:
+            result = self.fallback(required_values)
+            if result is not None:
+                self.record_set.add(result)
+                records.done[self.element] = result
+            else:
+                records.missing[self.element] = required_values
+                self.missing.add(required_values)
+        else:
+            records.done[self.element] = result
+
+    def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord | None:
+        return None
+
+    def fetch_missing(self, query: Query) -> None:
+        if self.missing:
+            self.record_set.update(
+                query.join_data_coordinates(
+                    [
+                        DataCoordinate.from_required_values(self.record_set.element.minimal_group, row)
+                        for row in self.missing
+                    ]
+                ).dimension_records(self.record_set.element.name)
+            )
+
+
+@dataclasses.dataclass
+class _DeserializingDimensionRecordLookupHelper(_DimensionRecordLookupHelper):
+    deserializer: DimensionRecordSetDeserializer = dataclasses.field(kw_only=True)
+
+    def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord | None:
+        try:
+            return self.deserializer[required_values]
+        except KeyError:
+            return None
+
+
+@dataclasses.dataclass
+class _SkyPixDimensionRecordLookupHelper(_DimensionRecordLookupHelper):
+    dimension: SkyPixDimension = dataclasses.field(kw_only=True)
+
+    def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord:
+        id = required_values[0]
+        return self.dimension.RecordClass(id=id, region=self.dimension.pixelization.pixel(id))

@@ -361,13 +361,16 @@ class DimensionGroup:  # numpydoc ignore=PR02
     def __gt__(self, other: DimensionGroup) -> bool:
         return self.names > other.names
 
-    def union(self, *others: DimensionGroup) -> DimensionGroup:
+    def union(*operands: DimensionGroup, universe: DimensionUniverse | None = None) -> DimensionGroup:
         """Construct a new group with all dimensions in any of the operands.
 
         Parameters
         ----------
-        *others : `DimensionGroup`
-            Other groups to join with.
+        *operands : `DimensionGroup`
+            Groups to union.
+        universe : `DimensionUniverse`, optional
+            Universe to use to create an empty universe when no operands are
+            provided (i.e. when this method is called on the class).
 
         Returns
         -------
@@ -381,8 +384,15 @@ class DimensionGroup:  # numpydoc ignore=PR02
         multiple dimensions are present, and those dependency dimensions could
         have been provided by different operands.
         """
-        names = set(self.names).union(*[other.names for other in others])
-        return DimensionGroup(self.universe, names)
+        names = set().union(*[operand.names for operand in operands])
+        if universe is None:
+            try:
+                universe = operands[0].universe
+            except IndexError:
+                raise TypeError(
+                    "'universe' must be provided when 'union' is called with an empty iterable."
+                ) from None
+        return DimensionGroup(universe, names)
 
     def intersection(self, *others: DimensionGroup) -> DimensionGroup:
         """Construct a new group with only dimensions in all of the operands.
