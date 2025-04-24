@@ -87,6 +87,9 @@ class _Visitor(TreeVisitor):
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
 
+    def visitGlobNode(self, expression, pattern, node):
+        return f"GLOB({expression}, {pattern})"
+
 
 class ParserYaccTestCase(unittest.TestCase):
     """A test case for ParserYacc"""
@@ -462,6 +465,32 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("Point(1, 1)")
         self.assertIsInstance(tree, exprTree.PointNode)
 
+    def testGlobNode(self):
+        """Tests for GLOB() function"""
+        parser = ParserYacc()
+
+        # Literal pattern and simple identifier.
+        tree = parser.parse("GLOB(group, '*')")
+        self.assertIsInstance(tree, exprTree.GlobNode)
+        self.assertIsInstance(tree.expression, exprTree.Identifier)
+        self.assertEqual(tree.expression.name, "group")
+        self.assertIsInstance(tree.pattern, exprTree.StringLiteral)
+        self.assertEqual(tree.pattern.value, "*")
+
+        # Bind name for pattern, dotted name for identifier, all in parens.
+        tree = parser.parse("glob((instrument.name), (:pattern))")
+        self.assertIsInstance(tree, exprTree.GlobNode)
+        self.assertIsInstance(tree.expression, exprTree.Identifier)
+        self.assertEqual(tree.expression.name, "instrument.name")
+        self.assertIsInstance(tree.pattern, exprTree.BindName)
+        self.assertEqual(tree.pattern.name, "pattern")
+
+        # Invalid argument types
+        with self.assertRaisesRegex(TypeError, r"glob\(\) first argument must be an identifier"):
+            parser.parse("glob('string', '*')")
+        with self.assertRaisesRegex(TypeError, r"glob\(\) second argument must be a string or a bind name"):
+            parser.parse("glob(group, id)")
+
     def testTupleNode(self):
         """Tests for tuple"""
         parser = ParserYacc()
@@ -588,6 +617,10 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("point(ra, :dec)")
         result = tree.visit(visitor)
         self.assertEqual(result, "POINT(ID(ra), :(dec))")
+
+        tree = parser.parse("glob(group, 'prefix#*')")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "GLOB(ID(group), S(prefix#*))")
 
     def testParseTimeStr(self):
         """Test for _parseTimeString method"""
