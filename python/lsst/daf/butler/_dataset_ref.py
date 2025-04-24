@@ -985,8 +985,7 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
         # Extract dimension record metadata if present.
         dimension_records = None
         if data_ids and len(compact_refs) == len(data_ids):
-            dimension_group = dimensions.pop()
-            dimension_group = dimension_group.union(*dimensions)
+            dimension_group = DimensionGroup.union(*dimensions, universe=universe)
 
             # Records were attached to all refs. Store them.
             extractor = DimensionDataExtractor.from_dimension_group(
