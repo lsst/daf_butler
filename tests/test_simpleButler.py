@@ -318,14 +318,17 @@ class SimpleButlerTests(TestCaseMixin):
             ({"raft": "A"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
             ({"raft": "A"}, {"instrument": "Cam1", "detector": "Ab", "physical_filter": "Cam1-G"}),
         )
-
+        butler._metrics.reset()
+        n_got = 0
         for dataId, kwds in variants:
             try:
                 flat_id, _ = butler.get("flat", dataId=dataId, collections=coll, **kwds)
+                n_got += 1
             except Exception as e:
                 e.add_note(f"dataId={dataId}, kwds={kwds}")
                 raise
             self.assertEqual(flat_id, flat2g.id, msg=f"DataId: {dataId}, kwds: {kwds}")
+        self.assertEqual(butler._metrics.n_get, n_got)
 
         # Check that bad combinations raise.
         variants = (

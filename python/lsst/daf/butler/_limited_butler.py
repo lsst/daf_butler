@@ -36,6 +36,7 @@ from typing import Any, ClassVar
 
 from lsst.resources import ResourcePath
 
+from ._butler_metrics import ButlerMetrics
 from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -138,7 +139,8 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        with self._metrics.instrument_get(log, msg="Retrieved dataset"):
+            return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
@@ -429,4 +431,9 @@ class LimitedButler(ABC):
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
+    """
+
+    _metrics: ButlerMetrics
+    """An object for recording metrics associated with this butler.
+    (`ButlerMetrics`)
     """

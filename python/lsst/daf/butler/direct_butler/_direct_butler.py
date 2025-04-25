@@ -58,6 +58,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from .._butler import Butler
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
+from .._butler_metrics import ButlerMetrics
 from .._collection_type import CollectionType
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetRef
@@ -143,12 +144,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         registry: SqlRegistry,
         datastore: Datastore,
         storageClasses: StorageClassFactory,
+        metrics: ButlerMetrics | None = None,
     ) -> DirectButler:
         self = cast(DirectButler, super().__new__(cls))
         self._config = config
         self._registry = registry
         self._datastore = datastore
         self.storageClasses = storageClasses
+        self._metrics = metrics if metrics is not None else ButlerMetrics()
 
         # For execution butler the datastore needs a special
         # dependency-inversion trick. This is not used by regular butler,
@@ -211,7 +214,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             storageClasses.addFromConfig(config)
 
             return DirectButler(
-                config=config, registry=registry, datastore=datastore, storageClasses=storageClasses
+                config=config,
+                registry=registry,
+                datastore=datastore,
+                storageClasses=storageClasses,
+                metrics=options.metrics,
             )
         except Exception:
             # Failures here usually mean that configuration is incomplete,
@@ -226,6 +233,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         run: str | None | EllipsisType = ...,
         inferDefaults: bool | EllipsisType = ...,
         dataId: dict[str, str] | EllipsisType = ...,
+        metrics: ButlerMetrics | None = None,
     ) -> DirectButler:
         # Docstring inherited
         defaults = self._registry.defaults.clone(collections, run, inferDefaults, dataId)
@@ -236,6 +244,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             config=self._config,
             datastore=self._datastore.clone(registry.getDatastoreBridgeManager()),
             storageClasses=self.storageClasses,
+            metrics=metrics,
         )
 
     GENERATION: ClassVar[int] = 3
@@ -991,36 +1000,43 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             _LOG.debug("Butler put direct: %s", datasetRefOrType)
             if run is not None:
                 warnings.warn("Run collection is not used for DatasetRef", stacklevel=3)
-            # If registry already has a dataset with the same dataset ID,
-            # dataset type and DataId, then _importDatasets will do nothing and
-            # just return an original ref. We have to raise in this case, there
-            # is a datastore check below for that.
-            self._registry._importDatasets([datasetRefOrType], expand=True)
-            # Before trying to write to the datastore check that it does not
-            # know this dataset. This is prone to races, of course.
-            if self._datastore.knows(datasetRefOrType):
-                raise ConflictingDefinitionError(f"Datastore already contains dataset: {datasetRefOrType}")
-            # Try to write dataset to the datastore, if it fails due to a race
-            # with another write, the content of stored data may be
-            # unpredictable.
-            try:
-                self._datastore.put(obj, datasetRefOrType, provenance=provenance)
-            except IntegrityError as e:
-                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
+
+            with self._metrics.instrument_put(_LOG, msg="Dataset put direct"):
+                # If registry already has a dataset with the same dataset ID,
+                # dataset type and DataId, then _importDatasets will do
+                # nothing and just return an original ref. We have to raise in
+                # this case, there is a datastore check below for that.
+                self._registry._importDatasets([datasetRefOrType], expand=True)
+                # Before trying to write to the datastore check that it does
+                # not know this dataset. This is prone to races, of course.
+                if self._datastore.knows(datasetRefOrType):
+                    raise ConflictingDefinitionError(
+                        f"Datastore already contains dataset: {datasetRefOrType}"
+                    )
+                # Try to write dataset to the datastore, if it fails due to a
+                # race with another write, the content of stored data may be
+                # unpredictable.
+                try:
+                    self._datastore.put(obj, datasetRefOrType, provenance=provenance)
+                except IntegrityError as e:
+                    raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
+
             return datasetRefOrType
 
         _LOG.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
 
-        # Handle dimension records in dataId
-        dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
+        with self._metrics.instrument_put(_LOG, msg="Dataset put with dataID"):
+            datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
 
-        # Add Registry Dataset entry.
-        dataId = self._registry.expandDataId(dataId, dimensions=datasetType.dimensions, **kwargs)
-        (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-        self._datastore.put(obj, ref, provenance=provenance)
+            # Handle dimension records in dataId
+            dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
+
+            # Add Registry Dataset entry.
+            dataId = self._registry.expandDataId(dataId, dimensions=datasetType.dimensions, **kwargs)
+            (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
+            self._datastore.put(obj, ref, provenance=provenance)
 
         return ref
 
@@ -1172,15 +1188,16 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         ``exposure`` is a temporal dimension.
         """
         _LOG.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        ref = self._findDatasetRef(
-            datasetRefOrType,
-            dataId,
-            collections=collections,
-            datastore_records=True,
-            timespan=timespan,
-            **kwargs,
-        )
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        with self._metrics.instrument_get(_LOG, msg="Retrieved dataset"):
+            ref = self._findDatasetRef(
+                datasetRefOrType,
+                dataId,
+                collections=collections,
+                datastore_records=True,
+                timespan=timespan,
+                **kwargs,
+            )
+            return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,

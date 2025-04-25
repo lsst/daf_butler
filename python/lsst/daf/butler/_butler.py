@@ -46,6 +46,7 @@ from lsst.utils.logging import getLogger
 from ._butler_collections import ButlerCollections
 from ._butler_config import ButlerConfig, ButlerType
 from ._butler_instance_options import ButlerInstanceOptions
+from ._butler_metrics import ButlerMetrics
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._exceptions import EmptyQueryResultError, InvalidQueryError
@@ -154,6 +155,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         writeable: bool | None = None,
         inferDefaults: bool = True,
         without_datastore: bool = False,
+        metrics: ButlerMetrics | None = None,
         **kwargs: Any,
     ) -> Butler:
         if cls is Butler:
@@ -165,6 +167,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 writeable=writeable,
                 inferDefaults=inferDefaults,
                 without_datastore=without_datastore,
+                metrics=metrics,
                 **kwargs,
             )
 
@@ -183,6 +186,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         writeable: bool | None = None,
         inferDefaults: bool = True,
         without_datastore: bool = False,
+        metrics: ButlerMetrics | None = None,
         **kwargs: Any,
     ) -> Butler:
         """Create butler instance from configuration.
@@ -230,6 +234,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         without_datastore : `bool`, optional
             If `True` do not attach a datastore to this butler. Any attempts
             to use a datastore will fail.
+        metrics : `ButlerMetrics` or `None`, optional
+            Metrics object to record butler usage statistics.
         **kwargs : `Any`
             Default data ID key-value pairs.  These may only identify
             "governor" dimensions like ``instrument`` and ``skymap``.
@@ -300,6 +306,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         # passing the "butler" parameter to its constructor.  This has
         # been moved out of the constructor into Butler.clone().
         butler = kwargs.pop("butler", None)
+        metrics = metrics if metrics is not None else ButlerMetrics()
         if butler is not None:
             if not isinstance(butler, Butler):
                 raise TypeError("'butler' parameter must be a Butler instance")
@@ -307,10 +314,17 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 raise TypeError(
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
-            return butler.clone(collections=collections, run=run, inferDefaults=inferDefaults, dataId=kwargs)
+            return butler.clone(
+                collections=collections, run=run, inferDefaults=inferDefaults, metrics=metrics, dataId=kwargs
+            )
 
         options = ButlerInstanceOptions(
-            collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
+            collections=collections,
+            run=run,
+            writeable=writeable,
+            inferDefaults=inferDefaults,
+            metrics=metrics,
+            kwargs=kwargs,
         )
 
         # Load the Butler configuration.  This may involve searching the
@@ -2123,6 +2137,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         run: str | None | EllipsisType = ...,
         inferDefaults: bool | EllipsisType = ...,
         dataId: dict[str, str] | EllipsisType = ...,
+        metrics: ButlerMetrics | None = None,
     ) -> Butler:
         """Return a new Butler instance connected to the same repository
         as this one, optionally overriding ``collections``, ``run``,
@@ -2142,5 +2157,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         dataId : `str`
             Same as ``kwargs`` passed to the constructor.  If omitted, copies
             values from original object.
+        metrics : `ButlerMetrics` or `None`, optional
+            Metrics object to record butler statistics.
         """
         raise NotImplementedError()
