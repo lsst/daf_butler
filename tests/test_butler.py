@@ -2052,6 +2052,12 @@ class FileDatastoreButlerTests(ButlerTests):
         deferred.get()
         self.assertEqual(metrics.n_get, 3)
 
+        with butler.record_metrics() as new:
+            butler.put(data, datasetType, visit=425, instrument="DummyCamComp")
+            butler.get(data_ref)
+        self.assertEqual(new.n_get, 1)
+        self.assertEqual(new.n_put, 1)
+
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""

@@ -31,7 +31,8 @@ __all__ = ("LimitedButler",)
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import Any, ClassVar
 
 from lsst.resources import ResourcePath
@@ -416,6 +417,30 @@ class LimitedButler(ABC):
             or the conditions for ``purge=True`` were not met.
         """
         raise NotImplementedError()
+
+    @contextmanager
+    def record_metrics(self, metrics: ButlerMetrics | None = None) -> Iterator[ButlerMetrics]:
+        """Enable new metrics recording context.
+
+        Parameters
+        ----------
+        metrics : `lsst.daf.butler.ButlerMetrics`
+            Optional override metrics object. If given, this will be the
+            same object returned by the context manager.
+
+        Yields
+        ------
+        metrics : `lsst.daf.butler.ButlerMetrics`
+            Metrics recorded within this context. This temporarily replaces
+            any existing metrics object associated with this butler.
+        """
+        old_metrics = self._metrics
+        new_metrics = metrics if metrics is not None else ButlerMetrics()
+        try:
+            self._metrics = new_metrics
+            yield new_metrics
+        finally:
+            self._metrics = old_metrics
 
     @property
     @abstractmethod

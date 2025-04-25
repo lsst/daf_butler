@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Iterator, Sequence
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from types import EllipsisType
 from typing import Any, TextIO, cast
 
@@ -88,6 +88,15 @@ class HybridButler(Butler):
 
     def transaction(self) -> AbstractContextManager[None]:
         return self._direct_butler.transaction()
+
+    @contextmanager
+    def record_metrics(self, metrics: ButlerMetrics | None = None) -> Iterator[ButlerMetrics]:
+        if metrics is None:
+            # Share same metrics in both butlers.
+            metrics = ButlerMetrics()
+
+        with self._direct_butler.record_metrics(metrics), self._remote_butler.record_metrics(metrics):
+            yield metrics
 
     def put(
         self,
