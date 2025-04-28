@@ -456,7 +456,7 @@ class UUIDArrowScalar(pa.ExtensionScalar):
     instance.
     """
 
-    def as_py(self) -> uuid.UUID:
+    def as_py(self, **_unused: Any) -> uuid.UUID:
         return uuid.UUID(bytes=self.value.as_py())
 
 
@@ -485,7 +485,7 @@ class RegionArrowScalar(pa.ExtensionScalar):
     Use the standard `as_py` method to convert to an actual region.
     """
 
-    def as_py(self) -> Region:
+    def as_py(self, **_unused: Any) -> Region:
         return Region.decode(self.value.as_py())
 
 
@@ -514,7 +514,7 @@ class TimespanArrowScalar(pa.ExtensionScalar):
     Use the standard `as_py` method to convert to an actual timespan.
     """
 
-    def as_py(self) -> Timespan | None:
+    def as_py(self, **_unused: Any) -> Timespan | None:
         if self.value is None:
             return None
         else:
@@ -552,7 +552,7 @@ class DateTimeArrowScalar(pa.ExtensionScalar):
     instance.
     """
 
-    def as_py(self) -> astropy.time.Time:
+    def as_py(self, **_unused: Any) -> astropy.time.Time:
         return TimeConverter().nsec_to_astropy(self.value.as_py())
 
 
