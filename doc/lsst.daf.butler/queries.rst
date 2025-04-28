@@ -354,7 +354,7 @@ consists of an identifier followed by zero or more comma-separated arguments
 enclosed in parentheses (e.g. ``func(1, 2, 3)``). An argument to a function
 can be any expression. Names of the functions are not case-sensitive.
 
-Presently there only few functions implemented in query language:
+Presently the following functions are implemented in the query language:
 
 - ``POINT(ra, dec)`` - function which declares (or returns) sky coordinates
   similarly to ADQL syntax.
