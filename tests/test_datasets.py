@@ -45,6 +45,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
+from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.resources import ResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -745,6 +746,41 @@ class DatasetRefTestCase(unittest.TestCase):
         ref2 = DatasetRef(self.datasetType, self.dataId, run="somerun2")
         with self.assertRaises(ValueError):
             FileDataset(path="other.yaml", refs=[ref, ref2])
+
+        serialized = file_dataset.to_simple()
+        self.assertEqual(serialized.path, "something.yaml")
+        self.assertEqual(len(serialized.refs), 1)
+        serialized_ref = serialized.refs[ref.id]
+        self.assertEqual(serialized_ref.run, ref.run)
+        self.assertEqual(serialized_ref.dataset_type_name, self.datasetType.name)
+        self.assertEqual(serialized_ref.data_id, dict(ref.dataId.mapping))
+
+        def load_dataset_type(name: str) -> DatasetType:
+            self.assertEqual(name, ref.datasetType.name)
+            return self.datasetType
+
+        deserialized = file_dataset.from_simple(
+            serialized, universe=ref.dimensions.universe, dataset_type_loader=load_dataset_type
+        )
+        self.assertEqual(deserialized.formatter, file_dataset.formatter)
+        self.assertEqual(deserialized.refs, file_dataset.refs)
+        self.assertEqual(deserialized.path, file_dataset.path)
+
+        file_dataset.formatter = "lsst.daf.butler.formatters.json.JsonFormatter"
+        file_dataset_from_string_formatter = FileDataset.from_simple(
+            file_dataset.to_simple(), dataset_type_loader=load_dataset_type, universe=ref.dimensions.universe
+        )
+        self.assertEqual(
+            file_dataset_from_string_formatter.formatter, "lsst.daf.butler.formatters.json.JsonFormatter"
+        )
+
+        file_dataset.formatter = YamlFormatter
+        file_dataset_from_class_formatter = FileDataset.from_simple(
+            file_dataset.to_simple(), dataset_type_loader=load_dataset_type, universe=ref.dimensions.universe
+        )
+        self.assertEqual(
+            file_dataset_from_class_formatter.formatter, "lsst.daf.butler.formatters.yaml.YamlFormatter"
+        )
 
     def test_container(self) -> None:
         ref1 = DatasetRef(self.datasetType, self.dataId, run="somerun")

@@ -27,15 +27,21 @@
 
 from __future__ import annotations
 
-__all__ = ["FileDataset"]
+__all__ = ("FileDataset", "SerializedFileDataset")
 
+import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias
+
+import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from ._dataset_ref import DatasetRef
+from ._dataset_ref import DatasetRef, MinimalistSerializableDatasetRef
+from ._dataset_type import DatasetType
 from ._formatter import FormatterParameter
+from .dimensions import DimensionUniverse
 
 
 @dataclass
@@ -87,3 +93,72 @@ class FileDataset:
         if not isinstance(other, type(self)):
             return NotImplemented
         return str(self.path) < str(other.path)
+
+    def to_simple(self) -> SerializedFileDataset:
+        """
+        Convert this instance to a simplified, JSON-serializable object.
+
+        Returns
+        -------
+        serialized : `SerializedFileDataset`
+            Serializable representation of this `FileDataset` instance.
+        """
+        if self.formatter is None:
+            formatter = None
+        elif isinstance(self.formatter, str):
+            formatter = self.formatter
+        else:
+            formatter = self.formatter.name()
+
+        refs = {ref.id: MinimalistSerializableDatasetRef.from_dataset_ref(ref) for ref in self.refs}
+
+        return SerializedFileDataset(
+            refs=refs,
+            path=str(self.path),
+            formatter=formatter,
+        )
+
+    @staticmethod
+    def from_simple(
+        dataset: SerializedFileDataset, *, dataset_type_loader: DatasetTypeLoader, universe: DimensionUniverse
+    ) -> FileDataset:
+        """
+        Deserialize a `SerializedFileDataset` into a `FileDataset`.
+
+        Parameters
+        ----------
+        dataset : `SerializedFileDataset`
+            Object to deserialize.
+        dataset_type_loader : `Callable` [[ `str` ], `DatasetType` ]
+            Function that takes a string dataset type name as its
+            only parameter, and returns an instance of `DatasetType`.
+            Used to deserialize the `DatasetRef` instances contained
+            in the serialized `FileDataset`.
+        universe : `DimensionUniverse`
+            Dimension universe associated with the `Butler` instance that
+            created the serialized `FileDataset` instance.
+
+        Returns
+        -------
+        file_dataset : `FileDataset`
+            Deserialized equivalent of the input dataset.
+        """
+        refs = [
+            ref.to_dataset_ref(id, universe=universe, dataset_type=dataset_type_loader(ref.dataset_type_name))
+            for id, ref in dataset.refs.items()
+        ]
+        return FileDataset(path=dataset.path, refs=refs, formatter=dataset.formatter)
+
+
+DatasetTypeLoader: TypeAlias = Callable[[str], DatasetType]
+"""Type signature for a function that takes a string dataset type name as its
+only parameter, and returns an instance of `DatasetType`.
+"""
+
+
+class SerializedFileDataset(pydantic.BaseModel):
+    """Serializable format of `FileDataset` object."""
+
+    refs: dict[uuid.UUID, MinimalistSerializableDatasetRef]
+    path: str
+    formatter: str | None = None

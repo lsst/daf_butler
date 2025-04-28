@@ -910,6 +910,62 @@ class MinimalistSerializableDatasetRef(pydantic.BaseModel):
     data_id: SerializedDataId
     """Data coordinate of this dataset."""
 
+    def to_dataset_ref(
+        self,
+        id: DatasetId,
+        *,
+        dataset_type: DatasetType,
+        universe: DimensionUniverse,
+        attacher: DimensionDataAttacher | None = None,
+    ) -> DatasetRef:
+        """Convert serialized object to a `DatasetRef`.
+
+        Parameters
+        ----------
+        id : `DatasetId`
+            UUID identifying the dataset.
+        dataset_type : `DatasetType`
+            `DatasetType` record corresponding to the dataset type name in the
+            serialized object.
+        universe : `DimensionUniverse`
+            Dimension universe for the dataset.
+        attacher : `DimensionDataAttacher`, optional
+            If provided, will be used to add dimension records to the
+            deserialized `DatasetRef` instance.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            The deserialized object.
+        """
+        assert dataset_type.name == self.dataset_type_name, (
+            "Given DatasetType does not match the serialized dataset type name"
+        )
+        simple_data_id = SerializedDataCoordinate(dataId=self.data_id)
+        data_id = DataCoordinate.from_simple(simple=simple_data_id, universe=universe)
+        if attacher:
+            data_ids = attacher.attach(dataset_type.dimensions, [data_id])
+            data_id = data_ids[0]
+        return DatasetRef(
+            id=id,
+            run=self.run,
+            datasetType=dataset_type,
+            dataId=data_id,
+        )
+
+    @staticmethod
+    def from_dataset_ref(ref: DatasetRef) -> MinimalistSerializableDatasetRef:
+        """Serialize a ``DatasetRef` to a simplified format.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            `DatasetRef` object to serialize.
+        """
+        return MinimalistSerializableDatasetRef(
+            dataset_type_name=ref.datasetType.name, run=ref.run, data_id=dict(ref.dataId.mapping)
+        )
+
 
 class SerializedDatasetRefContainer(pydantic.BaseModel):
     """Serializable model for a collection of DatasetRef.
@@ -966,18 +1022,11 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
         data_ids: list[DataCoordinate] = []
         dimensions: list[DimensionGroup] = []
         for ref in refs:
-            simple_ref = ref.to_simple()
-            dataset_type = simple_ref.datasetType
-            assert dataset_type is not None  # For mypy
             if universe is None:
                 universe = ref.datasetType.dimensions.universe
-            if (name := dataset_type.name) not in dataset_types:
-                dataset_types[name] = dataset_type
-            data_id = simple_ref.dataId
-            assert data_id is not None  # For mypy
-            compact_refs[simple_ref.id] = MinimalistSerializableDatasetRef(
-                dataset_type_name=name, run=simple_ref.run, data_id=data_id.dataId
-            )
+            if (name := ref.datasetType.name) not in dataset_types:
+                dataset_types[name] = ref.datasetType.to_simple()
+            compact_refs[ref.id] = MinimalistSerializableDatasetRef.from_dataset_ref(ref)
             if ref.dataId.hasRecords():
                 dimensions.append(ref.datasetType.dimensions)
                 data_ids.append(ref.dataId)
@@ -1057,17 +1106,11 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
 
         refs: list[DatasetRef] = []
         for id_, minimal in self.compact_refs.items():
-            dataset_type = dataset_types[minimal.dataset_type_name]
-            simple_data_id = SerializedDataCoordinate(dataId=minimal.data_id)
-            data_id = DataCoordinate.from_simple(simple=simple_data_id, universe=universe)
-            if attacher:
-                data_ids = attacher.attach(dataset_type.dimensions, [data_id])
-                data_id = data_ids[0]
-            ref = DatasetRef(
-                id=id_,
-                run=minimal.run,
-                datasetType=dataset_type,
-                dataId=data_id,
+            ref = minimal.to_dataset_ref(
+                id_,
+                dataset_type=dataset_types[minimal.dataset_type_name],
+                universe=universe,
+                attacher=attacher,
             )
             refs.append(ref)
         return refs
