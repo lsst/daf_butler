@@ -156,6 +156,15 @@ class SqlColumnVisitor(
                     f"Unexpected types {a.column_type},{b.column_type} in overlaps operator."
                 )
 
+        if operator == "glob":
+            # Second operand must be a string literal.
+            if isinstance(b, qt._column_literal.StringColumnLiteral):
+                pattern = b.value
+                expression = self.expect_scalar(a)
+                return self._driver.db.glob_expression(expression, pattern)
+            else:
+                raise AssertionError(f"Unexpected pattern type ({type(b)}) in glob operator.")
+
         lhs = self.expect_scalar(a)
         rhs = self.expect_scalar(b)
         # Special case to handle awkward situation where ingest_date is not

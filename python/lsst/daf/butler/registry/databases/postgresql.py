@@ -397,6 +397,56 @@ class PostgresqlDatabase(Database):
         # would become a String column in the output.
         return sqlalchemy.cast(sqlalchemy.func.any_value(column), column.type)
 
+    def glob_expression(
+        self, expression: sqlalchemy.ColumnElement[Any], pattern: str
+    ) -> sqlalchemy.ColumnElement[bool]:
+        # Docstring inherited.
+        # With Postgres we can use LIKE as it is case-sensitive, we only need
+        # to translate our simple glob language to LIKE patterns, escaping few
+        # things. Also we can try to optimize special cases when we can use
+        # ``starts_with()`` function or "*" pattern. ``starts_with()`` in
+        # Postgres14 does not use btree index, and LIKE with a constant prefix
+        # is using index, so we may not need ``starts_with()`` after all.
+        if pattern == "*":
+            # Simple case.
+            return sqlalchemy.literal(True)
+
+        def _escape(pattern: str) -> str:
+            """Transform glob pattern string into LIKE pattern."""
+            tokens = []
+            escape = ""
+            for char in pattern:
+                if not escape:
+                    if char == "\\":
+                        escape = char
+                    elif char in "_%":
+                        # Escape special SQL characters.
+                        tokens.append(f"\\{char}")
+                    elif char == "*":
+                        tokens.append("%")
+                    elif char == "?":
+                        tokens.append("_")
+                    else:
+                        tokens.append(char)
+                else:
+                    if char == "\\":
+                        # Two backslashes become one.
+                        tokens.append(char)
+                    elif char in "*?":
+                        # Handle escaped wildcards.
+                        tokens.append(f"{char}")
+                    else:
+                        # Copy both backslash and character.
+                        tokens.append(escape)
+                        tokens.append(char)
+                    escape = ""
+            # Trailing backslash added to pattern.
+            tokens.append(escape)
+            return "".join(tokens)
+
+        pattern = _escape(pattern)
+        return expression.op("LIKE")(sqlalchemy.literal(pattern))
+
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
     """A single-column `Timespan` representation usable only with

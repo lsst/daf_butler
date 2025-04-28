@@ -421,6 +421,52 @@ class SqliteDatabase(Database):
         # arbitrary value picked if there is more than one.
         return column
 
+    def glob_expression(
+        self, expression: sqlalchemy.ColumnElement[Any], pattern: str
+    ) -> sqlalchemy.ColumnElement[bool]:
+        # Docstring inherited.
+        # SQLite GLOB operator is preferrable in our case because it is
+        # case-sensitive. Our glob syntax supports only * and ?, while GLOB
+        # also supports bracket expressions. While we do not expect brackets
+        # in patters, we want to convert them to regular characters. Note that
+        # escaping does not work in GLOB, so we want to replace ``\*`` with
+        # ``*`` and similarly for ``\?``.
+        if pattern == "*":
+            # Simple case.
+            return sqlalchemy.literal(True)
+
+        def _escape(pattern: str) -> str:
+            """Transform our glob pattern into SQLite pattern."""
+            tokens = []
+            escape = ""
+            for char in pattern:
+                if not escape:
+                    if char == "\\":
+                        escape = char
+                    elif char in "[]":
+                        # Handle brackets.
+                        tokens.append(f"[{char}]")
+                    else:
+                        tokens.append(char)
+                else:
+                    if char == "\\":
+                        # Two backslashes become one.
+                        tokens.append(char)
+                    elif char in "[]*?":
+                        # Handle escaped brackets and wildcards.
+                        tokens.append(f"[{char}]")
+                    else:
+                        # Copy both backslash and character.
+                        tokens.append(escape)
+                        tokens.append(char)
+                    escape = ""
+            # Trailing backslash added to pattern.
+            tokens.append(escape)
+            return "".join(tokens)
+
+        pattern = _escape(pattern)
+        return expression.op("GLOB")(sqlalchemy.literal(pattern))
+
     filename: str | None
     """Name of the file this database is connected to (`str` or `None`).
 

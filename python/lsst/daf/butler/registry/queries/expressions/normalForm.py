@@ -1093,6 +1093,12 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitPointNode
         raise NotImplementedError("POINT() function is not supported yet")
 
+    def visitGlobNode(
+        self, expression: TransformationWrapper, pattern: TransformationWrapper, node: Node
+    ) -> TransformationWrapper:
+        # Docstring inherited from base class
+        return Opaque(node, PrecedenceTier.TOKEN)
+
 
 class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
     """A `NormalFormVisitor` that reconstructs complete expression tree.

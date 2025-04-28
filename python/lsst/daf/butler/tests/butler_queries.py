@@ -2408,6 +2408,57 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             butler.query_dimension_records("detector", instrument="Cam1", detector=2),
         )
 
+    def test_glob_expression(self) -> None:
+        """Test GLOB() function in user expressions."""
+        butler = self.make_butler("base.yaml")
+
+        tests = (
+            ("full_name", "*", 4),
+            ("full_name", "\\*", 0),
+            ("full_name", "A*", 2),
+            ("full_name", "A?", 2),
+            ("full_name", "??", 4),
+            ("full_name", "*a", 2),
+            ("full_name", "A[ab]", 0),
+            ("purpose", "*EN?E", 3),
+            ("purpose", "\\*CIENC\\*", 0),
+            ("full_name", "%", 0),
+            ("full_name", "__", 0),
+            ("full_name", "a", 0),
+            ("full_name", "", 0),
+        )
+
+        for column, pattern, count in tests:
+            # Pattern as a literal string.
+            records = butler.query_dimension_records(
+                "detector", instrument="Cam1", where=f"GLOB({column}, '{pattern}')", explain=False
+            )
+            self.assertEqual(len(records), count)
+
+            # Check that bind works with pattern.
+            records = butler.query_dimension_records(
+                "detector",
+                instrument="Cam1",
+                where=f"GLOB({column}, :pattern)",
+                explain=False,
+                bind={"pattern": pattern},
+            )
+            self.assertEqual(len(records), count)
+
+        # Check that glob works on dimension itself, not just metadata.
+        records = butler.query_dimension_records(
+            "detector", where="GLOB(instrument, '?a*1') AND GLOB(full_name, '*')"
+        )
+        self.assertEqual(len(records), 4)
+
+        # Check exceptions.
+        with self.assertRaisesRegex(InvalidQueryError, "first argument must be a string column"):
+            butler.query_dimension_records("detector", instrument="Cam1", where="GLOB(detector, '*')")
+
+        # This ofails at parser level because parser expects string literal.
+        with self.assertRaisesRegex(InvalidQueryError, "Failed to parse expression"):
+            butler.query_dimension_records("detector", instrument="Cam1", where="GLOB(full_name, full_name)")
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

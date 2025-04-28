@@ -1920,6 +1920,27 @@ class Database(ABC):
         """
         return 1000
 
+    @abstractmethod
+    def glob_expression(
+        self, expression: sqlalchemy.ColumnElement[Any], pattern: str
+    ) -> sqlalchemy.ColumnElement[bool]:
+        """Produce boolean expression for expression match against glob-like
+        pattern.
+
+        Parameters
+        ----------
+        expression : `sqlalchemy.ColumnElement`
+            Column expression that evaluates to string.
+        pattern : `str`
+            GLob pattern string.
+
+        Returns
+        -------
+        glob : `sqlalchemy.ColumnElement`
+            Boolean expression that matches ``expression`` against ``pattern``.
+        """
+        raise NotImplementedError()
+
     @property
     @abstractmethod
     def has_distinct_on(self) -> bool:

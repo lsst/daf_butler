@@ -290,6 +290,19 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
             f"Unary operator {operator!r} is not valid for operand of type {operand.column_type} in {node!s}."
         )
 
+    def visitGlobNode(
+        self, expression: _VisitorResult, pattern: _VisitorResult, node: Node
+    ) -> _VisitorResult:
+        # Docstring inherited.
+        if isinstance(expression, _ColExpr) and expression.value.is_column_reference:
+            if expression.value.column_type != "string":
+                raise InvalidQueryError(f"glob() first argument must be a string column (in node {node})")
+            column_ref = expression.value
+        if not (isinstance(pattern, _ColExpr) and pattern.value.expression_type == "string"):
+            raise InvalidQueryError(f"glob() second argument must be a string (in node {node})")
+
+        return Predicate.compare(a=column_ref, b=pattern.value, operator="glob")
+
 
 def _make_literal(value: LiteralValue) -> _ColExpr:
     return _ColExpr(make_column_literal(value))

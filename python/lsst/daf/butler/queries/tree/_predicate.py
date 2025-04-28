@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from ._column_set import ColumnSet
     from ._query_tree import QueryTree
 
-ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
+ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps", "glob"]
 
 
 _L = TypeVar("_L")
@@ -564,6 +564,8 @@ class Comparison(PredicateLeafBase):
                 case ("<" | ">" | ">=" | "<=", "int" | "string" | "float" | "datetime"):
                     pass
                 case ("overlaps", "region" | "timespan"):
+                    pass
+                case ("glob", "string"):
                     pass
                 case _:
                     raise InvalidQueryError(
