@@ -33,7 +33,6 @@ import logging
 import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
-from dataclasses import dataclass
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
@@ -369,9 +368,15 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
+        with self._cache.access() as cache:
+            if (cached_value := cache.dataset_types.get(name)) is not None:
+                return cached_value
+
         response = self._connection.get(f"dataset_type/{quote_path_variable(name)}")
         model = parse_model(response, GetDatasetTypeResponseModel)
-        return DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
+        value = DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
+        with self._cache.access() as cache:
+            return cache.dataset_types.setdefault(name, value)
 
     def get_dataset(
         self,
@@ -726,9 +731,10 @@ def _to_uuid_string(id: uuid.UUID | str) -> str:
     return str(uuid.UUID(str(id)))
 
 
-@dataclass
 class _RemoteButlerCacheData:
-    dimensions: DimensionUniverse | None = None
+    def __init__(self) -> None:
+        self.dimensions: DimensionUniverse | None = None
+        self.dataset_types: dict[str, DatasetType] = {}
 
 
 class RemoteButlerCache(LockedObject[_RemoteButlerCacheData]):
