@@ -223,6 +223,16 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ),
                 ids=[3, 4],
             )
+            self.check_detector_records(
+                results.where(_x.detector.full_name.glob("B?"), instrument="Cam1"), [3, 4]
+            )
+            self.check_detector_records(
+                results.where(_x.detector.full_name.glob("*a"), instrument="Cam1"), [1, 3]
+            )
+
+            # Test incorrect type for glob() parameter.
+            with self.assertRaises(InvalidQueryError):
+                results.where(_x.detector.full_name.glob(1), instrument="Cam1")  # type: ignore[arg-type]
 
     def test_simple_data_coordinate_query(self) -> None:
         butler = self.make_butler("base.yaml")
