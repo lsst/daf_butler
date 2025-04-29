@@ -273,6 +273,13 @@ class InspectionVisitorTestCase(unittest.TestCase):
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
+        tree = parser.parse("instrument = 'LSST' AND GLOB(group, 'prefix#*')")
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions, {"instrument", "group"})
+        self.assertFalse(summary.columns)
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
     def test_bind(self):
         """Test for simple expressions with binds."""
         universe = DimensionUniverse()

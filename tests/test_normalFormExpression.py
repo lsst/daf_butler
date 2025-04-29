@@ -121,6 +121,9 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     def visitTupleNode(self, items: tuple, node: Node) -> bool:
         raise NotImplementedError("Not implemented for bool operations")
 
+    def visitGlobNode(self, expression: str, pattern: str, node: Node) -> bool:
+        raise NotImplementedError("Not implemented for bool operations")
+
 
 class NormalFormExpressionTestCase(unittest.TestCase):
     """Tests for `NormalFormExpression` and its helper classes."""

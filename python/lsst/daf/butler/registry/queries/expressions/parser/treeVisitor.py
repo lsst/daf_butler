@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 if TYPE_CHECKING:
     import astropy.time
 
-    from .exprTree import Node, PointNode, RangeLiteral
+    from .exprTree import GlobNode, Node, PointNode, RangeLiteral
 
 
 T = TypeVar("T")
@@ -230,12 +230,12 @@ class TreeVisitor(Generic[T], ABC):
 
         Notes
         -----
-        For now we only have to support one specific function ``POINT()``
-        and for that function we define special node type `PointNode`.
-        `FunctionCall` node type represents a generic function and regular
-        visitors do not handle generic function. This non-abstract method
-        is a common implementation for those visitors which raises an
-        exception.
+        For now we only have to support a small set of functions, and for those
+        functions we define special node types (e.g. `PointNode`, `GlobNode`)
+        and special visit methods. `FunctionCall` node type represents a
+        generic function and regular visitors do not handle generic function.
+        This non-abstract method is a common implementation for those visitors
+        which raises an exception.
         """
         raise ValueError(f"Unknown function '{name}' in expression")
 
@@ -249,6 +249,20 @@ class TreeVisitor(Generic[T], ABC):
             Representation of 'ra' and 'dec' values, objects returned by
             methods of this class as a result of transformation of function
             arguments.
-        node : `Node`
+        node : `PointNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitGlobNode(self, expression: T, pattern: T, node: GlobNode) -> T:
+        """Visit GlobNode node.
+
+        Parameters
+        ----------
+        expression, pattern : `object`
+            Representation of 'pattern' and 'expression' values, objects
+            returned by methods of this class as a result of transformation of
+            function arguments.
+        node : `GlobNode`
             Corresponding tree node, mostly useful for diagnostics.
         """

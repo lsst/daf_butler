@@ -493,3 +493,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         raise ExpressionTypeError(
             f"Unary operator {operator!r} is not valid for operand of type {operand.dtype!s} in {node!s}."
         )
+
+    def visitGlobNode(self, expression: VisitorResult, pattern: VisitorResult, node: Node) -> VisitorResult:
+        # Docstring inherited.
+        raise NotImplementedError("GLOB() function is not supported yet")

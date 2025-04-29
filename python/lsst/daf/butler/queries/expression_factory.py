@@ -237,6 +237,22 @@ class ScalarExpressionProxy(ExpressionProxy):
         """
         return tree.Predicate.in_query(self._expression, column._expression, query._tree)
 
+    def glob(self, pattern: str) -> tree.Predicate:
+        """Return a boolean expression that matches this expression against
+        pattern.
+
+        Parameters
+        ----------
+        pattern : `str`
+            Pattern to use for matching.
+
+        Returns
+        -------
+        predicate : `tree.Predicate`
+            Boolean expression object.
+        """
+        return self._make_comparison(pattern, "glob")
+
 
 class ResolvedScalarExpressionProxy(ScalarExpressionProxy):
     """A `ScalarExpressionProxy` backed by an actual expression.

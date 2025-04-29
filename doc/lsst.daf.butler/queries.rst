@@ -229,7 +229,7 @@ Comparison operators
 
 Language supports set of regular comparison operators: ``=``, ``!=``, ``<``,
 ``<=``, ``>``, ``>=``. This can be used on operands that evaluate to a numeric
-values or timestamps.
+values, timestamps, or strings.
 
 .. note :: The equality comparison operator is a single ``=`` like in SQL, not
     double ``==`` like in Python or C++.
@@ -272,7 +272,7 @@ as are these:
 
 Another usage of ``IN`` operator is for checking whether a timestamp or a time
 range is contained wholly in other time range. Time range in this case can be
-specified as a tuple of two time literals or identifers each representing a
+specified as a tuple of two time literals or identifiers each representing a
 timestamp, or as a single identifier representing a time range. In case a
 single identifier appears on the right side of ``IN`` it has to be enclosed
 in parentheses.
@@ -352,11 +352,17 @@ Function call
 Function call syntax is similar to other languages, expression for call
 consists of an identifier followed by zero or more comma-separated arguments
 enclosed in parentheses (e.g. ``func(1, 2, 3)``). An argument to a function
-can be any expression.
+can be any expression. Names of the functions are not case-sensitive.
 
-Presently there only one construct that uses this syntax, ``POINT(ra, dec)``
-is function which declares (or returns) sky coordinates similarly to ADQL
-syntax. Name of the ``POINT`` function is not case-sensitive.
+Presently the following functions are implemented in the query language:
+
+- ``POINT(ra, dec)`` - function which declares (or returns) sky coordinates
+  similarly to ADQL syntax.
+- ``GLOB(expression, pattern)`` - performs case-sensitive match of a string
+  ``expression`` against ``pattern``. Pattern can include ``*`` and ``?``
+  meta-characters, matching any number of characters or a single character
+  respectfully. All other characters in pattern are matched literally, and
+  whole expression string has to match for ``GLOB()`` to return ``True``.
 
 
 .. _time-literals-syntax:

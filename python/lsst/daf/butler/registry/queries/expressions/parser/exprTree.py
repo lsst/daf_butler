@@ -73,6 +73,14 @@ if TYPE_CHECKING:
 
     from .treeVisitor import TreeVisitor
 
+
+def _strip_parens(expression: Node) -> Node:
+    """Strip all parentheses from an expression."""
+    if isinstance(expression, Parens):
+        return _strip_parens(expression.expr)
+    return expression
+
+
 # ------------------------
 #  Exported definitions --
 # ------------------------
@@ -447,6 +455,34 @@ class PointNode(Node):
         return f"POINT({self.ra}, {self.dec})"
 
 
+class GlobNode(Node):
+    """Node representing a call to GLOB(pattern, expression) function.
+
+    Parameters
+    ----------
+    expression : `Node`
+        Node representing expression matched against pattern, typically a
+        column-like thing.
+    pattern : `Node`
+        Node representing a pattern, this must be either a `StringLiteral` or
+        `BindName`.
+    """
+
+    def __init__(self, expression: Identifier, pattern: StringLiteral | BindName):
+        Node.__init__(self, (expression, pattern))
+        self.expression = expression
+        self.pattern = pattern
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        expression = self.expression.visit(visitor)
+        pattern = self.pattern.visit(visitor)
+        return visitor.visitGlobNode(expression, pattern, self)
+
+    def __str__(self) -> str:
+        return f"GLOB({self.expression}, {self.pattern})"
+
+
 def function_call(function: str, args: list[Node]) -> Node:
     """Return node representing function calls.
 
@@ -460,16 +496,26 @@ def function_call(function: str, args: list[Node]) -> Node:
     Notes
     -----
     Our parser supports arbitrary functions with arbitrary list of parameters.
-    For now the main purpose of the syntax is to support POINT(ra, dec)
-    construct, and to simplify implementation of visitors we define special
-    type of node for that. This method makes `PointNode` instance for that
-    special function call and generic `FunctionCall` instance for all other
-    functions.
+    For now we only need a small set of functions, and to simplify
+    implementation of visitors we define special type of node for each
+    supported function. This method makes a special `Node` instance for those
+    supported functions, and generic `FunctionCall` instance for all other
+    functions. Tree visitors will most likely raise an error when visiting
+    `FunctionCall` nodes.
     """
     if function.upper() == "POINT":
         if len(args) != 2:
             raise ValueError("POINT requires two arguments (ra, dec)")
         return PointNode(*args)
+    elif function.upper() == "GLOB":
+        if len(args) != 2:
+            raise ValueError("GLOB requires two arguments (pattern, expression)")
+        expression, pattern = (_strip_parens(arg) for arg in args)
+        if not isinstance(expression, Identifier):
+            raise TypeError("glob() first argument must be an identifier")
+        if not isinstance(pattern, StringLiteral | BindName):
+            raise TypeError("glob() second argument must be a string or a bind name (prefixed with colon)")
+        return GlobNode(expression, pattern)
     else:
         # generic function call
         return FunctionCall(function, args)
