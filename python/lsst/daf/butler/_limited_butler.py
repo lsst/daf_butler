@@ -31,11 +31,13 @@ __all__ = ("LimitedButler",)
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import Any, ClassVar
 
 from lsst.resources import ResourcePath
 
+from ._butler_metrics import ButlerMetrics
 from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -138,7 +140,8 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        with self._metrics.instrument_get(log, msg="Retrieved dataset"):
+            return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
@@ -415,6 +418,30 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
+    @contextmanager
+    def record_metrics(self, metrics: ButlerMetrics | None = None) -> Iterator[ButlerMetrics]:
+        """Enable new metrics recording context.
+
+        Parameters
+        ----------
+        metrics : `lsst.daf.butler.ButlerMetrics`
+            Optional override metrics object. If given, this will be the
+            same object returned by the context manager.
+
+        Yields
+        ------
+        metrics : `lsst.daf.butler.ButlerMetrics`
+            Metrics recorded within this context. This temporarily replaces
+            any existing metrics object associated with this butler.
+        """
+        old_metrics = self._metrics
+        new_metrics = metrics if metrics is not None else ButlerMetrics()
+        try:
+            self._metrics = new_metrics
+            yield new_metrics
+        finally:
+            self._metrics = old_metrics
+
     @property
     @abstractmethod
     def dimensions(self) -> DimensionUniverse:
@@ -429,4 +456,9 @@ class LimitedButler(ABC):
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
+    """
+
+    _metrics: ButlerMetrics
+    """An object for recording metrics associated with this butler.
+    (`ButlerMetrics`)
     """

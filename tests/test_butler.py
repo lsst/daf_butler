@@ -74,6 +74,7 @@ import astropy.time
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
+    ButlerMetrics,
     ButlerRepoIndex,
     CollectionCycleError,
     CollectionType,
@@ -214,21 +215,27 @@ class ButlerPutGetTests(TestCaseMixin):
         if self.root is not None:
             removeTestTempDir(self.root)
 
-    def create_empty_butler(self, run: str | None = None, writeable: bool | None = None):
+    def create_empty_butler(
+        self, run: str | None = None, writeable: bool | None = None, metrics: ButlerMetrics | None = None
+    ):
         """Create a Butler for the test repository, without inserting test
         data.
         """
-        butler = Butler.from_config(self.tmpConfigFile, run=run, writeable=writeable)
+        butler = Butler.from_config(self.tmpConfigFile, run=run, writeable=writeable, metrics=metrics)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         return butler
 
     def create_butler(
-        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+        self,
+        run: str,
+        storageClass: StorageClass | str,
+        datasetTypeName: str,
+        metrics: ButlerMetrics | None = None,
     ) -> tuple[Butler, DatasetType]:
         """Create a Butler for the test repository and insert some test data
         into it.
         """
-        butler = self.create_empty_butler(run=run)
+        butler = self.create_empty_butler(run=run, metrics=metrics)
 
         collections = set(butler.collections.query("*"))
         self.assertEqual(collections, {run})
@@ -2020,6 +2027,37 @@ class FileDatastoreButlerTests(ButlerTests):
             # Clear out the datasets from registry.
             butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
+    def test_butler_metrics(self):
+        """Test that metrics are collected."""
+        run = "test_run"
+        metrics = ButlerMetrics()
+        butler, datasetType = self.create_butler(
+            run, "MetricsExampleModelProvenance", "prov_metric", metrics=metrics
+        )
+        data = MetricsExampleModel(
+            summary={"AM1": 5.2, "AM2": 30.6},
+            output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+            data=[563, 234, 456.7, 752, 8, 9, 27],
+        )
+
+        data_ref = butler.put(data, datasetType, visit=424, instrument="DummyCamComp")
+        butler.get(data_ref)
+        butler.get(data_ref)
+        self.assertEqual(metrics.n_get, 2)
+        self.assertGreater(metrics.time_in_get, 0.0)
+        self.assertEqual(metrics.n_put, 1)
+        self.assertGreater(metrics.time_in_put, 0.0)
+
+        deferred = butler.getDeferred(data_ref)
+        deferred.get()
+        self.assertEqual(metrics.n_get, 3)
+
+        with butler.record_metrics() as new:
+            butler.put(data, datasetType, visit=425, instrument="DummyCamComp")
+            butler.get(data_ref)
+        self.assertEqual(new.n_get, 1)
+        self.assertEqual(new.n_put, 1)
+
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
@@ -2231,10 +2269,14 @@ class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTes
     """Test that Butler with a Postgres registry still works after cloning."""
 
     def create_butler(
-        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+        self,
+        run: str,
+        storageClass: StorageClass | str,
+        datasetTypeName: str,
+        metrics: ButlerMetrics | None = None,
     ) -> tuple[DirectButler, DatasetType]:
-        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
-        return butler.clone(run=run), datasetType
+        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName, metrics=metrics)
+        return butler.clone(run=run, metrics=metrics), datasetType
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -2259,9 +2301,13 @@ class ClonedSqliteButlerTestCase(InMemoryDatastoreButlerTestCase, unittest.TestC
     """Test that a Butler with a Sqlite registry still works after cloning."""
 
     def create_butler(
-        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+        self,
+        run: str,
+        storageClass: StorageClass | str,
+        datasetTypeName: str,
+        metrics: ButlerMetrics | None = None,
     ) -> tuple[DirectButler, DatasetType]:
-        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
+        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName, metrics=metrics)
         return butler.clone(run=run), datasetType
 
 
@@ -3019,8 +3065,10 @@ class ButlerServerTests(FileDatastoreButlerTests):
         # query parameters, so ignore query parameters when comparing.
         return uri1.scheme == uri2.scheme and uri1.netloc == uri2.netloc and uri1.path == uri2.path
 
-    def create_empty_butler(self, run: str | None = None, writeable: bool | None = None) -> Butler:
-        return self.server_instance.hybrid_butler.clone(run=run)
+    def create_empty_butler(
+        self, run: str | None = None, writeable: bool | None = None, metrics: ButlerMetrics | None = None
+    ) -> Butler:
+        return self.server_instance.hybrid_butler.clone(run=run, metrics=metrics)
 
     def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
         # Can't delete a file via S3 signed URLs, so we need to reach in

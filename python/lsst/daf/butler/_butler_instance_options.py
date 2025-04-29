@@ -30,6 +30,8 @@ __all__ = ("ButlerInstanceOptions",)
 import dataclasses
 from typing import Any
 
+from ._butler_metrics import ButlerMetrics
+
 
 @dataclasses.dataclass(frozen=True)
 class ButlerInstanceOptions:
@@ -43,4 +45,5 @@ class ButlerInstanceOptions:
     run: str | None = None
     writeable: bool | None = None
     inferDefaults: bool = True
+    metrics: ButlerMetrics = dataclasses.field(default_factory=ButlerMetrics)
     kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)

@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Iterator, Sequence
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from types import EllipsisType
 from typing import Any, TextIO, cast
 
@@ -36,6 +36,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler
 from .._butler_collections import ButlerCollections
+from .._butler_metrics import ButlerMetrics
 from .._dataset_existence import DatasetExistence
 from .._dataset_provenance import DatasetProvenance
 from .._dataset_ref import DatasetId, DatasetRef
@@ -74,6 +75,9 @@ class HybridButler(Butler):
         self._direct_butler = direct_butler
         self._datastore = direct_butler._datastore
         self._registry = HybridButlerRegistry(direct_butler._registry, remote_butler.registry)
+        # Force shared metrics.
+        self._metrics = self._direct_butler._metrics
+        self._remote_butler._metrics = self._metrics
         return self
 
     def isWriteable(self) -> bool:
@@ -84,6 +88,15 @@ class HybridButler(Butler):
 
     def transaction(self) -> AbstractContextManager[None]:
         return self._direct_butler.transaction()
+
+    @contextmanager
+    def record_metrics(self, metrics: ButlerMetrics | None = None) -> Iterator[ButlerMetrics]:
+        if metrics is None:
+            # Share same metrics in both butlers.
+            metrics = ButlerMetrics()
+
+        with self._direct_butler.record_metrics(metrics), self._remote_butler.record_metrics(metrics):
+            yield metrics
 
     def put(
         self,
@@ -353,12 +366,13 @@ class HybridButler(Butler):
         run: str | None | EllipsisType = ...,
         inferDefaults: bool | EllipsisType = ...,
         dataId: dict[str, str] | EllipsisType = ...,
+        metrics: ButlerMetrics | None = None,
     ) -> HybridButler:
         remote_butler = self._remote_butler.clone(
-            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
+            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId, metrics=metrics
         )
         direct_butler = self._direct_butler.clone(
-            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId
+            collections=collections, run=run, inferDefaults=inferDefaults, dataId=dataId, metrics=metrics
         )
         return HybridButler(remote_butler, direct_butler)
 

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
+import logging
 import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
@@ -53,6 +54,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler
 from .._butler_collections import ButlerCollections
+from .._butler_metrics import ButlerMetrics
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
@@ -93,6 +95,9 @@ if TYPE_CHECKING:
     from .._timespan import Timespan
     from ..dimensions import DataId
     from ..transfers import RepoExportContext
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -142,6 +147,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         defaults: RegistryDefaults,
         cache: RemoteButlerCache,
         use_disabled_datastore_cache: bool = True,
+        metrics: ButlerMetrics | None = None,
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
         self.storageClasses = StorageClassFactory()
@@ -150,6 +156,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._cache = cache
         self._datastore_cache_manager = None
         self._use_disabled_datastore_cache = use_disabled_datastore_cache
+        self._metrics = metrics if metrics is not None else ButlerMetrics()
 
         self._registry_defaults = DefaultsHolder(defaults)
         self._registry = RemoteButlerRegistry(self, self._registry_defaults, self._connection)
@@ -270,19 +277,20 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
+        with self._metrics.instrument_get(log=_LOG, msg="Retrieved remote dataset"):
+            model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
 
-        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
-        # If the caller provided a DatasetRef, they may have overridden the
-        # component on it.  We need to explicitly handle this because we did
-        # not send the DatasetType to the server in this case.
-        if isinstance(datasetRefOrType, DatasetRef):
-            componentOverride = datasetRefOrType.datasetType.component()
-            if componentOverride:
-                ref = ref.makeComponentRef(componentOverride)
-        ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
+            ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
+            # If the caller provided a DatasetRef, they may have overridden the
+            # component on it.  We need to explicitly handle this because we
+            # did not send the DatasetType to the server in this case.
+            if isinstance(datasetRefOrType, DatasetRef):
+                componentOverride = datasetRefOrType.datasetType.component()
+                if componentOverride:
+                    ref = ref.makeComponentRef(componentOverride)
+            ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
-        return self._get_dataset_as_python_object(ref, model, parameters)
+            return self._get_dataset_as_python_object(ref, model, parameters)
 
     def _get_dataset_as_python_object(
         self,
@@ -680,9 +688,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         run: str | None | EllipsisType = ...,
         inferDefaults: bool | EllipsisType = ...,
         dataId: dict[str, str] | EllipsisType = ...,
+        metrics: ButlerMetrics | None = None,
     ) -> RemoteButler:
         defaults = self._registry_defaults.get().clone(collections, run, inferDefaults, dataId)
-        return RemoteButler(connection=self._connection, cache=self._cache, defaults=defaults)
+        return RemoteButler(
+            connection=self._connection, cache=self._cache, defaults=defaults, metrics=metrics
+        )
 
     def __str__(self) -> str:
         return f"RemoteButler({self._connection.server_url})"

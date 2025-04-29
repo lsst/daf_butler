@@ -43,6 +43,7 @@ import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from ._butler_config import ButlerConfig
+from ._butler_metrics import ButlerMetrics
 from ._config import Config
 from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetId, DatasetRef
@@ -118,6 +119,8 @@ class QuantumBackedButler(LimitedButler):
         Object managing all storage class definitions.
     dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`]
         The registry dataset type definitions, indexed by name.
+    metrics : `lsst.daf.butler.ButlerMetrics` or `None`, optional
+        Metrics object for tracking butler statistics.
 
     Notes
     -----
@@ -164,6 +167,7 @@ class QuantumBackedButler(LimitedButler):
         datastore: Datastore,
         storageClasses: StorageClassFactory,
         dataset_types: Mapping[str, DatasetType] | None = None,
+        metrics: ButlerMetrics | None = None,
     ):
         self._dimensions = dimensions
         self._predicted_inputs = set(predicted_inputs)
@@ -175,6 +179,7 @@ class QuantumBackedButler(LimitedButler):
         self._datastore = datastore
         self.storageClasses = storageClasses
         self._dataset_types: Mapping[str, DatasetType] = {}
+        self._metrics = metrics if metrics is not None else ButlerMetrics()
         if dataset_types is not None:
             self._dataset_types = dataset_types
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
@@ -190,6 +195,7 @@ class QuantumBackedButler(LimitedButler):
         BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
+        metrics: ButlerMetrics | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from repository configuration
         and helper types.
@@ -219,6 +225,8 @@ class QuantumBackedButler(LimitedButler):
         dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`], \
                 optional
             Mapping of the dataset type name to its registry definition.
+        metrics : `lsst.daf.butler.ButlerMetrics` or `None`, optional
+            Metrics object for gathering butler statistics.
         """
         predicted_inputs = [ref.id for ref in itertools.chain.from_iterable(quantum.inputs.values())]
         predicted_inputs += [ref.id for ref in quantum.initInputs.values()]
@@ -234,6 +242,7 @@ class QuantumBackedButler(LimitedButler):
             BridgeManagerClass=BridgeManagerClass,
             search_paths=search_paths,
             dataset_types=dataset_types,
+            metrics=metrics,
         )
 
     @classmethod
@@ -249,6 +258,7 @@ class QuantumBackedButler(LimitedButler):
         BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
+        metrics: ButlerMetrics | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from sets of input and output
         dataset IDs.
@@ -281,6 +291,8 @@ class QuantumBackedButler(LimitedButler):
         dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`], \
                 optional
             Mapping of the dataset type name to its registry definition.
+        metrics : `lsst.daf.butler.ButlerMetrics` or `None`, optional
+            Metrics object for gathering butler statistics.
         """
         return cls._initialize(
             config=config,
@@ -293,6 +305,7 @@ class QuantumBackedButler(LimitedButler):
             BridgeManagerClass=BridgeManagerClass,
             search_paths=search_paths,
             dataset_types=dataset_types,
+            metrics=metrics,
         )
 
     @classmethod
@@ -309,6 +322,7 @@ class QuantumBackedButler(LimitedButler):
         BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
+        metrics: ButlerMetrics | None = None,
     ) -> QuantumBackedButler:
         """Initialize quantum-backed butler.
 
@@ -341,6 +355,8 @@ class QuantumBackedButler(LimitedButler):
             Additional search paths for butler configuration.
         dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
+        metrics : `lsst.daf.butler.ButlerMetrics` or `None`, optional
+            Metrics object for gathering butler statistics.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         butler_root = butler_config.get("root", butler_config.configDir)
@@ -373,6 +389,7 @@ class QuantumBackedButler(LimitedButler):
             datastore,
             storageClasses=storageClasses,
             dataset_types=dataset_types,
+            metrics=metrics,
         )
 
     def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
@@ -459,8 +476,9 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         if ref.id not in self._predicted_outputs:
             raise RuntimeError("Cannot `put` dataset that was not predicted as an output.")
-        self._datastore.put(obj, ref, provenance=provenance)
-        self._actual_output_refs.add(ref)
+        with self._metrics.instrument_put(log=_LOG, msg="Put QBB dataset"):
+            self._datastore.put(obj, ref, provenance=provenance)
+            self._actual_output_refs.add(ref)
         return ref
 
     def pruneDatasets(

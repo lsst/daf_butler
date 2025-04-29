@@ -34,6 +34,7 @@ from typing import cast
 
 from lsst.daf.butler import (
     Butler,
+    ButlerMetrics,
     Config,
     DatasetRef,
     DatasetType,
@@ -61,11 +62,12 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.config = Config()
         self.config["root"] = self.root
         self.universe = DimensionUniverse()
+        self.metrics = ButlerMetrics()
 
         # Make a butler and import dimension definitions.
         registryConfig = RegistryConfig(self.config.get("registry"))
         _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
-        butler = Butler.from_config(self.config, writeable=True, run="RUN")
+        butler = Butler.from_config(self.config, writeable=True, run="RUN", metrics=self.metrics)
         assert isinstance(butler, DirectButler)
         self.butler = butler
         self.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
@@ -140,7 +142,11 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for initialize factory method"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
-            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+            config=self.config,
+            quantum=quantum,
+            dimensions=self.universe,
+            dataset_types=self.dataset_types,
+            metrics=self.metrics,
         )
         self._test_factory(qbb)
 
@@ -161,6 +167,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
                     quantum=quantum,
                     dimensions=self.universe,
                     dataset_types=self.dataset_types,
+                    metrics=self.metrics,
                 )
                 self._test_factory(qbb)
 
@@ -191,7 +198,11 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for get/put methods"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
-            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+            config=self.config,
+            quantum=quantum,
+            dimensions=self.universe,
+            dataset_types=self.dataset_types,
+            metrics=self.metrics,
         )
 
         # Verify all input data are readable.
@@ -209,9 +220,12 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_inputs, qbb._predicted_inputs)
         self.assertEqual(qbb._unavailable_inputs, {ref.id for ref in self.missing_refs})
 
+        self.metrics.reset()
+
         # Write all expected outputs.
         for ref in self.output_refs:
             qbb.put({"data": cast(int, ref.dataId["detector"]) ** 2}, ref)
+        self.assertEqual(self.metrics.n_put, len(self.output_refs))
 
         # Must be able to read them back
         for ref in self.output_refs:
@@ -219,6 +233,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             self.assertEqual(data, {"data": cast(int, ref.dataId["detector"]) ** 2})
 
         self.assertEqual(qbb._actual_output_refs, set(self.output_refs))
+        self.assertEqual(self.metrics.n_get, len(self.output_refs))
 
         # Retrieve them as a Zip artifact.
         with tempfile.TemporaryDirectory() as tmpdir:
