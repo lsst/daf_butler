@@ -37,6 +37,7 @@ import enum
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Sequence
 from typing import Generic, TypeVar
+from uuid import UUID
 
 import astropy.time
 
@@ -1028,6 +1029,10 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
 
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
+        return Opaque(node, PrecedenceTier.TOKEN)
+
+    def visitUuidLiteral(self, value: UUID, node: Node) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitUuidLiteral
         return Opaque(node, PrecedenceTier.TOKEN)
 
     def visitRangeLiteral(

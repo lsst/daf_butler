@@ -35,6 +35,7 @@ __all__ = (
 import dataclasses
 from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ....dimensions import DataCoordinate, DataIdValue, Dimension, DimensionGroup, DimensionUniverse
@@ -207,6 +208,10 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
 
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
+        return TreeSummary()
+
+    def visitUuidLiteral(self, value: UUID, node: Node) -> TreeSummary:
+        # Docstring inherited from TreeVisitor.visitUuidLiteral
         return TreeSummary()
 
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:

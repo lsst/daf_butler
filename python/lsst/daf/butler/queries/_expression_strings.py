@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Set
 from typing import Literal, NamedTuple, TypeAlias
+from uuid import UUID
 
 import astropy.time
 
@@ -266,6 +267,9 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         return _make_literal(value)
 
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> _VisitorResult:
+        return _make_literal(value)
+
+    def visitUuidLiteral(self, value: UUID, node: Node) -> _VisitorResult:
         return _make_literal(value)
 
     def visitTupleNode(self, items: tuple[_VisitorResult, ...], node: Node) -> _VisitorResult:

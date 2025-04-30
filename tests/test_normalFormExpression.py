@@ -29,6 +29,7 @@
 import random
 import unittest
 from typing import Any
+from uuid import UUID
 
 import astropy.time
 
@@ -62,6 +63,10 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
 
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> bool:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
+        raise NotImplementedError()
+
+    def visitUuidLiteral(self, value: UUID, node: Node) -> bool:
+        # Docstring inherited from TreeVisitor.visitUuidLiteral
         raise NotImplementedError()
 
     def visitIdentifier(self, name: str, node: Node) -> bool:
