@@ -1535,7 +1535,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         has been removed from the datastore by another process whilst it is
         still in the cache.
         """
-        chunk_size = 10_000
+        chunk_size = 50_000
         dataset_existence: dict[DatasetRef, bool] = {}
         log.debug("Checking for the existence of multiple artifacts in datastore in chunks of %d", chunk_size)
         n_found_total = 0
@@ -2010,7 +2010,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # This should be chunked in case we end up having to check
         # the file store since we need some log output to show
         # progress.
-        for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=10_000):
+        chunk_size = 50_000
+        for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=chunk_size):
             records = {}
             for missing in missing_ids_chunk:
                 # Ask the source datastore where the missing artifacts
