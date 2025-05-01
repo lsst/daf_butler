@@ -136,7 +136,7 @@ class BinaryOp(Node):
     """
 
     def __init__(self, lhs: Node, op: str, rhs: Node):
-        Node.__init__(self, (lhs, rhs))
+        super().__init__((lhs, rhs))
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
@@ -166,7 +166,7 @@ class UnaryOp(Node):
     """
 
     def __init__(self, op: str, operand: Node):
-        Node.__init__(self, (operand,))
+        super().__init__((operand,))
         self.op = op
         self.operand = operand
 
@@ -189,7 +189,7 @@ class StringLiteral(LiteralNode):
     """
 
     def __init__(self, value: str):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -210,7 +210,7 @@ class TimeLiteral(LiteralNode):
     """
 
     def __init__(self, value: astropy.time.Time):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -234,7 +234,7 @@ class NumericLiteral(LiteralNode):
     """
 
     def __init__(self, value: str):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -279,7 +279,7 @@ class Identifier(Node):
     """
 
     def __init__(self, name: str):
-        Node.__init__(self)
+        super().__init__()
         self.name = name
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -302,7 +302,7 @@ class BindName(Node):
     """
 
     def __init__(self, name: str):
-        Node.__init__(self)
+        super().__init__()
         self.name = name
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -334,6 +334,7 @@ class RangeLiteral(LiteralNode):
     """
 
     def __init__(self, start: int, stop: int, stride: int | None = None):
+        super().__init__()
         self.start = start
         self.stop = stop
         self.stride = stride
@@ -367,7 +368,7 @@ class IsIn(Node):
             node = _strip_parens(node)
             if not isinstance(node, LiteralNode | BindName | Identifier):
                 raise TypeError(f"Unsupported type of expression in IN operator: {node}")
-        Node.__init__(self, (lhs,) + tuple(values))
+        super().__init__((lhs,) + tuple(values))
         self.lhs = lhs
         self.values = values
         self.not_in = not_in
@@ -396,7 +397,7 @@ class Parens(Node):
     """
 
     def __init__(self, expr: Node):
-        Node.__init__(self, (expr,))
+        super().__init__((expr,))
         self.expr = expr
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -422,7 +423,7 @@ class TupleNode(Node):
     """
 
     def __init__(self, items: tuple[Node, ...]):
-        Node.__init__(self, items)
+        super().__init__(items)
         self.items = items
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -447,7 +448,7 @@ class FunctionCall(Node):
     """
 
     def __init__(self, function: str, args: list[Node]):
-        Node.__init__(self, tuple(args))
+        super().__init__(tuple(args))
         self.name = function
         self.args = args[:]
 
@@ -473,7 +474,7 @@ class PointNode(Node):
     """
 
     def __init__(self, ra: Node, dec: Node):
-        Node.__init__(self, (ra, dec))
+        super().__init__((ra, dec))
         self.ra = ra
         self.dec = dec
 
@@ -501,7 +502,7 @@ class GlobNode(Node):
     """
 
     def __init__(self, expression: Identifier, pattern: StringLiteral | BindName):
-        Node.__init__(self, (expression, pattern))
+        super().__init__((expression, pattern))
         self.expression = expression
         self.pattern = pattern
 
