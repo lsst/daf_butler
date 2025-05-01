@@ -59,6 +59,7 @@ __all__ = [
 # -------------------------------
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 # -----------------------------
 #  Imports for other modules --
@@ -114,6 +115,10 @@ class Node(ABC):
         """
 
 
+class LiteralNode(Node):
+    """Intermediate base class for nodes representing literals of any knid."""
+
+
 class BinaryOp(Node):
     """Node representing binary operator.
 
@@ -131,7 +136,7 @@ class BinaryOp(Node):
     """
 
     def __init__(self, lhs: Node, op: str, rhs: Node):
-        Node.__init__(self, (lhs, rhs))
+        super().__init__((lhs, rhs))
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
@@ -161,7 +166,7 @@ class UnaryOp(Node):
     """
 
     def __init__(self, op: str, operand: Node):
-        Node.__init__(self, (operand,))
+        super().__init__((operand,))
         self.op = op
         self.operand = operand
 
@@ -174,7 +179,7 @@ class UnaryOp(Node):
         return "{op} {operand}".format(**vars(self))
 
 
-class StringLiteral(Node):
+class StringLiteral(LiteralNode):
     """Node representing string literal.
 
     Parameters
@@ -184,7 +189,7 @@ class StringLiteral(Node):
     """
 
     def __init__(self, value: str):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -195,7 +200,7 @@ class StringLiteral(Node):
         return "'{value}'".format(**vars(self))
 
 
-class TimeLiteral(Node):
+class TimeLiteral(LiteralNode):
     """Node representing time literal.
 
     Parameters
@@ -205,7 +210,7 @@ class TimeLiteral(Node):
     """
 
     def __init__(self, value: astropy.time.Time):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -216,8 +221,8 @@ class TimeLiteral(Node):
         return "'{value}'".format(**vars(self))
 
 
-class NumericLiteral(Node):
-    """Node representing string literal.
+class NumericLiteral(LiteralNode):
+    """Node representing a numeric literal.
 
     We do not convert literals to numbers, their text representation
     is stored literally.
@@ -229,7 +234,7 @@ class NumericLiteral(Node):
     """
 
     def __init__(self, value: str):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -240,11 +245,32 @@ class NumericLiteral(Node):
         return "{value}".format(**vars(self))
 
 
+class UuidLiteral(LiteralNode):
+    """Node representing a UUID literal.
+
+    Parameters
+    ----------
+    value : `UUID`
+        Literal value.
+    """
+
+    def __init__(self, value: UUID):
+        super().__init__()
+        self.value = value
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        return visitor.visitUuidLiteral(self.value, self)
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
 class Identifier(Node):
     """Node representing identifier.
 
-    Value of the identifier is its name, it may contain zero or one dot
-    character.
+    Value of the identifier is its name, it may contain zero, one, or two dot
+    characters.
 
     Parameters
     ----------
@@ -253,7 +279,7 @@ class Identifier(Node):
     """
 
     def __init__(self, name: str):
-        Node.__init__(self)
+        super().__init__()
         self.name = name
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -276,7 +302,7 @@ class BindName(Node):
     """
 
     def __init__(self, name: str):
-        Node.__init__(self)
+        super().__init__()
         self.name = name
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -287,7 +313,7 @@ class BindName(Node):
         return "{name}".format(**vars(self))
 
 
-class RangeLiteral(Node):
+class RangeLiteral(LiteralNode):
     """Node representing range literal appearing in `IN` list.
 
     Range literal defines a range of integer numbers with start and
@@ -308,6 +334,7 @@ class RangeLiteral(Node):
     """
 
     def __init__(self, start: int, stop: int, stride: int | None = None):
+        super().__init__()
         self.start = start
         self.stop = stop
         self.stride = stride
@@ -335,7 +362,13 @@ class IsIn(Node):
     """
 
     def __init__(self, lhs: Node, values: list[Node], not_in: bool = False):
-        Node.__init__(self, (lhs,) + tuple(values))
+        # All values must be literals or binds (and we allow simple identifiers
+        # as binds).
+        for node in values:
+            node = _strip_parens(node)
+            if not isinstance(node, LiteralNode | BindName | Identifier):
+                raise TypeError(f"Unsupported type of expression in IN operator: {node}")
+        super().__init__((lhs,) + tuple(values))
         self.lhs = lhs
         self.values = values
         self.not_in = not_in
@@ -364,7 +397,7 @@ class Parens(Node):
     """
 
     def __init__(self, expr: Node):
-        Node.__init__(self, (expr,))
+        super().__init__((expr,))
         self.expr = expr
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -390,7 +423,7 @@ class TupleNode(Node):
     """
 
     def __init__(self, items: tuple[Node, ...]):
-        Node.__init__(self, items)
+        super().__init__(items)
         self.items = items
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -415,7 +448,7 @@ class FunctionCall(Node):
     """
 
     def __init__(self, function: str, args: list[Node]):
-        Node.__init__(self, tuple(args))
+        super().__init__(tuple(args))
         self.name = function
         self.args = args[:]
 
@@ -441,7 +474,7 @@ class PointNode(Node):
     """
 
     def __init__(self, ra: Node, dec: Node):
-        Node.__init__(self, (ra, dec))
+        super().__init__((ra, dec))
         self.ra = ra
         self.dec = dec
 
@@ -469,7 +502,7 @@ class GlobNode(Node):
     """
 
     def __init__(self, expression: Identifier, pattern: StringLiteral | BindName):
-        Node.__init__(self, (expression, pattern))
+        super().__init__((expression, pattern))
         self.expression = expression
         self.pattern = pattern
 
@@ -516,6 +549,17 @@ def function_call(function: str, args: list[Node]) -> Node:
         if not isinstance(pattern, StringLiteral | BindName):
             raise TypeError("glob() second argument must be a string or a bind name (prefixed with colon)")
         return GlobNode(expression, pattern)
+    elif function.upper() == "UUID":
+        if len(args) != 1:
+            raise ValueError("UUID() requires a single arguments (uuid-string)")
+        argument = _strip_parens(args[0])
+        # Potentially we could allow BindName as argument but it's too
+        # complicated and people should use bind with UUID instead.
+        if not isinstance(argument, StringLiteral):
+            raise TypeError("UUID() argument must be a string literal")
+        # This will raise ValueError if string is not good.
+        uuid = UUID(argument.value)
+        return UuidLiteral(uuid)
     else:
         # generic function call
         return FunctionCall(function, args)

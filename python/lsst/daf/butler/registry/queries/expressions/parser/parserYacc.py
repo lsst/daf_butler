@@ -354,8 +354,8 @@ class ParserYacc:
 
     @classmethod
     def p_predicate(cls, p: YaccProduction) -> None:
-        """predicate : bit_expr IN LPAREN literal_or_id_list RPAREN
-        | bit_expr NOT IN LPAREN literal_or_id_list RPAREN
+        """predicate : bit_expr IN LPAREN literal_or_bind_list RPAREN
+        | bit_expr NOT IN LPAREN literal_or_bind_list RPAREN
         | bit_expr
         """
         if len(p) == 6:
@@ -366,21 +366,38 @@ class ParserYacc:
             p[0] = p[1]
 
     @classmethod
-    def p_identifier(cls, p: YaccProduction) -> None:
-        """identifier : SIMPLE_IDENTIFIER
-        | QUALIFIED_IDENTIFIER
-        """
+    def p_simple_id(cls, p: YaccProduction) -> None:
+        """simple_id : SIMPLE_IDENTIFIER"""
         p[0] = Identifier(p[1])
 
     @classmethod
-    def p_literal_or_id_list(cls, p: YaccProduction) -> None:
-        """literal_or_id_list : literal_or_id_list COMMA literal
-        | literal_or_id_list COMMA identifier
-        | literal_or_id_list COMMA bind_name
-        | literal
-        | identifier
-        | bind_name
+    def p_qualified_id(cls, p: YaccProduction) -> None:
+        """qualified_id : QUALIFIED_IDENTIFIER"""
+        p[0] = Identifier(p[1])
+
+    @classmethod
+    def p_identifier(cls, p: YaccProduction) -> None:
+        """identifier : simple_id
+        | qualified_id
         """
+        p[0] = p[1]
+
+    @classmethod
+    def p_literal_or_id_list(cls, p: YaccProduction) -> None:
+        """literal_or_bind_list : literal_or_bind_list COMMA literal
+        | literal_or_bind_list COMMA simple_id
+        | literal_or_bind_list COMMA bind_name
+        | literal_or_bind_list COMMA function_call
+        | literal
+        | simple_id
+        | bind_name
+        | function_call
+        """
+        # This expression is only used in IN() operator and it is supposed to
+        # include only literals and bind names (and identifiers as we still
+        # allow simple identifiers as bind names). UUID literal is implemented
+        # via UUID() function call, so we need to allow function calls here
+        # too. IsIn will check that all operands are literals or binds.
         if len(p) == 2:
             p[0] = [p[1]]
         else:

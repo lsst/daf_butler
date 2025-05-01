@@ -2469,6 +2469,57 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         with self.assertRaisesRegex(InvalidQueryError, "Failed to parse expression"):
             butler.query_dimension_records("detector", instrument="Cam1", where="GLOB(full_name, full_name)")
 
+    def test_dataset_id_queries(self) -> None:
+        """Test queries on dataset_id."""
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+
+        dataset_id = UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22")
+
+        refs = butler.query_datasets(
+            "bias",
+            "imported_g",
+            instrument="Cam1",
+            where="dataset_id = :ID",
+            bind={"ID": dataset_id},
+        )
+        self.assertEqual({ref.id for ref in refs}, {dataset_id})
+
+        dataset_ids = {
+            UUID("87f3e68d-258d-41b7-8ea5-edf3557ccb30"),
+            UUID("dc0ef017-dc94-4118-b431-d65b1ef89a5f"),
+            UUID("e255067d-dcc5-4f39-9824-0baa5817d3e5"),
+        }
+        refs = butler.query_datasets(
+            "bias",
+            "imported_r",
+            instrument="Cam1",
+            where="bias.dataset_id IN (:IDS)",
+            bind={"IDS": dataset_ids},
+        )
+        self.assertEqual({ref.id for ref in refs}, dataset_ids)
+
+        refs = butler.query_datasets(
+            "bias",
+            "imported_g",
+            instrument="Cam1",
+            where="dataset_id = UUID('e15ab039-bc8b-4135-87c5-90902a7c0b22')",
+        )
+        self.assertEqual({ref.id for ref in refs}, {dataset_id})
+
+        refs = butler.query_datasets(
+            "bias",
+            "imported_r",
+            instrument="Cam1",
+            where=(
+                "bias.dataset_id IN ("
+                "UUID('87f3e68d-258d-41b7-8ea5-edf3557ccb30'), "
+                "UUID('dc0ef017-dc94-4118-b431-d65b1ef89a5f'), "
+                "UUID('e255067d-dcc5-4f39-9824-0baa5817d3e5')"
+                ")"
+            ),
+        )
+        self.assertEqual({ref.id for ref in refs}, dataset_ids)
+
 
 def _get_exposure_ids_from_dimension_records(dimension_records: Iterable[DimensionRecord]) -> list[int]:
     output = []

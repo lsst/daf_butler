@@ -53,6 +53,9 @@ class _Visitor(TreeVisitor):
     def visitTimeLiteral(self, value, node):
         return f"T({value})"
 
+    def visitUuidLiteral(self, value, node):
+        return f"UUID({value})"
+
     def visitRangeLiteral(self, start, stop, stride, node):
         if stride is None:
             return f"R({start}..{stop})"
@@ -354,6 +357,21 @@ class ParserYaccTestCase(unittest.TestCase):
         self.assertIsInstance(tree.values[1], exprTree.BindName)
         self.assertIsInstance(tree.values[2], exprTree.Identifier)
         self.assertIsInstance(tree.values[3], exprTree.NumericLiteral)
+
+        expr = (
+            "id in ("
+            "UUID('38a42b54-0822-4dce-93b7-47e9b0d8ad66'), "
+            "UUID('782fb690-281a-4787-9b6e-f5324a9b6369'), "
+            ":uuid"
+            ")"
+        )
+        tree = parser.parse(expr)
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertEqual(len(tree.values), 3)
+        self.assertIsInstance(tree.values[0], exprTree.UuidLiteral)
+        self.assertIsInstance(tree.values[1], exprTree.UuidLiteral)
+        self.assertIsInstance(tree.values[2], exprTree.BindName)
 
         # parens on right hand side are required
         with self.assertRaises(ParseError):

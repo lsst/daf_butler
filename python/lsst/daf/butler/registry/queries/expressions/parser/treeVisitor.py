@@ -31,6 +31,7 @@ __all__ = ["TreeVisitor"]
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
+from uuid import UUID
 
 if TYPE_CHECKING:
     import astropy.time
@@ -76,6 +77,18 @@ class TreeVisitor(Generic[T], ABC):
         ----------
         value : `str`
             The value associated with the visited node.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitUuidLiteral(self, value: UUID, node: Node) -> T:
+        """Visit UuidLiteral node.
+
+        Parameters
+        ----------
+        value : `UUID`
+            The value associated with the visited node, the value is UUID.
         node : `Node`
             Corresponding tree node, mostly useful for diagnostics.
         """

@@ -34,6 +34,7 @@ import types
 import warnings
 from collections.abc import Mapping, Set
 from typing import Any, cast
+from uuid import UUID
 
 import astropy.time
 import astropy.utils.exceptions
@@ -467,6 +468,10 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> VisitorResult:
         # Docstring inherited.
         return ColumnExpression.literal(value, dtype=astropy.time.Time)
+
+    def visitUuidLiteral(self, value: UUID, node: Node) -> VisitorResult:
+        # Docstring inherited.
+        return ColumnExpression.literal(value, dtype=UUID)
 
     def visitTupleNode(self, items: tuple[VisitorResult, ...], node: Node) -> VisitorResult:
         # Docstring inherited.

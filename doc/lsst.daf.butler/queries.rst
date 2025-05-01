@@ -136,6 +136,16 @@ Time literals
     time scale. For detailed description of supported time specification
     check section :ref:`time-literals-syntax`.
 
+UUID literals
+    UUID values are produced by ``UUID()`` function which accepts a string
+    representation of the UUID. The string can have any format acceptable
+    by Python ``uuid.UUID()`` method.
+
+    Examples:
+
+    - ``UUID('12345678-1234-5678-1234-567812345678')``
+    - ``UUID('12345678123456781234567812345678')``
+
 Range literals
     This sort of literal is allowed inside ``IN`` expressions only. It consists
     of two integer literals separated by double dots and optionally followed by
@@ -441,6 +451,8 @@ Few examples of valid expressions using some of the constructs:
     visit.timespan.end < T'mjd/58938.515/tai'
 
     ingest_date < T'2020-11-06 21:10:00'
+
+    flat.dataset_id = UUID('e15ab039-bc8b-4135-87c5-90902a7c0b22')
 
 
 .. _daf_butler_query_ordering:
