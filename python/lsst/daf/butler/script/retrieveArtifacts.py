@@ -115,6 +115,7 @@ def retrieveArtifacts(
         limit=limit,
         order_by=order_by,
         show_uri=False,
+        with_dimension_records=True,
     )
     refs = set(itertools.chain(*query.getDatasets()))
     log.info("Number of datasets matching query: %d", len(refs))
