@@ -397,7 +397,7 @@ class ParserYacc:
         # include only literals and bind names (and identifiers as we still
         # allow simple identifiers as bind names). UUID literal is implemented
         # via UUID() function call, so we need to allow function calls here
-        # too. IsIn will check that all operands are literlas or binds.
+        # too. IsIn will check that all operands are literals or binds.
         if len(p) == 2:
             p[0] = [p[1]]
         else:

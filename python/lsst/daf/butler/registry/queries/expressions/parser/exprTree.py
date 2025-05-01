@@ -255,7 +255,7 @@ class UuidLiteral(LiteralNode):
     """
 
     def __init__(self, value: UUID):
-        Node.__init__(self)
+        super().__init__()
         self.value = value
 
     def visit(self, visitor: TreeVisitor) -> Any:
@@ -263,7 +263,7 @@ class UuidLiteral(LiteralNode):
         return visitor.visitUuidLiteral(self.value, self)
 
     def __str__(self) -> str:
-        return "{value}".format(**vars(self))
+        return str(self.value)
 
 
 class Identifier(Node):
