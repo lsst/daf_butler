@@ -268,9 +268,18 @@ class HybridButler(Butler):
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         return self._direct_butler.removeRuns(names, unstore)
 
-    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+    def ingest_zip(
+        self,
+        zip_file: ResourcePathExpression,
+        transfer: str = "auto",
+        *,
+        transfer_dimensions: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         # Docstring inherited.
-        return self._direct_butler.ingest_zip(zip_file, transfer=transfer)
+        return self._direct_butler.ingest_zip(
+            zip_file, transfer=transfer, transfer_dimensions=transfer_dimensions, dry_run=dry_run
+        )
 
     def ingest(
         self,

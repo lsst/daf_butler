@@ -2159,7 +2159,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         return artifact_map
 
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
         """Ingest an indexed Zip file and contents.
 
         The Zip file must have an index file as created by `retrieveArtifacts`.
@@ -2170,6 +2170,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             Path to the Zip file.
         transfer : `str`
             Method to use for transferring the Zip file into the datastore.
+        dry_run : `bool`, optional
+            If `True` the ingest will be processed without any modifications
+            made to the target datastore and as if the target datastore did not
+            have any of the datasets.
 
         Notes
         -----
@@ -2220,9 +2224,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 tgtLocation.uri.dirname().mkdir()
 
             # Transfer the Zip file into the datastore.
-            tgtLocation.uri.transfer_from(
-                zip_path, transfer=transfer, transaction=self._transaction, overwrite=True
-            )
+            if not dry_run:
+                tgtLocation.uri.transfer_from(
+                    zip_path, transfer=transfer, transaction=self._transaction, overwrite=True
+                )
+            else:
+                log.info("Would be copying Zip from %s to %s", zip_path, tgtLocation)
 
         if tgtLocation is None:
             path_in_store = str(zip_path)
@@ -2240,7 +2247,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             for id_ in index_info.ids:
                 artifacts.append((id_to_ref[id_], info))
 
-        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
+        if not dry_run:
+            self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
+        else:
+            log.info("Would be registering %d artifacts from Zip into datastore", len(artifacts))
 
     def get(
         self,

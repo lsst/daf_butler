@@ -35,6 +35,8 @@ def ingest_zip(
     repo: str,
     zip: str,
     transfer: str = "auto",
+    transfer_dimensions: bool = False,
+    dry_run: bool = False,
 ) -> None:
     """Ingest a Zip file into the given butler.
 
@@ -46,7 +48,17 @@ def ingest_zip(
         URI string of the location of the Zip file.
     transfer : `str`, optional
         Transfer mode to use for ingest.
+    transfer_dimensions : `bool`
+        Indicate whether dimensions should be transferred along with
+        datasets. If `True` the dimension records will be retrieved from the
+        zip and an attempt will be made to register any missing records.
+        If `False` assumes that all relevant records are already known to the
+        receiving Butler. It can be more efficient to disable this if it is
+        known that all dimensions exist.
+    dry_run : `bool`, optional
+        If `True` no transfers are done but the number of transfers that
+        would be done is reported.
     """
     butler = Butler.from_config(repo, writeable=True)
 
-    butler.ingest_zip(zip, transfer=transfer)
+    butler.ingest_zip(zip, transfer=transfer, transfer_dimensions=transfer_dimensions, dry_run=dry_run)

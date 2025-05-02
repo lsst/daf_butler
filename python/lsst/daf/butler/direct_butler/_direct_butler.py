@@ -38,7 +38,6 @@ import collections.abc
 import contextlib
 import io
 import itertools
-import logging
 import numbers
 import os
 import uuid
@@ -1563,8 +1562,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             ):
                 self._datastore.emptyTrash(refs=refs)
 
-    @transactional
-    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+    def ingest_zip(
+        self,
+        zip_file: ResourcePathExpression,
+        transfer: str = "auto",
+        *,
+        transfer_dimensions: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         """Ingest a Zip file into this butler.
 
         The Zip file must have been created by `retrieve_artifacts_zip`.
@@ -1575,10 +1580,17 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             Path to the Zip file.
         transfer : `str`, optional
             Method to use to transfer the Zip into the datastore.
+        transfer_dimensions : `bool`, optional
+            If `True`, dimension record data associated with the new datasets
+            will be transferred from the Zip, if present.
+        dry_run : `bool`, optional
+            If `True` the ingest will be processed without any modifications
+            made to the target butler and as if the target butler did not
+            have any of the datasets.
 
         Notes
         -----
-        Run collections are created as needed.
+        Run collections and dataset types are created as needed.
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
@@ -1618,25 +1630,30 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             if registered:
                 _LOG.verbose("Created RUN collection %s as part of zip ingest", run)
 
-        # Do not need expanded dataset refs so can ignore the return value.
-        self._ingest_file_datasets(datasets)
+        progress = Progress("lsst.daf.butler.Butler.ingest", level=VERBOSE)
+        import_info = self._prepare_ingest_file_datasets(
+            datasets, progress, dry_run=dry_run, transfer_dimensions=transfer_dimensions
+        )
 
-        try:
-            self._datastore.ingest_zip(zip_path, transfer=transfer)
-        except IntegrityError as e:
-            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}") from e
+        with self.transaction():
+            # Do not need expanded dataset refs so can ignore the return value.
+            self._ingest_file_datasets(datasets, import_info, progress, dry_run=dry_run)
 
-    def _ingest_file_datasets(
+            try:
+                self._datastore.ingest_zip(zip_path, transfer=transfer, dry_run=dry_run)
+            except IntegrityError as e:
+                raise ConflictingDefinitionError(
+                    f"Datastore already contains one or more datasets: {e}"
+                ) from e
+
+    def _prepare_ingest_file_datasets(
         self,
         datasets: Sequence[FileDataset],
+        progress: Progress,
         *,
+        transfer_dimensions: bool = False,
         dry_run: bool = False,
-    ) -> None:
-        if not datasets:
-            return
-
-        progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
-
+    ) -> _ImportDatasetsInfo:
         # Track DataIDs that are being ingested so we can spot issues early
         # with duplication. Retain previous FileDataset so we can report it.
         groupedDataIds: MutableMapping[tuple[DatasetType, str], dict[DataCoordinate, FileDataset]] = (
@@ -1661,16 +1678,26 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 groupedDataIds[group_key][ref.dataId] = dataset
             refs.extend(dataset.refs)
 
-        # Bulk insert.
+        # Ensure that dataset types are created and all ref information
+        # extracted.
         import_info = self._prepare_for_import_refs(
             self,
             refs,
             skip_missing=False,
             register_dataset_types=True,
             dry_run=dry_run,
-            transfer_dimensions=False,
+            transfer_dimensions=transfer_dimensions,
         )
+        return import_info
 
+    def _ingest_file_datasets(
+        self,
+        datasets: Sequence[FileDataset],
+        import_info: _ImportDatasetsInfo,
+        progress: Progress,
+        *,
+        dry_run: bool = False,
+    ) -> None:
         self._import_dimension_records(import_info.dimension_records, dry_run=dry_run)
         imported_refs = self._import_grouped_refs(
             import_info.grouped_refs, None, progress, dry_run=dry_run, expand_refs=True
@@ -1683,7 +1710,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         for dataset in progress.wrap(datasets, desc="Re-attaching expanded refs"):
             dataset.refs = [id_to_ref[ref.id] for ref in dataset.refs]
 
-    @transactional
     def ingest(
         self,
         *datasets: FileDataset,
@@ -1696,19 +1722,25 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+        progress = Progress("lsst.daf.butler.Butler.ingest", level=VERBOSE)
 
-        self._ingest_file_datasets(datasets)
+        import_info = self._prepare_ingest_file_datasets(datasets, progress)
 
-        # Bulk-insert everything into Datastore.
-        # We do not know if any of the registry entries already existed
-        # (_importDatasets only complains if they exist but differ) so
-        # we have to catch IntegrityError explicitly.
-        try:
-            self._datastore.ingest(
-                *datasets, transfer=transfer, record_validation_info=record_validation_info
-            )
-        except IntegrityError as e:
-            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}") from e
+        with self.transaction():
+            self._ingest_file_datasets(datasets, import_info, progress)
+
+            # Bulk-insert everything into Datastore.
+            # We do not know if any of the registry entries already existed
+            # (_importDatasets only complains if they exist but differ) so
+            # we have to catch IntegrityError explicitly.
+            try:
+                self._datastore.ingest(
+                    *datasets, transfer=transfer, record_validation_info=record_validation_info
+                )
+            except IntegrityError as e:
+                raise ConflictingDefinitionError(
+                    f"Datastore already contains one or more datasets: {e}"
+                ) from e
 
     @contextlib.contextmanager
     def export(

@@ -961,6 +961,20 @@ class ButlerTests(ButlerPutGetTests):
 
             butler.ingest_zip(zip, transfer="copy")
 
+            # Create an entirely new local file butler in this temp directory.
+            new_butler_cfg = Butler.makeRepo(tmpdir)
+            new_butler = Butler.from_config(new_butler_cfg, writeable=True)
+
+            # This will fail since dimensions records are missing.
+            with self.assertRaises(ConflictingDefinitionError):
+                new_butler.ingest_zip(zip, transfer="copy")
+
+            # Dry run should work.
+            new_butler.ingest_zip(zip, transfer="copy", dry_run=True)
+
+            new_butler.ingest_zip(zip, transfer="copy", transfer_dimensions=True)
+            self.assertTrue(butler.exists(refs[0]))
+
         # Check that the refs can be read again.
         _ = [butler.get(ref) for ref in refs]
 

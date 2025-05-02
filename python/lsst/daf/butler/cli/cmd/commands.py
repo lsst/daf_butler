@@ -829,6 +829,12 @@ def export_calibs(*args: Any, **kwargs: Any) -> None:
 @repo_argument(required=True)
 @click.argument("zip", required=True)
 @transfer_option()
+@transfer_dimensions_option(
+    default=False, help="Attempt to register missing dimension records during ingest."
+)
+@click.option(
+    "--dry-run/--no-dry-run", default=False, help="Enable dry run mode and do not ingest any datasets."
+)
 def ingest_zip(**kwargs: Any) -> None:
     """Ingest a Zip file created by retrieve-artifacts.
 

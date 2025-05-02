@@ -1374,7 +1374,14 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
-    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+    def ingest_zip(
+        self,
+        zip_file: ResourcePathExpression,
+        transfer: str = "auto",
+        *,
+        transfer_dimensions: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         """Ingest a Zip file into this butler.
 
         The Zip file must have been created by `retrieve_artifacts_zip`.
@@ -1385,10 +1392,17 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Path to the Zip file.
         transfer : `str`, optional
             Method to use to transfer the Zip into the datastore.
+        transfer_dimensions : `bool`, optional
+            If `True`, dimension record data associated with the new datasets
+            will be transferred from the Zip file, if present.
+        dry_run : `bool`, optional
+            If `True` the ingest will be processed without any modifications
+            made to the target butler and as if the target butler did not
+            have any of the datasets.
 
         Notes
         -----
-        Run collections are created as needed.
+        Run collections and dataset types are created as needed.
         """
         raise NotImplementedError()
 
