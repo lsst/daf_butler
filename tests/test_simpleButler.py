@@ -504,6 +504,11 @@ class SimpleButlerTests(TestCaseMixin):
         )
         self.assertEqual(bias3b_id, bias3b.id)
 
+        # Query for a calibration in a RUN and CALIBRATION collection to
+        # ensure we do not get duplicate results.
+        results = butler.query_datasets("bias", collections=["calibs", "imported_g"], find_first=False)
+        self.assertEqual(len(set(results)), len(results))
+
         # Extra but inconsistent record values are a problem.
         with self.assertRaises(ValueError):
             bias3b_id, _ = butler.get(
