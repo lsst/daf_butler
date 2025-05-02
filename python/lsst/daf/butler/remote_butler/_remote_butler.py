@@ -568,7 +568,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         raise NotImplementedError()
 
-    def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
+    def ingest_zip(
+        self,
+        zip_file: ResourcePathExpression,
+        transfer: str = "auto",
+        *,
+        transfer_dimensions: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
 
