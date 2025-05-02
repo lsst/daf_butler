@@ -1,0 +1,148 @@
+{
+  "index_version": "V1",
+  "refs": {
+    "container_version": "V1",
+    "universe_version": 7,
+    "universe_namespace": "daf_butler",
+    "dataset_types": {
+      "calexp": {
+        "name": "calexp",
+        "storageClass": "ExposureF",
+        "dimensions": [
+          "instrument",
+          "detector",
+          "visit"
+        ],
+        "parentStorageClass": null,
+        "isCalibration": false
+      }
+    },
+    "compact_refs": {
+      "11bb2876-2c68-4cc0-9fc2-dc81ea7a3cf2": {
+        "dataset_type_name": "calexp",
+        "run": "HSC/runs/ci_hsc/20250429T001504Z",
+        "data_id": {
+          "instrument": "HSC",
+          "detector": 16,
+          "visit": 903988,
+          "band": "i",
+          "day_obs": 20131102,
+          "physical_filter": "HSC-I"
+        }
+      },
+      "0d470958-1bd1-4aa5-9bcc-c0b4982453a2": {
+        "dataset_type_name": "calexp",
+        "run": "HSC/runs/ci_hsc_injection/20250429T004245Z",
+        "data_id": {
+          "instrument": "HSC",
+          "detector": 16,
+          "visit": 903988,
+          "band": "i",
+          "day_obs": 20131102,
+          "physical_filter": "HSC-I"
+        }
+      }
+    },
+    "dimension_records": {
+      "physical_filter": [
+        [
+          "HSC",
+          "HSC-I",
+          "i"
+        ]
+      ],
+      "day_obs": [
+        [
+          "HSC",
+          20131102,
+          [
+            1383350400000000000,
+            1383436800000000000
+          ]
+        ]
+      ],
+      "visit_detector_region": [
+        [
+          "HSC",
+          16,
+          903988,
+          "70df986845fbe6e83f15be986a5d18e4bf918efe23718f7fbf6d76f1325be7e83f6e9c70ee1218e4bf6730f6f5a07377bfe1e5dad5a4d4e83f914617922c2fe4bfd9d2362150bd77bf778e1e6d62d4e83f75c4a4e0502fe4bfe6235a7f78f67fbf"
+        ]
+      ],
+      "instrument": [
+        [
+          "HSC",
+          21474800,
+          0,
+          21474800,
+          200,
+          "lsst.obs.subaru.HyperSuprimeCam"
+        ]
+      ],
+      "visit": [
+        [
+          "HSC",
+          903988,
+          20131102,
+          "HSC-I",
+          "HSCA90398800",
+          903988,
+          30.0,
+          "STRIPE82L",
+          "science",
+          "o13015",
+          195.76668946,
+          20.474563720000006,
+          "704e8c7bab808be83f39aac5f3d086e4bf7aeb5871f4e68cbf71ad438d4b9ee83f58b6c6223d70e4bf16ac34e4542c8dbf338cd8455ac1e83f7f40bf4fb845e4bf3d862f127c308dbffb61777ef2d3e83f3dbdf9d5f32ee4bfc061ed91b9f08cbf20c44e2bb6e5e83f2d7523cc5019e4bfff9f8c98227c89bf20bff59c6cefe83fcd77bc2ab60de4bf72bfe376e7fa82bf363b26f931f8e83ffbe4f5031e03e4bf9171dfdebf5c78bfd8aa803487f8e83ff95283c4cf02e4bfc3afb3733aac71bf9a599d0695f8e83fe6b43227c302e4bfbabc4bc2174f70bfc7ddc4fac0f8e83f3c0cce039b02e4bfa340d17f29cc65bfc71d7b6cc9f8e83f37bae13e9302e4bfefbd59f8591663bf83b2704edff8e83fc61ac25e7f02e4bf4d65016fa25950bf73e52259e1f8e83f813cf0bf7d02e4bf668c91aae3cc45bf3a1296eae2f8e83feb9282c97b02e4bf7e10e78daae1453f4a83711ddff8e83f4e7725997f02e4bfb55f8a801f67503f00244de9c9f8e83fcf133da69202e4bf8ea32f271213633f5bd14852c2f8e83f8f9fab519902e4bf0a8a265328d1653f7771688d97f8e83f40b1a2e4bf02e4bf782552818057703fc10b75ee8af8e83fc5b50f24cb02e4bfd814a83e8baa713f3a79159834f8e83f7036fc931a03e4bf691bce5b8a65783feb96005f72efe83f6da90cdbae0de4bff06ed54d77fd823f1752ed15bee5e83fa7cdb5db4619e4bf6cbbef06cf7d893f25690c0efbd3e83fa63e8e4ee92ee4bfc9e94907b4f08c3f4dc71f155bc1e83f0aa21620b745e4bfe31039a3ad328d3f36d0aaaa489ee83f811f7f3c4070e4bf691ff2e087308d3feba8979f7d8be83f104b5d02d486e4bf7fe070d19bed8c3fa9acad3daf79e83f7d601b27559ce4bfbd821511fe76893f1c4327fcdf6fe83f2e0df0b065a8e4bff1c14c3cf6f3823f6ec64b122c67e83f0dd0fb6ffeb2e4bf190aa6297054783fb4c1a7f3ec66e83f0b5e9efd63b3e4bfc5bf02e9a7a2713f2e06cc22e366e83f210c23f773b3e4bfae9a6f4db74a703f4476be60c466e83f6fbc126aa6b3e4bff6f7654fe8c5653fea8c8fa4be66e83f1ee167ddafb3e4bff49617683b0b633f3b1b285bb066e83fd7cac6d8c7b3e4bfded0d0a6345d503f858d0de4ac66e83f49da43d4ccb3e4bf9384423798d2453fb82687f3ad66e83fb0429895cbb3e4bfc2ddee27b7be45bfd74e551db066e83f22d14a23c8b3e4bf1ca37abbdd5450bf5069c776be66e83f1dd9dd14b0b3e4bf4f19e8849a0963bf01ce1fcdc466e83fddd18defa5b3e4bf506e23baeec065bf8242e08ce366e83f9e4eb48173b3e4bf1177752b4c4870bff43ef46ded66e83fd627097163b3e4bf977177b39aa171bf2485ecbf2a67e83fea186d0e00b3e4bf8a8734a9225178bfeea239fede6fe83f7651bdee66a8e4bfae2c4f6bc6f282bf46be89e1b179e83fefc33c69529ce4bf1d147739e57189bf",
+          [
+            1383369626658000000,
+            1383369658886000000
+          ]
+        ]
+      ],
+      "band": [
+        [
+          "i"
+        ]
+      ],
+      "detector": [
+        [
+          "HSC",
+          16,
+          "0_30",
+          "30",
+          "0",
+          "SCIENCE"
+        ]
+      ]
+    }
+  },
+  "artifact_map": {
+    "HSC/runs/ci_hsc/20250429T001504Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_30_HSC_runs_ci_hsc_20250429T001504Z.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter",
+        "path": "HSC/runs/ci_hsc/20250429T001504Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_30_HSC_runs_ci_hsc_20250429T001504Z.fits",
+        "storage_class": "ExposureF",
+        "component": null,
+        "checksum": null,
+        "file_size": 58870080
+      },
+      "ids": [
+        "11bb2876-2c68-4cc0-9fc2-dc81ea7a3cf2"
+      ]
+    },
+    "HSC/runs/ci_hsc_injection/20250429T004245Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_30_HSC_runs_ci_hsc_injection_20250429T004245Z.fits": {
+      "info": {
+        "formatter": "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter",
+        "path": "HSC/runs/ci_hsc_injection/20250429T004245Z/calexp/20131102/i/HSC-I/903988/calexp_HSC_i_HSC-I_903988_0_30_HSC_runs_ci_hsc_injection_20250429T004245Z.fits",
+        "storage_class": "ExposureF",
+        "component": null,
+        "checksum": null,
+        "file_size": 58870080
+      },
+      "ids": [
+        "0d470958-1bd1-4aa5-9bcc-c0b4982453a2"
+      ]
+    }
+  }
+}
