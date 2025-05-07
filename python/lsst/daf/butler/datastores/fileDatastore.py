@@ -422,6 +422,32 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             raise
         log.debug("Successfully deleted file: %s", location.uri)
 
+    def _delete_artifacts(self, locations: list[Location]) -> None:
+        """Delete multiple artifacts from the datastore."""
+        # Filter out all artifacts that are direct.
+        n_locations = len(locations)
+        filtered = [loc.uri for loc in locations if not loc.pathInStore.isabs()]
+        n_direct = n_locations - len(filtered)
+        if n_direct > 0:
+            log.info(
+                "Not deleting %d artifact%s out of %d using absolute URIs",
+                n_direct,
+                "s" if n_direct != 1 else "",
+                n_locations,
+            )
+        if not filtered:
+            return
+
+        try:
+            ResourcePath.mremove(filtered, do_raise=True)
+        except* FileNotFoundError as e:
+            # File not there is counted as "success" because we don't want
+            # the file to be there.
+            n_except = len(e.exceptions)
+            s = "s" if n_except != 1 else ""
+            log.debug("%d artifact%s did not exist and so could not be deleted.", n_except, s)
+        log.debug("Successfully deleted %d file%s", len(filtered), "s" if len(filtered) != 1 else "")
+
     def addStoredItemInfo(
         self,
         refs: Iterable[DatasetRef],
@@ -2596,6 +2622,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 else:
                     artifacts_to_keep = slow_artifacts_to_keep
 
+            artifacts_to_delete: list[Location] = []
             for ref, info in trashed_list:
                 # Should not happen for this implementation but need
                 # to keep mypy happy.
@@ -2609,42 +2636,56 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # Only trashed refs still known to datastore will be returned.
                 location = info.file_location(self.locationFactory)
 
-                # Point of no return for this artifact
-                log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-                try:
-                    self._delete_artifact(location)
-                except FileNotFoundError:
-                    # If the file itself has been deleted there is nothing
-                    # we can do about it. It is possible that trash has
-                    # been run in parallel in another process or someone
-                    # decided to delete the file. It is unlikely to come
-                    # back and so we should still continue with the removal
-                    # of the entry from the trash table. It is also possible
-                    # we removed it in a previous iteration if it was
-                    # a multi-dataset artifact. The delete artifact method
-                    # will log a debug message in this scenario.
-                    # Distinguishing file missing before trash started and
-                    # file already removed previously as part of this trash
-                    # is not worth the distinction with regards to potential
-                    # memory cost.
-                    pass
-                except Exception as e:
-                    if ignore_errors:
-                        # Use a debug message here even though it's not
-                        # a good situation. In some cases this can be
-                        # caused by a race between user A and user B
-                        # and neither of them has permissions for the
-                        # other's files. Butler does not know about users
-                        # and trash has no idea what collections these
-                        # files were in (without guessing from a path).
-                        log.debug(
-                            "Encountered error removing artifact %s from datastore %s: %s",
-                            location.uri,
-                            self.name,
-                            e,
-                        )
-                    else:
-                        raise
+                artifacts_to_delete.append(location)
+
+            # Now do the deleting.
+            s_del = "s" if len(artifacts_to_delete) != 1 else ""
+            log.debug(
+                "Now removing %d file artifact%s from datastore %s",
+                len(artifacts_to_delete),
+                s_del,
+                self.name,
+            )
+
+            try:
+                self._delete_artifacts(artifacts_to_delete)
+            except* FileNotFoundError:
+                # If the file itself has been deleted there is nothing
+                # we can do about it. It is possible that trash has
+                # been run in parallel in another process or someone
+                # decided to delete the file. It is unlikely to come
+                # back and so we should still continue with the removal
+                # of the entry from the trash table. It is also possible
+                # we removed it in a previous iteration if it was
+                # a multi-dataset artifact. The delete artifact method
+                # will log a debug message in this scenario.
+                # Distinguishing file missing before trash started and
+                # file already removed previously as part of this trash
+                # is not worth the distinction with regards to potential
+                # memory cost. These should already be caught but just in case
+                # filter them out here.
+                pass
+            except* Exception as e:
+                if ignore_errors:
+                    # Use a debug message here even though it's not
+                    # a good situation. In some cases this can be
+                    # caused by a race between user A and user B
+                    # and neither of them has permissions for the
+                    # other's files. Butler does not know about users
+                    # and trash has no idea what collections these
+                    # files were in (without guessing from a path).
+                    s_err = "s" if len(e.exceptions) != 1 else ""
+                    log.debug(
+                        "Encountered %d error%s removing %d artifact%s from datastore %s: %s",
+                        len(e.exceptions),
+                        s_err,
+                        len(artifacts_to_delete),
+                        s_del,
+                        self.name,
+                        e,
+                    )
+                else:
+                    raise
 
     @transactional
     def transfer_from(
