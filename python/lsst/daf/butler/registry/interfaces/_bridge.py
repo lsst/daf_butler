@@ -29,7 +29,7 @@ from __future__ import annotations
 __all__ = ("DatasetIdRef", "DatastoreRegistryBridge", "DatastoreRegistryBridgeManager", "FakeDatasetRef")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
@@ -191,6 +191,7 @@ class DatastoreRegistryBridge(ABC):
         records_table: OpaqueTableStorage | None = None,
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
+        selected_ids: Collection[DatasetId] | None = None,
     ) -> AbstractContextManager[
         tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]
     ]:
@@ -206,6 +207,13 @@ class DatastoreRegistryBridge(ABC):
             Class to use when reading records from ``records_table``.
         record_column : `str`, optional
             Name of the column in records_table that refers to the artifact.
+        selected_ids : `collections.abc.Collection` [ `DatasetId` ] \
+                or `None`, optional
+            If provided, collection of IDs that should be trashed. Only records
+            within this selection will be yielded and then removed. This
+            can be used to allow a subset of the trash table to be emptied.
+            If an empty set is given no artifacts will be trashed. If `None`
+            the full list from the trash table will be used.
 
         Yields
         ------

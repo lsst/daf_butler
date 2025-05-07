@@ -516,8 +516,9 @@ class QuantumBackedButler(LimitedButler):
                 self._actual_output_refs.discard(ref)
 
         if unstore:
-            # Point of no return for removing artifacts
-            self._datastore.emptyTrash()
+            # Point of no return for removing artifacts. Only try to remove
+            # refs associated with this pruning.
+            self._datastore.emptyTrash(refs=refs)
 
     def retrieve_artifacts_zip(
         self,

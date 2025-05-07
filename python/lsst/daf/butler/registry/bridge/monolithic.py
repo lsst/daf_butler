@@ -32,12 +32,13 @@ __all__ = ("MonolithicDatastoreRegistryBridge", "MonolithicDatastoreRegistryBrid
 
 import copy
 from collections import namedtuple
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
+from ..._dataset_ref import DatasetId
 from ..._named import NamedValueSet
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
 from ..interfaces import (
@@ -209,6 +210,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         records_table: OpaqueTableStorage | None = None,
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
+        selected_ids: Collection[DatasetId] | None = None,
     ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
 
@@ -248,6 +250,10 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # use to delete.
         with self._db.query(info_in_trash) as sql_result:
             rows = [dict(row, datastore_name=self.datastoreName) for row in sql_result.mappings()]
+
+        # Only keep rows that match the external override selection.
+        if selected_ids is not None:
+            rows = [row for row in rows if row["dataset_id"] in selected_ids]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We

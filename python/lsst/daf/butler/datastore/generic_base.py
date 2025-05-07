@@ -80,7 +80,7 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
         encountered during removal are not ignored.
         """
         self.trash(ref, ignore_errors=False)
-        self.emptyTrash(ignore_errors=False)
+        self.emptyTrash(ignore_errors=False, refs=[ref])
 
     def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:
         """Retrieve a dataset from an input `Datastore`,
@@ -89,7 +89,7 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
         Parameters
         ----------
         inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
+            The external `Datastore` from which to retrieve the Dataset.
         ref : `DatasetRef`
             Reference to the required dataset in the input data store.
         """

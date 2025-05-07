@@ -2557,8 +2557,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             else:
                 raise
 
-    @transactional
-    def emptyTrash(self, ignore_errors: bool = True) -> None:
+    def emptyTrash(self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None) -> None:
         """Remove all datasets from the trash.
 
         Parameters
@@ -2567,14 +2566,56 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             If `True` return without error even if something went wrong.
             Problems could occur if another process is simultaneously trying
             to delete.
-        """
-        log.debug("Emptying trash in datastore %s", self.name)
+        refs : `collections.abc.Collection` [ `DatasetRef` ] or `None`
+            Explicit list of datasets that can be removed from trash. If listed
+            datasets are not already stored in the trash table they will be
+            ignored. If `None` every entry in the trash table will be
+            processed.
 
+        Notes
+        -----
+        Will empty the records from the trash tables only if this call finishes
+        without raising.
+        """
+        if refs:
+            selected_ids = {ref.id for ref in refs}
+            n_chunks = 0
+            for chunk in chunk_iterable(selected_ids, chunk_size=50_000):
+                n_chunks += 1
+                log.debug("Emptying trash for chunk %d of size %d", n_chunks, len(chunk))
+                self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk)
+        else:
+            log.debug("Emptying all trash in datastore %s", self.name)
+            self._empty_trash_subset(ignore_errors=ignore_errors)
+
+    @transactional
+    def _empty_trash_subset(
+        self, ignore_errors: bool = True, selected_ids: Collection[DatasetId] | None = None
+    ) -> None:
+        """Empty trash table in transaction.
+
+        Parameters
+        ----------
+        ignore_errors : `bool`
+            If `True` return without error even if something went wrong.
+            Problems could occur if another process is simultaneously trying
+            to delete.
+        selected_ids : `collections.abc.collection` [`DatasetId`] or `None`
+            Explicit list of dataset IDs that can be removed from the trash.
+            If listed datasets are not already included in the trash table
+            they will be ignored. If `None` every entry in the  trash table
+            will be processed.
+
+        Notes
+        -----
+        Will empty the records from the trash tables only if this call finishes
+        without raising.
+        """
         # Context manager will empty trash iff we finish it without raising.
         # It will also automatically delete the relevant rows from the
         # trash table and the records table.
         with self.bridge.emptyTrash(
-            self._table, record_class=StoredFileInfo, record_column="path"
+            self._table, record_class=StoredFileInfo, record_column="path", selected_ids=selected_ids
         ) as trash_data:
             # Removing the artifacts themselves requires that the files are
             # not also associated with refs that are not to be trashed.

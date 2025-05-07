@@ -1470,8 +1470,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             for name in names:
                 self._registry.removeCollection(name)
         if unstore:
-            # Point of no return for removing artifacts
-            self._datastore.emptyTrash()
+            # Point of no return for removing artifacts. Restrict the trash
+            # emptying to the datasets from this specific collection rather
+            # than everything in the trash.
+            self._datastore.emptyTrash(refs=refs)
 
     def pruneDatasets(
         self,
@@ -1535,8 +1537,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # deleting everything on disk and in private Datastore tables that is
         # in the dataset_location_trash table.
         if unstore:
-            # Point of no return for removing artifacts
-            self._datastore.emptyTrash()
+            # Point of no return for removing artifacts. Restrict the trash
+            # emptying to the refs that this call trashed.
+            self._datastore.emptyTrash(refs=refs)
 
     @transactional
     def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
