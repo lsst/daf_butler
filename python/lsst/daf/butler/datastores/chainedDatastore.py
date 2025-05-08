@@ -1028,9 +1028,13 @@ class ChainedDatastore(Datastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-    def emptyTrash(self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+    ) -> set[ResourcePath]:
+        removed = set()
         for datastore in self.datastores:
-            datastore.emptyTrash(ignore_errors=ignore_errors, refs=refs)
+            removed.update(datastore.emptyTrash(ignore_errors=ignore_errors, refs=refs))
+        return removed
 
     def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:
         """Retrieve a dataset from an input `Datastore`,

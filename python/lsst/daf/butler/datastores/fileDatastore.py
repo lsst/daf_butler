@@ -111,6 +111,7 @@ from lsst.utils.timer import time_this
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
+    from lsst.resources._resourcePath import MBulkResult
 
 log = getLogger(__name__)
 
@@ -422,7 +423,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             raise
         log.debug("Successfully deleted file: %s", location.uri)
 
-    def _delete_artifacts(self, locations: list[Location]) -> None:
+    def _delete_artifacts(self, locations: list[Location]) -> dict[ResourcePath, MBulkResult]:
         """Delete multiple artifacts from the datastore."""
         # Filter out all artifacts that are direct.
         n_locations = len(locations)
@@ -436,17 +437,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 n_locations,
             )
         if not filtered:
-            return
+            return {}
 
-        try:
-            ResourcePath.mremove(filtered, do_raise=True)
-        except* FileNotFoundError as e:
-            # File not there is counted as "success" because we don't want
-            # the file to be there.
-            n_except = len(e.exceptions)
-            s = "s" if n_except != 1 else ""
-            log.debug("%d artifact%s did not exist and so could not be deleted.", n_except, s)
-        log.debug("Successfully deleted %d file%s", len(filtered), "s" if len(filtered) != 1 else "")
+        return ResourcePath.mremove(filtered, do_raise=False)
 
     def addStoredItemInfo(
         self,
@@ -2557,7 +2550,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             else:
                 raise
 
-    def emptyTrash(self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+    ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
         Parameters
@@ -2572,26 +2567,39 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             ignored. If `None` every entry in the trash table will be
             processed.
 
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            List of artifacts that were removed.
+
         Notes
         -----
         Will empty the records from the trash tables only if this call finishes
         without raising.
         """
+        removed = set()
         if refs:
             selected_ids = {ref.id for ref in refs}
             n_chunks = 0
             for chunk in chunk_iterable(selected_ids, chunk_size=50_000):
                 n_chunks += 1
-                log.debug("Emptying trash for chunk %d of size %d", n_chunks, len(chunk))
-                self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk)
+                log.verbose("Emptying trash for chunk %d of size %d", n_chunks, len(chunk))
+                removed.update(self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk))
         else:
-            log.debug("Emptying all trash in datastore %s", self.name)
-            self._empty_trash_subset(ignore_errors=ignore_errors)
+            log.verbose("Emptying all trash in datastore %s", self.name)
+            removed = self._empty_trash_subset(ignore_errors=ignore_errors)
+        log.info(
+            "Removed %d file artifact%s from datastore %s",
+            len(removed),
+            "s" if len(removed) != 1 else "",
+            self.name,
+        )
+        return removed
 
     @transactional
     def _empty_trash_subset(
         self, ignore_errors: bool = True, selected_ids: Collection[DatasetId] | None = None
-    ) -> None:
+    ) -> set[ResourcePath]:
         """Empty trash table in transaction.
 
         Parameters
@@ -2605,6 +2613,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             If listed datasets are not already included in the trash table
             they will be ignored. If `None` every entry in the  trash table
             will be processed.
+
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            Artifacts successfully removed.
 
         Notes
         -----
@@ -2688,25 +2701,23 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 self.name,
             )
 
-            try:
-                self._delete_artifacts(artifacts_to_delete)
-            except* FileNotFoundError:
-                # If the file itself has been deleted there is nothing
-                # we can do about it. It is possible that trash has
-                # been run in parallel in another process or someone
-                # decided to delete the file. It is unlikely to come
-                # back and so we should still continue with the removal
-                # of the entry from the trash table. It is also possible
-                # we removed it in a previous iteration if it was
-                # a multi-dataset artifact. The delete artifact method
-                # will log a debug message in this scenario.
-                # Distinguishing file missing before trash started and
-                # file already removed previously as part of this trash
-                # is not worth the distinction with regards to potential
-                # memory cost. These should already be caught but just in case
-                # filter them out here.
-                pass
-            except* Exception as e:
+            remove_result = self._delete_artifacts(artifacts_to_delete)
+
+            removed: set[ResourcePath] = set()
+            exceptions: list[Exception] = []
+            for uri, result in remove_result.items():
+                if result.exception is None or isinstance(result.exception, FileNotFoundError):
+                    # File not existing is not an error since some other
+                    # process might have been trying to clean it and we do not
+                    # want to raise an error for a situation where the file
+                    # is not there and we do not want it to be there.
+                    removed.add(uri)
+                else:
+                    exceptions.append(result.exception)
+
+            if exceptions:
+                s_err = "s" if len(exceptions) != 1 else ""
+                e = ExceptionGroup(f"Error{s_err} removing {len(exceptions)} artifact{s_err}", exceptions)
                 if ignore_errors:
                     # Use a debug message here even though it's not
                     # a good situation. In some cases this can be
@@ -2715,10 +2726,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     # other's files. Butler does not know about users
                     # and trash has no idea what collections these
                     # files were in (without guessing from a path).
-                    s_err = "s" if len(e.exceptions) != 1 else ""
                     log.debug(
                         "Encountered %d error%s removing %d artifact%s from datastore %s: %s",
-                        len(e.exceptions),
+                        len(exceptions),
                         s_err,
                         len(artifacts_to_delete),
                         s_del,
@@ -2726,7 +2736,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         e,
                     )
                 else:
-                    raise
+                    raise e
+        return removed
 
     @transactional
     def transfer_from(

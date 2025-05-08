@@ -627,7 +627,9 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         with self._transaction.undoWith(f"Trash {len(ref_list)} datasets", _rollbackMoveToTrash, ref_list):
             self._trashedIds.update(ref.id for ref in ref_list)
 
-    def emptyTrash(self, ignore_errors: bool = False, refs: Collection[DatasetRef] | None = None) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = False, refs: Collection[DatasetRef] | None = None
+    ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
         Parameters
@@ -639,6 +641,11 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             datasets are not already stored in the trash table they will be
             ignored. If `None` every entry in the trash table will be
             processed.
+
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            List of artifacts that were removed. Empty for this datastore.
 
         Notes
         -----
@@ -689,6 +696,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         # Empty the trash table
         self._trashedIds = self._trashedIds - trashed_ids
+        return set()
 
     def validateConfiguration(
         self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False

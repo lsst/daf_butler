@@ -1160,7 +1160,9 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def emptyTrash(self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+    ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
         Parameters
@@ -1172,6 +1174,12 @@ class Datastore(metaclass=ABCMeta):
             datasets are not already stored in the trash table they will be
             ignored. If `None` every entry in the trash table will be
             processed.
+
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            List of artifacts that were removed. Can return nothing if
+            artifacts cannot be represented by URIs.
 
         Notes
         -----
@@ -1517,7 +1525,9 @@ class NullDatastore(Datastore):
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
-    def emptyTrash(self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+    ) -> set[ResourcePath]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def transfer(self, inputDatastore: Datastore, datasetRef: DatasetRef) -> None:
