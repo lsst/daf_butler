@@ -1161,7 +1161,7 @@ class Datastore(metaclass=ABCMeta):
 
     @abstractmethod
     def emptyTrash(
-        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
     ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
@@ -1174,6 +1174,9 @@ class Datastore(metaclass=ABCMeta):
             datasets are not already stored in the trash table they will be
             ignored. If `None` every entry in the trash table will be
             processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
 
         Returns
         -------
@@ -1526,7 +1529,7 @@ class NullDatastore(Datastore):
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def emptyTrash(
-        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
     ) -> set[ResourcePath]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 

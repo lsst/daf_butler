@@ -211,6 +211,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
         selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
 
@@ -294,7 +295,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         yield ((id_info, preserved))
 
         # No exception raised in context manager block.
-        if not rows:
+        if not rows or dry_run:
             return
 
         # Delete the rows from the records table

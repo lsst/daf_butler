@@ -2551,7 +2551,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 raise
 
     def emptyTrash(
-        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
     ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
@@ -2566,6 +2566,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             datasets are not already stored in the trash table they will be
             ignored. If `None` every entry in the trash table will be
             processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
 
         Returns
         -------
@@ -2584,12 +2587,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             for chunk in chunk_iterable(selected_ids, chunk_size=50_000):
                 n_chunks += 1
                 log.verbose("Emptying trash for chunk %d of size %d", n_chunks, len(chunk))
-                removed.update(self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk))
+                removed.update(
+                    self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk, dry_run=dry_run)
+                )
         else:
             log.verbose("Emptying all trash in datastore %s", self.name)
-            removed = self._empty_trash_subset(ignore_errors=ignore_errors)
+            removed = self._empty_trash_subset(ignore_errors=ignore_errors, dry_run=dry_run)
         log.info(
-            "Removed %d file artifact%s from datastore %s",
+            "%sRemoved %d file artifact%s from datastore %s",
+            "Would have " if dry_run else "",
             len(removed),
             "s" if len(removed) != 1 else "",
             self.name,
@@ -2598,7 +2604,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     @transactional
     def _empty_trash_subset(
-        self, ignore_errors: bool = True, selected_ids: Collection[DatasetId] | None = None
+        self,
+        *,
+        ignore_errors: bool = True,
+        selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> set[ResourcePath]:
         """Empty trash table in transaction.
 
@@ -2613,6 +2623,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             If listed datasets are not already included in the trash table
             they will be ignored. If `None` every entry in the  trash table
             will be processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
 
         Returns
         -------
@@ -2628,7 +2641,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # It will also automatically delete the relevant rows from the
         # trash table and the records table.
         with self.bridge.emptyTrash(
-            self._table, record_class=StoredFileInfo, record_column="path", selected_ids=selected_ids
+            self._table,
+            record_class=StoredFileInfo,
+            record_column="path",
+            selected_ids=selected_ids,
+            dry_run=dry_run,
         ) as trash_data:
             # Removing the artifacts themselves requires that the files are
             # not also associated with refs that are not to be trashed.
@@ -2700,6 +2717,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 s_del,
                 self.name,
             )
+
+            # For dry-run mode do not attempt to search the file store for
+            # the artifacts to determine whether they exist or not. Simply
+            # report that an attempt would be made to delete them.
+            if dry_run:
+                return {loc.uri for loc in artifacts_to_delete if not loc.pathInStore.isabs()}
 
             remove_result = self._delete_artifacts(artifacts_to_delete)
 

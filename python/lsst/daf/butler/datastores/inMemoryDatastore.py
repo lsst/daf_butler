@@ -628,7 +628,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             self._trashedIds.update(ref.id for ref in ref_list)
 
     def emptyTrash(
-        self, ignore_errors: bool = False, refs: Collection[DatasetRef] | None = None
+        self, ignore_errors: bool = False, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
     ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
@@ -641,6 +641,9 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             datasets are not already stored in the trash table they will be
             ignored. If `None` every entry in the trash table will be
             processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
 
         Returns
         -------
@@ -664,6 +667,12 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             selected_ids = {ref.id for ref in refs}
             if selected_ids is not None:
                 trashed_ids = {tid for tid in trashed_ids if tid in selected_ids}
+
+        if dry_run:
+            log.info(
+                "Would attempt remove %s dataset%s.", len(trashed_ids), "s" if len(trashed_ids) != 1 else ""
+            )
+            return set()
 
         for dataset_id in trashed_ids:
             try:

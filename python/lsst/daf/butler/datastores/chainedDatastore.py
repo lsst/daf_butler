@@ -1029,11 +1029,11 @@ class ChainedDatastore(Datastore):
                 raise FileNotFoundError(err_msg)
 
     def emptyTrash(
-        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
     ) -> set[ResourcePath]:
         removed = set()
         for datastore in self.datastores:
-            removed.update(datastore.emptyTrash(ignore_errors=ignore_errors, refs=refs))
+            removed.update(datastore.emptyTrash(ignore_errors=ignore_errors, refs=refs, dry_run=dry_run))
         return removed
 
     def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:

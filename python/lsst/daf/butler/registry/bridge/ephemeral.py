@@ -101,6 +101,7 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
         selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
         matches: Iterable[tuple[FakeDatasetRef, StoredDatastoreItemInfo | None]] = ()
@@ -123,6 +124,9 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Indicate to caller that we do not know about artifacts that
         # should be retained.
         yield ((matches, None))
+
+        if dry_run:
+            return
 
         if isinstance(records_table, OpaqueTableStorage):
             # Remove the records entries

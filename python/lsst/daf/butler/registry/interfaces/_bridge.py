@@ -192,6 +192,7 @@ class DatastoreRegistryBridge(ABC):
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
         selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> AbstractContextManager[
         tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]
     ]:
@@ -214,6 +215,9 @@ class DatastoreRegistryBridge(ABC):
             can be used to allow a subset of the trash table to be emptied.
             If an empty set is given no artifacts will be trashed. If `None`
             the full list from the trash table will be used.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
 
         Yields
         ------
