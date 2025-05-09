@@ -31,8 +31,10 @@ from typing import Any, Protocol
 
 try:
     import sentry_sdk
+
+    _SENTRY_AVAILABLE = True
 except ImportError:
-    sentry_sdk = None
+    _SENTRY_AVAILABLE = False
 
 
 class TelemetryContext(Protocol):
@@ -59,7 +61,7 @@ def enable_telemetry() -> None:
     """Turn on upload of trace telemetry to Sentry, to allow performance
     debugging of deployed server.
     """
-    if sentry_sdk is None:
+    if not _SENTRY_AVAILABLE:
         return
 
     # Configuration will be pulled from SENTRY_* environment variables
