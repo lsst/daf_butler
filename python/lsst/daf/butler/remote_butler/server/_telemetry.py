@@ -82,4 +82,4 @@ def _decide_whether_to_sample_trace(context: dict[str, Any]) -> float:
         if asgi_scope.get("path") == "/":
             return 0
 
-    return 1
+    return 0.02
