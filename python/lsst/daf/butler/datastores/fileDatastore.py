@@ -2684,15 +2684,22 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             if not artifacts_to_delete:
                 return set()
 
-            # Now do the deleting.
-            s_del = "s" if len(artifacts_to_delete) != 1 else ""
-            log.verbose(
-                "%s removing %d file artifact%s from datastore %s",
-                "Would be" if dry_run else "Now",
-                len(artifacts_to_delete),
-                s_del,
-                self.name,
-            )
+            # Now do the deleting. Special case the log message for a single
+            # artifact.
+            if len(artifacts_to_delete) == 1:
+                log.verbose(
+                    "%s removing file artifact %s from datastore %s",
+                    "Would be" if dry_run else "Now",
+                    list(artifacts_to_delete)[0],
+                    self.name,
+                )
+            else:
+                log.verbose(
+                    "%s removing %d file artifacts from datastore %s",
+                    "Would be" if dry_run else "Now",
+                    len(artifacts_to_delete),
+                    self.name,
+                )
 
             # For dry-run mode do not attempt to search the file store for
             # the artifacts to determine whether they exist or not. Simply
@@ -2732,7 +2739,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         len(exceptions),
                         s_err,
                         len(artifacts_to_delete),
-                        s_del,
+                        "s" if len(artifacts_to_delete) != 1 else "",
                         self.name,
                         e,
                     )
