@@ -111,7 +111,6 @@ from lsst.utils.timer import time_this
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
-    from lsst.resources._resourcePath import MBulkResult
 
 log = getLogger(__name__)
 
@@ -401,45 +400,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         """
         log.debug("Checking if resource exists: %s", location.uri)
         return location.uri.exists()
-
-    def _delete_artifact(self, location: Location) -> None:
-        """Delete the artifact from the datastore.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of the artifact associated with this datastore.
-        """
-        if location.pathInStore.isabs():
-            raise RuntimeError(f"Cannot delete artifact with absolute uri {location.uri}.")
-
-        try:
-            location.uri.remove()
-        except FileNotFoundError:
-            log.debug("File %s did not exist and so could not be deleted.", location.uri)
-            raise
-        except Exception as e:
-            log.critical("Failed to delete file: %s (%s)", location.uri, e)
-            raise
-        log.debug("Successfully deleted file: %s", location.uri)
-
-    def _delete_artifacts(self, locations: list[Location]) -> dict[ResourcePath, MBulkResult]:
-        """Delete multiple artifacts from the datastore."""
-        # Filter out all artifacts that are direct.
-        n_locations = len(locations)
-        filtered = [loc.uri for loc in locations if not loc.pathInStore.isabs()]
-        n_direct = n_locations - len(filtered)
-        if n_direct > 0:
-            log.info(
-                "Not deleting %d artifact%s out of %d using absolute URIs",
-                n_direct,
-                "s" if n_direct != 1 else "",
-                n_locations,
-            )
-        if not filtered:
-            return {}
-
-        return ResourcePath.mremove(filtered, do_raise=False)
 
     def addStoredItemInfo(
         self,
@@ -2693,7 +2653,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 else:
                     artifacts_to_keep = slow_artifacts_to_keep
 
-            artifacts_to_delete: list[Location] = []
+            n_direct = 0
+            artifacts_to_delete: set[ResourcePath] = set()
             for ref, info in trashed_list:
                 # Should not happen for this implementation but need
                 # to keep mypy happy.
@@ -2707,12 +2668,27 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # Only trashed refs still known to datastore will be returned.
                 location = info.file_location(self.locationFactory)
 
-                artifacts_to_delete.append(location)
+                if location.pathInStore.isabs():
+                    n_direct += 1
+                    continue
+
+                # Strip fragment before storing since it is the artifact
+                # we are deleting and we do not want repeats for every member
+                # in a zip.
+                artifacts_to_delete.add(location.uri.replace(fragment=""))
+
+            if n_direct > 0:
+                s = "s" if n_direct != 1 else ""
+                log.verbose("Not deleting %d artifact%s using absolute URI%s", n_direct, s, s)
+
+            if not artifacts_to_delete:
+                return set()
 
             # Now do the deleting.
             s_del = "s" if len(artifacts_to_delete) != 1 else ""
-            log.debug(
-                "Now removing %d file artifact%s from datastore %s",
+            log.verbose(
+                "%s removing %d file artifact%s from datastore %s",
+                "Would be" if dry_run else "Now",
                 len(artifacts_to_delete),
                 s_del,
                 self.name,
@@ -2720,11 +2696,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
             # For dry-run mode do not attempt to search the file store for
             # the artifacts to determine whether they exist or not. Simply
-            # report that an attempt would be made to delete them.
+            # report that an attempt would be made to delete them. Never
+            # report direct imports.
             if dry_run:
-                return {loc.uri for loc in artifacts_to_delete if not loc.pathInStore.isabs()}
+                return artifacts_to_delete
 
-            remove_result = self._delete_artifacts(artifacts_to_delete)
+            # Now remove the actual file artifacts.
+            remove_result = ResourcePath.mremove(artifacts_to_delete, do_raise=False)
 
             removed: set[ResourcePath] = set()
             exceptions: list[Exception] = []
