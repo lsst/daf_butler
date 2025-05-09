@@ -411,9 +411,9 @@ lsst-daf-relation==28.2025.900 \
     --hash=sha256:77cdb15f6c72f37bedb576d419cc757b4e8e685caa283f830220a142b21da1ce \
     --hash=sha256:dae0433e9e009aa9814324392daa8860afc10ec77d8cad2b84f3ed0baad814d9
     # via -r ./docker.in
-lsst-resources==29.2025.1200 \
-    --hash=sha256:957cc5dafdf4752982d63fc74415a83d919a4027e51f604e800323e0418fefe7 \
-    --hash=sha256:a677b82f817d983905bcdf741f2daa37770beb477bbb327b7bc43c35ac8403eb
+lsst-resources==29.2025.1900 \
+    --hash=sha256:156078d48f963c647c4851f3af40d4f5754ea91f4c0c1cc472a9e066d56d0c74 \
+    --hash=sha256:86d520fd4b1c640abddedf66b3d94523520b7c71a335a5496d21b0acb759300e
     # via -r ./docker.in
 lsst-sphgeom==28.2025.800 \
     --hash=sha256:02cbe9ee936fd146a429d79611208a1349d3ef22412e8b415d54ad06101bb355 \
