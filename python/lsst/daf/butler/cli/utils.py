@@ -741,9 +741,16 @@ class MWPath(click.Path):
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
-    def make_metavar(self) -> str:
+    def make_metavar(self, ctx: click.Context | None = None) -> str:
         """Make the metavar for the help menu.
 
+        Parameters
+        ----------
+        ctx : `click.Context` or `None`
+            Context from the command.
+
+        Notes
+        -----
         Overrides `click.Option.make_metavar`.
         Adds a space and an ellipsis after the metavar name if
         the option accepts multiple inputs, otherwise defers to the base
@@ -758,7 +765,7 @@ class MWOption(click.Option):
         transformation that must apply to all types should be applied in
         get_help_record.
         """
-        metavar = super().make_metavar()
+        metavar = super().make_metavar(ctx=ctx)  # type:ignore
         if self.multiple and self.nargs == 1:
             metavar += " ..."
         elif self.nargs != 1:
@@ -769,9 +776,16 @@ class MWOption(click.Option):
 class MWArgument(click.Argument):
     """Overrides click.Argument with desired behaviors."""
 
-    def make_metavar(self) -> str:
+    def make_metavar(self, ctx: click.Context | None = None) -> str:
         """Make the metavar for the help menu.
 
+        Parameters
+        ----------
+        ctx : `click.Context` or `None`
+            Context from the command.
+
+        Notes
+        -----
         Overrides `click.Option.make_metavar`.
         Always adds a space and an ellipsis (' ...') after the
         metavar name if the option accepts multiple inputs.
@@ -784,7 +798,7 @@ class MWArgument(click.Argument):
         metavar : `str`
             The metavar value.
         """
-        metavar = super().make_metavar()
+        metavar = super().make_metavar(ctx=ctx)  # type: ignore
         if self.nargs != 1:
             metavar = f"{metavar[:-3]} ..."
         return metavar
