@@ -246,15 +246,16 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # table that is not listed in the records table. Such an
         # inconsistency would be missed by this query.
         info_in_trash = join_records(records_table._table.select(), self._tables.dataset_location_trash)
+        if selected_ids:
+            info_in_trash = info_in_trash.where(
+                self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+            )
+        info_in_trash = info_in_trash.with_for_update(skip_locked=True)
 
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
         with self._db.query(info_in_trash) as sql_result:
             rows = [dict(row, datastore_name=self.datastoreName) for row in sql_result.mappings()]
-
-        # Only keep rows that match the external override selection.
-        if selected_ids is not None:
-            rows = [row for row in rows if row["dataset_id"] in selected_ids]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We
@@ -272,7 +273,12 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             items_in_trash = join_records(
                 sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location_trash,
-            ).alias("items_in_trash")
+            )
+            if selected_ids:
+                items_in_trash = items_in_trash.where(
+                    self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+                )
+            items_in_trash = items_in_trash.alias("items_in_trash")
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
