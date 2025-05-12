@@ -278,14 +278,16 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 items_in_trash = items_in_trash.where(
                     self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
                 )
-            items_in_trash = items_in_trash.alias("items_in_trash")
+            items_in_trash_alias = items_in_trash.alias("items_in_trash")
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
-            items_to_preserve = sqlalchemy.sql.select(items_in_trash.columns[record_column]).select_from(
+            items_to_preserve = sqlalchemy.sql.select(
+                items_in_trash_alias.columns[record_column]
+            ).select_from(
                 items_not_in_trash.join(
-                    items_in_trash,
-                    onclause=items_in_trash.columns[record_column]
+                    items_in_trash_alias,
+                    onclause=items_in_trash_alias.columns[record_column]
                     == items_not_in_trash.columns[record_column],
                 )
             )
