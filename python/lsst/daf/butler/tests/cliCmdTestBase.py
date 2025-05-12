@@ -174,7 +174,7 @@ class CliCmdTestBase(abc.ABC):
         """
         result = self.run_command(inputs)
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertRegex(result.stdout, expectedMsg)
+        self.assertRegex(result.output, expectedMsg)
 
     def test_help(self) -> None:
         self.assertFalse(

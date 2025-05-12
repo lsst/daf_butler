@@ -96,7 +96,7 @@ class FailedLoadTest(unittest.TestCase):
             pass
 
         with self.assertLogs() as cm:
-            result = self.runner.invoke(cli)
+            result = self.runner.invoke(cli, "--help")
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         expectedErrMsg = f"Could not import plugin from {FailCLI.localCmdPkg}, skipping."
         self.assertIn(expectedErrMsg, " ".join(cm.output))

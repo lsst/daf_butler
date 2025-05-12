@@ -102,7 +102,7 @@ class PluginCommand:
     """Where the command came from (`str`)."""
 
 
-class LoaderCLI(click.MultiCommand, abc.ABC):
+class LoaderCLI(click.Group, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
     subcommands at runtime.
 
