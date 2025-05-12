@@ -39,16 +39,24 @@ except ImportError:
 
 
 class TelemetryContext(Protocol):
+    """Interface for adding information to trace telemetry."""
+
     def span(self, name: str) -> AbstractContextManager[None]: ...
 
 
 class NullTelemetryContext(TelemetryContext):
+    """No-op implementation of telemetry used when no telemetry provider is
+    configured.
+    """
+
     @contextmanager
     def span(self, name: str) -> Iterator[None]:
         yield
 
 
 class SentryTelemetryContext(TelemetryContext):
+    """Implementation of telemetry using Sentry."""
+
     @contextmanager
     def span(self, name: str) -> Iterator[None]:
         with sentry_sdk.start_span(name=name):
@@ -75,6 +83,14 @@ def enable_telemetry() -> None:
 
 
 def get_telemetry_context() -> TelemetryContext:
+    """Return an object that can be used to add information to the trace
+    telemetry.
+
+    Returns
+    -------
+    telemetry_context : `TelemetryContext`
+        Object that can be used to add information to the trace telemetry.
+    """
     return _telemetry_context
 
 
