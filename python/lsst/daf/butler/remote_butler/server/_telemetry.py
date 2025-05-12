@@ -25,6 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Protocol
@@ -84,4 +85,5 @@ def _decide_whether_to_sample_trace(context: dict[str, Any]) -> float:
         if asgi_scope.get("path") == "/":
             return 0
 
-    return 0.02
+    sampling_rate = float(os.getenv("BUTLER_TRACE_SAMPLING_RATE", "0.02"))
+    return sampling_rate
