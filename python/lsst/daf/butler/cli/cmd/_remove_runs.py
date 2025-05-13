@@ -81,7 +81,9 @@ def _print_remove(will: bool, runs: Sequence[script.RemoveRun], datasets: Mappin
         else:
             print(run.name)
     print("\n" + willRemoveDatasetsMsg if will else didRemoveDatasetsMsg)
+    total = sum(datasets.values())
     print(", ".join([f"{i[0]}({i[1]})" for i in datasets.items()]))
+    print("Total number of datasets to remove: ", total)
 
 
 def _print_requires_confirmation(runs: Sequence[script.RemoveRun], datasets: Mapping[str, int]) -> None:
