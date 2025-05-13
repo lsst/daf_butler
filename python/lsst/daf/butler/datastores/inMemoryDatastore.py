@@ -523,7 +523,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
         return primary
 
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
         raise NotImplementedError("Can only ingest a Zip into a file datastore.")
 
     def retrieveArtifacts(
