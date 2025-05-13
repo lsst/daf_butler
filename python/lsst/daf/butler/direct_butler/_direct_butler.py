@@ -54,6 +54,7 @@ from sqlalchemy.exc import IntegrityError
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
+from lsst.utils.timer import time_this
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
@@ -1464,16 +1465,25 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         refs.extend(query.datasets(dt, collections=name))
         with self._datastore.transaction(), self._registry.transaction():
             if unstore:
-                self._datastore.trash(refs)
+                with time_this(
+                    _LOG, msg="Marking %d datasets for removal to clear RUN collections", args=(len(refs),)
+                ):
+                    self._datastore.trash(refs)
             else:
                 self._datastore.forget(refs)
             for name in names:
-                self._registry.removeCollection(name)
+                with time_this(_LOG, msg="Removing registry entries for RUN collection %s", args=(name,)):
+                    self._registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts. Restrict the trash
             # emptying to the datasets from this specific collection rather
             # than everything in the trash.
-            self._datastore.emptyTrash(refs=refs)
+            with time_this(
+                _LOG,
+                msg="Attempting to remove artifacts for %d datasets associated with RUN collections",
+                args=(len(refs),),
+            ):
+                self._datastore.emptyTrash(refs=refs)
 
     def pruneDatasets(
         self,
@@ -1520,13 +1530,20 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Registry operations.
         with self._datastore.transaction(), self._registry.transaction():
             if unstore:
-                self._datastore.trash(refs)
+                with time_this(
+                    _LOG, msg="Marking %d datasets for removal to during pruning", args=(len(refs),)
+                ):
+                    self._datastore.trash(refs)
             if purge:
-                self._registry.removeDatasets(refs)
+                with time_this(_LOG, msg="Removing %d pruned datasets from registry", args=(len(refs),)):
+                    self._registry.removeDatasets(refs)
             elif disassociate:
                 assert tags, "Guaranteed by earlier logic in this function."
-                for tag in tags:
-                    self._registry.disassociate(tag, refs)
+                with time_this(
+                    _LOG, msg="Disassociating %d datasets from tagged collections", args=(len(refs),)
+                ):
+                    for tag in tags:
+                        self._registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
         # (if there was an exception, everything rolled back, and it's as if
         # nothing happened - and we never get here).
@@ -1539,7 +1556,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if unstore:
             # Point of no return for removing artifacts. Restrict the trash
             # emptying to the refs that this call trashed.
-            self._datastore.emptyTrash(refs=refs)
+            with time_this(
+                _LOG,
+                msg="Attempting to remove artifacts for %d datasets associated with pruning",
+                args=(len(refs),),
+            ):
+                self._datastore.emptyTrash(refs=refs)
 
     @transactional
     def ingest_zip(self, zip_file: ResourcePathExpression, transfer: str = "auto") -> None:
