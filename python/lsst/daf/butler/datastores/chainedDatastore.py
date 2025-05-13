@@ -999,7 +999,7 @@ class ChainedDatastore(Datastore):
         """
         log.debug("Removing %s", ref)
         self.trash(ref, ignore_errors=False)
-        self.emptyTrash(ignore_errors=False)
+        self.emptyTrash(ignore_errors=False, refs=[ref])
 
     def forget(self, refs: Iterable[DatasetRef]) -> None:
         for datastore in tuple(self.datastores):
@@ -1028,9 +1028,13 @@ class ChainedDatastore(Datastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-    def emptyTrash(self, ignore_errors: bool = True) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
+    ) -> set[ResourcePath]:
+        removed = set()
         for datastore in self.datastores:
-            datastore.emptyTrash(ignore_errors=ignore_errors)
+            removed.update(datastore.emptyTrash(ignore_errors=ignore_errors, refs=refs, dry_run=dry_run))
+        return removed
 
     def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:
         """Retrieve a dataset from an input `Datastore`,
@@ -1039,7 +1043,7 @@ class ChainedDatastore(Datastore):
         Parameters
         ----------
         inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
+            The external `Datastore` from which to retrieve the Dataset.
         ref : `DatasetRef`
             Reference to the required dataset in the input data store.
 

@@ -32,12 +32,13 @@ __all__ = ("MonolithicDatastoreRegistryBridge", "MonolithicDatastoreRegistryBrid
 
 import copy
 from collections import namedtuple
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
+from ..._dataset_ref import DatasetId
 from ..._named import NamedValueSet
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
 from ..interfaces import (
@@ -209,6 +210,8 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         records_table: OpaqueTableStorage | None = None,
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
+        selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
 
@@ -243,6 +246,11 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # table that is not listed in the records table. Such an
         # inconsistency would be missed by this query.
         info_in_trash = join_records(records_table._table.select(), self._tables.dataset_location_trash)
+        if selected_ids:
+            info_in_trash = info_in_trash.where(
+                self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+            )
+        info_in_trash = info_in_trash.with_for_update(skip_locked=True)
 
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
@@ -265,14 +273,21 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             items_in_trash = join_records(
                 sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location_trash,
-            ).alias("items_in_trash")
+            )
+            if selected_ids:
+                items_in_trash = items_in_trash.where(
+                    self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+                )
+            items_in_trash_alias = items_in_trash.alias("items_in_trash")
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
-            items_to_preserve = sqlalchemy.sql.select(items_in_trash.columns[record_column]).select_from(
+            items_to_preserve = sqlalchemy.sql.select(
+                items_in_trash_alias.columns[record_column]
+            ).select_from(
                 items_not_in_trash.join(
-                    items_in_trash,
-                    onclause=items_in_trash.columns[record_column]
+                    items_in_trash_alias,
+                    onclause=items_in_trash_alias.columns[record_column]
                     == items_not_in_trash.columns[record_column],
                 )
             )
@@ -288,7 +303,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         yield ((id_info, preserved))
 
         # No exception raised in context manager block.
-        if not rows:
+        if not rows or dry_run:
             return
 
         # Delete the rows from the records table

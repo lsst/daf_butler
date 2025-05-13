@@ -28,7 +28,7 @@ from __future__ import annotations
 
 __all__ = ("EphemeralDatastoreRegistryBridge",)
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
@@ -100,28 +100,38 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         records_table: OpaqueTableStorage | None = None,
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
+        selected_ids: Collection[DatasetId] | None = None,
+        dry_run: bool = False,
     ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
         matches: Iterable[tuple[FakeDatasetRef, StoredDatastoreItemInfo | None]] = ()
+        trashed_ids = self._trashedIds
+
+        if selected_ids is not None:
+            trashed_ids = {tid for tid in trashed_ids if tid in selected_ids}
+
         if isinstance(records_table, OpaqueTableStorage):
             if record_class is None:
                 raise ValueError("Record class must be provided if records table is given.")
             matches = (
                 (FakeDatasetRef(id), record_class.from_record(record))
-                for id in self._trashedIds
+                for id in trashed_ids
                 for record in records_table.fetch(dataset_id=id)
             )
         else:
-            matches = ((FakeDatasetRef(id), None) for id in self._trashedIds)
+            matches = ((FakeDatasetRef(id), None) for id in trashed_ids)
 
         # Indicate to caller that we do not know about artifacts that
         # should be retained.
         yield ((matches, None))
 
+        if dry_run:
+            return
+
         if isinstance(records_table, OpaqueTableStorage):
             # Remove the records entries
-            records_table.delete(["dataset_id"], *[{"dataset_id": id} for id in self._trashedIds])
+            records_table.delete(["dataset_id"], *[{"dataset_id": id} for id in trashed_ids])
 
         # Empty the trash table
-        self._datasetIds.difference_update(self._trashedIds)
-        self._trashedIds = set()
+        self._datasetIds.difference_update(trashed_ids)
+        self._trashedIds = self._trashedIds - trashed_ids

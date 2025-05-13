@@ -33,7 +33,7 @@ __all__ = ("InMemoryDatastore", "StoredMemoryItemInfo")
 
 import logging
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
@@ -627,13 +627,28 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         with self._transaction.undoWith(f"Trash {len(ref_list)} datasets", _rollbackMoveToTrash, ref_list):
             self._trashedIds.update(ref.id for ref in ref_list)
 
-    def emptyTrash(self, ignore_errors: bool = False) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = False, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
+    ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
         Parameters
         ----------
         ignore_errors : `bool`, optional
             Ignore errors.
+        refs : `collections.abc.Collection` [ `DatasetRef` ] or `None`
+            Explicit list of datasets that can be removed from trash. If listed
+            datasets are not already stored in the trash table they will be
+            ignored. If `None` every entry in the trash table will be
+            processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
+
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            List of artifacts that were removed. Empty for this datastore.
 
         Notes
         -----
@@ -647,7 +662,19 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         """
         log.debug("Emptying trash in datastore %s", self.name)
 
-        for dataset_id in self._trashedIds:
+        trashed_ids = self._trashedIds
+        if refs:
+            selected_ids = {ref.id for ref in refs}
+            if selected_ids is not None:
+                trashed_ids = {tid for tid in trashed_ids if tid in selected_ids}
+
+        if dry_run:
+            log.info(
+                "Would attempt remove %s dataset%s.", len(trashed_ids), "s" if len(trashed_ids) != 1 else ""
+            )
+            return set()
+
+        for dataset_id in trashed_ids:
             try:
                 realID, _ = self._get_dataset_info(dataset_id)
             except FileNotFoundError:
@@ -677,7 +704,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             self._remove_stored_item_info(dataset_id)
 
         # Empty the trash table
-        self._trashedIds = set()
+        self._trashedIds = self._trashedIds - trashed_ids
+        return set()
 
     def validateConfiguration(
         self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False

@@ -1160,13 +1160,29 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def emptyTrash(self, ignore_errors: bool = True) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
+    ) -> set[ResourcePath]:
         """Remove all datasets from the trash.
 
         Parameters
         ----------
         ignore_errors : `bool`, optional
             Determine whether errors should be ignored.
+        refs : `collections.abc.Collection` [ `DatasetRef` ] or `None`
+            Explicit list of datasets that can be removed from trash. If listed
+            datasets are not already stored in the trash table they will be
+            ignored. If `None` every entry in the trash table will be
+            processed.
+        dry_run : `bool`, optional
+            If `True`, the trash table will be queried and results reported
+            but no artifacts will be removed.
+
+        Returns
+        -------
+        removed : `set` [ `lsst.resources.ResourcePath` ]
+            List of artifacts that were removed. Can return nothing if
+            artifacts cannot be represented by URIs.
 
         Notes
         -----
@@ -1512,7 +1528,9 @@ class NullDatastore(Datastore):
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
-    def emptyTrash(self, ignore_errors: bool = True) -> None:
+    def emptyTrash(
+        self, ignore_errors: bool = True, refs: Collection[DatasetRef] | None = None, dry_run: bool = False
+    ) -> set[ResourcePath]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def transfer(self, inputDatastore: Datastore, datasetRef: DatasetRef) -> None:

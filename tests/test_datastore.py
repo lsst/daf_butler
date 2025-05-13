@@ -1277,6 +1277,43 @@ class TrashDatastoreTestCase(PosixDatastoreTestCase):
         datastore.trash(subset)
         datastore.trash(refs.pop())  # Check that a single ref can trash
 
+    def test_empty_trash(self) -> None:
+        """Test parameters and return value for empty trash."""
+        datastore, *refs = self.prepDeleteTest(n_refs=10)
+
+        # Trash one of them.
+        ref = refs.pop()
+        uri = datastore.getURI(ref)
+        datastore.trash(ref)
+        self.assertTrue(uri.exists(), uri)  # Not deleted yet
+
+        # Empty trash but with a list of refs that does not include the
+        # one in the trash table.
+        removed = datastore.emptyTrash(refs=refs)
+        self.assertEqual(len(removed), 0)
+        self.assertTrue(uri.exists(), uri)
+
+        # Empty the entire trash but in dry_run mode.
+        removed = datastore.emptyTrash(dry_run=True)
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed.pop(), uri)
+        self.assertTrue(uri.exists(), uri)
+
+        # Empty the trash specifying the actual ref.
+        removed = datastore.emptyTrash(refs=[ref])
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed.pop(), uri)
+        self.assertFalse(uri.exists(), uri)
+
+        # Trash everything and empty.
+        datastore.trash(refs)
+        removed = datastore.emptyTrash(dry_run=True)
+        for u in removed:
+            self.assertTrue(u.exists())
+        removed = datastore.emptyTrash()
+        for u in removed:
+            self.assertFalse(u.exists())
+
 
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
     """Test datastore cleans up on failure."""
