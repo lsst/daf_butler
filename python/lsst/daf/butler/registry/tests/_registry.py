@@ -973,14 +973,14 @@ class RegistryTests(ABC):
         expected.
         """
 
-        def blocked_thread_func(registry: SqlRegistry):
+        def blocked_thread_func(butler: Butler):
             # This call will become blocked after it has decided on positions
             # for the new children in the collection chain, but before
             # inserting them.
-            registry._managers.collections.prepend_collection_chain("chain", ["a"])
+            butler.collections.prepend_chain("chain", ["a"])
 
-        def unblocked_thread_func(registry: SqlRegistry):
-            registry._managers.collections.prepend_collection_chain("chain", ["b"])
+        def unblocked_thread_func(butler: Butler):
+            butler.collections.prepend_chain("chain", ["b"])
 
         registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
 
@@ -993,13 +993,13 @@ class RegistryTests(ABC):
         expected.
         """
 
-        def blocked_thread_func(registry: SqlRegistry):
+        def blocked_thread_func(butler: Butler):
             # This call will become blocked after deleting children, but before
             # inserting new ones.
-            registry.setCollectionChain("chain", ["a"])
+            butler.collections.redefine_chain("chain", ["a"])
 
-        def unblocked_thread_func(registry: SqlRegistry):
-            registry.setCollectionChain("chain", ["b"])
+        def unblocked_thread_func(butler: Butler):
+            butler.collections.redefine_chain("chain", ["b"])
 
         registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
 
@@ -1008,8 +1008,23 @@ class RegistryTests(ABC):
         # chain with "b".
         self.assertEqual(("b",), registry.getCollectionChain("chain"))
 
+    def testCollectionChainRemoveConcurrency(self):
+        def blocked_thread_func(butler: Butler):
+            # This call will become blocked after taking the lock, but before
+            # deleting the children.
+            butler.collections.remove_from_chain("chain", ["b"])
+
+        def unblocked_thread_func(butler: Butler):
+            butler.collections.redefine_chain("chain", ["b", "a"])
+
+        registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
+
+        # blocked_thread_func should have finished first, removing "b".
+        # unblocked_thread_func should have finished second, putting "b" back.
+        self.assertEqual(("b", "a"), registry.getCollectionChain("chain"))
+
     def _do_collection_concurrency_test(
-        self, blocked_thread_func: Callable[[SqlRegistry]], unblocked_thread_func: Callable[[SqlRegistry]]
+        self, blocked_thread_func: Callable[[Butler]], unblocked_thread_func: Callable[[Butler]]
     ) -> SqlRegistry:
         # This function:
         # 1. Sets up two registries pointing at the same database.
@@ -1048,12 +1063,12 @@ class RegistryTests(ABC):
 
         with ThreadPoolExecutor(max_workers=1) as exec1:
             with ThreadPoolExecutor(max_workers=1) as exec2:
-                future1 = exec1.submit(blocked_thread_func, registry1)
+                future1 = exec1.submit(blocked_thread_func, butler1)
                 enter_barrier.wait()
 
                 # At this point registry 1 has entered the critical section and
                 # is waiting for us to release it.  Start the other thread.
-                future2 = exec2.submit(unblocked_thread_func, registry2)
+                future2 = exec2.submit(unblocked_thread_func, butler2)
                 # thread2 should block inside a database call, but we have no
                 # way to detect when it is in this state.
                 time.sleep(0.200)

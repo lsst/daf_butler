@@ -570,7 +570,16 @@ class DefaultCollectionManager(CollectionManager[K]):
             child_collection_names,
             # Removing members from a chain can't create collection cycles
             skip_cycle_check=True,
+            # It is OK for multiple instances of `remove_from_collection_chain`
+            # to run concurrently on the same collection, because it doesn't
+            # read/modify the position numbers of the children -- it only
+            # deletes existing rows.
+            #
+            # However, other chain modification operations must still be
+            # blocked to avoid consistency issues.
+            exclusive_lock=False,
         ) as c:
+            self._block_for_concurrency_test()
             self._remove_collection_chain_rows(c.parent_key, c.child_keys)
 
     @contextmanager
@@ -581,6 +590,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         *,
         skip_caching_check: bool = False,
         skip_cycle_check: bool = False,
+        exclusive_lock: bool = True,
     ) -> Iterator[_CollectionChainModificationContext[K]]:
         if (not skip_caching_check) and self._caching_context.collection_records is not None:
             # Avoid having cache-maintenance code around that is unlikely to
@@ -604,7 +614,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         with self._db.transaction():
             # Lock the parent collection to prevent concurrent updates to the
             # same collection chain.
-            parent_key = self._find_and_lock_collection_chain(parent_collection_name)
+            parent_key = self._find_and_lock_collection_chain(
+                parent_collection_name, exclusive_lock=exclusive_lock
+            )
             yield _CollectionChainModificationContext[K](
                 parent_key=parent_key, child_keys=child_keys, child_records=child_records
             )
@@ -704,7 +716,7 @@ class DefaultCollectionManager(CollectionManager[K]):
 
         return position
 
-    def _find_and_lock_collection_chain(self, collection_name: str) -> K:
+    def _find_and_lock_collection_chain(self, collection_name: str, *, exclusive_lock: bool) -> K:
         """
         Take a row lock on the specified collection's row in the collections
         table, and return the collection's primary key.
@@ -715,14 +727,19 @@ class DefaultCollectionManager(CollectionManager[K]):
         collection chain table -- all operations that modify collection chains
         must obtain this lock first.  The database will NOT automatically
         prevent modification of tables based on this lock.  The only guarantee
-        is that only one caller will be allowed to hold this lock for a given
-        collection at a time.  Concurrent calls will block until the caller
-        holding the lock has completed its transaction.
+        is that only one caller will be allowed to hold the exclusive lock for
+        a given collection at a time.  Concurrent calls will block until the
+        caller holding the lock has completed its transaction.
 
         Parameters
         ----------
         collection_name : `str`
             Name of the collection whose chain is being modified.
+        exclusive_lock : `bool`
+            If `True`, an exclusive lock will be taken to block all concurrent
+            modifications to the same collection.  If `False`, a shared lock
+            will be taken which will only block operations that request an
+            exclusive lock.
 
         Returns
         -------
@@ -742,7 +759,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         )
         assert self._db.isWriteable(), "Collection row locks are only useful for write operations."
 
-        query = self._select_pkey_by_name(collection_name).with_for_update()
+        query = self._select_pkey_by_name(collection_name).with_for_update(read=not exclusive_lock)
         with self._db.query(query) as cursor:
             rows = cursor.all()
 
