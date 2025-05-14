@@ -2681,6 +2681,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 s = "s" if n_direct != 1 else ""
                 log.verbose("Not deleting %d artifact%s using absolute URI%s", n_direct, s, s)
 
+            if artifacts_to_keep:
+                log.verbose(
+                    "%d artifact%s were not deleted because they are associated with other datasets",
+                    len(artifacts_to_keep),
+                    "s" if len(artifacts_to_keep) != 1 else "",
+                )
+
             if not artifacts_to_delete:
                 return set()
 
