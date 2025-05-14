@@ -427,4 +427,4 @@ storageClasses:
   PZModel:
     pytype: rail.core.model.Model
   VisitBackgroundModel:
-    pytype: lsst.drp.tasks.smooth_visit_background.VisitBackgroundModel
+    pytype: lsst.drp.tasks.fit_visit_background.VisitBackgroundModel
