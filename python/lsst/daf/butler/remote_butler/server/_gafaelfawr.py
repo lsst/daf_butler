@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 import httpx
 import pydantic
 
@@ -65,3 +67,30 @@ class _GafaelfawrUserInfo(pydantic.BaseModel):
 
 class _GafaelfawrGroup(pydantic.BaseModel):
     name: str
+
+
+class GafaelfawrGroupAuthorizer:
+    def __init__(self, client: GafaelfawrClient, repository_groups: dict[str, list[str]]) -> None:
+        self._client = client
+        self._repository_groups = repository_groups
+        self._cache: dict[str, set[str]] = defaultdict(set)
+
+    async def is_user_authorized_for_repository(
+        self, *, repository: str, user_name: str, user_token: str
+    ) -> bool:
+        allowed_groups = self._repository_groups.get(repository)
+        if allowed_groups is None:
+            raise ValueError(f"Unknown repository '${repository}'")
+
+        if "*" in allowed_groups:
+            return True
+
+        if user_name in self._cache[repository]:
+            return True
+
+        user_groups = await self._client.get_groups(user_token)
+        if any(group in allowed_groups for group in user_groups):
+            self._cache[repository].add(user_name)
+            return True
+
+        return False
