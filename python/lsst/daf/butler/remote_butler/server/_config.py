@@ -27,28 +27,51 @@
 
 from __future__ import annotations
 
-import dataclasses
-import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclasses.dataclass(frozen=True)
-class ButlerServerConfig:
-    """Butler server configuration loaded from environment variables.
+class ButlerServerConfig(BaseSettings):
+    """Butler server configuration loaded from environment variables."""
 
-    Notes
-    -----
-    Besides these variables, there is one critical environment variable.  The
-    list of repositories to be hosted must be defined using
-     ``DAF_BUTLER_REPOSITORIES`` or ``DAF_BUTLER_REPOSITORY_INDEX`` -- see
-     `ButlerRepoIndex`.
-    """
+    model_config = SettingsConfigDict(env_prefix="DAF_BUTLER_SERVER_")
 
-    static_files_path: str | None
+    static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
     as static files from the `configs/` HTTP route.
     """
 
+    repositories: dict[str, RepositoryConfig]
+    """Mapping from repository name to configuration for the repository."""
+
+
+class RepositoryConfig(BaseModel):
+    """Per-repository configuration for the Butler server."""
+
+    config_uri: str
+    """Path to DirectButler configuration YAML file for the repository."""
+
+
+_config: ButlerServerConfig | None = None
+
 
 def load_config() -> ButlerServerConfig:
     """Read the Butler server configuration from the environment."""
-    return ButlerServerConfig(static_files_path=os.environ.get("DAF_BUTLER_SERVER_STATIC_FILES_PATH"))
+    global _config
+    if _config is None:
+        _config = ButlerServerConfig()
+    return _config
+
+
+@contextmanager
+def mock_config() -> Iterator[None]:
+    global _config
+    orig = _config
+    try:
+        _config = ButlerServerConfig(repositories={})
+        yield
+    finally:
+        _config = orig
