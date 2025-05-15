@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
+from lsst.daf.butler.remote_butler.server._config import mock_config
 from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
@@ -97,7 +98,7 @@ def create_test_server(
             if postgres is not None:
                 postgres.patch_butler_config(config)
 
-            with TemporaryDirectory() as root:
+            with TemporaryDirectory() as root, mock_config():
                 Butler.makeRepo(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
 

@@ -31,9 +31,10 @@ from fastapi import Depends
 
 from lsst.daf.butler import LabeledButlerFactory
 
+from ._config import load_config
 from ._factory import Factory
 
-_butler_factory = LabeledButlerFactory()
+_butler_factory: LabeledButlerFactory | None = None
 
 
 async def butler_factory_dependency() -> LabeledButlerFactory:
@@ -41,6 +42,11 @@ async def butler_factory_dependency() -> LabeledButlerFactory:
     construct internal DirectButler instances for interacting with the Butler
     repositories we are serving.
     """
+    global _butler_factory
+    if _butler_factory is None:
+        config = load_config()
+        repositories = {k: v.config_uri for k, v in config.repositories.items()}
+        _butler_factory = LabeledButlerFactory(repositories)
     return _butler_factory
 
 
