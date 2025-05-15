@@ -29,8 +29,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from functools import cache
 
-from pydantic import BaseModel
+from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,13 +40,18 @@ class ButlerServerConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="DAF_BUTLER_SERVER_")
 
+    repositories: dict[str, RepositoryConfig]
+    """Mapping from repository name to configuration for the repository."""
+
+    gafaelfawr_url: AnyHttpUrl
+    """URL to the top-level HTTP path where Gafaelfawr can be found (e.g.
+    "https://data-int.lsst.cloud").
+    """
+
     static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
     as static files from the `configs/` HTTP route.
     """
-
-    repositories: dict[str, RepositoryConfig]
-    """Mapping from repository name to configuration for the repository."""
 
 
 class RepositoryConfig(BaseModel):
@@ -53,11 +59,17 @@ class RepositoryConfig(BaseModel):
 
     config_uri: str
     """Path to DirectButler configuration YAML file for the repository."""
+    authorized_groups: list[str]
+    """List of Gafaelfawr groups that will be allowed to access this
+    repository.  If this list contains the special group `*`, all users will be
+    granted access.
+    """
 
 
 _config: ButlerServerConfig | None = None
 
 
+@cache
 def load_config() -> ButlerServerConfig:
     """Read the Butler server configuration from the environment."""
     global _config
@@ -71,7 +83,7 @@ def mock_config() -> Iterator[None]:
     global _config
     orig = _config
     try:
-        _config = ButlerServerConfig(repositories={})
+        _config = ButlerServerConfig(repositories={}, gafaelfawr_url="http://gafaelfawr.example")
         yield
     finally:
         _config = orig

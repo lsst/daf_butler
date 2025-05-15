@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -11,7 +12,12 @@ from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
 from lsst.daf.butler.remote_butler.server._config import mock_config
-from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
+from lsst.daf.butler.remote_butler.server._dependencies import (
+    auth_delegated_token_dependency,
+    auth_dependency,
+    authorizer_dependency,
+    butler_factory_dependency,
+)
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
 from ..direct_butler import DirectButler
@@ -123,6 +129,9 @@ def create_test_server(
                 # as needed.
                 server_butler_factory._preload_unsafe_direct_butler_caches = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
+                app.dependency_overrides[authorizer_dependency] = lambda: _MockGafaelfawrGroupAuthorizer()
+                app.dependency_overrides[auth_dependency] = lambda: "mock-username"
+                app.dependency_overrides[auth_delegated_token_dependency] = lambda: "mock-delegated-token"
 
                 # Using TestClient in a context manager ensures that it uses
                 # the same async event loop for all requests -- otherwise it
@@ -176,3 +185,8 @@ def _add_root_exception_handler(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def convert_exception_types(request: Request, exc: Exception) -> None:
         raise UnhandledServerError("Unhandled server exception") from exc
+
+
+class _MockGafaelfawrGroupAuthorizer:
+    async def is_user_authorized_for_repository(self, *args: Any, **kwargs: Any) -> bool:
+        return True
