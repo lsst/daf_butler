@@ -35,6 +35,18 @@ from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class RepositoryConfig(BaseModel):
+    """Per-repository configuration for the Butler server."""
+
+    config_uri: str
+    """Path to DirectButler configuration YAML file for the repository."""
+    authorized_groups: list[str]
+    """List of Gafaelfawr groups that will be allowed to access this
+    repository.  If this list contains the special group `*`, all users will be
+    granted access.
+    """
+
+
 class ButlerServerConfig(BaseSettings):
     """Butler server configuration loaded from environment variables."""
 
@@ -51,18 +63,6 @@ class ButlerServerConfig(BaseSettings):
     static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
     as static files from the `configs/` HTTP route.
-    """
-
-
-class RepositoryConfig(BaseModel):
-    """Per-repository configuration for the Butler server."""
-
-    config_uri: str
-    """Path to DirectButler configuration YAML file for the repository."""
-    authorized_groups: list[str]
-    """List of Gafaelfawr groups that will be allowed to access this
-    repository.  If this list contains the special group `*`, all users will be
-    granted access.
     """
 
 
