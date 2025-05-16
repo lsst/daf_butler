@@ -46,6 +46,7 @@ try:
     from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
+    from lsst.daf.butler.remote_butler.server._config import mock_config
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
     from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
@@ -122,8 +123,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
             with open(os.path.join(tmpdir, "temp.txt"), "w") as fh:
                 fh.write("test data 123")
 
-            with mock_env({"DAF_BUTLER_SERVER_STATIC_FILES_PATH": tmpdir}):
-                with create_test_server(TESTDIR) as server:
+            with mock_config() as server_config:
+                server_config.static_files_path = tmpdir
+                with create_test_server(TESTDIR, server_config=server_config) as server:
                     response = server.client.get("/api/butler/configs/temp.txt")
                     self.assertEqual(response.status_code, 200)
                     self.assertEqual(response.text, "test data 123")
