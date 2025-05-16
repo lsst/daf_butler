@@ -1,4 +1,5 @@
 import contextlib
+import json
 import os
 import tempfile
 import time
@@ -25,12 +26,8 @@ def _run_server_docker():
 
         port = 8080
         butler_root = "/butler_root"
-
-        # Set up a repository index file to be read in by the server
-        index_filename = "repo_index.yaml"
         repo_name = "testserver"
-        with open(os.path.join(temp_dir, index_filename), "wb") as fh:
-            fh.write(f"{repo_name}: {butler_root}\n".encode())
+        repository_config = {repo_name: {"config_uri": butler_root, "authorized_groups": ["*"]}}
 
         docker_image = os.getenv("BUTLER_SERVER_DOCKER_IMAGE")
         if not docker_image:
@@ -38,7 +35,8 @@ def _run_server_docker():
         container = (
             DockerContainer(docker_image)
             .with_exposed_ports(port)
-            .with_env("DAF_BUTLER_REPOSITORY_INDEX", f"{butler_root}/{index_filename}")
+            .with_env("DAF_BUTLER_SERVER_REPOSITORIES", json.dumps(repository_config))
+            .with_env("DAF_BUTLER_SERVER_GAFAELFAWR_URL", "http://gafaelfawr.example")
             .with_volume_mapping(temp_dir, butler_root, "rw")
         )
 
@@ -86,7 +84,14 @@ class ButlerDockerTestCase(unittest.TestCase):
         cls.server_uri = cls.enterClassContext(_run_server_docker())
 
     def test_get_dataset_type(self):
-        butler = RemoteButlerFactory.create_factory_for_url(self.server_uri).create_butler_for_access_token(
+        client = httpx.Client(
+            headers={
+                # Mock Gafaelfawr authentication headers
+                "X-Auth-Request-User": "fake-username",
+                "X-Auth-Request-Token": "fake-delegated-token",
+            }
+        )
+        butler = RemoteButlerFactory(self.server_uri, client).create_butler_for_access_token(
             "fake-access-token"
         )
         dataset_type = butler.get_dataset_type("test_metric_comp")
