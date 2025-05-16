@@ -1559,7 +1559,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     # Single chunk but multiple files. Summarize.
                     log.log(
                         log_threshold,
-                        "Number of datasets found in datastore: %d out of %d datasets checked.",
+                        "Number of datasets found in datastore %s: %d out of %d datasets checked.",
+                        self.name,
                         n_found,
                         n_checked,
                     )
@@ -2763,20 +2764,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
-        log.verbose("transfer_from %s to %s", source_datastore.name, self.name)
-        # Docstring inherited
-        if type(self) is not type(source_datastore):
-            raise TypeError(
-                f"Datastore mismatch between this datastore ({type(self)}) and the "
-                f"source datastore ({type(source_datastore)})."
-            )
-
-        # Be explicit for mypy
-        if not isinstance(source_datastore, FileDatastore):
-            raise TypeError(
-                "Can only transfer to a FileDatastore from another FileDatastore, not"
-                f" {type(source_datastore)}"
-            )
+        log.verbose("Transferring %d datasets from %s to %s", len(refs), source_datastore.name, self.name)
 
         # Stop early if "direct" transfer mode is requested. That would
         # require that the URI inside the source datastore should be stored
@@ -2788,6 +2776,128 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 " those files are controlled by the other datastore."
             )
 
+        if not refs:
+            return set(), set()
+
+        # Potentially can be transferring from a chain.
+        datastores = getattr(source_datastore, "datastores", [source_datastore])
+
+        incompatible: list[Datastore] = []
+        acceptable: list[FileDatastore] = []
+        for current_source in datastores:
+            if not isinstance(current_source, FileDatastore):
+                incompatible.append(current_source)
+            else:
+                acceptable.append(current_source)
+
+        if len(incompatible) == len(datastores):
+            if len(datastores) == 1:
+                raise TypeError(
+                    "Can only transfer to a FileDatastore from another FileDatastore, not"
+                    f" {get_full_type_name(source_datastore)}"
+                )
+            else:
+                types = [get_full_type_name(d) for d in datastores]
+                raise TypeError(
+                    f"ChainedDatastore encountered that had no FileDatastores. Had {','.join(types)}"
+                )
+
+        if len(acceptable) == 1:
+            # No need to filter in advance since there is only one usable
+            # source datastore.
+            return self._transfer_from(
+                acceptable[0], refs, transfer=transfer, artifact_existence=artifact_existence, dry_run=dry_run
+            )
+
+        # To avoid complaints from the transfer that the source does not have
+        # a ref, partition refs by source datastores, and any unknown to both
+        # are sent to any that support trustGetRequest.
+        unassigned_refs: set[DatasetRef] = set(refs)
+        known_refs: list[set[DatasetRef]] = []
+        for datastore in acceptable:
+            known_to_datastore = {ref for ref, known in datastore.knows_these(refs).items() if known}
+            known_refs.append(known_to_datastore)
+            unassigned_refs -= known_to_datastore
+
+        if unassigned_refs:
+            for datastore, refs_known_to_datastore in zip(acceptable, known_refs, strict=True):
+                if datastore.trustGetRequest:
+                    # Have to check each datastore in turn. If we do not do
+                    # this warnings will be issued further down for datasets
+                    # that are in one and not the other. The existence cache
+                    # will prevent repeat checks.
+                    exist_in_store = datastore.mexists(unassigned_refs, artifact_existence=artifact_existence)
+                    present = {ref for ref, exists in exist_in_store.items() if exists}
+                    refs_known_to_datastore.update(present)
+                    # Only transferring once so do not need to check later
+                    # datastores.
+                    unassigned_refs -= present
+                    log.debug(
+                        "Adding %d missing refs to list for transfer from %s", len(present), datastore.name
+                    )
+
+        if unassigned_refs:
+            log.warning(
+                "Encountered %d dataset%s where no file artifacts exist from the "
+                "source datastore and will be skipped.",
+                len(unassigned_refs),
+                "s" if len(unassigned_refs) != 1 else "",
+            )
+
+        # Once we have accepted refs from one datastore, do not need to try to
+        # transfer them again.
+        accepted: set[DatasetRef] = set()
+        rejected: set[DatasetRef] = set()
+        if artifact_existence is None:
+            artifact_existence = {}
+
+        for current_source, refs_to_transfer in zip(acceptable, known_refs, strict=True):
+            # Do not transfer if already transferred.
+            refs_to_transfer -= accepted
+            # No need to retry something that has already been rejected.
+            refs_to_transfer -= rejected
+
+            if not refs_to_transfer:
+                continue
+
+            log.verbose(
+                "Requesting transfer of %d dataset%s from datastore %s to %s",
+                len(refs_to_transfer),
+                "s" if len(refs_to_transfer) != 1 else "",
+                current_source.name,
+                self.name,
+            )
+            current_accepted, current_rejected = self._transfer_from(
+                current_source,
+                refs_to_transfer,
+                transfer=transfer,
+                artifact_existence=artifact_existence,
+                dry_run=dry_run,
+            )
+
+            accepted.update(current_accepted)
+            rejected.update(current_rejected)
+
+        log.verbose(
+            "Finished transfer_from %s to %s with %d accepted, %d rejected, %d requested",
+            source_datastore.name,
+            self.name,
+            len(accepted),
+            len(rejected),
+            len(refs),
+        )
+
+        return accepted, rejected
+
+    @transactional
+    def _transfer_from(
+        self,
+        source_datastore: FileDatastore,
+        refs: Collection[DatasetRef],
+        transfer: str = "auto",
+        artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
+    ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Empty existence lookup if none given.
         if artifact_existence is None:
             artifact_existence = {}

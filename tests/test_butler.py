@@ -2555,24 +2555,36 @@ class PosixDatastoreTransfers(unittest.TestCase):
     def tearDown(self) -> None:
         removeTestTempDir(self.root)
 
-    def create_butler(self, manager: str, label: str) -> Butler:
-        config = Config(self.configFile)
+    def create_butler(self, manager: str, label: str, config_file: str | None = None) -> Butler:
+        config = Config(config_file if config_file is not None else self.configFile)
         config["registry", "managers", "datasets"] = manager
         return Butler.from_config(
             Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True
         )
 
-    def create_butlers(self, manager1: str | None = None, manager2: str | None = None) -> None:
+    def create_butlers(
+        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
+    ) -> None:
         default = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
         if manager1 is None:
             manager1 = default
         if manager2 is None:
             manager2 = default
-        self.source_butler = self.create_butler(manager1, "1")
+        self.source_butler = self.create_butler(manager1, "1", config_file=source_config)
         self.target_butler = self.create_butler(manager2, "2")
 
     def testTransferUuidToUuid(self) -> None:
         self.create_butlers()
+        self.assertButlerTransfers()
+
+    def testTransferFromChainedUuidToUuid(self) -> None:
+        """Force the source butler to be a ChainedDatastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-chained.yaml"))
+        self.assertButlerTransfers()
+
+    def testTransferFromFileUuidToUuid(self) -> None:
+        """Force the source butler to be a FileDatastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler.yaml"))
         self.assertButlerTransfers()
 
     def testTransferMissing(self) -> None:
