@@ -79,11 +79,18 @@ def load_config() -> ButlerServerConfig:
 
 
 @contextmanager
-def mock_config() -> Iterator[None]:
+def mock_config(temporary_config: ButlerServerConfig | None = None) -> Iterator[ButlerServerConfig]:
     global _config
     orig = _config
     try:
-        _config = ButlerServerConfig(repositories={}, gafaelfawr_url="http://gafaelfawr.example")
-        yield
+        if temporary_config is None:
+            temporary_config = ButlerServerConfig(
+                repositories={},
+                gafaelfawr_url="http://gafaelfawr.example",
+                static_files_path=None,
+            )
+        _config = temporary_config
+        load_config.cache_clear()
+        yield _config
     finally:
         _config = orig

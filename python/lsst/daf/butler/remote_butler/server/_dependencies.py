@@ -58,7 +58,7 @@ async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
     if _authorizer is None:
         config = load_config()
         authorized_groups = {k: v.authorized_groups for k, v in config.repositories.items()}
-        client = GafaelfawrClient(config.gafaelfawr_url)
+        client = GafaelfawrClient(str(config.gafaelfawr_url))
         _authorizer = GafaelfawrGroupAuthorizer(client, authorized_groups)
 
     return _authorizer

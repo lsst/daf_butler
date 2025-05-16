@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
-from lsst.daf.butler.remote_butler.server._config import mock_config
+from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, mock_config
 from lsst.daf.butler.remote_butler.server._dependencies import (
     auth_delegated_token_dependency,
     auth_dependency,
@@ -69,7 +69,10 @@ class TestServerInstance:
 
 @contextmanager
 def create_test_server(
-    test_directory: str, *, postgres: TemporaryPostgresInstance | None = None
+    test_directory: str,
+    *,
+    postgres: TemporaryPostgresInstance | None = None,
+    server_config: ButlerServerConfig | None = None,
 ) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
 
@@ -82,6 +85,8 @@ def create_test_server(
         If provided, the Butler server will use this postgres database
         instance.  If no postgres instance is specified, the server will use a
         a SQLite database.
+    server_config : `ButlerServerConfig`, optional
+        Configuration to use for the Butler server.
 
     Returns
     -------
@@ -104,7 +109,7 @@ def create_test_server(
             if postgres is not None:
                 postgres.patch_butler_config(config)
 
-            with TemporaryDirectory() as root, mock_config():
+            with TemporaryDirectory() as root, mock_config(server_config):
                 Butler.makeRepo(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
 
