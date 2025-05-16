@@ -27,13 +27,17 @@
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
+from safir.dependencies.gafaelfawr import auth_delegated_token_dependency, auth_dependency
 
 from lsst.daf.butler import LabeledButlerFactory
 
+from ._config import load_config
 from ._factory import Factory
+from ._gafaelfawr import GafaelfawrClient, GafaelfawrGroupAuthorizer
 
-_butler_factory = LabeledButlerFactory()
+_butler_factory: LabeledButlerFactory | None = None
+_authorizer: GafaelfawrGroupAuthorizer | None = None
 
 
 async def butler_factory_dependency() -> LabeledButlerFactory:
@@ -41,11 +45,31 @@ async def butler_factory_dependency() -> LabeledButlerFactory:
     construct internal DirectButler instances for interacting with the Butler
     repositories we are serving.
     """
+    global _butler_factory
+    if _butler_factory is None:
+        config = load_config()
+        repositories = {k: v.config_uri for k, v in config.repositories.items()}
+        _butler_factory = LabeledButlerFactory(repositories)
     return _butler_factory
 
 
+async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
+    global _authorizer
+    if _authorizer is None:
+        config = load_config()
+        authorized_groups = {k: v.authorized_groups for k, v in config.repositories.items()}
+        client = GafaelfawrClient(str(config.gafaelfawr_url))
+        _authorizer = GafaelfawrGroupAuthorizer(client, authorized_groups)
+
+    return _authorizer
+
+
 async def factory_dependency(
-    repository: str, butler_factory: Annotated[LabeledButlerFactory, Depends(butler_factory_dependency)]
+    repository: str,
+    butler_factory: Annotated[LabeledButlerFactory, Depends(butler_factory_dependency)],
+    authorizer: Annotated[GafaelfawrGroupAuthorizer, Depends(authorizer_dependency)],
+    user_name: Annotated[str, Depends(auth_dependency)],
+    user_token: Annotated[str, Depends(auth_delegated_token_dependency)],
 ) -> Factory:
     """Return Factory object for injection into FastAPI.
 
@@ -56,4 +80,11 @@ async def factory_dependency(
     butler_factory : `LabeledButlerFactory`
         Factory for instantiating DirectButlers.
     """
+    if not await authorizer.is_user_authorized_for_repository(
+        repository=repository, user_name=user_name, user_token=user_token
+    ):
+        raise HTTPException(
+            status_code=403, detail=f"User {user_name} does not have permission to access {repository}"
+        )
+
     return Factory(butler_factory=butler_factory, repository=repository)
