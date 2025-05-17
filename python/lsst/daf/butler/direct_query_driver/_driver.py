@@ -633,6 +633,13 @@ class DirectQueryDriver(QueryDriver):
         # searching for datasets and organize them for the kind of lookups
         # we'll do later.
         collection_analysis = self._analyze_collections(tree)
+        # Extract the data ID implied by the predicate; we can use the governor
+        # dimensions in that to constrain the collections we search for
+        # datasets later.
+        predicate_constraints = PredicateConstraintsSummary(tree.predicate)
+        # Use the default data ID to apply additional constraints where needed.
+        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
+        predicate = predicate_constraints.predicate
         # Delegate to the dimensions manager to rewrite the predicate and start
         # a SqlSelectBuilder to cover any spatial overlap joins or constraints.
         # We'll return that SqlSelectBuilder (or copies of it) at the end.
@@ -642,18 +649,12 @@ class DirectQueryDriver(QueryDriver):
             postprocessing,
         ) = self.managers.dimensions.process_query_overlaps(
             tree.dimensions,
-            tree.predicate,
+            predicate,
             tree.get_joined_dimension_groups(),
             collection_analysis.calibration_dataset_types,
             allow_duplicate_overlaps,
+            predicate_constraints.constraint_data_id,
         )
-        # Extract the data ID implied by the predicate; we can use the governor
-        # dimensions in that to constrain the collections we search for
-        # datasets later.
-        predicate_constraints = PredicateConstraintsSummary(predicate)
-        # Use the default data ID to apply additional constraints where needed.
-        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
-        predicate = predicate_constraints.predicate
         # Initialize the plan we're return at the end of the method.
         joins = QueryJoinsAnalysis(predicate=predicate, columns=select_builder.columns)
         joins.messages.extend(predicate_constraints.messages)
