@@ -1,0 +1,2 @@
+datastore: !include chainedDatastore2.yaml
+storageClasses: !include storageClasses.yaml

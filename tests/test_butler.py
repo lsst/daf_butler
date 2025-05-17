@@ -2582,6 +2582,18 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-chained.yaml"))
         self.assertButlerTransfers()
 
+    def testTransferFromIncompatibleUuidToUuid(self) -> None:
+        """Force the source butler to be a incompatible datastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml"))
+        with self.assertRaises(TypeError):
+            self.assertButlerTransfers()
+
+    def testTransferFromIncompatibleChainUuidToUuid(self) -> None:
+        """Force the source butler to be a incompatible datastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory-chain.yaml"))
+        with self.assertRaises(TypeError):
+            self.assertButlerTransfers()
+
     def testTransferFromFileUuidToUuid(self) -> None:
         """Force the source butler to be a FileDatastore."""
         self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler.yaml"))
