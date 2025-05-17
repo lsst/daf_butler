@@ -29,13 +29,14 @@ from __future__ import annotations
 __all__ = ("DimensionRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Iterable, Set
+from collections.abc import Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Join, Relation
 
 from ...dimensions import (
     DataCoordinate,
+    DataIdValue,
     DimensionElement,
     DimensionGroup,
     DimensionRecord,
@@ -402,7 +403,8 @@ class DimensionRecordStorageManager(VersionedExtension):
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str | AnyDatasetType],
-        allow_duplicates: bool = False,
+        allow_duplicates: bool,
+        constraint_data_id: Mapping[str, DataIdValue],
     ) -> tuple[Predicate, SqlSelectBuilder, Postprocessing]:
         """Process a query's WHERE predicate and dimensions to handle spatial
         and temporal overlaps.
@@ -428,6 +430,9 @@ class DimensionRecordStorageManager(VersionedExtension):
         allow_duplicates : `bool`
             If set to `True` then query will be allowed to return non-distinct
             rows.
+        constraint_data_id : `~collections.abc.Mapping` [`str`, `int` | `str`]
+            Dimension values that are known to be common to all rows in the
+            query result set.
 
         Returns
         -------
