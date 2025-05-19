@@ -555,7 +555,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> dict[DatasetRef, DatasetExistence]:
         return {ref: self.exists(ref, full_check=full_check) for ref in refs}
 
-    def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
+    def removeRuns(
+        self, names: Iterable[str], unstore: bool = True, *, unlink_from_chains: bool = False
+    ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
 

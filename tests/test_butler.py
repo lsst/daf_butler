@@ -70,6 +70,7 @@ except ImportError:
     create_test_server = None
 
 import astropy.time
+from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler import (
     Butler,
@@ -1806,11 +1807,23 @@ class FileDatastoreButlerTests(ButlerTests):
         uri1 = butler.getURI(ref1)
         uri2 = butler.getURI(ref2)
 
+        # Put one of the runs in a chain.
+        butler.collections.register("Chain", CollectionType.CHAINED)
+        butler.collections.extend_chain("Chain", run1)
+
         with self.assertRaises(OrphanedRecordError):
             butler.registry.removeDatasetType(datasetType.name)
 
+        # Remove a non-run.
+        with self.assertRaises(TypeError):
+            butler.removeRuns(["Chain"], unstore=True)
+
+        # Remove without unlinking from chain should fail.
+        with self.assertRaises(IntegrityError):
+            butler.removeRuns([run1], unstore=True)
+
         # Remove from both runs with different values for unstore.
-        butler.removeRuns([run1], unstore=True)
+        butler.removeRuns([run1], unstore=True, unlink_from_chains=True)
         butler.removeRuns([run2], unstore=False)
         # Should be nothing in registry for either one, and datastore should
         # not think either exists.

@@ -1442,27 +1442,47 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return existence
 
-    def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
+    def removeRuns(
+        self, names: Iterable[str], unstore: bool = True, *, unlink_from_chains: bool = False
+    ) -> None:
         # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         names = list(names)
         refs: list[DatasetRef] = []
         all_dataset_types = [dt.name for dt in self._registry.queryDatasetTypes(...)]
+        # Map of the chained collections to the RUN children.
+        parents_to_children: dict[str, set[str]] = defaultdict(set)
+
         with self._caching_context():
-            for name in names:
-                collectionType = self._registry.getCollectionType(name)
-                if collectionType is not CollectionType.RUN:
-                    raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
-                with self.query() as query:
+            with self.query() as query:
+                # Get information about these RUNs.
+                collections_info = self.collections.query_info(
+                    names, include_summary=True, include_parents=unlink_from_chains
+                )
+                for info in collections_info:
+                    if info.type is not CollectionType.RUN:
+                        raise TypeError(f"The collection type of '{info.name}' is {info.type.name}, not RUN.")
+                    if unlink_from_chains:
+                        if info.parents is None:  # For mypy.
+                            raise AssertionError(
+                                "Internal error: Collection parents required but not received"
+                            )
+                        for parent in info.parents:
+                            parents_to_children[parent].add(info.name)
+
                     # Work out the dataset types that are relevant.
-                    collections_info = self.collections.query_info(name, include_summary=True)
                     filtered_dataset_types = self.collections._filter_dataset_types(
                         all_dataset_types, collections_info
                     )
                     for dt in filtered_dataset_types:
-                        refs.extend(query.datasets(dt, collections=name))
+                        refs.extend(query.datasets(dt, collections=info.name))
         with self._datastore.transaction(), self._registry.transaction():
+            if unlink_from_chains:
+                # Use deterministic order for deletions to attempt to minimize
+                # risk of deadlocks for parallel deletes.
+                for parent in sorted(parents_to_children):
+                    self.collections.remove_from_chain(parent, sorted(parents_to_children[parent]))
             if unstore:
                 with time_this(
                     _LOG, msg="Marking %d datasets for removal to clear RUN collections", args=(len(refs),)
