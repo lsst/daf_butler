@@ -2009,7 +2009,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             source_refs = list(source_refs)
 
         original_count = len(source_refs)
-        _LOG.info("Importing %d datasets into %s", original_count, str(self))
+        log_level = _LOG.INFO if original_count > 1 else _LOG.VERBOSE
+        _LOG.log(
+            log_level,
+            "Importing %d dataset%s into %s",
+            original_count,
+            "s" if original_count != 1 else "",
+            str(self),
+        )
 
         # In some situations the datastore artifact may be missing
         # and we do not want that registry entry to be imported.
