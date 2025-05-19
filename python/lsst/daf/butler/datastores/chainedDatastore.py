@@ -32,7 +32,6 @@ from __future__ import annotations
 __all__ = ("ChainedDatastore",)
 
 import itertools
-import logging
 import time
 import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -51,13 +50,14 @@ from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
+from lsst.utils.logging import getLogger
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from lsst.resources import ResourcePathExpression
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class _IngestPrepData(Datastore.IngestPrepData):
@@ -1239,102 +1239,65 @@ class ChainedDatastore(Datastore):
         dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
-        # mypy does not understand "type(self) is not type(source)"
-        if isinstance(source_datastore, ChainedDatastore):
-            # Both the source and destination are chained datastores.
-            source_datastores = tuple(source_datastore.datastores)
-        else:
-            # The source datastore is different, forward everything to the
-            # child datastores.
-            source_datastores = (source_datastore,)
-
         if not refs:
-            # Nothing to transfer.
             return set(), set()
 
-        # Need to know the set of all possible refs that could be transferred.
-        remaining_refs = set(refs)
-
-        missing_from_source: set[DatasetRef] | None = None
-        all_accepted = set()
+        # Assume that each child datastore knows how to look inside a chained
+        # datastore for compatible datastores (and so there is no need to
+        # unpack the source datastores here).
+        # Need to decide if a ref accepted by one datastore should be sent to
+        # later datastores (as is done in put()). More efficient to filter out
+        # accepted datasets.
+        if artifact_existence is None:
+            artifact_existence = {}
+        available_refs = set(refs)
+        accepted: set[DatasetRef] = set()
+        rejected: set[DatasetRef] = set()
         nsuccess = 0
-        for source_child in source_datastores:
-            # If we are reading from a chained datastore, it's possible that
-            # only a subset of the datastores know about the dataset. We can't
-            # ask the receiving datastore to copy it when it doesn't exist
-            # so we have to filter again based on what the source datastore
-            # understands.
-            known_to_source = source_child.knows_these(list(refs))
 
-            # Need to know that there is a possibility that some of these
-            # datasets exist but are unknown to the source datastore if
-            # trust is enabled.
-            if getattr(source_child, "trustGetRequest", False):
-                unknown = [ref for ref, known in known_to_source.items() if not known]
-                existence = source_child.mexists(unknown, artifact_existence)
-                for ref, exists in existence.items():
-                    known_to_source[ref] = exists
+        log.debug("Initiating transfer to chained datastore %s from %s", self.name, source_datastore.name)
+        for datastore in self.datastores:
+            # Rejections from this datastore might be acceptances in the next.
+            # We add them all up but then recalculate at the end.
+            if not available_refs:
+                break
+            log.verbose("Transferring %d datasets to %s from chain", len(available_refs), datastore.name)
 
-            missing = {ref for ref, known in known_to_source.items() if not known}
-            if missing:
-                if missing_from_source is None:
-                    missing_from_source = missing
-                else:
-                    missing_from_source &= missing
-
-            # Try to transfer from each source datastore to each child
-            # datastore. Have to make sure we don't transfer something
-            # we've already transferred to this destination on later passes.
-
-            # Filter the initial list based on the datasets we have
-            # not yet transferred.
-            these_refs = []
-            for ref in refs:
-                if ref in remaining_refs and known_to_source[ref]:
-                    these_refs.append(ref)
-
-            if not these_refs:
-                # Already transferred all datasets known to this datastore.
+            try:
+                current_accepted, current_rejected = datastore.transfer_from(
+                    source_datastore,
+                    available_refs,
+                    transfer=transfer,
+                    artifact_existence=artifact_existence,
+                    dry_run=dry_run,
+                )
+            except (TypeError, NotImplementedError):
+                # The datastores were incompatible.
                 continue
+            else:
+                nsuccess += 1
 
-            for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
-                if constraints is not None:
-                    filtered_refs = []
-                    for ref in these_refs:
-                        if constraints.isAcceptable(ref):
-                            filtered_refs.append(ref)
-                        else:
-                            log.debug("Rejecting ref by constraints: %s", ref)
-                else:
-                    filtered_refs = list(these_refs)
-                try:
-                    accepted, _ = datastore.transfer_from(
-                        source_child,
-                        filtered_refs,
-                        transfer,
-                        artifact_existence,
-                        dry_run=dry_run,
-                    )
-                except (TypeError, NotImplementedError):
-                    # The datastores were incompatible.
-                    continue
-                else:
-                    nsuccess += 1
+                # Do not send accepted refs to later datastores.
+                available_refs -= current_accepted
 
-                # Remove the accepted datasets from those remaining.
-                remaining_refs = remaining_refs - accepted
-
-                # Keep track of everything we have accepted.
-                all_accepted.update(accepted)
-
-        if missing_from_source:
-            for ref in missing_from_source:
-                log.warning("Asked to transfer dataset %s but no file artifacts exist for it", ref)
+                accepted.update(current_accepted)
+                rejected.update(current_rejected)
 
         if nsuccess == 0:
             raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
 
-        return all_accepted, remaining_refs
+        # It's not rejected if some other datastore accepted it.
+        rejected -= accepted
+        log.verbose(
+            "Finished transfer_from %s to %s with %d accepted, %d rejected from %d requested.",
+            source_datastore.name,
+            self.name,
+            len(accepted),
+            len(rejected),
+            len(refs),
+        )
+
+        return accepted, rejected
 
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
