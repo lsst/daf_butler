@@ -16,6 +16,7 @@ from lsst.daf.butler.remote_butler.server._dependencies import (
     auth_delegated_token_dependency,
     auth_dependency,
     butler_factory_dependency,
+    reset_dependency_caches,
 )
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
@@ -117,6 +118,7 @@ def create_test_server(
                         config_uri=config_file_path, authorized_groups=["*"]
                     )
                 }
+                reset_dependency_caches()
 
                 app = create_app()
                 add_auth_header_check_middleware(app)

@@ -53,10 +53,22 @@ async def butler_factory_dependency() -> LabeledButlerFactory:
     return _butler_factory
 
 
+async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
+    global _authorizer
+    if _authorizer is None:
+        config = load_config()
+        authorized_groups = {k: v.authorized_groups for k, v in config.repositories.items()}
+        client = GafaelfawrClient(str(config.gafaelfawr_url))
+        _authorizer = GafaelfawrGroupAuthorizer(client, authorized_groups)
+
+    return _authorizer
+
+
 async def repository_authorization_dependency(
     repository: str,
     user_name: Annotated[str, Depends(auth_dependency)],
     user_token: Annotated[str, Depends(auth_delegated_token_dependency)],
+    authorizer: Annotated[GafaelfawrGroupAuthorizer, Depends(authorizer_dependency)],
 ) -> None:
     """Restrict access to specific repositories based on the user's membership
     in Gafaelfawr groups.
@@ -71,15 +83,10 @@ async def repository_authorization_dependency(
         Delegated token for the user accessing the repository, from Gafaelfawr
         headers.  Used for retrieving group membership information about the
         user from Gafaelfawr.
+    authorizer : `GafaelfawrGroupAuthorizer`
+        Authorization client that will be used to verify group membership.
     """
-    global _authorizer
-    if _authorizer is None:
-        config = load_config()
-        authorized_groups = {k: v.authorized_groups for k, v in config.repositories.items()}
-        client = GafaelfawrClient(str(config.gafaelfawr_url))
-        _authorizer = GafaelfawrGroupAuthorizer(client, authorized_groups)
-
-    if not await _authorizer.is_user_authorized_for_repository(
+    if not await authorizer.is_user_authorized_for_repository(
         repository=repository, user_name=user_name, user_token=user_token
     ):
         raise HTTPException(
@@ -102,3 +109,15 @@ async def factory_dependency(
         Factory for instantiating DirectButlers.
     """
     return Factory(butler_factory=butler_factory, repository=repository)
+
+
+def reset_dependency_caches() -> None:
+    """Clear caches used by dependencies.  Unit tests should call this after
+    changing the configuration, to allow objects to be re-created with the
+    new configuration.
+    """
+    global _butler_factory
+    global _authorizer
+
+    _butler_factory = None
+    _authorizer = None
