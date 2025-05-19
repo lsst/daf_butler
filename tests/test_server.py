@@ -43,11 +43,15 @@ try:
 
     import lsst.daf.butler.remote_butler._query_results
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
-    from lsst.daf.butler.remote_butler import RemoteButler
+    from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._config import mock_config
-    from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
+    from lsst.daf.butler.remote_butler.server._dependencies import (
+        authorizer_dependency,
+        butler_factory_dependency,
+    )
+    from lsst.daf.butler.remote_butler.server._gafaelfawr import MockGafaelfawrGroupAuthorizer
     from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
@@ -62,6 +66,7 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetNotFoundError,
     DatasetRef,
+    DatasetType,
     LabeledButlerFactory,
     MissingDatasetTypeError,
     NoDefaultCollectionError,
@@ -84,6 +89,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         server_instance = cls.enterClassContext(create_test_server(TESTDIR))
+        cls.server_instance = server_instance
         cls.client = server_instance.client
         cls.butler = server_instance.remote_butler
         cls.butler_without_error_propagation = server_instance.remote_butler_without_error_propagation
@@ -524,6 +530,33 @@ class ButlerClientServerTestCase(unittest.TestCase):
             ),
         ).json()
         self.assertCountEqual(json["collections"], ["imported_g", "imported_r"])
+
+
+class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
+    """Test that group membership repository authorization is checked when
+    repository is accessed.
+    """
+
+    def test_group_authorization(self):
+        with create_test_server(TESTDIR) as server_instance:
+            mock = MockGafaelfawrGroupAuthorizer()
+            server_instance.app.dependency_overrides[authorizer_dependency] = lambda: mock
+            server_instance.direct_butler.registry.registerDatasetType(
+                DatasetType("bias", [], "int", universe=server_instance.direct_butler.dimensions)
+            )
+            server_instance.direct_butler.collections.register("collection")
+            butler = server_instance.remote_butler
+            mock.set_response(False)
+            with self.assertRaises(ButlerServerError) as e:
+                butler.get_dataset_type("bias")
+            self.assertEqual(e.exception.status_code, 403)
+            with self.assertRaises(ButlerServerError) as e:
+                butler.query_datasets("bias", collections="*", find_first=False)
+            self.assertEqual(e.exception.status_code, 403)
+
+            mock.set_response(True)
+            self.assertEqual(butler.get_dataset_type("bias").name, "bias")
+            self.assertEqual(butler.query_datasets("bias", collections="collection", explain=False), [])
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:

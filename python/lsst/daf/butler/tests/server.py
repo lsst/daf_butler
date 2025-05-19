@@ -65,6 +65,8 @@ class TestServerInstance:
     """
     hybrid_butler: HybridButler
     """`HybridButler` instance connected to the temporary server."""
+    app: FastAPI
+    """Butler server FastAPI app."""
 
 
 @contextmanager
@@ -168,6 +170,7 @@ def create_test_server(
                         remote_butler=remote_butler,
                         remote_butler_without_error_propagation=remote_butler_without_error_propagation,
                         hybrid_butler=hybrid_butler,
+                        app=app,
                     )
 
 

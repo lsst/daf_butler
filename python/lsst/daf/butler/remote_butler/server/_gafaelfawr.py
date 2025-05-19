@@ -94,3 +94,14 @@ class GafaelfawrGroupAuthorizer:
             return True
 
         return False
+
+
+class MockGafaelfawrGroupAuthorizer:
+    def __init__(self) -> None:
+        self._response = True
+
+    def set_response(self, value: bool) -> None:
+        self._response = value
+
+    async def is_user_authorized_for_repository(self, **kwargs: str) -> bool:
+        return self._response
