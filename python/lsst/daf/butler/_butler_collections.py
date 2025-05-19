@@ -108,6 +108,10 @@ class ButlerCollections(ABC, Sequence):
         """Collection defaults associated with this butler."""
         raise NotImplementedError("Defaults must be implemented by a subclass")
 
+    def __str__(self) -> str:
+        """Return string representation."""
+        return f"{self.__class__.__name__}(defaults={self.defaults})"
+
     @abstractmethod
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         """Add children to the end of a CHAINED collection.
