@@ -11,11 +11,10 @@ from fastapi.testclient import TestClient
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
-from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, mock_config
+from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, RepositoryConfig, mock_config
 from lsst.daf.butler.remote_butler.server._dependencies import (
     auth_delegated_token_dependency,
     auth_dependency,
-    authorizer_dependency,
     butler_factory_dependency,
 )
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
@@ -109,9 +108,15 @@ def create_test_server(
             if postgres is not None:
                 postgres.patch_butler_config(config)
 
-            with TemporaryDirectory() as root, mock_config(server_config):
+            with TemporaryDirectory() as root, mock_config(server_config) as server_config:
                 Butler.makeRepo(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
+
+                server_config.repositories = {
+                    TEST_REPOSITORY_NAME: RepositoryConfig(
+                        config_uri=config_file_path, authorized_groups=["*"]
+                    )
+                }
 
                 app = create_app()
                 add_auth_header_check_middleware(app)
@@ -134,7 +139,8 @@ def create_test_server(
                 # as needed.
                 server_butler_factory._preload_unsafe_direct_butler_caches = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
-                app.dependency_overrides[authorizer_dependency] = lambda: _MockGafaelfawrGroupAuthorizer()
+                # In an actual deployment, these headers would be provided by
+                # the Gafaelfawr ingress.
                 app.dependency_overrides[auth_dependency] = lambda: "mock-username"
                 app.dependency_overrides[auth_delegated_token_dependency] = lambda: "mock-delegated-token"
 

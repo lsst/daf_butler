@@ -32,7 +32,7 @@ __all__ = ("create_app",)
 from collections.abc import Awaitable, Callable
 
 import safir.dependencies.logger
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from safir.logging import configure_logging, configure_uvicorn_logging
 
@@ -40,6 +40,7 @@ from ..._exceptions import ButlerUserError
 from .._errors import serialize_butler_user_error
 from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 from ._config import load_config
+from ._dependencies import repository_authorization_dependency
 from ._telemetry import enable_telemetry
 from .handlers._external import external_router
 from .handlers._external_query import query_router
@@ -65,6 +66,9 @@ def create_app() -> FastAPI:
         app.include_router(
             router,
             prefix=f"{default_api_path}/repo/{repository_placeholder}",
+            # Verify that users have permission to access repository-specific
+            # resources.
+            dependencies=[Depends(repository_authorization_dependency)],
             # document that 422 responses will include a JSON-formatted error
             # message, from `butler_exception_handler()` below.
             responses={422: {"model": ErrorResponseModel}},
