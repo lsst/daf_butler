@@ -215,8 +215,12 @@ class RemoteButlerHttpConnection:
             response = self._send_with_retries(request, stream=False)
             self._handle_http_status(response, request.request_id)
             return response
+        except httpx.HTTPStatusError as e:
+            raise ButlerServerError(
+                client_request_id=request.request_id, status_code=e.response.status_code
+            ) from e
         except httpx.HTTPError as e:
-            raise ButlerServerError(request.request_id) from e
+            raise ButlerServerError(client_request_id=request.request_id) from e
 
     @contextmanager
     def _send_request_with_stream_response(self, request: _Request) -> Iterator[httpx.Response]:
@@ -227,8 +231,12 @@ class RemoteButlerHttpConnection:
                 yield response
             finally:
                 response.close()
+        except httpx.HTTPStatusError as e:
+            raise ButlerServerError(
+                client_request_id=request.request_id, status_code=e.response.status_code
+            ) from e
         except httpx.HTTPError as e:
-            raise ButlerServerError(request.request_id) from e
+            raise ButlerServerError(client_request_id=request.request_id) from e
 
     def _send_with_retries(self, request: _Request, stream: bool) -> httpx.Response:
         max_retry_time_seconds = 120
@@ -325,10 +333,14 @@ class ButlerServerError(RuntimeError):
     ----------
     client_request_id : `str`
         Request ID to include in the exception message.
+    status_code : `int`, optional
+        HTTP status code for response that triggered the error, if available.
     """
 
-    def __init__(self, client_request_id: str):
+    def __init__(self, *, client_request_id: str, status_code: int | None = None):
         super().__init__(f"Error while communicating with Butler server.  Request ID: {client_request_id}")
+        self.client_request_id = client_request_id
+        self.status_code = status_code
 
 
 def quote_path_variable(path: str) -> str:  # numpydoc ignore=PR01
