@@ -90,7 +90,7 @@ def find_calibration_datasets(
 def exportCalibs(
     repo: str, directory: str, collections: Iterable[str], dataset_type: Iterable[str], transfer: str
 ) -> Table:
-    """Certify a set of calibrations with a validity range.
+    """Export calibrations from the butler for import elsewhere.
 
     Parameters
     ----------
@@ -130,6 +130,7 @@ def exportCalibs(
         for datasetType in butler.registry.queryDatasetTypes(dataset_type_query)
         if datasetType.isCalibration()
     ]
+    calibTypeNames = set([dt.name for dt in calibTypes])
 
     collectionsToExport = []
     datasetsToExport = []
@@ -139,15 +140,21 @@ def exportCalibs(
         flatten_chains=True,
         include_chains=True,
         include_doc=True,
+        include_summary=True,
         collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
     ):
         log.info("Checking collection: %s", collection.name)
+        if collection.dataset_types.isdisjoint(calibTypeNames):
+            continue
 
         # Get collection information.
-        collectionsToExport.append(collection.name)
         if collection.type == CollectionType.CALIBRATION:
             exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
-            datasetsToExport.extend(exportDatasets)
+            if len(exportDatasets) > 0:
+                datasetsToExport.extend(exportDatasets)
+                collectionsToExport.append(collection.name)
+        else:
+            collectionsToExport.append(collection.name)
 
     if os.path.exists(directory):
         raise RuntimeError(f"Export directory exists: {directory}")
