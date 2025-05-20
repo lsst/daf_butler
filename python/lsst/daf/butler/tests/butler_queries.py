@@ -2140,6 +2140,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(len(result), 1)
         result = butler.query_datasets("dt", "run1", where="ingest_date < T'2000-01-01'", explain=False)
         self.assertEqual(len(result), 0)
+        result = butler.query_datasets(
+            "dt", "run1", where="ingest_date OVERLAPS (T'2000-01-01', T'2099-01-01')"
+        )
+        self.assertEqual(len(result), 1)
+        result = butler.query_datasets(
+            "dt", "run1", where="(T'2000-01-01', T'2099-01-01') OVERLAPS ingest_date"
+        )
+        self.assertEqual(len(result), 1)
+        result = butler.query_datasets(
+            "dt", "run1", where="(T'2000-01-01', T'2001-01-01') OVERLAPS ingest_date", explain=False
+        )
+        self.assertEqual(len(result), 0)
 
     def test_multiple_instrument_queries(self) -> None:
         """Test that multiple-instrument queries are not rejected as having

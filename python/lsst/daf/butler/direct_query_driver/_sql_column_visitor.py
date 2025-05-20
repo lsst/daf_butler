@@ -146,8 +146,12 @@ class SqlColumnVisitor(
     ) -> sqlalchemy.ColumnElement[bool]:
         # Docstring inherited.
         if operator == "overlaps":
-            if values := qt.is_one_timespan_and_one_datetime(a, b):
+            if values := (qt.is_one_timespan_and_one_datetime(a, b)):
                 return self.expect_timespan(values.timespan).contains(self.expect_scalar(values.datetime))
+            elif values := (qt.is_one_timespan_and_one_ingest_date(a, b)):
+                return self.expect_timespan(values.timespan).contains(
+                    self._convert_ingest_date_to_datetime(values.datetime)
+                )
             elif a.column_type == "timespan" and b.column_type == "timespan":
                 return self.expect_timespan(a).overlaps(self.expect_timespan(b))
             else:
@@ -314,6 +318,20 @@ class SqlColumnVisitor(
                 warnings.simplefilter("ignore", category=erfa.ErfaWarning)
                 dt = expression.value.utc.to_datetime()
             return sqlalchemy.literal(dt)
+        else:
+            # For v2 schema, ingest_date uses TAI nanoseconds like everything
+            # else, so no conversion is required.
+            return self.expect_scalar(expression)
+
+    def _convert_ingest_date_to_datetime(self, expression: qt.ColumnExpression) -> sqlalchemy.ColumnElement:
+        assert expression.column_type == "ingest_date"
+        if self._driver.managers.datasets.ingest_date_dtype() == sqlalchemy.TIMESTAMP:
+            # Datasets manager v1 schema has "datasets" table's "ingest_date"
+            # column as TIMESTAMP, but the rest of the database schema and
+            # query system uses integer TAI nanoseconds.
+            raise InvalidQueryError(
+                "Expressions involving ingest date are not supported by this database schema."
+            )
         else:
             # For v2 schema, ingest_date uses TAI nanoseconds like everything
             # else, so no conversion is required.

@@ -50,6 +50,7 @@ from ._column_expression import (
     is_numeric,
     is_one_datetime_and_one_ingest_date,
     is_one_timespan_and_one_datetime,
+    is_one_timespan_and_one_ingest_date,
 )
 
 if TYPE_CHECKING:
@@ -549,8 +550,11 @@ class Comparison(PredicateLeafBase):
     @pydantic.model_validator(mode="after")
     def _validate_column_types(self) -> Comparison:
         comparison_operators = ("==", "!=", "<", ">", ">=", "<=")
-        if self.operator == "overlaps" and is_one_timespan_and_one_datetime(self.a, self.b):
-            # Allow mixed-type comparison of datetime overlaps timespan.
+        if self.operator == "overlaps" and (
+            is_one_timespan_and_one_datetime(self.a, self.b)
+            or is_one_timespan_and_one_ingest_date(self.a, self.b)
+        ):
+            # Allow timespan OVERLAPS datetime/ingest_date.
             pass
         elif is_one_datetime_and_one_ingest_date(self.a, self.b) and self.operator in comparison_operators:
             # ingest_date might be one of two different column types
