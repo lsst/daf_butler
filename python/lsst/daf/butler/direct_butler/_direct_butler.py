@@ -2339,6 +2339,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Find all the registered instruments (if "instrument" is in the
         # universe).
+        instruments: set[str] = set()
         if "instrument" in self.dimensions:
             instruments = {rec.name for rec in self.query_dimension_records("instrument", explain=False)}
 
