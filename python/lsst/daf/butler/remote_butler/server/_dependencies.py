@@ -54,6 +54,7 @@ async def butler_factory_dependency() -> LabeledButlerFactory:
 
 
 async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
+    """Instantiate a client for checking group membership via Gafaelfawr."""
     global _authorizer
     if _authorizer is None:
         config = load_config()

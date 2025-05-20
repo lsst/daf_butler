@@ -72,6 +72,20 @@ class _GafaelfawrGroup(pydantic.BaseModel):
 
 
 class GafaelfawrGroupAuthorizer:
+    """Authorizes access to Butler repositories on the basis of Gafaelfawr
+    groups.
+
+    Parameters
+    ----------
+    client : `GafaelfawrClient`
+        `GafaelfawrClient` instance that will be used to access group
+        information.
+    repository_groups : `dict` [ `str, `list` [ `str` ]]
+        Mapping from repository name to list of Gafaelfawr groups authorized to
+        access that repository.  If a user is a member of any one of the groups
+        in the list, access will be granted.
+    """
+
     def __init__(self, client: GafaelfawrClient, repository_groups: dict[str, list[str]]) -> None:
         self._client = client
         self._repository_groups = repository_groups
@@ -99,6 +113,8 @@ class GafaelfawrGroupAuthorizer:
 
 
 class MockGafaelfawrGroupAuthorizer:
+    """Mock implementation of ``GafaelfawrGroupAuthorizer`` for unit tests."""
+
     def __init__(self) -> None:
         self._response = True
 

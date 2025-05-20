@@ -80,6 +80,19 @@ def load_config() -> ButlerServerConfig:
 
 @contextmanager
 def mock_config(temporary_config: ButlerServerConfig | None = None) -> Iterator[ButlerServerConfig]:
+    """Replace the global Butler server configuration with a temporary value.
+
+    Parameters
+    ----------
+    temporary_config : `ButlerServerConfig`, optional
+        Configuration to replace the global value with.  If not provided,
+        a default empty configuration will be used.
+
+    Returns
+    -------
+    config : `ButlerServerConfig`
+        The new configuration object.
+    """
     global _config
     orig = _config
     try:
