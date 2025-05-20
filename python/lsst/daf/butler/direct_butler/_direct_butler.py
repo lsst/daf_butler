@@ -1541,18 +1541,23 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
         with self._datastore.transaction(), self._registry.transaction():
+            plural = "s" if len(refs) != 1 else ""
             if unstore:
                 with time_this(
-                    _LOG, msg="Marking %d datasets for removal to during pruning", args=(len(refs),)
+                    _LOG,
+                    msg="Marking %d dataset%s for removal during pruneDatasets",
+                    args=(len(refs), plural),
                 ):
                     self._datastore.trash(refs)
             if purge:
-                with time_this(_LOG, msg="Removing %d pruned datasets from registry", args=(len(refs),)):
+                with time_this(
+                    _LOG, msg="Removing %d pruned dataset%s from registry", args=(len(refs), plural)
+                ):
                     self._registry.removeDatasets(refs)
             elif disassociate:
                 assert tags, "Guaranteed by earlier logic in this function."
                 with time_this(
-                    _LOG, msg="Disassociating %d datasets from tagged collections", args=(len(refs),)
+                    _LOG, msg="Disassociating %d dataset%ss from tagged collections", args=(len(refs), plural)
                 ):
                     for tag in tags:
                         self._registry.disassociate(tag, refs)
@@ -1570,8 +1575,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # emptying to the refs that this call trashed.
             with time_this(
                 _LOG,
-                msg="Attempting to remove artifacts for %d datasets associated with pruning",
-                args=(len(refs),),
+                msg="Attempting to remove artifacts for %d dataset%s associated with pruning",
+                args=(len(refs), plural),
             ):
                 self._datastore.emptyTrash(refs=refs)
 

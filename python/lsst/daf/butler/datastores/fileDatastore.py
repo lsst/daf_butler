@@ -2694,9 +2694,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
             if artifacts_to_keep:
                 log.verbose(
-                    "%d artifact%s were not deleted because they are associated with other datasets",
+                    "%d artifact%s %s not deleted because of association with other datasets",
                     len(artifacts_to_keep),
                     "s" if len(artifacts_to_keep) != 1 else "",
+                    "were" if len(artifacts_to_keep) != 1 else "was",
                 )
 
             if not artifacts_to_delete:
