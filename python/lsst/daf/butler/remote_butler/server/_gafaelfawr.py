@@ -43,7 +43,7 @@ class GafaelfawrClient:
     ----------
     base_url : `str`
         The top-level HTTP path where Gafaelfawr can be found (e.g.
-        ``"https://data-int.lsst.cloud"``).
+        ``"https://data-int.lsst.cloud/auth"``).
     transport : ``httpx.AsyncBaseTransport``, optional
         Override the HTTP client's transport.  (For unit tests).
     """
@@ -54,9 +54,7 @@ class GafaelfawrClient:
         self._client = httpx.AsyncClient(base_url=base_url, transport=transport, timeout=20.0)
 
     async def get_groups(self, user_token: str) -> list[str]:
-        response = await self._client.get(
-            "/auth/api/v1/user-info", headers=get_authentication_headers(user_token)
-        )
+        response = await self._client.get("/api/v1/user-info", headers=get_authentication_headers(user_token))
         response.raise_for_status()
         info = _GafaelfawrUserInfo.model_validate_json(response.content)
         if info.groups is None:
