@@ -1497,10 +1497,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # incremental re-running of the command. The only issue will be if the
         # Ctrl-C comes during emptyTrash since an admin command would need to
         # run to finish the emptying of that chunk.
+        progress = Progress("lsst.daf.butler.Butler.ingest", level=_LOG.INFO)
         chunk_size = 50_000
         n_chunks = math.ceil(len(refs) / chunk_size)
         chunk_num = 0
-        for chunked_refs in chunk_iterable(refs, chunk_size=chunk_size):
+        for chunked_refs in progress.wrap(
+            chunk_iterable(refs, chunk_size=chunk_size), desc="Deleting datasets from RUNs", total=n_chunks
+        ):
             chunk_num += 1
             _LOG.verbose(
                 "Deleting %d dataset%s from requested RUN collections in chunk %d/%d",
