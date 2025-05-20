@@ -27,13 +27,17 @@
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
+from safir.dependencies.gafaelfawr import auth_delegated_token_dependency, auth_dependency
 
 from lsst.daf.butler import LabeledButlerFactory
 
+from ._config import load_config
 from ._factory import Factory
+from ._gafaelfawr import GafaelfawrClient, GafaelfawrGroupAuthorizer
 
-_butler_factory = LabeledButlerFactory()
+_butler_factory: LabeledButlerFactory | None = None
+_authorizer: GafaelfawrGroupAuthorizer | None = None
 
 
 async def butler_factory_dependency() -> LabeledButlerFactory:
@@ -41,11 +45,60 @@ async def butler_factory_dependency() -> LabeledButlerFactory:
     construct internal DirectButler instances for interacting with the Butler
     repositories we are serving.
     """
+    global _butler_factory
+    if _butler_factory is None:
+        config = load_config()
+        repositories = {k: v.config_uri for k, v in config.repositories.items()}
+        _butler_factory = LabeledButlerFactory(repositories)
     return _butler_factory
 
 
+async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
+    """Instantiate a client for checking group membership via Gafaelfawr."""
+    global _authorizer
+    if _authorizer is None:
+        config = load_config()
+        authorized_groups = {k: v.authorized_groups for k, v in config.repositories.items()}
+        client = GafaelfawrClient(str(config.gafaelfawr_url))
+        _authorizer = GafaelfawrGroupAuthorizer(client, authorized_groups)
+
+    return _authorizer
+
+
+async def repository_authorization_dependency(
+    repository: str,
+    user_name: Annotated[str, Depends(auth_dependency)],
+    user_token: Annotated[str, Depends(auth_delegated_token_dependency)],
+    authorizer: Annotated[GafaelfawrGroupAuthorizer, Depends(authorizer_dependency)],
+) -> None:
+    """Restrict access to specific repositories based on the user's membership
+    in Gafaelfawr groups.
+
+    Parameters
+    ----------
+    repository : `str`
+        Butler repository that is being accessed.
+    user_name : `str`
+        Name of the user accessing the repository, from Gafaelfawr headers.
+    user_token : `str`
+        Delegated token for the user accessing the repository, from Gafaelfawr
+        headers.  Used for retrieving group membership information about the
+        user from Gafaelfawr.
+    authorizer : `GafaelfawrGroupAuthorizer`
+        Authorization client that will be used to verify group membership.
+    """
+    if not await authorizer.is_user_authorized_for_repository(
+        repository=repository, user_name=user_name, user_token=user_token
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=f"User {user_name} does not have permission to access Butler repository '{repository}'",
+        )
+
+
 async def factory_dependency(
-    repository: str, butler_factory: Annotated[LabeledButlerFactory, Depends(butler_factory_dependency)]
+    repository: str,
+    butler_factory: Annotated[LabeledButlerFactory, Depends(butler_factory_dependency)],
 ) -> Factory:
     """Return Factory object for injection into FastAPI.
 
@@ -57,3 +110,15 @@ async def factory_dependency(
         Factory for instantiating DirectButlers.
     """
     return Factory(butler_factory=butler_factory, repository=repository)
+
+
+def reset_dependency_caches() -> None:
+    """Clear caches used by dependencies.  Unit tests should call this after
+    changing the configuration, to allow objects to be re-created with the
+    new configuration.
+    """
+    global _butler_factory
+    global _authorizer
+
+    _butler_factory = None
+    _authorizer = None

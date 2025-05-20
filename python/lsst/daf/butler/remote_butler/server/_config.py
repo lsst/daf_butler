@@ -27,28 +27,83 @@
 
 from __future__ import annotations
 
-import dataclasses
-import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from functools import cache
+
+from pydantic import AnyHttpUrl, BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclasses.dataclass(frozen=True)
-class ButlerServerConfig:
-    """Butler server configuration loaded from environment variables.
+class RepositoryConfig(BaseModel):
+    """Per-repository configuration for the Butler server."""
 
-    Notes
-    -----
-    Besides these variables, there is one critical environment variable.  The
-    list of repositories to be hosted must be defined using
-     ``DAF_BUTLER_REPOSITORIES`` or ``DAF_BUTLER_REPOSITORY_INDEX`` -- see
-     `ButlerRepoIndex`.
+    config_uri: str
+    """Path to DirectButler configuration YAML file for the repository."""
+    authorized_groups: list[str]
+    """List of Gafaelfawr groups that will be allowed to access this
+    repository.  If this list contains the special group `*`, all users will be
+    granted access.
     """
 
-    static_files_path: str | None
+
+class ButlerServerConfig(BaseSettings):
+    """Butler server configuration loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_prefix="DAF_BUTLER_SERVER_")
+
+    repositories: dict[str, RepositoryConfig]
+    """Mapping from repository name to configuration for the repository."""
+
+    gafaelfawr_url: AnyHttpUrl
+    """URL to the top-level HTTP path where Gafaelfawr can be found (e.g.
+    "https://data-int.lsst.cloud").
+    """
+
+    static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
     as static files from the `configs/` HTTP route.
     """
 
 
+_config: ButlerServerConfig | None = None
+
+
+@cache
 def load_config() -> ButlerServerConfig:
     """Read the Butler server configuration from the environment."""
-    return ButlerServerConfig(static_files_path=os.environ.get("DAF_BUTLER_SERVER_STATIC_FILES_PATH"))
+    global _config
+    if _config is None:
+        _config = ButlerServerConfig()
+    return _config
+
+
+@contextmanager
+def mock_config(temporary_config: ButlerServerConfig | None = None) -> Iterator[ButlerServerConfig]:
+    """Replace the global Butler server configuration with a temporary value.
+
+    Parameters
+    ----------
+    temporary_config : `ButlerServerConfig`, optional
+        Configuration to replace the global value with.  If not provided,
+        a default empty configuration will be used.
+
+    Returns
+    -------
+    config : `ButlerServerConfig`
+        The new configuration object.
+    """
+    global _config
+    orig = _config
+    try:
+        if temporary_config is None:
+            temporary_config = ButlerServerConfig(
+                repositories={},
+                gafaelfawr_url="http://gafaelfawr.example",
+                static_files_path=None,
+            )
+        _config = temporary_config
+        load_config.cache_clear()
+        yield _config
+    finally:
+        _config = orig

@@ -10,7 +10,13 @@ from fastapi.testclient import TestClient
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
-from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
+from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, RepositoryConfig, mock_config
+from lsst.daf.butler.remote_butler.server._dependencies import (
+    auth_delegated_token_dependency,
+    auth_dependency,
+    butler_factory_dependency,
+    reset_dependency_caches,
+)
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
 from ..direct_butler import DirectButler
@@ -58,11 +64,16 @@ class TestServerInstance:
     """
     hybrid_butler: HybridButler
     """`HybridButler` instance connected to the temporary server."""
+    app: FastAPI
+    """Butler server FastAPI app."""
 
 
 @contextmanager
 def create_test_server(
-    test_directory: str, *, postgres: TemporaryPostgresInstance | None = None
+    test_directory: str,
+    *,
+    postgres: TemporaryPostgresInstance | None = None,
+    server_config: ButlerServerConfig | None = None,
 ) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
 
@@ -75,6 +86,8 @@ def create_test_server(
         If provided, the Butler server will use this postgres database
         instance.  If no postgres instance is specified, the server will use a
         a SQLite database.
+    server_config : `ButlerServerConfig`, optional
+        Configuration to use for the Butler server.
 
     Returns
     -------
@@ -97,9 +110,16 @@ def create_test_server(
             if postgres is not None:
                 postgres.patch_butler_config(config)
 
-            with TemporaryDirectory() as root:
+            with TemporaryDirectory() as root, mock_config(server_config) as server_config:
                 Butler.makeRepo(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
+
+                server_config.repositories = {
+                    TEST_REPOSITORY_NAME: RepositoryConfig(
+                        config_uri=config_file_path, authorized_groups=["*"]
+                    )
+                }
+                reset_dependency_caches()
 
                 app = create_app()
                 add_auth_header_check_middleware(app)
@@ -122,6 +142,10 @@ def create_test_server(
                 # as needed.
                 server_butler_factory._preload_unsafe_direct_butler_caches = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
+                # In an actual deployment, these headers would be provided by
+                # the Gafaelfawr ingress.
+                app.dependency_overrides[auth_dependency] = lambda: "mock-username"
+                app.dependency_overrides[auth_delegated_token_dependency] = lambda: "mock-delegated-token"
 
                 # Using TestClient in a context manager ensures that it uses
                 # the same async event loop for all requests -- otherwise it
@@ -145,6 +169,7 @@ def create_test_server(
                         remote_butler=remote_butler,
                         remote_butler_without_error_propagation=remote_butler_without_error_propagation,
                         hybrid_butler=hybrid_butler,
+                        app=app,
                     )
 
 
