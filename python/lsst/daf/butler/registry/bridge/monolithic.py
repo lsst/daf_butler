@@ -38,6 +38,8 @@ from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
+from lsst.utils.iteration import chunk_iterable
+
 from ..._dataset_ref import DatasetId
 from ..._named import NamedValueSet
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
@@ -168,23 +170,43 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        rows = self._refsToRows(self.check(refs))
-        self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
+        with self._db.transaction():
+            # The list of IDs can be very large, split it into reasonable size
+            # chunks to avoid hitting limits.
+            for refs_chunk in chunk_iterable(refs, 50_000):
+                dataset_ids = [ref.id for ref in refs_chunk]
+                where = sqlalchemy.sql.and_(
+                    self._tables.dataset_location.columns.datastore_name == self.datastoreName,
+                    self._tables.dataset_location.columns.dataset_id.in_(dataset_ids),
+                )
+                self._db.deleteWhere(self._tables.dataset_location, where)
 
     def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: DatastoreTransaction | None) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        # TODO: avoid self.check() call via queries like
-        #     INSERT INTO dataset_location_trash
-        #         SELECT datastore_name, dataset_id FROM dataset_location
-        #         WHERE datastore_name=? AND dataset_id IN (?);
-        #     DELETE FROM dataset_location
-        #         WHERE datastore_name=? AND dataset_id IN (?);
-        # ...but the Database interface doesn't support those kinds of queries
-        # right now.
-        rows = self._refsToRows(self.check(refs))
+        location = self._tables.dataset_location
+        location_trash = self._tables.dataset_location_trash
         with self._db.transaction():
-            self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
-            self._db.insert(self._tables.dataset_location_trash, *rows)
+            for refs_chunk in chunk_iterable(refs, 50_000):
+                # We only want to move IDs that actually exist in the
+                # dataset_location table. Instead of querying for existing IDs,
+                # which would need an extra query, we use INSERT ... SELECT
+                # and DELETE using WHERE clause that limits operations to
+                # existing IDs.
+                dataset_ids = [ref.id for ref in refs_chunk]
+
+                where = sqlalchemy.sql.and_(
+                    location.columns.datastore_name == self.datastoreName,
+                    location.columns.dataset_id.in_(dataset_ids),
+                )
+
+                select = (
+                    sqlalchemy.sql.select(location.columns.datastore_name, location.columns.dataset_id)
+                    .where(where)
+                    .with_for_update()
+                )
+                self._db.insert(location_trash, select=select)
+
+                self._db.deleteWhere(location, where)
 
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
