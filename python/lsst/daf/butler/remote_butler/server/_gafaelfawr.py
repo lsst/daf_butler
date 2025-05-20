@@ -49,7 +49,9 @@ class GafaelfawrClient:
     """
 
     def __init__(self, base_url: str, *, transport: httpx.AsyncBaseTransport | None = None) -> None:
-        self._client = httpx.AsyncClient(base_url=base_url, transport=transport)
+        if transport is None:
+            transport = httpx.AsyncHTTPTransport(retries=3)
+        self._client = httpx.AsyncClient(base_url=base_url, transport=transport, timeout=20.0)
 
     async def get_groups(self, user_token: str) -> list[str]:
         response = await self._client.get(
