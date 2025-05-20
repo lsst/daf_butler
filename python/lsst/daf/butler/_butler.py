@@ -90,6 +90,10 @@ class SpecificButlerDataset:
     dataset: DatasetRef | None
 
 
+class _DeprecatedDefault:
+    """Default value for a deprecated parameter."""
+
+
 class Butler(LimitedButler):  # numpydoc ignore=PR02
     """Interface for data butler and factory for Butler instances.
 
@@ -1289,7 +1293,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     @abstractmethod
     def removeRuns(
-        self, names: Iterable[str], unstore: bool = True, *, unlink_from_chains: bool = False
+        self,
+        names: Iterable[str],
+        unstore: bool | type[_DeprecatedDefault] = _DeprecatedDefault,
+        *,
+        unlink_from_chains: bool = False,
     ) -> None:
         """Remove one or more `~CollectionType.RUN` collections and the
         datasets within them.
@@ -1303,7 +1311,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             they are present, and attempt to rollback the registry deletions if
             datastore deletions fail (which may not always be possible).  If
             `False`, datastore records for these datasets are still removed,
-            but any artifacts (e.g. files) will not be.
+            but any artifacts (e.g. files) will not be. This parameter is now
+            deprecated and no longer has any effect. Files are always deleted
+            from datastores unless they were ingested using full URIs.
         unlink_from_chains : `bool`, optional
             If `True` remove the RUN collection from any chains prior to
             removing the RUN. If `False` the removal will fail if any chains

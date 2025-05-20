@@ -140,7 +140,7 @@ def removeRuns(
         """Perform the remove step."""
         butler = Butler.from_config(repo, writeable=True)
 
-        butler.removeRuns([r.name for r in runs], unstore=True, unlink_from_chains=True)
+        butler.removeRuns([r.name for r in runs], unlink_from_chains=True)
 
     result = RemoveRunsResult(
         onConfirmation=partial(_doRemove, runs),

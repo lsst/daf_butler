@@ -34,7 +34,7 @@ from typing import Any, TextIO, cast
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .._butler import Butler
+from .._butler import Butler, _DeprecatedDefault
 from .._butler_collections import ButlerCollections
 from .._butler_metrics import ButlerMetrics
 from .._dataset_existence import DatasetExistence
@@ -266,7 +266,11 @@ class HybridButler(Butler):
         return self._remote_butler._exists_many(refs, full_check=full_check)
 
     def removeRuns(
-        self, names: Iterable[str], unstore: bool = True, *, unlink_from_chains: bool = False
+        self,
+        names: Iterable[str],
+        unstore: bool | type[_DeprecatedDefault] = _DeprecatedDefault,
+        *,
+        unlink_from_chains: bool = False,
     ) -> None:
         return self._direct_butler.removeRuns(names, unstore, unlink_from_chains=unlink_from_chains)
 

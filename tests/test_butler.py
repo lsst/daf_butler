@@ -1816,15 +1816,16 @@ class FileDatastoreButlerTests(ButlerTests):
 
         # Remove a non-run.
         with self.assertRaises(TypeError):
-            butler.removeRuns(["Chain"], unstore=True)
+            butler.removeRuns(["Chain"])
 
         # Remove without unlinking from chain should fail.
         with self.assertRaises(IntegrityError):
-            butler.removeRuns([run1], unstore=True)
+            butler.removeRuns([run1])
 
-        # Remove from both runs with different values for unstore.
-        butler.removeRuns([run1], unstore=True, unlink_from_chains=True)
-        butler.removeRuns([run2], unstore=False)
+        # Remove from both runs. No longer use unstore parameter since it
+        # always purges.
+        butler.removeRuns([run1, run2], unlink_from_chains=True)
+
         # Should be nothing in registry for either one, and datastore should
         # not think either exists.
         with self.assertRaises(MissingCollectionError):
@@ -1833,10 +1834,9 @@ class FileDatastoreButlerTests(ButlerTests):
             butler.collections.get_info(run1)
         self.assertFalse(butler.stored(ref1))
         self.assertFalse(butler.stored(ref2))
-        # The ref we unstored should be gone according to the URI, but the
-        # one we forgot should still be around.
+        # We always unstore so both URIs should be gone.
         self.assertFalse(uri1.exists())
-        self.assertTrue(uri2.exists())
+        self.assertFalse(uri2.exists())
 
         # Now that the collections have been pruned we can remove the
         # dataset type
