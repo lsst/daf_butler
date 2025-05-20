@@ -532,6 +532,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertCountEqual(json["collections"], ["imported_g", "imported_r"])
 
 
+@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
 class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
     """Test that group membership repository authorization is checked when
     repository is accessed.
