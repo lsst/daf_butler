@@ -62,9 +62,17 @@ from .._factory import Factory
 from ._utils import set_default_data_id
 
 external_router = APIRouter()
+"""Routes reachable by end users that apply authorization checks before
+granting access.
+"""
+
+unauthenticated_external_router = APIRouter()
+"""Publically accessible routes that do not require user authentication to
+access.
+"""
 
 
-@external_router.get(
+@unauthenticated_external_router.get(
     "/butler.yaml",
     description=(
         "Returns a Butler YAML configuration file that can be used to instantiate a Butler client"
@@ -73,7 +81,7 @@ external_router = APIRouter()
     summary="Client configuration file",
     response_model=dict[str, Any],
 )
-@external_router.get(
+@unauthenticated_external_router.get(
     "/butler.json",
     description=(
         "Returns a Butler JSON configuration file that can be used to instantiate a Butler client"
