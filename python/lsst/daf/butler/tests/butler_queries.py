@@ -1677,6 +1677,17 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
                 [],
             )
+
+            # Allow comparison of float columns with int literals
+            self.assertCountEqual(
+                [record.id for record in query.where("visit.exposure_time > 50").dimension_records("visit")],
+                [1],
+            )
+            self.assertCountEqual(
+                [record.id for record in query.where(_x.visit.exposure_time > 50).dimension_records("visit")],
+                [1],
+            )
+
             self.check_detector_records(
                 query.where(_x.detector.in_iterable([1, 3, 4])).dimension_records("detector"),
                 [1, 3, 4],

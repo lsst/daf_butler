@@ -852,8 +852,6 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         # Mixed type comparisons.
         with self.assertRaises(InvalidQueryError):
             self.x.visit > "three"
-        with self.assertRaises(InvalidQueryError):
-            self.x.visit > 3.0
         # Invalid operator for type.
         with self.assertRaises(InvalidQueryError):
             self.x["raw"].dataset_id < uuid.uuid4()

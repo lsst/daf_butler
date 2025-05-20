@@ -298,3 +298,14 @@ def is_one_datetime_and_one_ingest_date(
     return (a.column_type == "datetime" and b.column_type == "ingest_date") or (
         a.column_type == "ingest_date" and b.column_type == "datetime"
     )
+
+
+def is_numeric(expr: ColumnExpression) -> bool:
+    """Return `True` if the expression is a numeric type (float or int).
+
+    Parameters
+    ----------
+    expr : `ColumnExpression`
+        Column expression to test.
+    """
+    return expr.column_type == "float" or expr.column_type == "int"
