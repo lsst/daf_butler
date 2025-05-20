@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -201,8 +200,3 @@ def _add_root_exception_handler(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def convert_exception_types(request: Request, exc: Exception) -> None:
         raise UnhandledServerError("Unhandled server exception") from exc
-
-
-class _MockGafaelfawrGroupAuthorizer:
-    async def is_user_authorized_for_repository(self, *args: Any, **kwargs: Any) -> bool:
-        return True
