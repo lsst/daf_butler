@@ -30,7 +30,6 @@ from ... import ddl
 
 __all__ = ("MonolithicDatastoreRegistryBridge", "MonolithicDatastoreRegistryBridgeManager")
 
-import copy
 from collections import namedtuple
 from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
@@ -41,7 +40,6 @@ import sqlalchemy
 from lsst.utils.iteration import chunk_iterable
 
 from ..._dataset_ref import DatasetId
-from ..._named import NamedValueSet
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
 from ..interfaces import (
     DatasetIdRef,
@@ -73,7 +71,7 @@ _TablesTuple = namedtuple(
 )
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(0, 2, 0)
+_VERSION = VersionTuple(0, 2, 1)
 
 
 def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple:
@@ -93,30 +91,36 @@ def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple
     # We want the dataset_location and dataset_location_trash tables
     # to have the same definition, aside from the behavior of their link
     # to the dataset table: the trash table has no foreign key constraint.
-    dataset_location_spec = ddl.TableSpec(
+    # The order of columns in dataset_location_trash is reversed, it is more
+    # optimal for query planner.
+
+    datastore_field = ddl.FieldSpec(
+        name="datastore_name",
+        dtype=sqlalchemy.String,
+        length=256,
+        primaryKey=True,
+        nullable=False,
+        doc="Name of the Datastore this entry corresponds to.",
+    )
+
+    dataset_location = ddl.TableSpec(
         doc=(
             "A table that provides information on whether a dataset is stored in "
             "one or more Datastores.  The presence or absence of a record in this "
             "table itself indicates whether the dataset is present in that "
             "Datastore. "
         ),
-        fields=NamedValueSet(
-            [
-                ddl.FieldSpec(
-                    name="datastore_name",
-                    dtype=sqlalchemy.String,
-                    length=256,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Name of the Datastore this entry corresponds to.",
-                ),
-            ]
-        ),
+        fields=[datastore_field],
     )
-    dataset_location = copy.deepcopy(dataset_location_spec)
     datasets.addDatasetForeignKey(dataset_location, primaryKey=True)
-    dataset_location_trash = copy.deepcopy(dataset_location_spec)
+
+    dataset_location_trash = ddl.TableSpec(
+        doc="A table that keeps iinformation about datasets that are removed from Datastores.",
+        fields=[],
+    )
     datasets.addDatasetForeignKey(dataset_location_trash, primaryKey=True, constraint=False)
+    dataset_location_trash.fields.add(datastore_field)
+
     return _TablesTuple(
         dataset_location=dataset_location,
         dataset_location_trash=dataset_location_trash,
