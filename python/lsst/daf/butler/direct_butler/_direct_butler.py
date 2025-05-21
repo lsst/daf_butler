@@ -1582,7 +1582,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self._datastore.transaction(), self._registry.transaction():
+        with self.transaction():
             plural = "s" if len(refs) != 1 else ""
             if unstore:
                 with time_this(
