@@ -34,6 +34,7 @@ __all__ = ("FileDatastore",)
 import contextlib
 import hashlib
 import logging
+import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -2554,10 +2555,24 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         removed = set()
         if refs:
             selected_ids = {ref.id for ref in refs}
-            n_chunks = 0
-            for chunk in chunk_iterable(selected_ids, chunk_size=50_000):
-                n_chunks += 1
-                log.verbose("Emptying trash for chunk %d of size %d", n_chunks, len(chunk))
+            chunk_size = 50_000
+            n_chunks = math.ceil(len(selected_ids) / chunk_size)
+            chunk_num = 0
+            for chunk in chunk_iterable(selected_ids, chunk_size=chunk_size):
+                chunk_num += 1
+                if n_chunks == 1:
+                    log.verbose(
+                        "Emptying datastore trash for %d dataset%s",
+                        len(chunk),
+                        "s" if len(chunk) != 1 else "",
+                    )
+                else:
+                    log.verbose(
+                        "Emptying datastore trash for chunk %d out of %d of size %d",
+                        chunk_num,
+                        n_chunks,
+                        len(chunk),
+                    )
                 removed.update(
                     self._empty_trash_subset(ignore_errors=ignore_errors, selected_ids=chunk, dry_run=dry_run)
                 )
