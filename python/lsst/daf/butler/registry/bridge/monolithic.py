@@ -30,7 +30,6 @@ from ... import ddl
 
 __all__ = ("MonolithicDatastoreRegistryBridge", "MonolithicDatastoreRegistryBridgeManager")
 
-import copy
 from collections import namedtuple
 from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
@@ -38,8 +37,9 @@ from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
+from lsst.utils.iteration import chunk_iterable
+
 from ..._dataset_ref import DatasetId
-from ..._named import NamedValueSet
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
 from ..interfaces import (
     DatasetIdRef,
@@ -71,7 +71,7 @@ _TablesTuple = namedtuple(
 )
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(0, 2, 0)
+_VERSION = VersionTuple(0, 2, 1)
 
 
 def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple:
@@ -91,30 +91,36 @@ def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple
     # We want the dataset_location and dataset_location_trash tables
     # to have the same definition, aside from the behavior of their link
     # to the dataset table: the trash table has no foreign key constraint.
-    dataset_location_spec = ddl.TableSpec(
+    # The order of columns in dataset_location_trash is reversed, it is more
+    # optimal for query planner.
+
+    datastore_field = ddl.FieldSpec(
+        name="datastore_name",
+        dtype=sqlalchemy.String,
+        length=256,
+        primaryKey=True,
+        nullable=False,
+        doc="Name of the Datastore this entry corresponds to.",
+    )
+
+    dataset_location = ddl.TableSpec(
         doc=(
             "A table that provides information on whether a dataset is stored in "
             "one or more Datastores.  The presence or absence of a record in this "
             "table itself indicates whether the dataset is present in that "
             "Datastore. "
         ),
-        fields=NamedValueSet(
-            [
-                ddl.FieldSpec(
-                    name="datastore_name",
-                    dtype=sqlalchemy.String,
-                    length=256,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Name of the Datastore this entry corresponds to.",
-                ),
-            ]
-        ),
+        fields=[datastore_field],
     )
-    dataset_location = copy.deepcopy(dataset_location_spec)
     datasets.addDatasetForeignKey(dataset_location, primaryKey=True)
-    dataset_location_trash = copy.deepcopy(dataset_location_spec)
+
+    dataset_location_trash = ddl.TableSpec(
+        doc="A table that keeps iinformation about datasets that are removed from Datastores.",
+        fields=[],
+    )
     datasets.addDatasetForeignKey(dataset_location_trash, primaryKey=True, constraint=False)
+    dataset_location_trash.fields.add(datastore_field)
+
     return _TablesTuple(
         dataset_location=dataset_location,
         dataset_location_trash=dataset_location_trash,
@@ -168,23 +174,43 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        rows = self._refsToRows(self.check(refs))
-        self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
+        with self._db.transaction():
+            # The list of IDs can be very large, split it into reasonable size
+            # chunks to avoid hitting limits.
+            for refs_chunk in chunk_iterable(refs, 50_000):
+                dataset_ids = [ref.id for ref in refs_chunk]
+                where = sqlalchemy.sql.and_(
+                    self._tables.dataset_location.columns.datastore_name == self.datastoreName,
+                    self._tables.dataset_location.columns.dataset_id.in_(dataset_ids),
+                )
+                self._db.deleteWhere(self._tables.dataset_location, where)
 
     def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: DatastoreTransaction | None) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        # TODO: avoid self.check() call via queries like
-        #     INSERT INTO dataset_location_trash
-        #         SELECT datastore_name, dataset_id FROM dataset_location
-        #         WHERE datastore_name=? AND dataset_id IN (?);
-        #     DELETE FROM dataset_location
-        #         WHERE datastore_name=? AND dataset_id IN (?);
-        # ...but the Database interface doesn't support those kinds of queries
-        # right now.
-        rows = self._refsToRows(self.check(refs))
+        location = self._tables.dataset_location
+        location_trash = self._tables.dataset_location_trash
         with self._db.transaction():
-            self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
-            self._db.insert(self._tables.dataset_location_trash, *rows)
+            for refs_chunk in chunk_iterable(refs, 50_000):
+                # We only want to move IDs that actually exist in the
+                # dataset_location table. Instead of querying for existing IDs,
+                # which would need an extra query, we use INSERT ... SELECT
+                # and DELETE using WHERE clause that limits operations to
+                # existing IDs.
+                dataset_ids = [ref.id for ref in refs_chunk]
+
+                where = sqlalchemy.sql.and_(
+                    location.columns.datastore_name == self.datastoreName,
+                    location.columns.dataset_id.in_(dataset_ids),
+                )
+
+                select = (
+                    sqlalchemy.sql.select(location.columns.datastore_name, location.columns.dataset_id)
+                    .where(where)
+                    .with_for_update()
+                )
+                self._db.insert(location_trash, select=select)
+
+                self._db.deleteWhere(location, where)
 
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
