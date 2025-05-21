@@ -37,6 +37,7 @@ __all__ = (
     "UnaryOperator",
     "is_one_datetime_and_one_ingest_date",
     "is_one_timespan_and_one_datetime",
+    "is_one_timespan_and_one_ingest_date",
     "validate_order_expression",
 )
 
@@ -298,3 +299,41 @@ def is_one_datetime_and_one_ingest_date(
     return (a.column_type == "datetime" and b.column_type == "ingest_date") or (
         a.column_type == "ingest_date" and b.column_type == "datetime"
     )
+
+
+def is_one_timespan_and_one_ingest_date(
+    a: ColumnExpression, b: ColumnExpression
+) -> TimespanAndDatetime | None:
+    """Return `True` if the two columns ``a`` and `b`` include one timespan
+    column and one ingest_date column.
+
+    Parameters
+    ----------
+    a : `ColumnExpression`
+        First column expression.
+    b : `ColumnExpression`
+        Second column expression.
+
+    Returns
+    -------
+    which_is_which : `TimespanAndDatetime` | None
+        An object telling which column is the ingest_date and which is the
+        timespan, or `None` if the types were not as expected.
+    """
+    if a.column_type == "timespan" and b.column_type == "ingest_date":
+        return TimespanAndDatetime(a, b)
+    elif a.column_type == "ingest_date" and b.column_type == "timespan":
+        return TimespanAndDatetime(b, a)
+    else:
+        return None
+
+
+def is_numeric(expr: ColumnExpression) -> bool:
+    """Return `True` if the expression is a numeric type (float or int).
+
+    Parameters
+    ----------
+    expr : `ColumnExpression`
+        Column expression to test.
+    """
+    return expr.column_type == "float" or expr.column_type == "int"

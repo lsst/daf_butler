@@ -1677,6 +1677,17 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
                 [],
             )
+
+            # Allow comparison of float columns with int literals
+            self.assertCountEqual(
+                [record.id for record in query.where("visit.exposure_time > 50").dimension_records("visit")],
+                [1],
+            )
+            self.assertCountEqual(
+                [record.id for record in query.where(_x.visit.exposure_time > 50).dimension_records("visit")],
+                [1],
+            )
+
             self.check_detector_records(
                 query.where(_x.detector.in_iterable([1, 3, 4])).dimension_records("detector"),
                 [1, 3, 4],
@@ -2128,6 +2139,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         result = butler.query_datasets("dt", "run1", where="ingest_date > T'2000-01-01'")
         self.assertEqual(len(result), 1)
         result = butler.query_datasets("dt", "run1", where="ingest_date < T'2000-01-01'", explain=False)
+        self.assertEqual(len(result), 0)
+        result = butler.query_datasets(
+            "dt", "run1", where="ingest_date OVERLAPS (T'2000-01-01', T'2099-01-01')"
+        )
+        self.assertEqual(len(result), 1)
+        result = butler.query_datasets(
+            "dt", "run1", where="(T'2000-01-01', T'2099-01-01') OVERLAPS ingest_date"
+        )
+        self.assertEqual(len(result), 1)
+        result = butler.query_datasets(
+            "dt", "run1", where="(T'2000-01-01', T'2001-01-01') OVERLAPS ingest_date", explain=False
+        )
         self.assertEqual(len(result), 0)
 
     def test_multiple_instrument_queries(self) -> None:
