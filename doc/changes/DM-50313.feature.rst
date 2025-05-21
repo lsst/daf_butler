@@ -1,0 +1,3 @@
+Added the ability for Zip ingest to register any missing dimension records.
+Note that if any datasets use ``visit`` that require registration then the records being registered will not fully define the visit and so can not be usable for graph building.
+It is recommended that visits be defined first before ingest at this time.

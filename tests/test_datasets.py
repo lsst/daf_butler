@@ -997,6 +997,15 @@ class ZipIndexTestCase(unittest.TestCase):
         universe = DimensionUniverse(dimension_config)
         refs = index.refs.to_refs(universe=universe)
         self.assertEqual(len(refs), 4)
+        self.assertFalse(refs[0].dataId.hasRecords())
+
+        # Read an index with records attached.
+        path = os.path.join(TESTDIR, "data", "zip_index_with_records.json")
+        with open(path) as fd:
+            index = ZipIndex.model_validate_json(fd.read())
+        refs = index.refs.to_refs(universe=universe)
+        self.assertEqual(len(refs), 2)
+        self.assertTrue(refs[0].dataId.hasRecords())
 
 
 if __name__ == "__main__":

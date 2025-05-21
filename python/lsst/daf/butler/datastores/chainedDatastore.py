@@ -912,7 +912,7 @@ class ChainedDatastore(Datastore):
 
         return merged_artifact_map
 
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
         """Ingest an indexed Zip file and contents.
 
         The Zip file must have an index file as created by `retrieveArtifacts`.
@@ -923,6 +923,10 @@ class ChainedDatastore(Datastore):
             Path to the Zip file.
         transfer : `str`
             Method to use for transferring the Zip file into the datastore.
+        dry_run : `bool`, optional
+            If `True` the ingest will be processed without any modifications
+            made to the target datastore and as if the target datastore did not
+            have any of the datasets.
 
         Notes
         -----
@@ -966,7 +970,7 @@ class ChainedDatastore(Datastore):
                 log.debug("Datastore %s skipping zip ingest due to constraints", datastore.name)
                 continue
             try:
-                datastore.ingest_zip(zip_path, transfer=transfer)
+                datastore.ingest_zip(zip_path, transfer=transfer, dry_run=dry_run)
             except NotImplementedError:
                 continue
             except Exception as e:

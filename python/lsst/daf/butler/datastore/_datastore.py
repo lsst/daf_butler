@@ -1082,7 +1082,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
         """Ingest an indexed Zip file and contents.
 
         The Zip file must have an index file as created by `retrieveArtifacts`.
@@ -1093,6 +1093,10 @@ class Datastore(metaclass=ABCMeta):
             Path to the Zip file.
         transfer : `str`
             Method to use for transferring the Zip file into the datastore.
+        dry_run : `bool`, optional
+            If `True` the ingest will be processed without any modifications
+            made to the target datastore and as if the target datastore did not
+            have any of the datasets.
         """
         raise NotImplementedError()
 
@@ -1504,7 +1508,7 @@ class NullDatastore(Datastore):
     def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ResourcePath:
         raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None) -> None:
+    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
         raise NotImplementedError("Can only ingest a Zip into a real datastore.")
 
     def retrieveArtifacts(
