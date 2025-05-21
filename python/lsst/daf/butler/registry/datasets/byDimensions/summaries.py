@@ -279,14 +279,14 @@ class CollectionSummaryManager:
                     "dataset_type_id": dataset_type_id,
                     self._collectionKeyName: collection.key,
                 }
-                for dataset_type_id in dataset_type_ids
+                for dataset_type_id in sorted(dataset_type_ids)
             ],
         )
-        for dimension, values in summary.governors.items():
-            if values:
+        for dimension in sorted(summary.governors):
+            if values := summary.governors[dimension]:
                 self._db.ensure(
                     self._tables.dimensions[dimension],
-                    *[{self._collectionKeyName: collection.key, dimension: v} for v in values],
+                    *[{self._collectionKeyName: collection.key, dimension: v} for v in sorted(values)],
                 )
 
     def fetch_summaries(
