@@ -139,17 +139,8 @@ def removeRuns(
     def _doRemove(runs: Sequence[RemoveRun]) -> None:
         """Perform the remove step."""
         butler = Butler.from_config(repo, writeable=True)
-        # Collections must be removed from chains in a deterministic
-        # order to protect against parallelized purging on the same chain.
-        parents_to_children: dict[str, set[str]] = defaultdict(set)
-        for run in runs:
-            for parent in run.parents:
-                parents_to_children[parent].add(run.name)
 
-        with butler.transaction():
-            for parent in sorted(parents_to_children):
-                butler.collections.remove_from_chain(parent, sorted(parents_to_children[parent]))
-            butler.removeRuns([r.name for r in runs], unstore=True)
+        butler.removeRuns([r.name for r in runs], unlink_from_chains=True)
 
     result = RemoveRunsResult(
         onConfirmation=partial(_doRemove, runs),

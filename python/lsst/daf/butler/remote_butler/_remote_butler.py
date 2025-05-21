@@ -51,7 +51,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .._butler import Butler
+from .._butler import Butler, _DeprecatedDefault
 from .._butler_collections import ButlerCollections
 from .._butler_metrics import ButlerMetrics
 from .._dataset_existence import DatasetExistence
@@ -555,7 +555,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> dict[DatasetRef, DatasetExistence]:
         return {ref: self.exists(ref, full_check=full_check) for ref in refs}
 
-    def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
+    def removeRuns(
+        self,
+        names: Iterable[str],
+        unstore: bool | type[_DeprecatedDefault] = _DeprecatedDefault,
+        *,
+        unlink_from_chains: bool = False,
+    ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
 

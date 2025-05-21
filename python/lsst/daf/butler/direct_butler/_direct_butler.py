@@ -38,6 +38,7 @@ import collections.abc
 import contextlib
 import io
 import itertools
+import math
 import numbers
 import os
 import uuid
@@ -51,11 +52,12 @@ from deprecated.sphinx import deprecated
 from sqlalchemy.exc import IntegrityError
 
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils.introspection import get_class_of
+from lsst.utils.introspection import find_outside_stacklevel, get_class_of
+from lsst.utils.iteration import chunk_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
-from .._butler import Butler
+from .._butler import Butler, _DeprecatedDefault
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from .._butler_metrics import ButlerMetrics
@@ -1442,47 +1444,100 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return existence
 
-    def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
+    def removeRuns(
+        self,
+        names: Iterable[str],
+        unstore: bool | type[_DeprecatedDefault] = _DeprecatedDefault,
+        *,
+        unlink_from_chains: bool = False,
+    ) -> None:
         # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
+
+        if unstore is not _DeprecatedDefault:
+            # The value was passed in by a user. Must report it is now
+            # ignored.
+            if unstore is True:
+                msg = "The unstore parameter is deprecated and is now always treated as True. "
+            else:
+                msg = "The unstore parameter for removeRuns can no longer be False and is now ignored. "
+            warnings.warn(
+                msg + " The parameter will be removed after v30.",
+                category=FutureWarning,
+                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+            )
+
         names = list(names)
         refs: list[DatasetRef] = []
-        all_dataset_types = [dt.name for dt in self._registry.queryDatasetTypes(...)]
+        # Map of the chained collections to the RUN children.
+        parents_to_children: dict[str, set[str]] = defaultdict(set)
+
         with self._caching_context():
-            for name in names:
-                collectionType = self._registry.getCollectionType(name)
-                if collectionType is not CollectionType.RUN:
-                    raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
-                with self.query() as query:
-                    # Work out the dataset types that are relevant.
-                    collections_info = self.collections.query_info(name, include_summary=True)
-                    filtered_dataset_types = self.collections._filter_dataset_types(
-                        all_dataset_types, collections_info
-                    )
-                    for dt in filtered_dataset_types:
-                        refs.extend(query.datasets(dt, collections=name))
-        with self._datastore.transaction(), self._registry.transaction():
-            if unstore:
-                with time_this(
-                    _LOG, msg="Marking %d datasets for removal to clear RUN collections", args=(len(refs),)
-                ):
-                    self._datastore.trash(refs)
-            else:
-                self._datastore.forget(refs)
-            for name in names:
-                with time_this(_LOG, msg="Removing registry entries for RUN collection %s", args=(name,)):
-                    self._registry.removeCollection(name)
-        if unstore:
-            # Point of no return for removing artifacts. Restrict the trash
-            # emptying to the datasets from this specific collection rather
-            # than everything in the trash.
+            # Get information about these RUNs.
+            collections_info = self.collections.query_info(names, include_parents=unlink_from_chains)
+            for info in collections_info:
+                if info.type is not CollectionType.RUN:
+                    raise TypeError(f"The collection type of '{info.name}' is {info.type.name}, not RUN.")
+                if unlink_from_chains:
+                    if info.parents is None:  # For mypy.
+                        raise AssertionError("Internal error: Collection parents required but not received")
+                    for parent in info.parents:
+                        parents_to_children[parent].add(info.name)
+
+            # Update the names in case the query unexpectedly had a wildcard.
+            names = [info.name for info in collections_info]
+
+            # Get all the datasets from these runs.
+            refs = self._query_all_datasets(names, find_first=False, limit=None)
+
+        # Chunk the deletions using a size that is reasonably efficient whilst
+        # also giving reasonable feedback to the user. Chunking also minimizes
+        # what needs to rollback if there is a failure and should allow
+        # incremental re-running of the command. The only issue will be if the
+        # Ctrl-C comes during emptyTrash since an admin command would need to
+        # run to finish the emptying of that chunk.
+        progress = Progress("lsst.daf.butler.Butler.ingest", level=_LOG.INFO)
+        chunk_size = 50_000
+        n_chunks = math.ceil(len(refs) / chunk_size)
+        chunk_num = 0
+        for chunked_refs in progress.wrap(
+            chunk_iterable(refs, chunk_size=chunk_size), desc="Deleting datasets from RUNs", total=n_chunks
+        ):
+            chunk_num += 1
+            _LOG.verbose(
+                "Deleting %d dataset%s from requested RUN collections in chunk %d/%d",
+                len(chunked_refs),
+                "s" if len(chunked_refs) != 1 else "",
+                chunk_num,
+                n_chunks,
+            )
+            # Call pruneDatasets since we are deliberately removing
+            # datasets in chunks from the RUN collections rather than
+            # attempting to remove everything at once.
             with time_this(
                 _LOG,
-                msg="Attempting to remove artifacts for %d datasets associated with RUN collections",
-                args=(len(refs),),
+                msg="Removing %d datasets for chunk %d/%d",
+                args=(len(chunked_refs), chunk_num, n_chunks),
             ):
-                self._datastore.emptyTrash(refs=refs)
+                self.pruneDatasets(chunked_refs, unstore=True, purge=True, disassociate=True)
+
+        # Now can remove the actual RUN collection and unlink from chains.
+        with self._registry.transaction():
+            # This will fail if caller is not unlinking from chains but the
+            # RUN is in a chain -- but we have already deleted all the datasets
+            # by this point.
+            if unlink_from_chains:
+                # Use deterministic order for deletions to attempt to minimize
+                # risk of deadlocks for parallel deletes.
+                for parent in sorted(parents_to_children):
+                    self.collections.remove_from_chain(parent, sorted(parents_to_children[parent]))
+            # Sort to avoid potential deadlocks.
+            for name in sorted(names):
+                # This should be fast since the collection should be empty.
+                with time_this(_LOG, msg="Removing RUN collection %s", args=(name,)):
+                    self._registry.removeCollection(name)
+            _LOG.info("Completely removed the following RUN collections: %s", ", ".join(names))
 
     def pruneDatasets(
         self,
@@ -1527,19 +1582,24 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self._datastore.transaction(), self._registry.transaction():
+        with self.transaction():
+            plural = "s" if len(refs) != 1 else ""
             if unstore:
                 with time_this(
-                    _LOG, msg="Marking %d datasets for removal to during pruning", args=(len(refs),)
+                    _LOG,
+                    msg="Marking %d dataset%s for removal during pruneDatasets",
+                    args=(len(refs), plural),
                 ):
                     self._datastore.trash(refs)
             if purge:
-                with time_this(_LOG, msg="Removing %d pruned datasets from registry", args=(len(refs),)):
+                with time_this(
+                    _LOG, msg="Removing %d pruned dataset%s from registry", args=(len(refs), plural)
+                ):
                     self._registry.removeDatasets(refs)
             elif disassociate:
                 assert tags, "Guaranteed by earlier logic in this function."
                 with time_this(
-                    _LOG, msg="Disassociating %d datasets from tagged collections", args=(len(refs),)
+                    _LOG, msg="Disassociating %d dataset%ss from tagged collections", args=(len(refs), plural)
                 ):
                     for tag in tags:
                         self._registry.disassociate(tag, refs)
@@ -1557,8 +1617,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # emptying to the refs that this call trashed.
             with time_this(
                 _LOG,
-                msg="Attempting to remove artifacts for %d datasets associated with pruning",
-                args=(len(refs),),
+                msg="Attempting to remove artifacts for %d dataset%s associated with pruning",
+                args=(len(refs), plural),
             ):
                 self._datastore.emptyTrash(refs=refs)
 
@@ -1996,7 +2056,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             source_refs = list(source_refs)
 
         original_count = len(source_refs)
-        _LOG.info("Importing %d datasets into %s", original_count, str(self))
+        log_level = _LOG.INFO if original_count > 1 else _LOG.VERBOSE
+        _LOG.log(
+            log_level,
+            "Importing %d dataset%s into %s",
+            original_count,
+            "s" if original_count != 1 else "",
+            str(self),
+        )
 
         # In some situations the datastore artifact may be missing
         # and we do not want that registry entry to be imported.
@@ -2272,6 +2339,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Find all the registered instruments (if "instrument" is in the
         # universe).
+        instruments: set[str] = set()
         if "instrument" in self.dimensions:
             instruments = {rec.name for rec in self.query_dimension_records("instrument", explain=False)}
 
