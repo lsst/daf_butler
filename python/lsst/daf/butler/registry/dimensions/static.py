@@ -47,6 +47,7 @@ from ...dimensions import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     DataCoordinate,
+    DataIdValue,
     Dimension,
     DimensionElement,
     DimensionGroup,
@@ -488,10 +489,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
-        allow_duplicates: bool = False,
+        allow_duplicates: bool,
+        constraint_data_id: Mapping[str, DataIdValue],
     ) -> tuple[qt.Predicate, SqlSelectBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(
-            self._db, dimensions, calibration_dataset_types, self._overlap_tables, allow_duplicates
+            self._db,
+            dimensions,
+            calibration_dataset_types,
+            self._overlap_tables,
+            allow_duplicates,
+            constraint_data_id=constraint_data_id,
         )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.builder, overlaps_visitor.postprocessing
@@ -1028,6 +1035,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         calibration_dataset_types: Set[str | qt.AnyDatasetType],
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
         allow_duplicates: bool,
+        constraint_data_id: Mapping[str, DataIdValue],
     ):
         super().__init__(dimensions, calibration_dataset_types)
         self.builder: SqlSelectBuilder = SqlJoinsBuilder(db=db).to_select_builder(qt.ColumnSet(dimensions))
@@ -1036,6 +1044,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
         self.common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
         self.allow_duplicates = allow_duplicates
+        self.constraint_data_id = constraint_data_id
 
     def visit_spatial_constraint(
         self,
@@ -1169,13 +1178,16 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
 
     def _make_common_skypix_overlap_joins_builder(self, element: DatabaseDimensionElement) -> SqlJoinsBuilder:
         _, overlap_table = self.overlap_tables[element.name]
+        where_terms: list[sqlalchemy.ColumnElement] = [
+            overlap_table.c.skypix_system == self.common_skypix.system.name,
+            overlap_table.c.skypix_level == self.common_skypix.level,
+        ]
+        for dimension in element.minimal_group.required & self.constraint_data_id.keys():
+            where_terms.append(
+                overlap_table.columns[dimension] == sqlalchemy.literal(self.constraint_data_id[dimension])
+            )
         return (
             SqlJoinsBuilder(db=self.builder.joins.db, from_clause=overlap_table)
             .extract_dimensions(element.required.names, skypix_index=self.common_skypix.name)
-            .where(
-                sqlalchemy.and_(
-                    overlap_table.c.skypix_system == self.common_skypix.system.name,
-                    overlap_table.c.skypix_level == self.common_skypix.level,
-                )
-            )
+            .where(sqlalchemy.and_(*where_terms))
         )
