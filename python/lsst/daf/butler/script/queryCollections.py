@@ -221,16 +221,21 @@ def _getTree(
     def addCollection(info: CollectionInfo, level: int = 0) -> None:
         collection_table = Table([["  " * level + info.name], [info.type.name]], names=["Name", "Type"])
         if show_dataset_types:
-            dataset_types = _parseDatasetTypes(info.dataset_types)
-            if exclude_dataset_types:
-                dataset_types = [
-                    dt
-                    for dt in dataset_types
-                    if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
-                ]
-                dataset_types = _parseDatasetTypes(dataset_types)
-            dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
-            collection_table = hstack([collection_table, dataset_types_table]).filled("")
+            if info.type == CollectionType.CHAINED:
+                collection_table = hstack(
+                    [collection_table, Table([[""] * len(collection_table)], names=["Dataset Types"])]
+                )
+            else:
+                dataset_types = _parseDatasetTypes(info.dataset_types)
+                if exclude_dataset_types:
+                    dataset_types = [
+                        dt
+                        for dt in dataset_types
+                        if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                    ]
+                    dataset_types = _parseDatasetTypes(dataset_types)
+                dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+                collection_table = hstack([collection_table, dataset_types_table]).filled("")
         for row in collection_table:
             table.add_row(row)
 
