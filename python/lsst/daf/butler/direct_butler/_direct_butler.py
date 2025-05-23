@@ -44,7 +44,7 @@ import os
 import uuid
 import warnings
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, MutableMapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, MutableMapping, Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
 
@@ -1491,36 +1491,15 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # Get all the datasets from these runs.
             refs = self._query_all_datasets(names, find_first=False, limit=None)
 
-        # Chunk the deletions using a size that is reasonably efficient whilst
-        # also giving reasonable feedback to the user. Chunking also minimizes
-        # what needs to rollback if there is a failure and should allow
-        # incremental re-running of the command. The only issue will be if the
-        # Ctrl-C comes during emptyTrash since an admin command would need to
-        # run to finish the emptying of that chunk.
-        progress = Progress("lsst.daf.butler.Butler.ingest", level=_LOG.INFO)
-        chunk_size = 50_000
-        n_chunks = math.ceil(len(refs) / chunk_size)
-        chunk_num = 0
-        for chunked_refs in progress.wrap(
-            chunk_iterable(refs, chunk_size=chunk_size), desc="Deleting datasets from RUNs", total=n_chunks
+        # Call pruneDatasets since we are deliberately removing
+        # datasets in chunks from the RUN collections rather than
+        # attempting to remove everything at once.
+        with time_this(
+            _LOG,
+            msg="Removing %d dataset%s from %s",
+            args=(len(refs), "s" if len(refs) != 1 else "", ", ".join(names)),
         ):
-            chunk_num += 1
-            _LOG.verbose(
-                "Deleting %d dataset%s from requested RUN collections in chunk %d/%d",
-                len(chunked_refs),
-                "s" if len(chunked_refs) != 1 else "",
-                chunk_num,
-                n_chunks,
-            )
-            # Call pruneDatasets since we are deliberately removing
-            # datasets in chunks from the RUN collections rather than
-            # attempting to remove everything at once.
-            with time_this(
-                _LOG,
-                msg="Removing %d datasets for chunk %d/%d",
-                args=(len(chunked_refs), chunk_num, n_chunks),
-            ):
-                self.pruneDatasets(chunked_refs, unstore=True, purge=True, disassociate=True)
+            self.pruneDatasets(refs, unstore=True, purge=True, disassociate=True)
 
         # Now can remove the actual RUN collection and unlink from chains.
         with self._registry.transaction():
@@ -1577,6 +1556,49 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         for ref in refs:
             if ref.datasetType.component():
                 raise ValueError(f"Can not prune a component of a dataset (ref={ref})")
+
+        # Chunk the deletions using a size that is reasonably efficient whilst
+        # also giving reasonable feedback to the user. Chunking also minimizes
+        # what needs to rollback if there is a failure and should allow
+        # incremental re-running of the pruning (assuming the query is
+        # repeated). The only issue will be if the Ctrl-C comes during
+        # emptyTrash since an admin command would need to run to finish the
+        # emptying of that chunk.
+        progress = Progress("lsst.daf.butler.Butler.pruneDatasets", level=_LOG.INFO)
+        chunk_size = 50_000
+        n_chunks = math.ceil(len(refs) / chunk_size)
+        if n_chunks > 1:
+            _LOG.verbose("Pruning a total of %d datasets", len(refs))
+        chunk_num = 0
+        for chunked_refs in progress.wrap(
+            chunk_iterable(refs, chunk_size=chunk_size), desc="Deleting datasets", total=n_chunks
+        ):
+            chunk_num += 1
+            _LOG.verbose(
+                "Pruning %d dataset%s in chunk %d/%d",
+                len(chunked_refs),
+                "s" if len(chunked_refs) != 1 else "",
+                chunk_num,
+                n_chunks,
+            )
+            with time_this(
+                _LOG,
+                msg="Removing %d datasets for chunk %d/%d",
+                args=(len(chunked_refs), chunk_num, n_chunks),
+            ):
+                self._prune_datasets(
+                    chunked_refs, tags=tags, unstore=unstore, purge=purge, disassociate=disassociate
+                )
+
+    def _prune_datasets(
+        self,
+        refs: Collection[DatasetRef],
+        *,
+        disassociate: bool = True,
+        unstore: bool = False,
+        tags: Iterable[str] = (),
+        purge: bool = False,
+    ) -> None:
         # We don't need an unreliable Datastore transaction for this, because
         # we've been extra careful to ensure that Datastore.trash only involves
         # mutating the Registry (it can _look_ at Datastore-specific things,

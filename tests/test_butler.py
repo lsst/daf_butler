@@ -957,7 +957,7 @@ class ButlerTests(ButlerPutGetTests):
                 butler.ingest_zip(zip)
 
             # Clear out the collection.
-            butler.removeRuns([self.default_run], unstore=True)
+            butler.removeRuns([self.default_run])
             self.assertFalse(butler.exists(refs[0]))
 
             butler.ingest_zip(zip, transfer="copy")
@@ -990,7 +990,7 @@ class ButlerTests(ButlerPutGetTests):
         metric2 = butler.get(refs[1])
         self.assertEqual(metric2, metric, msg=f"{metric2} != {metric}")
 
-        butler.removeRuns([self.default_run], unstore=True)
+        butler.removeRuns([self.default_run])
         self.assertFalse(uri.exists())
         self.assertFalse(butler.exists(refs[-1]))
 
@@ -2966,7 +2966,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         # Now prune run2 collection and create instead a CHAINED collection.
         # This should block the transfer.
-        self.target_butler.removeRuns(["run2"], unstore=True)
+        self.target_butler.removeRuns(["run2"])
         self.target_butler.collections.register("run2", CollectionType.CHAINED)
         with self.assertRaises(CollectionTypeError):
             # Re-importing the run1 datasets can be problematic if they
