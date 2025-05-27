@@ -61,7 +61,14 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_minimal(self):
         """Test only required parameters, and omit optional parameters."""
-        self.run_test(["query-collections", "here", "--chains", "TABLE"], self.makeExpected(repo="here"))
+        self.run_test(
+            ["query-collections", "here", "--chains", "TABLE"],
+            self.makeExpected(
+                repo="here",
+                show_dataset_types=False,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
 
     def test_all(self):
         """Test all parameters"""
@@ -82,6 +89,57 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
                 glob=("foo*",),
                 collection_type=(CollectionType.TAGGED, CollectionType.RUN),
                 chains="TABLE",
+                show_dataset_types=False,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
+
+    def test_show_dataset_types(self):
+        """Test the --show-dataset-types option."""
+        self.run_test(
+            ["query-collections", "here", "--chains", "TABLE", "--show-dataset-types"],
+            self.makeExpected(
+                repo="here",
+                chains="TABLE",
+                show_dataset_types=True,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
+        self.run_test(
+            ["query-collections", "here", "--chains", "TREE", "--show-dataset-types"],
+            self.makeExpected(
+                repo="here",
+                chains="TREE",
+                show_dataset_types=True,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
+        self.run_test(
+            ["query-collections", "here", "--chains", "FLATTEN", "--show-dataset-types"],
+            self.makeExpected(
+                repo="here",
+                chains="FLATTEN",
+                show_dataset_types=True,
+                exclude_dataset_types=("*_config", "*_log", "*_metadata", "packages"),
+            ),
+        )
+
+    def test_exclude_dataset_types(self):
+        """Test the --exclude-dataset-types option."""
+        self.run_test(
+            [
+                "query-collections",
+                "here",
+                "--chains",
+                "TABLE",
+                "--show-dataset-types",
+                "--exclude-dataset-types",
+                "flat",
+            ],
+            self.makeExpected(
+                repo="here",
+                show_dataset_types=True,
+                exclude_dataset_types=("flat",),
             ),
         )
 
@@ -216,6 +274,71 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                     )
                 ),
                 names=("Name", "Type"),
+            )
+            self.assertAstropyTablesEqual(table, expected)
+
+            # Test table with show_dataset_types == True
+            table = queryCollections(
+                "here",
+                glob=(),
+                collection_type=CollectionType.all(),
+                chains="TREE",
+                show_dataset_types=True,
+            )
+            expected = Table(
+                array(
+                    (
+                        ("calibration1", "CALIBRATION", ""),
+                        ("chain1", "CHAINED", ""),
+                        ("  tag1", "TAGGED", ""),
+                        ("  run1", "RUN", ""),
+                        ("  chain2", "CHAINED", ""),
+                        ("    calibration1", "CALIBRATION", ""),
+                        ("    run1", "RUN", ""),
+                        ("chain2", "CHAINED", ""),
+                        ("  calibration1", "CALIBRATION", ""),
+                        ("  run1", "RUN", ""),
+                        ("imported_g", "RUN", "bias"),
+                        ("", "", "flat"),
+                        ("imported_r", "RUN", "bias"),
+                        ("", "", "flat"),
+                        ("run1", "RUN", ""),
+                        ("tag1", "TAGGED", ""),
+                    )
+                ),
+                names=("Name", "Type", "Dataset Types"),
+            )
+            self.assertAstropyTablesEqual(table, expected)
+
+            # Test table with show_dataset_types, excluding some dataset types
+            table = queryCollections(
+                "here",
+                glob=(),
+                collection_type=CollectionType.all(),
+                chains="TREE",
+                show_dataset_types=True,
+                exclude_dataset_types=("bias",),
+            )
+            expected = Table(
+                array(
+                    (
+                        ("calibration1", "CALIBRATION", ""),
+                        ("chain1", "CHAINED", ""),
+                        ("  tag1", "TAGGED", ""),
+                        ("  run1", "RUN", ""),
+                        ("  chain2", "CHAINED", ""),
+                        ("    calibration1", "CALIBRATION", ""),
+                        ("    run1", "RUN", ""),
+                        ("chain2", "CHAINED", ""),
+                        ("  calibration1", "CALIBRATION", ""),
+                        ("  run1", "RUN", ""),
+                        ("imported_g", "RUN", "flat"),
+                        ("imported_r", "RUN", "flat"),
+                        ("run1", "RUN", ""),
+                        ("tag1", "TAGGED", ""),
+                    )
+                ),
+                names=("Name", "Type", "Dataset Types"),
             )
             self.assertAstropyTablesEqual(table, expected)
 
