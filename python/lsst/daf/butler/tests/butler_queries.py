@@ -2079,6 +2079,74 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
 
+        # Query in multiple collections, with one of the collections being a
+        # calibration collection.  This triggers special cases related to
+        # timespan columns in the query code.
+        refs = butler.query_datasets(
+            "bias",
+            collections=[collection, "imported_g"],
+            where="instrument = 'Cam1' and detector = 2",
+            find_first=False,
+        )
+        self.assertEqual(
+            sorted([str(ref.id) for ref in refs]),
+            ["51352db4-a47a-447c-b12d-a50b206b17cd", "87f3e68d-258d-41b7-8ea5-edf3557ccb30"],
+        )
+        with butler.query() as query:
+            query = query.join_dataset_search("bias", [collection, "imported_g"])
+            query = query.where("instrument = 'Cam1' and detector = 2")
+
+            results = list(
+                query.general(
+                    ["detector"],
+                    dataset_fields={"bias": {"dataset_id"}},
+                    find_first=False,
+                ).iter_tuples()
+            )
+            # Dataset ID should be de-duplicated with no collection/timespan
+            # column present.
+            self.assertEqual(
+                sorted([str(x.raw_row["bias.dataset_id"]) for x in results]),
+                ["51352db4-a47a-447c-b12d-a50b206b17cd", "87f3e68d-258d-41b7-8ea5-edf3557ccb30"],
+            )
+
+            results = list(
+                query.general(
+                    ["detector"],
+                    dataset_fields={"bias": {"dataset_id", "timespan"}},
+                    find_first=False,
+                ).iter_tuples()
+            )
+            # We should have one row for each timespan associated with each
+            # dataset ID.  The extra copy of "51352..." comes from the run
+            # collection, with a timespan of None.
+            self.assertEqual(
+                sorted([str(x.raw_row["bias.dataset_id"]) for x in results]),
+                [
+                    "51352db4-a47a-447c-b12d-a50b206b17cd",
+                    "51352db4-a47a-447c-b12d-a50b206b17cd",
+                    "87f3e68d-258d-41b7-8ea5-edf3557ccb30",
+                ],
+            )
+
+            results = list(
+                query.general(
+                    ["detector"],
+                    dataset_fields={"bias": {"dataset_id", "collection"}},
+                    find_first=False,
+                ).iter_tuples()
+            )
+            # We should have one row for each collection associated with each
+            # dataset ID.
+            self.assertEqual(
+                sorted([(str(x.raw_row["bias.dataset_id"]), x.raw_row["bias.collection"]) for x in results]),
+                [
+                    ("51352db4-a47a-447c-b12d-a50b206b17cd", "Cam1/calibs"),
+                    ("51352db4-a47a-447c-b12d-a50b206b17cd", "imported_g"),
+                    ("87f3e68d-258d-41b7-8ea5-edf3557ccb30", "Cam1/calibs"),
+                ],
+            )
+
     def test_collection_query_info(self) -> None:
         butler = self.make_butler("base.yaml", "datasets.yaml")
 

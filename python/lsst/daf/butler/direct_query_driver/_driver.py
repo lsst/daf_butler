@@ -571,12 +571,15 @@ class DirectQueryDriver(QueryDriver):
                 union_dataset_dimensions=tree.any_dataset.dimensions,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
+                find_first_dataset=find_first_dataset,
             )
         else:
+            assert find_first_dataset != qt.AnyDatasetType.ANY_DATASET
             builder = SingleSelectQueryBuilder(
                 tree_analysis=query_tree_analysis,
                 projection_columns=projection_columns,
                 final_columns=final_columns,
+                find_first_dataset=find_first_dataset,
             )
         # Finish setting up the projection part of the builder.
         builder.analyze_projection()
@@ -590,7 +593,7 @@ class DirectQueryDriver(QueryDriver):
         builder.joins_analysis.columns.update(builder.projection_columns)
         # Set up the find-first part of the builder.
         if find_first_dataset is not None:
-            builder.analyze_find_first(find_first_dataset)
+            builder.analyze_find_first()
         # At this point, analysis is complete, and we can proceed to making
         # the select_builder(s) reflect that analysis.
         if not analyze_only:
@@ -1060,6 +1063,7 @@ class DirectQueryDriver(QueryDriver):
         # it depends on the kinds of collection(s) we're searching and whether
         # it's a find-first query.
         for dataset_type, fields_for_dataset in projection_columns.dataset_fields.items():
+            is_find_first = dataset_type == find_first_dataset
             dataset_search: ResolvedDatasetSearch[Any]
             if dataset_type is qt.ANY_DATASET:
                 assert union_datasets is not None
@@ -1077,7 +1081,7 @@ class DirectQueryDriver(QueryDriver):
                         derived_fields.append((dataset_type, "collection_key"))
                 elif dataset_field == "timespan" and dataset_search.is_calibration_search:
                     # The timespan is also a unique key...
-                    if dataset_type == find_first_dataset:
+                    if is_find_first:
                         # ...unless we're doing a find-first search on this
                         # dataset, in which case we need to use ANY_VALUE on
                         # the timespan and check that _VALIDITY_MATCH_COUNT
@@ -1096,6 +1100,20 @@ class DirectQueryDriver(QueryDriver):
                         ].apply_any_aggregate(self.db.apply_any_aggregate)
                     else:
                         unique_keys.extend(select_builder.joins.timespans[dataset_type].flatten())
+                elif (
+                    dataset_field == "dataset_id"
+                    and len(dataset_search.collection_records) > 1
+                    and not is_find_first
+                ):
+                    # If we have more than one collection in the search, we can
+                    # find multiple dataset IDs with the same data ID, in
+                    # different collections.
+                    # In a non-find-first search, we have to make dataset ID a
+                    # unique key to prevent de-duplication for rows with the
+                    # same data ID but different dataset IDs.
+                    # We don't do this for a find-first search because the
+                    # window function will take care of it.
+                    unique_keys.append(select_builder.joins.fields[dataset_type]["dataset_id"])
                 else:
                     # Other dataset fields derive their uniqueness from key
                     # fields.
