@@ -238,6 +238,10 @@ class Database(ABC):
         Object representing the tables and other schema entities.  If not
         provided, will be generated during the next call to
         ``declareStaticTables``.
+    allow_temporary_tables : `bool`, optional
+        If `True`, database operations will be allowed to use temporary tables.
+        If `False`, other SQL constructs will be used instead of temporary
+        tables when possible.
 
     Notes
     -----
@@ -272,6 +276,7 @@ class Database(ABC):
         engine: sqlalchemy.engine.Engine,
         namespace: str | None = None,
         metadata: DatabaseMetadata | None = None,
+        allow_temporary_tables: bool = True,
     ):
         self.origin = origin
         self.name_shrinker = NameShrinker(engine.dialect.max_identifier_length)
@@ -280,6 +285,7 @@ class Database(ABC):
         self._session_connection: sqlalchemy.engine.Connection | None = None
         self._temp_tables: set[str] = set()
         self._metadata = metadata
+        self._allow_temporary_tables = allow_temporary_tables
 
     def __repr__(self) -> str:
         # Rather than try to reproduce all the parameters used to create
@@ -539,6 +545,8 @@ class Database(ABC):
         support the full range of expected read-only butler behavior.
         """
         assert self._metadata is not None, "Static tables must be created before temporary tables"
+        if not self.supports_temporary_tables:
+            raise ReadOnlyDatabaseError("Creation of temporary tables is not supported by this database.")
         with self._session() as connection:
             table = self._make_temporary_table(connection, spec=spec, name=name)
             self._temp_tables.add(table.key)
@@ -1953,6 +1961,10 @@ class Database(ABC):
         or something equivalent.
         """
         raise NotImplementedError()
+
+    @property
+    def supports_temporary_tables(self) -> bool:
+        return self._allow_temporary_tables
 
     @abstractmethod
     def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:

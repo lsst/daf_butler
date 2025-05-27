@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ()
 
 import unittest
+import unittest.mock
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from operator import attrgetter
@@ -1339,16 +1340,23 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             if not isinstance(query._driver, DirectQueryDriver):
                 raise unittest.SkipTest("Test requires meddling with DirectQueryDriver internals.")
             query._driver._constant_rows_limit = 2
+            data_coordinates = [
+                DataCoordinate.standardize(instrument="Cam1", detector=1, universe=butler.dimensions),
+                DataCoordinate.standardize(instrument="Cam1", detector=3, universe=butler.dimensions),
+                DataCoordinate.standardize(instrument="Cam1", detector=4, universe=butler.dimensions),
+            ]
             self.check_detector_records(
-                query.join_data_coordinates(
-                    [
-                        DataCoordinate.standardize(instrument="Cam1", detector=1, universe=butler.dimensions),
-                        DataCoordinate.standardize(instrument="Cam1", detector=3, universe=butler.dimensions),
-                        DataCoordinate.standardize(instrument="Cam1", detector=4, universe=butler.dimensions),
-                    ]
-                ).dimension_records("detector"),
+                query.join_data_coordinates(data_coordinates).dimension_records("detector"),
                 [1, 3, 4],
             )
+
+            # Make sure it can fall back to a VALUES clause if temporary tables
+            # are not supported by the DB.
+            with unittest.mock.patch.object(query._driver.db, "_allow_temporary_tables", False):
+                self.check_detector_records(
+                    query.join_data_coordinates(data_coordinates).dimension_records("detector"),
+                    [1, 3, 4],
+                )
 
     def test_materialization(self) -> None:
         """Test querying for dimension records against a materialized previous
