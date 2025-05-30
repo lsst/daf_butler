@@ -50,7 +50,12 @@ from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
+
+from .._dataset_ref import DatasetId
+from ..datastore._transfer import FileTransferInfo
+from .fileDatastore import FileDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -1233,6 +1238,83 @@ class ChainedDatastore(Datastore):
             if dataset is None:
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
             yield dataset
+
+    def _get_file_info_for_transfer(
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
+    ) -> dict[DatasetId, list[FileTransferInfo]]:
+        datastores = self.datastores
+        incompatible: list[Datastore] = []
+        acceptable: list[FileDatastore] = []
+        for current_source in datastores:
+            if not isinstance(current_source, FileDatastore):
+                incompatible.append(current_source)
+            else:
+                acceptable.append(current_source)
+
+        if len(incompatible) == len(datastores):
+            if len(datastores) == 1:
+                raise TypeError(
+                    "Can only transfer to a FileDatastore from another FileDatastore, not"
+                    f" {get_full_type_name(datastores[0])}"
+                )
+            else:
+                types = [get_full_type_name(d) for d in datastores]
+                raise TypeError(
+                    f"ChainedDatastore encountered that had no FileDatastores. Had {','.join(types)}"
+                )
+
+        if len(acceptable) == 1:
+            # No need to filter in advance since there is only one usable
+            # source datastore.
+            return acceptable[0]._get_file_info_for_transfer(refs, artifact_existence)
+
+        # To avoid complaints from the transfer that the source does not have
+        # a ref, partition refs by source datastores, and any unknown to both
+        # are sent to any that support trustGetRequest.
+        unassigned_refs: set[DatasetRef] = set(refs)
+        known_refs: list[set[DatasetRef]] = []
+        for datastore in acceptable:
+            known_to_datastore = {ref for ref, known in datastore.knows_these(refs).items() if known}
+            known_refs.append(known_to_datastore)
+            unassigned_refs -= known_to_datastore
+
+        if unassigned_refs:
+            for datastore, refs_known_to_datastore in zip(acceptable, known_refs, strict=True):
+                if datastore.trustGetRequest:
+                    # Have to check each datastore in turn. If we do not do
+                    # this warnings will be issued further down for datasets
+                    # that are in one and not the other. The existence cache
+                    # will prevent repeat checks.
+                    exist_in_store = datastore.mexists(unassigned_refs, artifact_existence=artifact_existence)
+                    present = {ref for ref, exists in exist_in_store.items() if exists}
+                    refs_known_to_datastore.update(present)
+                    # Only transferring once so do not need to check later
+                    # datastores.
+                    unassigned_refs -= present
+                    log.debug(
+                        "Adding %d missing refs to list for transfer from %s", len(present), datastore.name
+                    )
+
+        if unassigned_refs:
+            log.warning(
+                "Encountered %d dataset%s where no file artifacts exist from the "
+                "source datastore and will be skipped.",
+                len(unassigned_refs),
+                "s" if len(unassigned_refs) != 1 else "",
+            )
+
+        output: dict[DatasetId, list[FileTransferInfo]] = {}
+        for current_source, refs_to_transfer in zip(acceptable, known_refs, strict=True):
+            if not refs_to_transfer:
+                continue
+
+            for k, v in current_source._get_file_info_for_transfer(
+                refs_to_transfer, artifact_existence
+            ).items():
+                if k not in output:
+                    output[k] = v
+
+        return output
 
     def transfer_from(
         self,
