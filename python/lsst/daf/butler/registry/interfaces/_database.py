@@ -1696,9 +1696,8 @@ class Database(ABC):
             for k, v in content.items():
                 if k == name:
                     continue
-                column = table.columns[k]
                 # The set only has one element
-                clauses.append(column == v.pop())
+                clauses.append(table.columns[k] == v.pop())
 
             # The IN operator will not work for "infinite" numbers of
             # rows so must batch it up into distinct calls.

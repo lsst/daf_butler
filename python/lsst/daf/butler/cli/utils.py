@@ -1057,7 +1057,7 @@ class MWCommand(click.Command):
         return ret
 
     @epilog.setter
-    def epilog(self, val: str) -> None:
+    def epilog(self, val: str | None) -> None:
         self._epilog = val
 
 
