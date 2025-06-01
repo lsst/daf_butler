@@ -179,6 +179,24 @@ class DimensionTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             DimensionGroup.union()
 
+    def test_group_set_ops(self) -> None:
+        """Test set operations on DimensionGroups."""
+        a = self.universe.conform(["visit"])
+        b = self.universe.conform(["detector"])
+        c = self.universe.conform(["visit", "detector"])
+        d = self.universe.conform(["physical_filter"])
+        e = self.universe.conform(["detector", "physical_filter"])
+        self.assertEqual(a.union(b), c)
+        self.assertEqual(a.union(d), a)
+        self.assertEqual(b.union(d), e)
+        self.assertEqual(a.difference(b), a)
+        self.assertEqual(a.difference(c), self.universe.empty)
+        self.assertEqual(a.difference(d), a)
+        self.assertEqual(c.difference(a), b)
+        self.assertEqual(a.intersection(c), a)
+        self.assertEqual(a.intersection(d), d)
+        self.assertEqual(a.intersection(e), d)
+
     def testCompatibility(self):
         # Simple check that should always be true.
         self.assertTrue(self.universe.isCompatibleWith(self.universe))
