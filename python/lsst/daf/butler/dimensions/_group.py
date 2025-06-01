@@ -414,11 +414,36 @@ class DimensionGroup:  # numpydoc ignore=PR02
         names = set(self.names).intersection(*[other.names for other in others])
         return DimensionGroup(self.universe, names=names)
 
+    def difference(self, other: DimensionGroup) -> DimensionGroup:
+        """Construct a new group with dimensions that are in ``self`` but not
+        ``other`` OR dependencies of those in ``self`` but not in ``other``.
+
+        Parameters
+        ----------
+        other : `DimensionGroup`
+            Other group to compare with.
+
+        Returns
+        -------
+        diff : `DimensionGroup`
+            Difference of the two groups.
+
+        Notes
+        -----
+        This is not exactly equivalent to a true `set` difference, because the
+        result must be expanded to include required and implied dependencies,
+        and those may be common to ``self`` and ``other``.
+        """
+        return DimensionGroup(self.universe, names=self.names - other.names)
+
     def __or__(self, other: DimensionGroup) -> DimensionGroup:
         return self.union(other)
 
     def __and__(self, other: DimensionGroup) -> DimensionGroup:
         return self.intersection(other)
+
+    def __sub__(self, other: DimensionGroup) -> DimensionGroup:
+        return self.difference(other)
 
     @property
     def data_coordinate_keys(self) -> Set[str]:
