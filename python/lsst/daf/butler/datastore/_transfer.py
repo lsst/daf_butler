@@ -27,9 +27,27 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from collections.abc import Iterable
+from typing import NamedTuple, Protocol
 
+from lsst.resources import ResourcePath
+
+from .._dataset_ref import DatasetId, DatasetRef
 from .stored_file_info import Location, StoredFileInfo
+
+__all__ = ("FileTransferInfo", "FileTransferSource")
+
+
+class FileTransferSource(Protocol):
+    name: str
+
+    def get_file_info_for_transfer(
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
+    ) -> dict[DatasetId, list[FileTransferInfo]]: ...
+
+    def mexists(
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
+    ) -> dict[DatasetRef, bool]: ...
 
 
 class FileTransferInfo(NamedTuple):

@@ -54,7 +54,7 @@ from .._config import Config, ConfigSubset
 from .._exceptions import DatasetTypeNotSupportedError, ValidationError
 from .._file_dataset import FileDataset
 from .._storage_class import StorageClassFactory
-from ._transfer import FileTransferInfo
+from ._transfer import FileTransferInfo, FileTransferSource
 from .constraints import Constraints
 
 if TYPE_CHECKING:
@@ -284,7 +284,7 @@ class DatasetRefURIs(abc.Sequence):
         return f"DatasetRefURIs({repr(self.primaryURI)}, {repr(self.componentURIs)})"
 
 
-class Datastore(metaclass=ABCMeta):
+class Datastore(FileTransferSource, metaclass=ABCMeta):
     """Datastore interface.
 
     Parameters
@@ -869,7 +869,7 @@ class Datastore(metaclass=ABCMeta):
 
     def transfer_from(
         self,
-        source_datastore: Datastore,
+        source_datastore: FileTransferSource,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
@@ -1421,7 +1421,7 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def _get_file_info_for_transfer(
+    def get_file_info_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> dict[DatasetId, list[FileTransferInfo]]:
         raise NotImplementedError(f"Transferring files is not supported by datastore {self}")
@@ -1500,7 +1500,7 @@ class NullDatastore(Datastore):
 
     def transfer_from(
         self,
-        source_datastore: Datastore,
+        source_datastore: FileTransferSource,
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,

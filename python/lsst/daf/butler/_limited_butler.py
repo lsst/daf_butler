@@ -42,7 +42,7 @@ from ._dataset_provenance import DatasetProvenance
 from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._storage_class import StorageClass, StorageClassFactory
-from .datastore import DatasetRefURIs, Datastore
+from .datastore import DatasetRefURIs, Datastore, FileTransferSource
 from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
@@ -449,6 +449,13 @@ class LimitedButler(ABC):
         repository (`DimensionUniverse`).
         """
         raise NotImplementedError()
+
+    @property
+    def _file_transfer_source(self) -> FileTransferSource:
+        """Object that manages the transfer of files between Butler
+        repositories.
+        """
+        return self._datastore
 
     _datastore: Datastore
     """The object that manages actual dataset storage (`Datastore`)."""

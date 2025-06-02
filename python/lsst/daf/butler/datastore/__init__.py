@@ -26,3 +26,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._datastore import *
+from ._transfer import *
