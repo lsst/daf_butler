@@ -54,7 +54,7 @@ from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
-from ..datastore._transfer import FileTransferInfo
+from ..datastore import FileTransferInfo, FileTransferSource
 from .fileDatastore import FileDatastore
 
 if TYPE_CHECKING:
@@ -1239,7 +1239,7 @@ class ChainedDatastore(Datastore):
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
             yield dataset
 
-    def _get_file_info_for_transfer(
+    def get_file_info_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> dict[DatasetId, list[FileTransferInfo]]:
         datastores = self.datastores
@@ -1266,7 +1266,7 @@ class ChainedDatastore(Datastore):
         if len(acceptable) == 1:
             # No need to filter in advance since there is only one usable
             # source datastore.
-            return acceptable[0]._get_file_info_for_transfer(refs, artifact_existence)
+            return acceptable[0].get_file_info_for_transfer(refs, artifact_existence)
 
         # To avoid complaints from the transfer that the source does not have
         # a ref, partition refs by source datastores, and any unknown to both
@@ -1308,7 +1308,7 @@ class ChainedDatastore(Datastore):
             if not refs_to_transfer:
                 continue
 
-            for k, v in current_source._get_file_info_for_transfer(
+            for k, v in current_source.get_file_info_for_transfer(
                 refs_to_transfer, artifact_existence
             ).items():
                 if k not in output:
@@ -1318,7 +1318,7 @@ class ChainedDatastore(Datastore):
 
     def transfer_from(
         self,
-        source_datastore: Datastore,
+        source_datastore: FileTransferSource,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,

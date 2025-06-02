@@ -109,7 +109,7 @@ from lsst.utils.iteration import chunk_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
-from ..datastore._transfer import FileTransferInfo
+from ..datastore import FileTransferInfo, FileTransferSource
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -2785,7 +2785,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     @transactional
     def transfer_from(
         self,
-        source_datastore: Datastore,
+        source_datastore: FileTransferSource,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
@@ -2828,9 +2828,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # in the source.
 
         try:
-            source_records = source_datastore._get_file_info_for_transfer(refs, artifact_existence)
+            source_records = source_datastore.get_file_info_for_transfer(refs, artifact_existence)
         except NotImplementedError as e:
-            raise TypeError(f"Source datastore {source_datastore} does not support file transfer") from e
+            raise TypeError(f"Source datastore {source_datastore.name} does not support file transfer") from e
 
         # See if we already have these records
         log.verbose("Looking up existing datastore records in target %s for %d refs", self.name, len(refs))
@@ -2958,7 +2958,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         )
         return accepted, rejected
 
-    def _get_file_info_for_transfer(
+    def get_file_info_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> dict[DatasetId, list[FileTransferInfo]]:
         log.verbose("Looking up source datastore records in %s", self.name)
