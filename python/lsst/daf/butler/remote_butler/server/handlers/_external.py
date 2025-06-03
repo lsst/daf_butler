@@ -38,10 +38,12 @@ from ...._butler import Butler
 from ...._collection_type import CollectionType
 from ...._dataset_ref import DatasetRef
 from ...._exceptions import DatasetNotFoundError
+from ....datastore import FileTransferRecord
 from ....registry.interfaces import ChainedCollectionRecord
 from ...server_models import (
     ExpandDataIdRequestModel,
     ExpandDataIdResponseModel,
+    FileTransferRecordModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
@@ -49,6 +51,8 @@ from ...server_models import (
     GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetFileTransferInfoRequestModel,
+    GetFileTransferInfoResponseModel,
     GetUniverseResponseModel,
     QueryCollectionInfoRequestModel,
     QueryCollectionInfoResponseModel,
@@ -206,6 +210,29 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+
+
+@external_router.post(
+    "/v1/file_transfer",
+    summary="Retrieve information needed to transfer files to an external Butler repository",
+)
+def file_transfer(
+    request: GetFileTransferInfoRequestModel, factory: Factory = Depends(factory_dependency)
+) -> GetFileTransferInfoResponseModel:
+    butler = factory.create_butler()
+    files = butler._datastore.get_file_info_for_transfer(request.dataset_ids)
+    output = {id: [_serialize_file_transfer_record(r) for r in records] for id, records in files.items()}
+    return GetFileTransferInfoResponseModel(files=output)
+
+
+def _serialize_file_transfer_record(record: FileTransferRecord) -> FileTransferRecordModel:
+    return FileTransferRecordModel(
+        # TODO: return a permanent URL
+        url=record.location.uri.generate_presigned_get_url(expiration_time_seconds=3600),
+        # TODO: normalize path (like the get_file stuff does inside
+        # FileDatastore)
+        file_info=record.file_info.to_simple(),
+    )
 
 
 # TODO DM-46204: This can be removed once the RSP recommended image has been
