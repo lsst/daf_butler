@@ -54,7 +54,7 @@ from .._config import Config, ConfigSubset
 from .._exceptions import DatasetTypeNotSupportedError, ValidationError
 from .._file_dataset import FileDataset
 from .._storage_class import StorageClassFactory
-from ._transfer import FileTransferInfo, FileTransferSource
+from ._transfer import FileTransferMap, FileTransferSource
 from .constraints import Constraints
 
 if TYPE_CHECKING:
@@ -1421,9 +1421,12 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def get_file_info_for_transfer(
+    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap:
+        raise NotImplementedError(f"Transferring files is not supported by datastore {self}")
+
+    def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetId, list[FileTransferInfo]]:
+    ) -> FileTransferMap:
         raise NotImplementedError(f"Transferring files is not supported by datastore {self}")
 
 

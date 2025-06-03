@@ -109,7 +109,7 @@ from lsst.utils.iteration import chunk_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
-from ..datastore import FileTransferInfo, FileTransferSource
+from ..datastore import FileTransferMap, FileTransferRecord, FileTransferSource
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -1979,6 +1979,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         refs: Iterable[DatasetRef],
         missing_ids: set[DatasetId],
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        warn_for_missing: bool = True,
     ) -> dict[DatasetId, list[StoredFileInfo]]:
         if not missing_ids:
             return {}
@@ -2018,7 +2019,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # Skip completely if the ref does not exist.
                 ref = id_to_ref[missing]
                 if not ref_exists[ref]:
-                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
+                    if warn_for_missing:
+                        log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
                     continue
                 # Check for file artifact to decide which parts of a
                 # disassembled composite do exist. If there is only a
@@ -2826,11 +2828,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # What we really want is all the records in the source datastore
         # associated with these refs. Or derived ones if they don't exist
         # in the source.
-
-        try:
-            source_records = source_datastore.get_file_info_for_transfer(refs, artifact_existence)
-        except NotImplementedError as e:
-            raise TypeError(f"Source datastore {source_datastore.name} does not support file transfer") from e
+        source_records = _retrieve_file_transfer_records(source_datastore, refs, artifact_existence)
 
         # See if we already have these records
         log.verbose("Looking up existing datastore records in target %s for %d refs", self.name, len(refs))
@@ -2958,40 +2956,34 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         )
         return accepted, rejected
 
-    def get_file_info_for_transfer(
+    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap:
+        source_records = self._get_stored_records_associated_with_refs(
+            [FakeDatasetRef(id) for id in dataset_ids], ignore_datastore_records=True
+        )
+        return self._convert_stored_file_info_to_file_transfer_record(source_records)
+
+    def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetId, list[FileTransferInfo]]:
-        log.verbose("Looking up source datastore records in %s", self.name)
-        source_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
-
-        # The source dataset_ids are the keys in these records
-        source_ids = set(source_records)
-        log.debug("Number of datastore records found in source: %d", len(source_ids))
-
-        requested_ids = {ref.id for ref in refs}
-        missing_ids = requested_ids - source_ids
-
+    ) -> FileTransferMap:
+        missing_ids = {ref.id for ref in refs}
         # Missing IDs can be okay if that datastore has allowed
         # gets based on file existence. Should we transfer what we can
         # or complain about it and warn?
-        if missing_ids and not self.trustGetRequest:
+        if not self.trustGetRequest:
             raise ValueError(f"Some datasets are missing from source datastore {self}: {missing_ids}")
 
-        # Need to map these missing IDs to a DatasetRef so we can guess
-        # the details.
-        if missing_ids:
-            log.info(
-                "Number of expected datasets missing from source datastore records: %d out of %d",
-                len(missing_ids),
-                len(requested_ids),
-            )
-            found_records = self._find_missing_records(refs, missing_ids, artifact_existence)
-            source_records.update(found_records)
+        found_records = self._find_missing_records(
+            refs, missing_ids, artifact_existence, warn_for_missing=False
+        )
+        return self._convert_stored_file_info_to_file_transfer_record(found_records)
 
-        output: dict[DatasetId, list[FileTransferInfo]] = {}
-        for k, file_info_list in source_records.items():
+    def _convert_stored_file_info_to_file_transfer_record(
+        self, info_map: dict[DatasetId, list[StoredFileInfo]]
+    ) -> FileTransferMap:
+        output: dict[DatasetId, list[FileTransferRecord]] = {}
+        for k, file_info_list in info_map.items():
             output[k] = [
-                FileTransferInfo(file_info=info, location=info.file_location(self.locationFactory))
+                FileTransferRecord(file_info=info, location=info.file_location(self.locationFactory))
                 for info in file_info_list
             ]
         return output
@@ -3264,3 +3256,46 @@ def _to_file_info_payload(
         url=location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds),
         datastoreRecords=datastoreRecords,
     )
+
+
+def _retrieve_file_transfer_records(
+    source_datastore: FileTransferSource,
+    refs: Iterable[DatasetRef],
+    artifact_existence: dict[ResourcePath, bool],
+) -> FileTransferMap:
+    log.verbose("Looking up source datastore records in %s", source_datastore.name)
+    refs_by_id = {ref.id: ref for ref in refs}
+    try:
+        source_records = source_datastore.get_file_info_for_transfer(refs_by_id.keys())
+    except NotImplementedError as e:
+        raise TypeError(f"Source datastore {source_datastore.name} does not support file transfer") from e
+
+    log.debug("Number of datastore records found in source: %d", len(source_records))
+
+    # If we couldn't find all of the datasets in the database, continue
+    # searching.  Some datastores may have artifacts on disk that do not have
+    # corresponding records in the database.
+    missing_ids = refs_by_id.keys() - source_records.keys()
+    if missing_ids:
+        log.info(
+            "Number of expected datasets missing from source datastore records: %d out of %d",
+            len(missing_ids),
+            len(refs_by_id),
+        )
+        missing_refs = {refs_by_id[id] for id in missing_ids}
+        found_records = source_datastore.locate_missing_files_for_transfer(missing_refs, artifact_existence)
+        source_records |= found_records
+
+        still_missing = len(missing_refs) - len(found_records)
+        if still_missing:
+            for ref in missing_refs:
+                if ref.id not in found_records:
+                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
+            log.warning(
+                "Encountered %d dataset%s where no file artifacts exist from the "
+                "source datastore and will be skipped.",
+                still_missing,
+                "s" if still_missing != 1 else "",
+            )
+
+    return source_records
