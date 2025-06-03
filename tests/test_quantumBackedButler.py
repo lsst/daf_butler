@@ -70,7 +70,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         butler = Butler.from_config(self.config, writeable=True, run="RUN", metrics=self.metrics)
         assert isinstance(butler, DirectButler)
         self.butler = butler
-        self.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        self.butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
 
         # make all dataset types
         graph = self.universe.conform(("instrument", "detector"))

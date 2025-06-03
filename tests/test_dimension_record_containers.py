@@ -27,7 +27,6 @@
 
 import copy
 import json
-import os
 import unittest
 
 import pyarrow as pa
@@ -48,8 +47,8 @@ from lsst.daf.butler.arrow_utils import TimespanArrowType
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
 DIMENSION_DATA_FILES = [
-    os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry", "base.yaml")),
-    os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry", "spatial.yaml")),
+    "resource://lsst.daf.butler/tests/registry_data/base.yaml",
+    "resource://lsst.daf.butler/tests/registry_data/spatial.yaml",
 ]
 
 

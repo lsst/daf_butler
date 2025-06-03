@@ -74,7 +74,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         assert isinstance(butler, DirectButler), "Test expects DirectButler"
         for filename in filenames:
             butler.import_(
-                filename=os.path.join(TESTDIR, "data", "registry", filename),
+                filename=f"resource://lsst.daf.butler/tests/registry_data/{filename}",
                 without_datastore=True,
             )
         return butler

@@ -33,7 +33,6 @@ __all__ = ["RegistryTests"]
 import contextlib
 import datetime
 import itertools
-import os
 import re
 import time
 import unittest
@@ -154,12 +153,6 @@ class RegistryTests(ABC):
     like {'htm11' = ...}
     """
 
-    @classmethod
-    @abstractmethod
-    def getDataDir(cls) -> str:
-        """Return the root directory containing test data YAML files."""
-        raise NotImplementedError()
-
     def makeRegistryConfig(self) -> RegistryConfig:
         """Create RegistryConfig used to create a registry.
 
@@ -188,7 +181,8 @@ class RegistryTests(ABC):
         raise NotImplementedError()
 
     def load_data(self, butler: Butler, *filenames: str) -> None:
-        """Load registry test data from ``getDataDir/<filename>``,
+        """Load registry test data from
+        ``resource://lsst.daf.butler/tests/registry_data/<filename>``,
         which should be a YAML import/export file.
 
         Parameters
@@ -199,7 +193,9 @@ class RegistryTests(ABC):
             The names of the files to load.
         """
         for filename in filenames:
-            butler.import_(filename=os.path.join(self.getDataDir(), filename), without_datastore=True)
+            butler.import_(
+                filename=f"resource://lsst.daf.butler/tests/registry_data/{filename}", without_datastore=True
+            )
 
     def checkQueryResults(self, results, expected):
         """Check that a query results object contains expected values.
@@ -1461,7 +1457,7 @@ class RegistryTests(ABC):
         """Test queries that involve spatial overlap joins."""
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "hsc-rc2-subset.yaml")
+        self.load_data(butler, "base.yaml", "spatial.yaml")
 
         # Dictionary of spatial DatabaseDimensionElements, keyed by the name of
         # the TopologicalFamily they belong to.  We'll relate all elements in
@@ -2843,13 +2839,13 @@ class RegistryTests(ABC):
         """Test query expressions involving timespans."""
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "hsc-rc2-subset.yaml")
+        self.load_data(butler, "ci_hsc-subset.yaml")
         # All exposures in the database; mapping from ID to timespan.
         visits = {record.id: record.timespan for record in registry.queryDimensionRecords("visit")}
         # Just those IDs, sorted (which is also temporal sorting, because HSC
         # exposure IDs are monotonically increasing).
         ids = sorted(visits.keys())
-        self.assertGreater(len(ids), 20)
+        self.assertEqual(len(ids), 11)
         # Pick some quasi-random indexes into `ids` to play with.
         i1 = int(len(ids) * 0.1)
         i2 = int(len(ids) * 0.3)
@@ -2908,13 +2904,13 @@ class RegistryTests(ABC):
         if self.supportsExtendedTimeQueryOperators:
             self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (:t1, :t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
-        self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', :t4)"))
+        self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}/tai', :t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
         self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (:t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
         self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS :t3"))
-        self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
+        self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}/tai' OVERLAPS visit.timespan"))
         if self.supportsExtendedTimeQueryOperators:
             self.assertEqual(ids[:i2], query("visit.timespan < :t2"))
             self.assertEqual(ids[:i2], query(":t2 > visit.timespan"))
@@ -2926,23 +2922,24 @@ class RegistryTests(ABC):
 
         # Make sure that expanded data IDs include the timespans.
         results = list(
-            registry.queryDataIds(["exposure"], dataId={"instrument": "HSC", "exposure": 903342}).expanded()
+            registry.queryDataIds(["visit"], dataId={"instrument": "HSC", "visit": ids[1]}).expanded()
         )
         self.assertEqual(len(results), 1)
-        exposure_time = Timespan(
-            astropy.time.Time("2013-06-17 13:34:45.775000000", scale="tai"),
-            astropy.time.Time("2013-06-17 13:35:17.947000000", scale="tai"),
-        )
-        self.assertEqual(results[0].timespan, exposure_time)
-        exposure_record = results[0].records["exposure"]
-        assert exposure_record is not None
-        self.assertEqual(exposure_record.timespan, exposure_time)
+        visit_timespan = visits[ids[1]]
+        self.assertEqual(results[0].timespan, visit_timespan)
+        visit_record = results[0].records["visit"]
+        assert visit_record is not None
+        self.assertEqual(visit_record.timespan, visit_timespan)
         day_obs_record = results[0].records["day_obs"]
         assert day_obs_record is not None
         self.assertEqual(day_obs_record.id, 20130617)
-        # day_obs can have a start/end timespan associated with it, but the
-        # ones in this set of data don't.
-        self.assertEqual(day_obs_record.timespan, None)
+        self.assertEqual(
+            day_obs_record.timespan,
+            Timespan(
+                astropy.time.Time("2013-06-17T00:00:00", scale="tai"),
+                astropy.time.Time("2013-06-18T00:00:00", scale="tai"),
+            ),
+        )
 
     def testCollectionSummaries(self):
         """Test recording and retrieval of collection summaries."""
@@ -3674,16 +3671,14 @@ class RegistryTests(ABC):
         service.
 
         The most complete test dataset currently available to daf_butler tests
-        is hsc-rc2-subset.yaml export (which is unfortunately distinct from the
-        the lsst/rc2_subset GitHub repo), but that does not have 'exposure'
-        dimension records as it was focused on providing nontrivial spatial
-        overlaps between visit+detector and tract+patch.  So in this test we
-        need to translate queries that originally used the exposure dimension
-        to use the (very similar) visit dimension instead.
+        is ci_hsc-subset.yaml export , but that does not have 'exposure'
+        dimension records.  So in this test we need to translate queries that
+        originally used the exposure dimension to use the (very similar) visit
+        dimension instead.
         """
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "hsc-rc2-subset.yaml")
+        self.load_data(butler, "ci_hsc-subset.yaml")
         self.assertEqual(
             [
                 record.id
@@ -3691,14 +3686,14 @@ class RegistryTests(ABC):
                 .order_by("visit")
                 .limit(5)
             ],
-            [318, 322, 326, 330, 332],
+            [903334, 903336, 903338, 903342, 903344],
         )
         self.assertEqual(
             [
                 data_id["visit"]
                 for data_id in registry.queryDataIds(["visit"], instrument="HSC").order_by("visit").limit(5)
             ],
-            [318, 322, 326, 330, 332],
+            [903334, 903336, 903338, 903342, 903344],
         )
         self.assertEqual(
             [
@@ -3707,7 +3702,7 @@ class RegistryTests(ABC):
                 .order_by("full_name")
                 .limit(5)
             ],
-            [73, 72, 71, 70, 65],
+            [25, 24, 23, 22, 18],
         )
         self.assertEqual(
             [
@@ -3716,7 +3711,7 @@ class RegistryTests(ABC):
                 .order_by("full_name")
                 .limit(5)
             ],
-            [73, 72, 71, 70, 65],
+            [25, 24, 23, 22, 18],
         )
 
     def test_long_query_names(self) -> None:
@@ -3754,7 +3749,7 @@ class RegistryTests(ABC):
         """Test queries spatially constrained by a skypix data ID."""
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "hsc-rc2-subset.yaml")
+        self.load_data(butler, "base.yaml", "spatial.yaml")
         patch_regions = {
             (data_id["tract"], data_id["patch"]): data_id.region
             for data_id in registry.queryDataIds(["patch"]).expanded()
@@ -3805,7 +3800,7 @@ class RegistryTests(ABC):
         with contextlib.suppress(InvalidQueryError):
             full_data_ids = set(
                 registry.queryDataIds(
-                    ["tract", "visit", "htm7"], skymap="hsc_rings_v1", instrument="HSC"
+                    ["tract", "visit", "htm7"], skymap="SkyMap1", instrument="Cam1"
                 ).expanded()
             )
             self.assertGreater(len(full_data_ids), 0)
@@ -3824,7 +3819,7 @@ class RegistryTests(ABC):
         """
         butler = self.make_butler()
         registry = butler._registry
-        self.load_data(butler, "hsc-rc2-subset.yaml")
+        self.load_data(butler, "base.yaml", "spatial.yaml")
         patch_regions = {
             (data_id["tract"], data_id["patch"]): data_id.region
             for data_id in registry.queryDataIds(["patch"]).expanded()
@@ -3881,7 +3876,7 @@ class RegistryTests(ABC):
                 for data_id in registry.queryDataIds(
                     ["visit", "detector"],
                     where=f"tract={nontrivial_patch[0]} AND patch={nontrivial_patch[1]}",
-                    skymap="hsc_rings_v1",
+                    skymap="SkyMap1",
                 )
             },
             overlaps_by_patch[nontrivial_patch],
@@ -3892,7 +3887,7 @@ class RegistryTests(ABC):
                 for data_id in registry.queryDataIds(
                     ["patch"],
                     where=f"visit={nontrivial_observation[0]} AND detector={nontrivial_observation[1]}",
-                    instrument="HSC",
+                    instrument="Cam1",
                 )
             },
             overlaps_by_observation[nontrivial_observation],
@@ -3907,7 +3902,7 @@ class RegistryTests(ABC):
                         "tract": nontrivial_patch[0],
                         "patch": nontrivial_patch[1],
                     },
-                    skymap="hsc_rings_v1",
+                    skymap="SkyMap1",
                 )
             },
             overlaps_by_patch[nontrivial_patch],
@@ -3921,7 +3916,7 @@ class RegistryTests(ABC):
                         "visit": nontrivial_observation[0],
                         "detector": nontrivial_observation[1],
                     },
-                    instrument="HSC",
+                    instrument="Cam1",
                 )
             },
             overlaps_by_observation[nontrivial_observation],

@@ -27,7 +27,6 @@
 
 """Unit tests for daf_butler CLI query-collections command."""
 
-import os
 import unittest
 
 from astropy.table import Table
@@ -40,8 +39,6 @@ from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.script import queryCollections
 from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
-
-TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
@@ -203,8 +200,8 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             # Replace datastore functions with mocks:
             DatastoreMock.apply(butler1)
 
-            butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-            butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+            butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+            butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/datasets.yaml")
             registry1 = butler1.registry
             registry1.registerRun("run1")
             registry1.registerCollection("tag1", CollectionType.TAGGED)
