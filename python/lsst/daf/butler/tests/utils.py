@@ -41,6 +41,8 @@ from typing import TYPE_CHECKING, Any
 import astropy
 from astropy.table import Table as AstropyTable
 
+from lsst.resources import ResourcePathExpression
+
 from .. import Butler, ButlerConfig, Config, DatasetRef, StorageClassFactory, Timespan
 from .._collection_type import CollectionType
 from ..datastore import NullDatastore
@@ -127,12 +129,12 @@ def safeTestTempDir(default_base: str) -> Iterator[str]:
         removeTestTempDir(root)
 
 
-def create_populated_sqlite_registry(*args: str) -> Butler:
+def create_populated_sqlite_registry(*args: ResourcePathExpression) -> Butler:
     """Create an in-memory registry-only sqlite butler and populate it.
 
     Parameters
     ----------
-    *args : `str`
+    *args : convertible to `lsst.resources.ResourcePath`
         Paths to export YAML files that should be imported.
 
     Returns

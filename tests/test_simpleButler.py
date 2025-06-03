@@ -146,8 +146,8 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
@@ -170,8 +170,8 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
@@ -194,8 +194,8 @@ class SimpleButlerTests(TestCaseMixin):
         """Test exporting and then importing collections of various types."""
         # Populate a registry with some datasets.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         registry1 = butler1.registry
         # Add some more collections.
         registry1.registerRun("run1")
@@ -271,8 +271,8 @@ class SimpleButlerTests(TestCaseMixin):
         """Test that butler.get can work with different variants."""
         # Import data to play with.
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
 
         # Find the DatasetRef for a flat
         coll = "imported_g"
@@ -355,8 +355,8 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         # Certify some biases into a CALIBRATION collection.
         registry = butler.registry
         registry.registerCollection("calibs", CollectionType.CALIBRATION)
@@ -553,8 +553,8 @@ class SimpleButlerTests(TestCaseMixin):
         database backend at all.
         """
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
@@ -624,8 +624,8 @@ class SimpleButlerTests(TestCaseMixin):
     def testJson(self):
         """Test JSON serialization mediated by registry."""
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
@@ -697,27 +697,27 @@ class SimpleButlerTests(TestCaseMixin):
         # Dimension Records
         butler = self.makeButler(writeable=True)
         with self.assertWarns(UserWarning) as cm:
-            butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset-v0.yaml"))
+            butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/hsc-rc2-subset-v0.yaml")
         self.assertIn("Constructing day_obs records with no timespans", str(cm.warning))
 
         # Count records and assume this means it worked.
         dimensions = (
-            ("day_obs", 15),
+            ("day_obs", 3),
             ("group", 1),
             ("exposure", 1),
-            ("visit", 160),
-            ("detector", 111),
-            ("visit_system_membership", 160),
+            ("visit", 2),
+            ("detector", 3),
+            ("visit_system_membership", 2),
         )
         for dimension, count in dimensions:
             records = list(butler.registry.queryDimensionRecords(dimension, instrument="HSC"))
-            self.assertEqual(len(records), count)
+            self.assertEqual(len(records), count, dimension)
 
     def testWildcardQueries(self):
         """Test that different collection type queries work."""
         # Import data to play with.
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
 
         # Create some collections
         created = {"collection", "u/user/test", "coll3"}
@@ -783,9 +783,9 @@ class SimpleButlerTests(TestCaseMixin):
         # ClonedPostgresPosixDatastoreButlerTestCase.
 
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "spatial.yaml"))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/datasets.yaml")
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/spatial.yaml")
 
         # Original butler was created with the default arguments:
         # collections = None
@@ -912,8 +912,8 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
     def test_dataset_uris(self):
         """Test that dataset URIs can be parsed and retrieved."""
         butler = self.makeButler(writeable=True)
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
 
         butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
         ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
