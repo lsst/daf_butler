@@ -76,6 +76,7 @@ from ._query_results import convert_dataset_ref_results, read_query_results
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from ._registry import RemoteButlerRegistry
 from ._remote_butler_collections import RemoteButlerCollections
+from ._remote_file_transfer_source import RemoteFileTransferSource
 from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
@@ -712,6 +713,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return RemoteButler(
             connection=self._connection, cache=self._cache, defaults=defaults, metrics=metrics
         )
+
+    @property
+    def _file_transfer_source(self) -> RemoteFileTransferSource:
+        return RemoteFileTransferSource(self._connection)
 
     def __str__(self) -> str:
         return f"RemoteButler({self._connection.server_url})"
