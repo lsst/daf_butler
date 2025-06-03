@@ -28,28 +28,33 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import NamedTuple, Protocol
+from typing import NamedTuple, Protocol, TypeAlias
 
 from lsst.resources import ResourcePath
 
 from .._dataset_ref import DatasetId, DatasetRef
 from .stored_file_info import Location, StoredFileInfo
 
-__all__ = ("FileTransferInfo", "FileTransferSource")
+__all__ = ("FileTransferMap", "FileTransferRecord", "FileTransferSource")
 
 
 class FileTransferSource(Protocol):
     name: str
 
-    def get_file_info_for_transfer(
+    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap: ...
+
+    def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetId, list[FileTransferInfo]]: ...
+    ) -> FileTransferMap: ...
 
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> dict[DatasetRef, bool]: ...
 
 
-class FileTransferInfo(NamedTuple):
+class FileTransferRecord(NamedTuple):
     location: Location
     file_info: StoredFileInfo
+
+
+FileTransferMap: TypeAlias = dict[DatasetId, list[FileTransferRecord]]
