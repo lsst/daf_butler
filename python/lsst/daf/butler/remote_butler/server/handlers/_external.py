@@ -39,6 +39,7 @@ from ...._collection_type import CollectionType
 from ...._dataset_ref import DatasetRef
 from ...._exceptions import DatasetNotFoundError
 from ....datastore import FileTransferRecord
+from ....datastore.stored_file_info import make_datastore_path_relative
 from ....registry.interfaces import ChainedCollectionRecord
 from ...server_models import (
     ExpandDataIdRequestModel,
@@ -226,12 +227,13 @@ def file_transfer(
 
 
 def _serialize_file_transfer_record(record: FileTransferRecord) -> FileTransferRecordModel:
+    file_info = record.file_info.to_simple()
+    file_info.path = make_datastore_path_relative(file_info.path)
+
     return FileTransferRecordModel(
         # TODO: return a permanent URL
         url=record.location.uri.generate_presigned_get_url(expiration_time_seconds=3600),
-        # TODO: normalize path (like the get_file stuff does inside
-        # FileDatastore)
-        file_info=record.file_info.to_simple(),
+        file_info=file_info,
     )
 
 
