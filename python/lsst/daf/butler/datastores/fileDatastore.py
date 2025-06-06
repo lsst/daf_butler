@@ -110,6 +110,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
 from ..datastore import FileTransferMap, FileTransferRecord, FileTransferSource
+from ..datastore.stored_file_info import make_datastore_path_relative
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -3241,16 +3242,8 @@ def _to_file_info_payload(
 ) -> FileDatastoreGetPayloadFileInfo:
     location, file_info = info
 
-    # Make sure that we send only relative paths, to avoid leaking
-    # details of our configuration to the client.
-    path = location.pathInStore
-    if path.isabs():
-        relative_path = path.relativeToPathRoot
-    else:
-        relative_path = str(path)
-
     datastoreRecords = file_info.to_simple()
-    datastoreRecords.path = relative_path
+    datastoreRecords.path = make_datastore_path_relative(datastoreRecords.path)
 
     return FileDatastoreGetPayloadFileInfo(
         url=location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds),
