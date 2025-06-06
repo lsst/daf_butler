@@ -231,7 +231,7 @@ def _serialize_file_transfer_record(record: FileTransferRecord) -> FileTransferR
     file_info.path = make_datastore_path_relative(file_info.path)
 
     return FileTransferRecordModel(
-        # TODO: return a permanent URL
+        # TODO DM-51301: return a permanent URL
         url=record.location.uri.generate_presigned_get_url(expiration_time_seconds=3600),
         file_info=file_info,
     )

@@ -43,6 +43,15 @@ from .server_models import (
 
 
 class RemoteFileTransferSource(FileTransferSource):
+    """Implementation of `FileTransferSource` that retrieves information from
+    Butler server.
+
+    Parameters
+    ----------
+    connection : `RemoteButlerHttpConnection`
+        HTTP connection used to access the Butler server.
+    """
+
     def __init__(self, connection: RemoteButlerHttpConnection) -> None:
         self._connection = connection
         self.name = f"RemoteFileTransferSource{connection.server_url}"
@@ -67,9 +76,12 @@ class RemoteFileTransferSource(FileTransferSource):
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> dict[DatasetRef, bool]:
-        # TODO: This is a stub.  It's not clear that this function makes much
+        # This is a stub.  It's not clear that this function makes much
         # sense in the context of Butler Server -- our data releases should
         # never include files that are accidentally missing.
+        # TODO DM-51302: Rework the transfer_from process so that we can use
+        # get_file_info_for_transfer() to implement
+        # transfer_from(skip_missing=True) instead of calling this function.
         return {ref: True for ref in refs}
 
 

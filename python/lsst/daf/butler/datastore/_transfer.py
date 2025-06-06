@@ -39,22 +39,90 @@ __all__ = ("FileTransferMap", "FileTransferRecord", "FileTransferSource")
 
 
 class FileTransferSource(Protocol):
-    name: str
+    """Protocol for an object that can return information about files that need
+    to be transferred to copy datasets from one Butler repository to another.
+    """
 
-    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap: ...
+    name: str
+    """A human-readable, descriptive name for this file transfer source."""
+
+    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap:
+        """Given a list of dataset IDs, return all file information associated
+        with the datasets that can be determined without searching the
+        filesystem.
+
+        Parameters
+        ----------
+        dataset_ids : `~collections.abc.Iterable` [ `DatasetId` ]
+            List of dataset IDs for which we will retrieve file information.
+
+        Return
+        ------
+        transfer_map : `FileTransferMap`
+            Dictionary from `DatasetId` to a list of files found for that
+            dataset.  If information about any  given dataset IDs could not
+            be found, the missing IDs are omitted from the dictionary.
+        """
 
     def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> FileTransferMap: ...
+    ) -> FileTransferMap:
+        """Given a list of `DatasetRef`, search the filesystem to locate
+        artifacts associated with the dataset.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested.
+
+        Raises
+        ------
+        ValueError
+            If this file transfer source cannot locate artifacts by searching
+            the filesystem.
+
+        Return
+        ------
+        transfer_map : `FileTransferMap`
+            Dictionary from `DatasetId` to a list of files found for that
+            dataset.  If information about any  given dataset IDs could not
+            be found, the missing IDs are omitted from the dictionary.
+        """
 
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetRef, bool]: ...
+    ) -> dict[DatasetRef, bool]:
+        """Scan the filesystem to determine whether the given datasets exist on
+        disk.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
 
 
 class FileTransferRecord(NamedTuple):
+    """Information needed to transfer a file from one Butler repository to
+    another.
+    """
+
     location: Location
     file_info: StoredFileInfo
 
 
 FileTransferMap: TypeAlias = dict[DatasetId, list[FileTransferRecord]]
+"""A dictionary from `DatasetId` to a list of `FileTransferRecord`, containing
+the datastore information about a set of files to be transferred.
+"""
