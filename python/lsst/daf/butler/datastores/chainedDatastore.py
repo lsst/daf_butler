@@ -50,7 +50,12 @@ from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
+
+from .._dataset_ref import DatasetId
+from ..datastore import FileTransferMap, FileTransferSource
+from .fileDatastore import FileDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -1234,9 +1239,65 @@ class ChainedDatastore(Datastore):
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
             yield dataset
 
+    def _find_child_datastores_supporting_file_transfer(self) -> list[FileDatastore]:
+        datastores = self.datastores
+        incompatible: list[Datastore] = []
+        acceptable: list[FileDatastore] = []
+        for current_source in datastores:
+            if not isinstance(current_source, FileDatastore):
+                incompatible.append(current_source)
+            else:
+                acceptable.append(current_source)
+
+        if len(incompatible) == len(datastores):
+            if len(datastores) == 1:
+                raise TypeError(
+                    "Can only transfer to a FileDatastore from another FileDatastore, not"
+                    f" {get_full_type_name(datastores[0])}"
+                )
+            else:
+                types = [get_full_type_name(d) for d in datastores]
+                raise TypeError(
+                    f"ChainedDatastore encountered that had no FileDatastores. Had {','.join(types)}"
+                )
+
+        return acceptable
+
+    def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap:
+        unassigned_ids = set(dataset_ids)
+        output: FileTransferMap = {}
+        datastores = self._find_child_datastores_supporting_file_transfer()
+        for datastore in datastores:
+            found = datastore.get_file_info_for_transfer(unassigned_ids)
+            output.update(found)
+            unassigned_ids -= found.keys()
+        return output
+
+    def locate_missing_files_for_transfer(
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
+    ) -> FileTransferMap:
+        datastores = self._find_child_datastores_supporting_file_transfer()
+
+        missing_refs = {ref.id: ref for ref in refs}
+        output: FileTransferMap = {}
+        for datastore in datastores:
+            if datastore.trustGetRequest:
+                # Have to check each datastore in turn. If we do not do
+                # this warnings will be issued further down for datasets
+                # that are in one and not the other. The existence cache
+                # will prevent repeat checks.
+
+                found = datastore.locate_missing_files_for_transfer(missing_refs.values(), artifact_existence)
+                output.update(found)
+                for id in found.keys():
+                    missing_refs.pop(id)
+                log.debug("Adding %d missing refs to list for transfer from %s", len(found), datastore.name)
+
+        return output
+
     def transfer_from(
         self,
-        source_datastore: Datastore,
+        source_datastore: FileTransferSource,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
