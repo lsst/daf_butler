@@ -295,7 +295,7 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray | np.ma.MaskedArray:
     numpy_dict = arrow_to_numpy_dict(arrow_table)
 
     has_mask = False
-    dtype = []
+    dtype: list[tuple] = []
     for name, col in numpy_dict.items():
         if len(shape := numpy_dict[name].shape) <= 1:
             dtype.append((name, col.dtype))
@@ -429,7 +429,11 @@ def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     md = {}
     md[b"lsst::arrow::rowcount"] = str(len(np_array))
 
-    for name in np_array.dtype.names:
+    names = np_array.dtype.names
+    if names is None:
+        names = ()
+
+    for name in names:
         _append_numpy_string_metadata(md, name, np_array.dtype[name])
         _append_numpy_multidim_metadata(md, name, np_array.dtype[name])
 
@@ -1379,7 +1383,7 @@ def _numpy_dict_to_dtype(numpy_dict: dict[str, np.ndarray]) -> tuple[np.dtype, i
     """
     import numpy as np
 
-    dtype_list = []
+    dtype_list: list[tuple] = []
     rowcount = 0
     for name, col in numpy_dict.items():
         if rowcount == 0:
