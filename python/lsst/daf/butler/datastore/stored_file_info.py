@@ -410,7 +410,8 @@ def make_datastore_path_relative(path: str) -> str:
     ------
     normalized_path : `str`
         The original path, if it was relative. Otherwise, a version of it that
-        was converted to a relative path.
+        was converted to a relative path, stripping URI scheme and netloc from
+        it.
     """
     # Force the datastore file path sent to the client to be relative, since
     # absolute URLs in the server will generally not be reachable by the
