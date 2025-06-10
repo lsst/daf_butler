@@ -61,6 +61,8 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from lsst.resources import ResourcePathExpression
 
+    from .fileDatastoreClient import FileDatastoreGetPayload
+
 log = getLogger(__name__)
 
 
@@ -409,7 +411,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> object | None:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
         datastore = self._get_matching_datastore(ref)
         if datastore is None:
             return None
