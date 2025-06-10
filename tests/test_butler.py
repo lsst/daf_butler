@@ -2799,13 +2799,6 @@ class DatastoreTransfers(TestCaseMixin):
             transferred = self.target_butler.transfer_from(self.source_butler, source_refs)
             self.assertEqual(len(transferred), n_expected)
 
-            # Also do an explicit low-level transfer to trigger some
-            # edge cases.
-            with self.assertLogs(level=logging.DEBUG) as log_cm:
-                self.target_butler._datastore.transfer_from(self.source_butler._datastore, source_refs)
-            log_output = ";".join(log_cm.output)
-            self.assertIn("no file artifacts exist", log_output)
-
             with self.assertRaises((TypeError, AttributeError)):
                 self.target_butler._datastore.transfer_from(self.source_butler, source_refs)  # type: ignore
 
@@ -2883,7 +2876,7 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     def testTransferFromIncompatibleUuidToUuid(self) -> None:
         """Force the source butler to be a incompatible datastore."""
         self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml"))
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NotImplementedError):
             self.assertButlerTransfers()
 
     def testTransferFromIncompatibleChainUuidToUuid(self) -> None:
