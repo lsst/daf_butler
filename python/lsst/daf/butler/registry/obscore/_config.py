@@ -178,6 +178,11 @@ class ObsCoreConfig(pydantic.BaseModel):
     indexing support, but a standard ``s_region`` column is always included.
     """
 
+    fallback_instrument: str | None = None
+    """Instrument to use if a dataset type does not have an instrument
+    dimension. Will be left unset if `None`. Can be dangerous to set this
+    in a repository containing data from multiple instruments."""
+
 
 class ConfigCollectionType(str, enum.Enum):
     """Enum class defining possible values for configuration attributes."""

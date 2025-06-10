@@ -394,12 +394,14 @@ class DafButlerRecordFactory(RecordFactory):
         dataId = ref.dataId
         record: dict[str, str | int | float | UUID | None] = {}
 
-        instrument_name = cast(str, dataId.get("instrument"))
+        instrument_name = cast(str | None, dataId.get("instrument", self.config.fallback_instrument))
         record["instrument_name"] = instrument_name
         if self.schema.dataset_fk is not None:
             record[self.schema.dataset_fk.name] = ref.id
 
-        record["facility_name"] = self.config.facility_map.get(instrument_name, self.config.facility_name)
+        record["facility_name"] = self.config.facility_map.get(
+            instrument_name or "", self.config.facility_name
+        )
 
         timespan = dataId.timespan
         if timespan is not None:
