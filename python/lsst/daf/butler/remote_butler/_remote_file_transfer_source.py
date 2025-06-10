@@ -70,19 +70,9 @@ class RemoteFileTransferSource(FileTransferSource):
     def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> FileTransferMap:
-        missing_ids = {ref.id for ref in refs}
-        raise ValueError(f"Some datasets could not be found in {self.name}: {missing_ids}")
-
-    def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetRef, bool]:
-        # This is a stub.  It's not clear that this function makes much
-        # sense in the context of Butler Server -- our data releases should
-        # never include files that are accidentally missing.
-        # TODO DM-51302: Rework the transfer_from process so that we can use
-        # get_file_info_for_transfer() to implement
-        # transfer_from(skip_missing=True) instead of calling this function.
-        return {ref: True for ref in refs}
+        # The server does not provide an alternate way to look up files that
+        # could not be found using the file transfer endpoint.
+        return {}
 
 
 def _deserialize_file_transfer_record(record: FileTransferRecordModel) -> FileTransferRecord:

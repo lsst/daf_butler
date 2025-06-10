@@ -54,7 +54,7 @@ from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
-from ..datastore import FileTransferMap, FileTransferSource
+from ..datastore import FileTransferMap
 from .fileDatastore import FileDatastore
 
 if TYPE_CHECKING:
@@ -1297,7 +1297,7 @@ class ChainedDatastore(Datastore):
 
     def transfer_from(
         self,
-        source_datastore: FileTransferSource,
+        source_records: FileTransferMap,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
@@ -1320,7 +1320,7 @@ class ChainedDatastore(Datastore):
         rejected: set[DatasetRef] = set()
         nsuccess = 0
 
-        log.debug("Initiating transfer to chained datastore %s from %s", self.name, source_datastore.name)
+        log.debug("Initiating transfer to chained datastore %s", self.name)
         for datastore in self.datastores:
             # Rejections from this datastore might be acceptances in the next.
             # We add them all up but then recalculate at the end.
@@ -1330,7 +1330,7 @@ class ChainedDatastore(Datastore):
 
             try:
                 current_accepted, current_rejected = datastore.transfer_from(
-                    source_datastore,
+                    source_records,
                     available_refs,
                     transfer=transfer,
                     artifact_existence=artifact_existence,
@@ -1349,13 +1349,12 @@ class ChainedDatastore(Datastore):
                 rejected.update(current_rejected)
 
         if nsuccess == 0:
-            raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
+            raise TypeError("None of the child datastores could accept file transfers")
 
         # It's not rejected if some other datastore accepted it.
         rejected -= accepted
         log.verbose(
-            "Finished transfer_from %s to %s with %d accepted, %d rejected from %d requested.",
-            source_datastore.name,
+            "Finished transfer_from to %s with %d accepted, %d rejected from %d requested.",
             self.name,
             len(accepted),
             len(rejected),

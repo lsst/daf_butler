@@ -75,6 +75,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
 from ..datastore import Datastore, NullDatastore
 from ..datastores.file_datastore.retrieve_artifacts import ZipIndex, retrieve_and_zip
+from ..datastores.file_datastore.transfer import retrieve_file_transfer_records
 from ..dimensions import DataCoordinate, Dimension, DimensionGroup
 from ..direct_query_driver import DirectQueryDriver
 from ..progress import Progress
@@ -1765,7 +1766,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         import_info = self._prepare_for_import_refs(
             self,
             refs,
-            skip_missing=False,
             register_dataset_types=True,
             dry_run=dry_run,
             transfer_dimensions=transfer_dimensions,
@@ -2063,7 +2063,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         source_butler: LimitedButler,
         source_refs: Iterable[DatasetRef],
         *,
-        skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
         dry_run: bool = False,
@@ -2086,27 +2085,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             "s" if original_count != 1 else "",
             str(self),
         )
-
-        # In some situations the datastore artifact may be missing
-        # and we do not want that registry entry to be imported.
-        # Asking datastore is not sufficient, the records may have been
-        # purged, we have to ask for the (predicted) URI and check
-        # existence explicitly. Execution butler is set up exactly like
-        # this with no datastore records.
-        artifact_existence: dict[ResourcePath, bool] = {}
-        if skip_missing:
-            dataset_existence = source_butler._file_transfer_source.mexists(
-                source_refs, artifact_existence=artifact_existence
-            )
-            source_refs = [ref for ref, exists in dataset_existence.items() if exists]
-            filtered_count = len(source_refs)
-            n_missing = original_count - filtered_count
-            _LOG.verbose(
-                "%d dataset%s removed because the artifact does not exist. Now have %d.",
-                n_missing,
-                "" if n_missing == 1 else "s",
-                filtered_count,
-            )
 
         # Importing requires that we group the refs by dimension group and run
         # before doing the import.
@@ -2207,7 +2185,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             dimension_records = self._extract_all_dimension_records_from_data_ids(
                 source_butler, dataIds, elements
             )
-        return _ImportDatasetsInfo(grouped_refs, dimension_records, artifact_existence)
+        return _ImportDatasetsInfo(grouped_refs, dimension_records)
 
     def _import_dimension_records(
         self,
@@ -2294,15 +2272,40 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         dry_run: bool = False,
     ) -> collections.abc.Collection[DatasetRef]:
         # Docstring inherited.
+        source_refs = list(source_refs)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
         progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
 
+        artifact_existence: dict[ResourcePath, bool] = {}
+        file_transfer_source = source_butler._file_transfer_source
+        transfer_records = retrieve_file_transfer_records(
+            file_transfer_source, source_refs, artifact_existence
+        )
+        # In some situations the datastore artifact may be missing and we do
+        # not want that registry entry to be imported.  For example, this can
+        # happen if a file was removed but the dataset was left in the registry
+        # for provenance, or if a pipeline task didn't create all of the
+        # possible files in a QuantumBackedButler.
+        if skip_missing:
+            original_ids = {ref.id for ref in source_refs}
+            missing_ids = original_ids - transfer_records.keys()
+            if missing_ids:
+                original_count = len(source_refs)
+                source_refs = [ref for ref in source_refs if ref.id not in missing_ids]
+                filtered_count = len(source_refs)
+                n_missing = original_count - filtered_count
+                _LOG.verbose(
+                    "%d dataset%s removed because the artifact does not exist. Now have %d.",
+                    n_missing,
+                    "" if n_missing == 1 else "s",
+                    filtered_count,
+                )
+
         import_info = self._prepare_for_import_refs(
             source_butler,
             source_refs,
-            skip_missing=skip_missing,
             register_dataset_types=register_dataset_types,
             dry_run=dry_run,
             transfer_dimensions=transfer_dimensions,
@@ -2317,11 +2320,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
+            _LOG.verbose("Transferring %d datasets from %s", len(transfer_records), file_transfer_source.name)
             accepted, rejected = self._datastore.transfer_from(
-                source_butler._file_transfer_source,
+                transfer_records,
                 imported_refs,
                 transfer=transfer,
-                artifact_existence=import_info.artifact_existence,
+                artifact_existence=artifact_existence,
                 dry_run=dry_run,
             )
             if rejected:
@@ -2567,4 +2571,3 @@ class _ImportDatasetsInfo(NamedTuple):
 
     grouped_refs: defaultdict[_RefGroup, list[DatasetRef]]
     dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]
-    artifact_existence: dict[ResourcePath, bool]
