@@ -2095,7 +2095,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # this with no datastore records.
         artifact_existence: dict[ResourcePath, bool] = {}
         if skip_missing:
-            dataset_existence = source_butler._datastore.mexists(
+            dataset_existence = source_butler._file_transfer_source.mexists(
                 source_refs, artifact_existence=artifact_existence
             )
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
@@ -2318,7 +2318,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
             accepted, rejected = self._datastore.transfer_from(
-                source_butler._datastore,
+                source_butler._file_transfer_source,
                 imported_refs,
                 transfer=transfer,
                 artifact_existence=import_info.artifact_existence,

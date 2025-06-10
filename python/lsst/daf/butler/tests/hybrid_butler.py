@@ -47,7 +47,7 @@ from .._limited_butler import LimitedButler
 from .._query_all_datasets import QueryAllDatasetsParameters
 from .._storage_class import StorageClass
 from .._timespan import Timespan
-from ..datastore import DatasetRefURIs
+from ..datastore import DatasetRefURIs, FileTransferSource
 from ..dimensions import DataCoordinate, DataId, DimensionElement, DimensionRecord, DimensionUniverse
 from ..direct_butler import DirectButler
 from ..queries import Query
@@ -430,3 +430,7 @@ class HybridButler(Butler):
         self, args: QueryAllDatasetsParameters
     ) -> AbstractContextManager[Iterator[list[DatasetRef]]]:
         return self._remote_butler._query_all_datasets_by_page(args)
+
+    @property
+    def _file_transfer_source(self) -> FileTransferSource:
+        return self._remote_butler._file_transfer_source
