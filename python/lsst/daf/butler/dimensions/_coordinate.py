@@ -427,6 +427,9 @@ class DataCoordinate:
     @overload
     def get(self, key: str, default: str) -> str: ...
 
+    @overload
+    def get(self, key: str, default: DataIdValue | None) -> DataIdValue | None: ...
+
     def get(self, key: str, default: DataIdValue | None = None) -> DataIdValue | None:
         try:
             return self.__getitem__(key)
