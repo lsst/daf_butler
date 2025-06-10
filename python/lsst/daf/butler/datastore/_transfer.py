@@ -78,38 +78,12 @@ class FileTransferSource(Protocol):
             Optional mapping of datastore artifact to existence. Updated by
             this method with details of all artifacts tested.
 
-        Raises
-        ------
-        ValueError
-            If this file transfer source cannot locate artifacts by searching
-            the filesystem.
-
         Return
         ------
         transfer_map : `FileTransferMap`
             Dictionary from `DatasetId` to a list of files found for that
             dataset.  If information about any  given dataset IDs could not
             be found, the missing IDs are omitted from the dictionary.
-        """
-
-    def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
-    ) -> dict[DatasetRef, bool]:
-        """Scan the filesystem to determine whether the given datasets exist on
-        disk.
-
-        Parameters
-        ----------
-        refs : iterable of `DatasetRef`
-            The datasets to be checked.
-        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
-            Optional mapping of datastore artifact to existence. Updated by
-            this method with details of all artifacts tested.
-
-        Returns
-        -------
-        existence : `dict` of [`DatasetRef`, `bool`]
-            Mapping from dataset to boolean indicating existence.
         """
 
 

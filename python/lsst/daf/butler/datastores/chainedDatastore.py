@@ -54,8 +54,7 @@ from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
-from ..datastore import FileTransferMap, FileTransferSource
-from .fileDatastore import FileDatastore
+from ..datastore import FileTransferMap
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -1239,65 +1238,50 @@ class ChainedDatastore(Datastore):
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
             yield dataset
 
-    def _find_child_datastores_supporting_file_transfer(self) -> list[FileDatastore]:
-        datastores = self.datastores
-        incompatible: list[Datastore] = []
-        acceptable: list[FileDatastore] = []
-        for current_source in datastores:
-            if not isinstance(current_source, FileDatastore):
-                incompatible.append(current_source)
-            else:
-                acceptable.append(current_source)
-
-        if len(incompatible) == len(datastores):
-            if len(datastores) == 1:
-                raise TypeError(
-                    "Can only transfer to a FileDatastore from another FileDatastore, not"
-                    f" {get_full_type_name(datastores[0])}"
-                )
-            else:
-                types = [get_full_type_name(d) for d in datastores]
-                raise TypeError(
-                    f"ChainedDatastore encountered that had no FileDatastores. Had {','.join(types)}"
-                )
-
-        return acceptable
-
     def get_file_info_for_transfer(self, dataset_ids: Iterable[DatasetId]) -> FileTransferMap:
         unassigned_ids = set(dataset_ids)
         output: FileTransferMap = {}
-        datastores = self._find_child_datastores_supporting_file_transfer()
-        for datastore in datastores:
-            found = datastore.get_file_info_for_transfer(unassigned_ids)
-            output.update(found)
-            unassigned_ids -= found.keys()
+        found_acceptable_datastore = False
+        for datastore in self.datastores:
+            try:
+                found = datastore.get_file_info_for_transfer(unassigned_ids)
+                found_acceptable_datastore = True
+                output.update(found)
+                unassigned_ids -= found.keys()
+            except NotImplementedError:
+                pass
+
+        if not found_acceptable_datastore:
+            types = {get_full_type_name(d) for d in self.datastores}
+            raise TypeError(
+                "ChainedDatastore had no datastores able to provide file transfer information."
+                f" Had {','.join(types)}"
+            )
+
         return output
 
     def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> FileTransferMap:
-        datastores = self._find_child_datastores_supporting_file_transfer()
-
         missing_refs = {ref.id: ref for ref in refs}
         output: FileTransferMap = {}
-        for datastore in datastores:
-            if datastore.trustGetRequest:
-                # Have to check each datastore in turn. If we do not do
-                # this warnings will be issued further down for datasets
-                # that are in one and not the other. The existence cache
-                # will prevent repeat checks.
+        for datastore in self.datastores:
+            # Have to check each datastore in turn. If we do not do
+            # this warnings will be issued further down for datasets
+            # that are in one and not the other. The existence cache
+            # will prevent repeat checks.
 
-                found = datastore.locate_missing_files_for_transfer(missing_refs.values(), artifact_existence)
-                output.update(found)
-                for id in found.keys():
-                    missing_refs.pop(id)
-                log.debug("Adding %d missing refs to list for transfer from %s", len(found), datastore.name)
+            found = datastore.locate_missing_files_for_transfer(missing_refs.values(), artifact_existence)
+            output.update(found)
+            for id in found.keys():
+                missing_refs.pop(id)
+            log.debug("Adding %d missing refs to list for transfer from %s", len(found), datastore.name)
 
         return output
 
     def transfer_from(
         self,
-        source_datastore: FileTransferSource,
+        source_records: FileTransferMap,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
@@ -1320,7 +1304,7 @@ class ChainedDatastore(Datastore):
         rejected: set[DatasetRef] = set()
         nsuccess = 0
 
-        log.debug("Initiating transfer to chained datastore %s from %s", self.name, source_datastore.name)
+        log.debug("Initiating transfer to chained datastore %s", self.name)
         for datastore in self.datastores:
             # Rejections from this datastore might be acceptances in the next.
             # We add them all up but then recalculate at the end.
@@ -1330,7 +1314,7 @@ class ChainedDatastore(Datastore):
 
             try:
                 current_accepted, current_rejected = datastore.transfer_from(
-                    source_datastore,
+                    source_records,
                     available_refs,
                     transfer=transfer,
                     artifact_existence=artifact_existence,
@@ -1349,13 +1333,12 @@ class ChainedDatastore(Datastore):
                 rejected.update(current_rejected)
 
         if nsuccess == 0:
-            raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
+            raise TypeError("None of the child datastores could accept file transfers")
 
         # It's not rejected if some other datastore accepted it.
         rejected -= accepted
         log.verbose(
-            "Finished transfer_from %s to %s with %d accepted, %d rejected from %d requested.",
-            source_datastore.name,
+            "Finished transfer_from to %s with %d accepted, %d rejected from %d requested.",
             self.name,
             len(accepted),
             len(rejected),

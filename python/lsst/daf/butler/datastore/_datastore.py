@@ -869,7 +869,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
     def transfer_from(
         self,
-        source_datastore: FileTransferSource,
+        source_records: FileTransferMap,
         refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
@@ -879,9 +879,8 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        source_datastore : `Datastore`
-            The datastore from which to transfer artifacts. That datastore
-            must be compatible with this datastore receiving the artifacts.
+        source_records : `FileTransferMap`
+            The artifacts to be transferred into this datastore.
         refs : `~collections.abc.Collection` of `DatasetRef`
             The datasets to transfer from the source datastore.
         transfer : `str`, optional
@@ -916,13 +915,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         TypeError
             Raised if the two datastores are not compatible.
         """
-        if type(self) is not type(source_datastore):
-            raise TypeError(
-                f"Datastore mismatch between this datastore ({type(self)}) and the "
-                f"source datastore ({type(source_datastore)})."
-            )
-
-        raise NotImplementedError(f"Datastore {type(self)} must implement a transfer_from method.")
+        raise NotImplementedError(f"Datastore {type(self)} does not implement a transfer_from method.")
 
     def getManyURIs(
         self,
@@ -1427,7 +1420,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
     def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> FileTransferMap:
-        raise NotImplementedError(f"Transferring files is not supported by datastore {self}")
+        return {}
 
 
 class NullDatastore(Datastore):
@@ -1503,7 +1496,7 @@ class NullDatastore(Datastore):
 
     def transfer_from(
         self,
-        source_datastore: FileTransferSource,
+        source_records: FileTransferMap,
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
