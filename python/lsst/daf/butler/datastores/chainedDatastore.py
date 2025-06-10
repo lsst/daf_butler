@@ -1253,7 +1253,10 @@ class ChainedDatastore(Datastore):
 
         if not found_acceptable_datastore:
             types = {get_full_type_name(d) for d in self.datastores}
-            raise TypeError(f"ChainedDatastore encountered that had no FileDatastores. Had {','.join(types)}")
+            raise TypeError(
+                "ChainedDatastore had no datastores able to provide file transfer information."
+                f" Had {','.join(types)}"
+            )
 
         return output
 

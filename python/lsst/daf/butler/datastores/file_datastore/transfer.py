@@ -43,7 +43,7 @@ def retrieve_file_transfer_records(
     refs: Iterable[DatasetRef],
     artifact_existence: dict[ResourcePath, bool],
 ) -> FileTransferMap:
-    """Look up the datastore records corresponding to the given `DatasetRef`s.
+    """Look up the datastore records corresponding to the given datasets.
 
     Parameters
     ----------
