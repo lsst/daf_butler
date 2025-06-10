@@ -2876,7 +2876,7 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     def testTransferFromIncompatibleUuidToUuid(self) -> None:
         """Force the source butler to be a incompatible datastore."""
         self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml"))
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NotImplementedError):
             self.assertButlerTransfers()
 
     def testTransferFromIncompatibleChainUuidToUuid(self) -> None:
