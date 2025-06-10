@@ -1420,7 +1420,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
     def locate_missing_files_for_transfer(
         self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool]
     ) -> FileTransferMap:
-        raise NotImplementedError(f"Transferring files is not supported by datastore {self}")
+        return {}
 
 
 class NullDatastore(Datastore):

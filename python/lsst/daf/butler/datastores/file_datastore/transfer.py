@@ -71,10 +71,7 @@ def retrieve_file_transfer_records(
     """
     log.verbose("Looking up source datastore records in %s", source_datastore.name)
     refs_by_id = {ref.id: ref for ref in refs}
-    try:
-        source_records = source_datastore.get_file_info_for_transfer(refs_by_id.keys())
-    except NotImplementedError as e:
-        raise TypeError(f"Source datastore {source_datastore.name} does not support file transfer") from e
+    source_records = source_datastore.get_file_info_for_transfer(refs_by_id.keys())
 
     log.debug("Number of datastore records found in source: %d", len(source_records))
 
