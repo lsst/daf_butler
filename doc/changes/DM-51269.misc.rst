@@ -1,0 +1,2 @@
+Added a ``fallback_instrument`` to ObsCore configurations.
+This instrument is used when an ObsCore record is constructed from a dataset type that has no instrument defined.
