@@ -38,7 +38,7 @@ __all__ = [
 ]
 
 from collections.abc import Iterable
-from typing import Annotated, Any, Literal, NewType, Self, TypeAlias
+from typing import Annotated, Any, ClassVar, Literal, NewType, Self, TypeAlias
 from uuid import UUID
 
 import pydantic
@@ -58,6 +58,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
+from ..datastore.stored_file_info import SerializedStoredFileInfo
 from ..dimensions import SerializedDimensionConfig, SerializedDimensionRecord
 from ..queries.result_specs import SerializedResultSpec
 from ..queries.tree import ColumnLiteral, SerializedQueryTree
@@ -416,3 +417,17 @@ class QueryAllDatasetsRequestModel(pydantic.BaseModel):
     bind: dict[str, ColumnLiteral]
     limit: int | None
     with_dimension_records: bool
+
+
+class GetFileTransferInfoRequestModel(pydantic.BaseModel):
+    MAX_ITEMS_PER_REQUEST: ClassVar[int] = 10_000
+    dataset_ids: Annotated[list[UUID], pydantic.Field(max_length=MAX_ITEMS_PER_REQUEST)]
+
+
+class FileTransferRecordModel(pydantic.BaseModel):
+    url: pydantic.AnyHttpUrl
+    file_info: SerializedStoredFileInfo
+
+
+class GetFileTransferInfoResponseModel(pydantic.BaseModel):
+    files: dict[UUID, list[FileTransferRecordModel]]

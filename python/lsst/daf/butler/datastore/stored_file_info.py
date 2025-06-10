@@ -395,3 +395,37 @@ class SerializedStoredFileInfo(pydantic.BaseModel):
 
     file_size: int
     """Size of the serialized dataset in bytes."""
+
+
+def make_datastore_path_relative(path: str) -> str:
+    """Normalize a path from a `StoredFileInfo` object so
+    that it is always relative.
+
+    Parameters
+    ----------
+    path : `str`
+        The file path from a `StoredFileInfo`.
+
+    Return
+    ------
+    normalized_path : `str`
+        The original path, if it was relative. Otherwise, a version of it that
+        was converted to a relative path, stripping URI scheme and netloc from
+        it.
+    """
+    # Force the datastore file path sent to the client to be relative, since
+    # absolute URLs in the server will generally not be reachable by the
+    # client.  If an absolute URL is sent, it (or a portion of it) can end up
+    # baked into the FileDatastore that is the target of the transfer in some
+    # cases.
+    rpath = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
+    if rpath.isabs():
+        relative = rpath.relativeToPathRoot
+        if rpath.fragment:
+            # Preserve the fragment, since this used to indicate special
+            # processing like zip extraction.
+            return f"{relative}#{rpath.fragment}"
+        else:
+            return relative
+    else:
+        return path

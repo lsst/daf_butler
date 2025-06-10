@@ -61,7 +61,7 @@ from lsst.daf.butler.datastore.cache_manager import (
     DatastoreCacheManagerConfig,
     DatastoreDisabledCacheManager,
 )
-from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
+from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo, make_datastore_path_relative
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
@@ -2209,6 +2209,12 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
         pickled_info = pickle.dumps(info)
         unpickled_info = pickle.loads(pickled_info)
         self.assertEqual(unpickled_info, info)
+
+    def test_make_datastore_path_relative(self):
+        self.assertEqual(make_datastore_path_relative("a/relative/path"), "a/relative/path")
+        self.assertEqual(make_datastore_path_relative("path/with#fragment"), "path/with#fragment")
+        self.assertEqual(make_datastore_path_relative("http://server.com/some/path"), "some/path")
+        self.assertEqual(make_datastore_path_relative("http://server.com/some/path#frag"), "some/path#frag")
 
 
 @contextlib.contextmanager

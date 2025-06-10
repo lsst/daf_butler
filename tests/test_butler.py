@@ -2553,17 +2553,11 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         super().tearDown()
 
 
-class PosixDatastoreTransfers(unittest.TestCase):
-    """Test data transfers between butlers.
-
-    Test for different managers. UUID to UUID and integer to integer are
-    tested. UUID to integer is not supported since we do not currently
-    want to allow that.  Integer to UUID is supported with the caveat
-    that UUID4 will be generated and this will be incorrect for raw
-    dataset types. The test ignores that.
+class DatastoreTransfers(TestCaseMixin):
+    """Base test setup for data transfers between butlers.  The concrete tests
+    for specific configurations are in other classes, below.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory: StorageClassFactory
 
     @classmethod
@@ -2582,132 +2576,16 @@ class PosixDatastoreTransfers(unittest.TestCase):
     def tearDown(self) -> None:
         removeTestTempDir(self.root)
 
-    def create_butler(self, manager: str, label: str, config_file: str | None = None) -> Butler:
+    def create_butler(self, manager: str | None, label: str, config_file: str | None = None) -> Butler:
+        if manager is None:
+            manager = (
+                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+            )
         config = Config(config_file if config_file is not None else self.configFile)
         config["registry", "managers", "datasets"] = manager
         return Butler.from_config(
             Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True
         )
-
-    def create_butlers(
-        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
-    ) -> None:
-        default = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
-        if manager1 is None:
-            manager1 = default
-        if manager2 is None:
-            manager2 = default
-        self.source_butler = self.create_butler(manager1, "1", config_file=source_config)
-        self.target_butler = self.create_butler(manager2, "2")
-
-    def testTransferUuidToUuid(self) -> None:
-        self.create_butlers()
-        self.assertButlerTransfers()
-
-    def testTransferFromChainedUuidToUuid(self) -> None:
-        """Force the source butler to be a ChainedDatastore."""
-        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-chained.yaml"))
-        self.assertButlerTransfers()
-
-    def testTransferFromIncompatibleUuidToUuid(self) -> None:
-        """Force the source butler to be a incompatible datastore."""
-        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml"))
-        with self.assertRaises(TypeError):
-            self.assertButlerTransfers()
-
-    def testTransferFromIncompatibleChainUuidToUuid(self) -> None:
-        """Force the source butler to be a incompatible datastore."""
-        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory-chain.yaml"))
-        with self.assertRaises(TypeError):
-            self.assertButlerTransfers()
-
-    def testTransferFromFileUuidToUuid(self) -> None:
-        """Force the source butler to be a FileDatastore."""
-        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler.yaml"))
-        self.assertButlerTransfers()
-
-    def testTransferMissing(self) -> None:
-        """Test transfers where datastore records are missing.
-
-        This is how execution butler works.
-        """
-        self.create_butlers()
-
-        # Configure the source butler to allow trust.
-        self.source_butler._datastore._set_trust_mode(True)
-
-        self.assertButlerTransfers(purge=True)
-
-    def testTransferMissingDisassembly(self) -> None:
-        """Test transfers where datastore records are missing.
-
-        This is how execution butler works.
-        """
-        self.create_butlers()
-
-        # Configure the source butler to allow trust.
-        self.source_butler._datastore._set_trust_mode(True)
-
-        # Test disassembly.
-        self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
-
-    def testTransferDifferingStorageClasses(self) -> None:
-        """Test transfers when the source butler dataset type has a different
-        but compatible storage class.
-        """
-        self.create_butlers()
-
-        self.assertButlerTransfers(storageClassNameTarget="MetricsConversion")
-
-    def testTransferDifferingStorageClassesDisassembly(self) -> None:
-        """Test transfers when the source butler dataset type has a different
-        but compatible storage class and where the source butler has
-        disassembled.
-        """
-        self.create_butlers()
-
-        self.assertButlerTransfers(
-            storageClassName="StructuredComposite", storageClassNameTarget="MetricsConversion"
-        )
-
-    def testAbsoluteURITransferDirect(self) -> None:
-        """Test transfer using an absolute URI."""
-        self._absolute_transfer("auto")
-
-    def testAbsoluteURITransferCopy(self) -> None:
-        """Test transfer using an absolute URI."""
-        self._absolute_transfer("copy")
-
-    def _absolute_transfer(self, transfer: str) -> None:
-        self.create_butlers()
-
-        storageClassName = "StructuredData"
-        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
-        datasetTypeName = "random_data"
-        run = "run1"
-        self.source_butler.collections.register(run)
-
-        dimensions = self.source_butler.dimensions.conform(())
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        self.source_butler.registry.registerDatasetType(datasetType)
-
-        metrics = makeExampleMetrics()
-        with ResourcePath.temporary_uri(suffix=".json") as temp:
-            dataId = DataCoordinate.make_empty(self.source_butler.dimensions)
-            source_refs = [DatasetRef(datasetType, dataId, run=run)]
-            temp.write(json.dumps(metrics.exportAsDict()).encode())
-            dataset = FileDataset(path=temp, refs=source_refs)
-            self.source_butler.ingest(dataset, transfer="direct")
-
-            self.target_butler.transfer_from(
-                self.source_butler, dataset.refs, register_dataset_types=True, transfer=transfer
-            )
-
-            uri = self.target_butler.getURI(dataset.refs[0])
-            if transfer == "auto":
-                self.assertEqual(uri, temp)
-            else:
-                self.assertNotEqual(uri, temp)
 
     def assertButlerTransfers(
         self,
@@ -2974,6 +2852,134 @@ class PosixDatastoreTransfers(unittest.TestCase):
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]
             self.target_butler.transfer_from(self.source_butler, to_transfer)
 
+
+class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
+    """Test data transfers between butlers.
+
+    Test for different managers. UUID to UUID and integer to integer are
+    tested. UUID to integer is not supported since we do not currently
+    want to allow that.  Integer to UUID is supported with the caveat
+    that UUID4 will be generated and this will be incorrect for raw
+    dataset types. The test ignores that.
+    """
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def create_butlers(
+        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
+    ) -> None:
+        self.source_butler = self.create_butler(manager1, "1", config_file=source_config)
+        self.target_butler = self.create_butler(manager2, "2")
+
+    def testTransferUuidToUuid(self) -> None:
+        self.create_butlers()
+        self.assertButlerTransfers()
+
+    def testTransferFromChainedUuidToUuid(self) -> None:
+        """Force the source butler to be a ChainedDatastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-chained.yaml"))
+        self.assertButlerTransfers()
+
+    def testTransferFromIncompatibleUuidToUuid(self) -> None:
+        """Force the source butler to be a incompatible datastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml"))
+        with self.assertRaises(TypeError):
+            self.assertButlerTransfers()
+
+    def testTransferFromIncompatibleChainUuidToUuid(self) -> None:
+        """Force the source butler to be a incompatible datastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler-inmemory-chain.yaml"))
+        with self.assertRaises(TypeError):
+            self.assertButlerTransfers()
+
+    def testTransferFromFileUuidToUuid(self) -> None:
+        """Force the source butler to be a FileDatastore."""
+        self.create_butlers(source_config=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        self.assertButlerTransfers()
+
+    def testTransferMissing(self) -> None:
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers()
+
+        # Configure the source butler to allow trust.
+        self.source_butler._datastore._set_trust_mode(True)
+
+        self.assertButlerTransfers(purge=True)
+
+    def testTransferMissingDisassembly(self) -> None:
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers()
+
+        # Configure the source butler to allow trust.
+        self.source_butler._datastore._set_trust_mode(True)
+
+        # Test disassembly.
+        self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
+
+    def testTransferDifferingStorageClasses(self) -> None:
+        """Test transfers when the source butler dataset type has a different
+        but compatible storage class.
+        """
+        self.create_butlers()
+
+        self.assertButlerTransfers(storageClassNameTarget="MetricsConversion")
+
+    def testTransferDifferingStorageClassesDisassembly(self) -> None:
+        """Test transfers when the source butler dataset type has a different
+        but compatible storage class and where the source butler has
+        disassembled.
+        """
+        self.create_butlers()
+
+        self.assertButlerTransfers(
+            storageClassName="StructuredComposite", storageClassNameTarget="MetricsConversion"
+        )
+
+    def testAbsoluteURITransferDirect(self) -> None:
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("auto")
+
+    def testAbsoluteURITransferCopy(self) -> None:
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("copy")
+
+    def _absolute_transfer(self, transfer: str) -> None:
+        self.create_butlers()
+
+        storageClassName = "StructuredData"
+        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
+        datasetTypeName = "random_data"
+        run = "run1"
+        self.source_butler.collections.register(run)
+
+        dimensions = self.source_butler.dimensions.conform(())
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        self.source_butler.registry.registerDatasetType(datasetType)
+
+        metrics = makeExampleMetrics()
+        with ResourcePath.temporary_uri(suffix=".json") as temp:
+            dataId = DataCoordinate.make_empty(self.source_butler.dimensions)
+            source_refs = [DatasetRef(datasetType, dataId, run=run)]
+            temp.write(json.dumps(metrics.exportAsDict()).encode())
+            dataset = FileDataset(path=temp, refs=source_refs)
+            self.source_butler.ingest(dataset, transfer="direct")
+
+            self.target_butler.transfer_from(
+                self.source_butler, dataset.refs, register_dataset_types=True, transfer=transfer
+            )
+
+            uri = self.target_butler.getURI(dataset.refs[0])
+            if transfer == "auto":
+                self.assertEqual(uri, temp)
+            else:
+                self.assertNotEqual(uri, temp)
+
     def test_shared_dimension_group(self):
         """Test internal logic that divides dataset types by dimension group
         when doing registry updates.
@@ -3037,6 +3043,19 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     """Test transfers using a chained datastore."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
+    """Test ``transfer_from`` involving Butler server."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def test_transfers_from_remote_to_direct(self) -> None:
+        self.target_butler = self.create_butler(None, "2")
+        with create_test_server(TESTDIR) as server:
+            self.source_butler = server.hybrid_butler
+            self.assertButlerTransfers()
 
 
 class NullDatastoreTestCase(unittest.TestCase):
