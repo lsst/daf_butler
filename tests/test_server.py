@@ -38,13 +38,17 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
+    import httpx
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
 
     import lsst.daf.butler.remote_butler._query_results
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
-    from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
+    from lsst.daf.butler.remote_butler._authentication import (
+        _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
+        get_authentication_headers,
+    )
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._config import mock_config
     from lsst.daf.butler.remote_butler.server._dependencies import (
@@ -52,6 +56,7 @@ try:
         butler_factory_dependency,
     )
     from lsst.daf.butler.remote_butler.server._gafaelfawr import MockGafaelfawrGroupAuthorizer
+    from lsst.daf.butler.remote_butler.server.handlers._utils import generate_file_download_uri
     from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
@@ -64,6 +69,7 @@ except ImportError as e:
 from lsst.daf.butler import (
     Butler,
     DataCoordinate,
+    DatasetId,
     DatasetNotFoundError,
     DatasetRef,
     DatasetType,
@@ -374,6 +380,51 @@ class ButlerClientServerTestCase(unittest.TestCase):
         componentRef = ref.makeComponentRef("summary")
         componentUris = self.butler.getURIs(componentRef)
         check_uris(componentUris)
+
+    def test_file_download_redirect(self):
+        def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx.Response:
+            uri = generate_file_download_uri("http://unittest.test/", TEST_REPOSITORY_NAME, id, component)
+            return self.client.get(
+                uri, follow_redirects=False, headers=get_authentication_headers("mock-token")
+            )
+
+        # Test behavior of a single-file dataset.
+        response = get_download_redirect(self.simple_dataset_ref.id)
+        self.assertEqual(response.status_code, 307)
+        self.assertTrue(response.has_redirect_location)
+        assert response.next_request is not None
+        self.assertEqual(response.next_request.url.scheme, "https")
+        self.assertIn("test_int_DummyCamComp_R_d-r_423_ingest_run.json", response.next_request.url.path)
+
+        response = get_download_redirect(self.simple_dataset_ref.id, "somecomponent")
+        self.assertEqual(response.status_code, 404)
+
+        # This dataset is a "disassembled composite" with multiple files.
+        dataset_type = "test_metric_comp"
+        data_id = {"instrument": "DummyCamComp", "visit": 423}
+        collections = "ingest/run"
+        ref = self.butler.find_dataset(dataset_type, data_id, collections=collections)
+
+        # Getting single component of a multi-file "disassembled composite".
+        response = get_download_redirect(ref.id, "summary")
+        self.assertEqual(response.status_code, 307)
+        self.assertTrue(response.has_redirect_location)
+        assert response.next_request is not None
+        self.assertEqual(response.next_request.url.scheme, "https")
+        self.assertIn("test_metric_comp.summary", response.next_request.url.path)
+
+        # Unknown component.
+        response = get_download_redirect(ref.id, "badcomponent")
+        self.assertEqual(response.status_code, 404)
+
+        # Not specifying the component for a multi-file "disassembled
+        # composite".
+        response = get_download_redirect(ref.id, None)
+        self.assertEqual(response.status_code, 422)
+
+        # Unknown dataset.
+        response = get_download_redirect(uuid.UUID("59467c1b-fa13-4f7a-8ff8-cd83e092e563"))
+        self.assertEqual(response.status_code, 404)
 
     def test_auth_check(self):
         # This is checking that the unit-test middleware for validating the
