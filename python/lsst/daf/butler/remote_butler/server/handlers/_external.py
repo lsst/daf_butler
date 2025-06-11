@@ -32,7 +32,8 @@ __all__ = ()
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 
 from ...._butler import Butler
 from ...._collection_type import CollectionType
@@ -211,6 +212,48 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+
+
+@external_router.get(
+    "/v1/dataset/{dataset_id}/download",
+    summary="Return an HTTP redirect to a location where you can download the artifact file for the dataset.",
+)
+def redirect_to_dataset_download(
+    dataset_id: uuid.UUID,
+    component: str | None = None,
+    factory: Factory = Depends(factory_dependency),
+) -> RedirectResponse:
+    butler = factory.create_butler()
+    ref = butler.get_dataset(dataset_id, datastore_records=True)
+    if ref is None:
+        raise HTTPException(404, f"Dataset id '{dataset_id}' not found in repository '{factory.repository}'")
+
+    payload = butler._datastore.prepare_get_for_external_client(ref)
+    if payload is None or len(payload.file_info) == 0:
+        raise HTTPException(
+            404, f"No files are available for dataset id '{dataset_id}' in repository '{factory.repository}'"
+        )
+    for info in payload.file_info:
+        # Most datasets have a single file, which will have a component of
+        # `None`.  Datasets which are "disassembled composites" have multiple
+        # files, and you must specify the component to pick which one you want
+        # to download.
+        if info.datastoreRecords.component == component:
+            return RedirectResponse(status_code=307, url=str(info.url))
+
+    found_components = [info.datastoreRecords.component for info in payload.file_info]
+    if component is None:
+        raise HTTPException(
+            422,
+            f"Dataset '{dataset_id}' in repository '{factory.repository}' consists of multiple files. "
+            f" Specify the 'component' query parameter to select one of the following: {found_components}",
+        )
+    else:
+        raise HTTPException(
+            404,
+            f"Component '{component}' for dataset '{dataset_id}' in repository '{factory.repository}'"
+            f" not found.  Available components: {found_components}",
+        )
 
 
 @external_router.post(
