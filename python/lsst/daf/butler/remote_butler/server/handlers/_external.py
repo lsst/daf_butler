@@ -32,12 +32,12 @@ __all__ = ()
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from ...._butler import Butler
 from ...._collection_type import CollectionType
-from ...._dataset_ref import DatasetRef
+from ...._dataset_ref import DatasetId, DatasetRef
 from ...._exceptions import DatasetNotFoundError
 from ....datastore import FileTransferRecord
 from ....datastore.stored_file_info import make_datastore_path_relative
@@ -65,7 +65,7 @@ from ...server_models import (
 )
 from .._dependencies import factory_dependency
 from .._factory import Factory
-from ._utils import set_default_data_id
+from ._utils import generate_file_download_uri, set_default_data_id
 
 external_router = APIRouter()
 """Routes reachable by end users that apply authorization checks before
@@ -261,21 +261,36 @@ def redirect_to_dataset_download(
     summary="Retrieve information needed to transfer files to an external Butler repository",
 )
 def file_transfer(
-    request: GetFileTransferInfoRequestModel, factory: Factory = Depends(factory_dependency)
+    body: GetFileTransferInfoRequestModel,
+    request: Request,
+    factory: Factory = Depends(factory_dependency),
 ) -> GetFileTransferInfoResponseModel:
     butler = factory.create_butler()
-    files = butler._datastore.get_file_info_for_transfer(request.dataset_ids)
-    output = {id: [_serialize_file_transfer_record(r) for r in records] for id, records in files.items()}
+    files = butler._datastore.get_file_info_for_transfer(body.dataset_ids)
+    output = {}
+    for id, records in files.items():
+        output[id] = [
+            _serialize_file_transfer_record(r, id, str(request.base_url), factory.repository) for r in records
+        ]
     return GetFileTransferInfoResponseModel(files=output)
 
 
-def _serialize_file_transfer_record(record: FileTransferRecord) -> FileTransferRecordModel:
+def _serialize_file_transfer_record(
+    record: FileTransferRecord, dataset_id: DatasetId, base_url: str, repository: str
+) -> FileTransferRecordModel:
     file_info = record.file_info.to_simple()
     file_info.path = make_datastore_path_relative(file_info.path)
 
     return FileTransferRecordModel(
-        # TODO DM-51301: return a permanent URL
-        url=record.location.uri.generate_presigned_get_url(expiration_time_seconds=3600),
+        # Instead of directly returning a signed URL, return a "permanent" URL
+        # based on the dataset ID that redirects to the signed URL.
+        # This allows transfers to take longer than the URL expiration time.
+        url=generate_file_download_uri(
+            root_uri=base_url, repository=repository, dataset_id=dataset_id, component=file_info.component
+        ),
+        # Instruct the client that it will need to provide Gafaelfawr
+        # authentication headers to access these URLs.
+        auth="gafaelfawr",
         file_info=file_info,
     )
 
