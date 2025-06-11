@@ -25,10 +25,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
+from typing import Any, cast
 
 from lsst.daf.butler._dataset_ref import DatasetId, DatasetRef
 from lsst.resources import ResourcePath
+from lsst.resources.http import HttpResourcePath
 from lsst.utils.iteration import chunk_iterable
 
 from .._location import Location
@@ -63,7 +66,7 @@ class RemoteFileTransferSource(FileTransferSource):
             response = self._connection.post("file_transfer", request)
             model = parse_model(response, GetFileTransferInfoResponseModel)
             for id, records in model.files.items():
-                output[id] = [_deserialize_file_transfer_record(r) for r in records]
+                output[id] = [self._deserialize_file_transfer_record(r) for r in records]
 
         return output
 
@@ -74,9 +77,48 @@ class RemoteFileTransferSource(FileTransferSource):
         # could not be found using the file transfer endpoint.
         return {}
 
+    def _deserialize_file_transfer_record(self, record: FileTransferRecordModel) -> FileTransferRecord:
+        # If the server tells us it is necessary, attach the Gafaelfawr
+        # authentication headers to the URL.
+        if record.auth == "none":
+            headers = None
+        elif record.auth == "gafaelfawr":
+            headers = self._connection.authentication_headers
+        else:
+            raise ValueError(f"Unknown authentication type {record.auth}")
+        resource_path = HttpResourcePath.create_http_resource_path(str(record.url), extra_headers=headers)
+        resource_path = _tweak_uri_for_unit_test(resource_path)
 
-def _deserialize_file_transfer_record(record: FileTransferRecordModel) -> FileTransferRecord:
-    return FileTransferRecord(
-        location=Location(None, ResourcePath(str(record.url))),
-        file_info=StoredFileInfo.from_simple(record.file_info),
-    )
+        return FileTransferRecord(
+            location=Location(None, resource_path),
+            file_info=StoredFileInfo.from_simple(record.file_info),
+        )
+
+
+def _tweak_uri_for_unit_test(path: HttpResourcePath) -> HttpResourcePath:
+    # Provide a place for unit tests to hook in and modify URLs, since there is
+    # no actual HTTP server reachable via a domain name during testing.
+    return path
+
+
+@contextmanager
+def mock_file_transfer_uris_for_unit_test(
+    callback: Callable[[HttpResourcePath], HttpResourcePath],
+) -> Iterator[None]:
+    """Hooks into the RemoteButler file transfer logic to modify URLs for unit
+    testing.  The given callback will be used to transform file download URLs
+    before attempting to access them.
+
+    Parameters
+    ----------
+    callback : `~collections.abc.Callable`
+        A function that takes an `HttpResourcePath` as its only parameter and
+        returns a modified `HttpResourcePath`.
+    """
+    global _tweak_uri_for_unit_test
+    orig = _tweak_uri_for_unit_test
+    _tweak_uri_for_unit_test = cast(Any, callback)
+    try:
+        yield
+    finally:
+        _tweak_uri_for_unit_test = orig
