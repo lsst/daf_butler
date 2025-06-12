@@ -426,6 +426,7 @@ class GetFileTransferInfoRequestModel(pydantic.BaseModel):
 
 class FileTransferRecordModel(pydantic.BaseModel):
     url: pydantic.AnyHttpUrl
+    auth: Literal["none", "gafaelfawr"]
     file_info: SerializedStoredFileInfo
 
 

@@ -52,3 +52,7 @@ class Factory:
         if not isinstance(butler, DirectButler):
             raise TypeError("Server can only use a DirectButler")
         return butler
+
+    @property
+    def repository(self) -> str:
+        return self._repository

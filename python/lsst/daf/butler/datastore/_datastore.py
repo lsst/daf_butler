@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
     from ..datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
+    from ..datastores.fileDatastoreClient import FileDatastoreGetPayload
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .record_data import DatastoreRecordData
     from .stored_file_info import StoredDatastoreItemInfo
@@ -613,7 +614,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> object | None:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
         """Retrieve serializable data that can be used to execute a ``get()``.
 
         Parameters

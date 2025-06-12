@@ -112,6 +112,7 @@ from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDete
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
+from lsst.resources.http import HttpResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
@@ -3045,10 +3046,24 @@ class ButlerServerDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def test_transfers_from_remote_to_direct(self) -> None:
+        from lsst.daf.butler.remote_butler._remote_file_transfer_source import (
+            mock_file_transfer_uris_for_unit_test,
+        )
+
         self.target_butler = self.create_butler(None, "2")
         with create_test_server(TESTDIR) as server:
             self.source_butler = server.hybrid_butler
-            self.assertButlerTransfers()
+
+            def _remap_transfer_url(path: HttpResourcePath) -> HttpResourcePath:
+                # The Butler server returns HTTP URIs with a domain name that
+                # is not resolvable because there is no actual HTTP server
+                # involved in these tests.  Strip this first layer of
+                # indirection, and return the target of the redirect instead.
+                response = server.client.get(str(path), follow_redirects=False, headers=path._extra_headers)
+                return ResourcePath(str(response.next_request.url))
+
+            with mock_file_transfer_uris_for_unit_test(_remap_transfer_url):
+                self.assertButlerTransfers()
 
 
 class NullDatastoreTestCase(unittest.TestCase):
