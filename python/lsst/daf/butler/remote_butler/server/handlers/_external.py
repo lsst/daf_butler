@@ -32,11 +32,12 @@ __all__ = ()
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from ...._butler import Butler
 from ...._collection_type import CollectionType
-from ...._dataset_ref import DatasetRef
+from ...._dataset_ref import DatasetId, DatasetRef
 from ...._exceptions import DatasetNotFoundError
 from ....datastore import FileTransferRecord
 from ....datastore.stored_file_info import make_datastore_path_relative
@@ -64,7 +65,7 @@ from ...server_models import (
 )
 from .._dependencies import factory_dependency
 from .._factory import Factory
-from ._utils import set_default_data_id
+from ._utils import generate_file_download_uri, set_default_data_id
 
 external_router = APIRouter()
 """Routes reachable by end users that apply authorization checks before
@@ -213,26 +214,83 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
 
 
+@external_router.get(
+    "/v1/dataset/{dataset_id}/download",
+    summary="Return an HTTP redirect to a location where you can download the artifact file for the dataset.",
+)
+def redirect_to_dataset_download(
+    dataset_id: uuid.UUID,
+    component: str | None = None,
+    factory: Factory = Depends(factory_dependency),
+) -> RedirectResponse:
+    butler = factory.create_butler()
+    ref = butler.get_dataset(dataset_id, datastore_records=True)
+    if ref is None:
+        raise HTTPException(404, f"Dataset id '{dataset_id}' not found in repository '{factory.repository}'")
+
+    payload = butler._datastore.prepare_get_for_external_client(ref)
+    if payload is None or len(payload.file_info) == 0:
+        raise HTTPException(
+            404, f"No files are available for dataset id '{dataset_id}' in repository '{factory.repository}'"
+        )
+    for info in payload.file_info:
+        # Most datasets have a single file, which will have a component of
+        # `None`.  Datasets which are "disassembled composites" have multiple
+        # files, and you must specify the component to pick which one you want
+        # to download.
+        if info.datastoreRecords.component == component:
+            return RedirectResponse(status_code=307, url=str(info.url))
+
+    found_components = [info.datastoreRecords.component for info in payload.file_info]
+    if component is None:
+        raise HTTPException(
+            422,
+            f"Dataset '{dataset_id}' in repository '{factory.repository}' consists of multiple files. "
+            f" Specify the 'component' query parameter to select one of the following: {found_components}",
+        )
+    else:
+        raise HTTPException(
+            404,
+            f"Component '{component}' for dataset '{dataset_id}' in repository '{factory.repository}'"
+            f" not found.  Available components: {found_components}",
+        )
+
+
 @external_router.post(
     "/v1/file_transfer",
     summary="Retrieve information needed to transfer files to an external Butler repository",
 )
 def file_transfer(
-    request: GetFileTransferInfoRequestModel, factory: Factory = Depends(factory_dependency)
+    body: GetFileTransferInfoRequestModel,
+    request: Request,
+    factory: Factory = Depends(factory_dependency),
 ) -> GetFileTransferInfoResponseModel:
     butler = factory.create_butler()
-    files = butler._datastore.get_file_info_for_transfer(request.dataset_ids)
-    output = {id: [_serialize_file_transfer_record(r) for r in records] for id, records in files.items()}
+    files = butler._datastore.get_file_info_for_transfer(body.dataset_ids)
+    output = {}
+    for id, records in files.items():
+        output[id] = [
+            _serialize_file_transfer_record(r, id, str(request.base_url), factory.repository) for r in records
+        ]
     return GetFileTransferInfoResponseModel(files=output)
 
 
-def _serialize_file_transfer_record(record: FileTransferRecord) -> FileTransferRecordModel:
+def _serialize_file_transfer_record(
+    record: FileTransferRecord, dataset_id: DatasetId, base_url: str, repository: str
+) -> FileTransferRecordModel:
     file_info = record.file_info.to_simple()
     file_info.path = make_datastore_path_relative(file_info.path)
 
     return FileTransferRecordModel(
-        # TODO DM-51301: return a permanent URL
-        url=record.location.uri.generate_presigned_get_url(expiration_time_seconds=3600),
+        # Instead of directly returning a signed URL, return a "permanent" URL
+        # based on the dataset ID that redirects to the signed URL.
+        # This allows transfers to take longer than the URL expiration time.
+        url=generate_file_download_uri(
+            root_uri=base_url, repository=repository, dataset_id=dataset_id, component=file_info.component
+        ),
+        # Instruct the client that it will need to provide Gafaelfawr
+        # authentication headers to access these URLs.
+        auth="gafaelfawr",
         file_info=file_info,
     )
 

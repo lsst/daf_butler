@@ -27,7 +27,9 @@
 
 from __future__ import annotations
 
-from lsst.daf.butler import Butler
+from urllib.parse import quote
+
+from lsst.daf.butler import Butler, DatasetId
 from lsst.daf.butler.dimensions import DataCoordinate, SerializedDataId
 from lsst.daf.butler.registry import RegistryDefaults
 
@@ -37,3 +39,15 @@ def set_default_data_id(butler: Butler, data_id: SerializedDataId) -> None:  # n
     butler.registry.defaults = RegistryDefaults.from_data_id(
         DataCoordinate.standardize(data_id, universe=butler.dimensions)
     )
+
+
+def generate_file_download_uri(
+    root_uri: str, repository: str, dataset_id: DatasetId, component: str | None = None
+) -> str:  # numpydoc ignore=PR01
+    """Generate a URL pointing to the file download redirect endpoint."""
+    root_uri = root_uri.rstrip("/")
+    uri = f"{root_uri}/api/butler/repo/{quote(repository)}/v1/dataset/{quote(str(dataset_id))}/download"
+    if component:
+        return uri + f"?component={quote(component)}"
+    else:
+        return uri
