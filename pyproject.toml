@@ -77,7 +77,7 @@ zip-safe = true
 license-files = ["COPYRIGHT", "LICENSE", "bsd_license.txt", "gpl-v3.0.txt"]
 
 [tool.setuptools.package-data]
-"lsst.daf.butler" = ["py.typed", "configs/*.yaml", "configs/*/*.yaml"]
+"lsst.daf.butler" = ["py.typed", "configs/*.yaml", "configs/*/*.yaml", "tests/registry_data/*.yaml"]
 
 [tool.setuptools.dynamic]
 version = { attr = "lsst_versions.get_lsst_version" }
