@@ -99,7 +99,7 @@ SKYMAP_NAME = "SkyMap1"
 #
 # Edit this data structure and examine the resulting plots to add more test
 # dimension records; running with ``--show-detector-grid`` may be helpful.
-VISIT_DATA = {
+VISIT_DATA: dict[int, dict[str, Any]] = {
     1: {
         "physical_filter": "Cam1-G",
         "day_obs": 20210909,
@@ -143,31 +143,27 @@ VISIT_DATA = {
 #
 # Edit this data structure and examine the resulting plots to add more test
 # dimension records; running with ``--show-patch-grid`` may be helpful.
-TRACT_DATA = {
+TRACT_DATA: dict[int, dict[int, dict[str, Any]]] = {
     0: {
-        "patches": {
-            0: {"cell_x": 0, "cell_y": 0, "region": 458787},
-            1: {"cell_x": 1, "cell_y": 0, "region": 458790},
-            2: {"cell_x": 0, "cell_y": 1, "region": 458785},
-            3: {"cell_x": 1, "cell_y": 1, "region": 458788},
-            4: {"cell_x": 0, "cell_y": 2, "region": 458763},
-            5: {"cell_x": 1, "cell_y": 2, "region": 458766},
-        },
+        0: {"cell_x": 0, "cell_y": 0, "region": 458787},
+        1: {"cell_x": 1, "cell_y": 0, "region": 458790},
+        2: {"cell_x": 0, "cell_y": 1, "region": 458785},
+        3: {"cell_x": 1, "cell_y": 1, "region": 458788},
+        4: {"cell_x": 0, "cell_y": 2, "region": 458763},
+        5: {"cell_x": 1, "cell_y": 2, "region": 458766},
     },
     1: {
-        "patches": {
-            0: {"cell_x": 0, "cell_y": 0, "region": 458761},
-            1: {"cell_x": 1, "cell_y": 0, "region": 458764},
-            2: {"cell_x": 0, "cell_y": 1, "region": 458755},
-            3: {"cell_x": 1, "cell_y": 1, "region": 458758},
-            4: {"cell_x": 0, "cell_y": 2, "region": 458753},
-            5: {"cell_x": 1, "cell_y": 2, "region": 458756},
-        },
+        0: {"cell_x": 0, "cell_y": 0, "region": 458761},
+        1: {"cell_x": 1, "cell_y": 0, "region": 458764},
+        2: {"cell_x": 0, "cell_y": 1, "region": 458755},
+        3: {"cell_x": 1, "cell_y": 1, "region": 458758},
+        4: {"cell_x": 0, "cell_y": 2, "region": 458753},
+        5: {"cell_x": 1, "cell_y": 2, "region": 458756},
     },
 }
 
 
-def main():
+def main() -> None:
     """Run script."""
     parser = argparse.ArgumentParser(description="Create and examine spatial-topology registry test data.")
     default_filename = os.path.join(os.path.dirname(__file__), "spatial.yaml")
@@ -203,7 +199,7 @@ def main():
         write_yaml(namespace.filename)
 
 
-def make_plots(detector_grid: bool, patch_grid: bool):
+def make_plots(detector_grid: bool, patch_grid: bool) -> None:
     """Plot the regions of the dimension records defined by this script.
 
     Parameters
@@ -261,7 +257,7 @@ def make_plots(detector_grid: bool, patch_grid: bool):
     colors = iter(["red", "blue", "cyan", "green"])
     for (visit_id, visit_data), color in zip(VISIT_DATA.items(), colors, strict=False):
         for detector_id, pixel_indices in visit_data["detector_regions"].items():
-            label = f"visit={visit_id}"
+            label: str | None = f"visit={visit_id}"
             if label in labels_used:
                 label = None
             else:
@@ -282,7 +278,7 @@ def make_plots(detector_grid: bool, patch_grid: bool):
                 ),
             )
     for (tract_id, tract_data), color in zip(TRACT_DATA.items(), colors, strict=True):
-        for patch_id, patch_data in tract_data["patches"].items():
+        for patch_id, patch_data in tract_data.items():
             label = f"tract={tract_id}"
             if label in labels_used:
                 label = None
@@ -310,7 +306,7 @@ def make_plots(detector_grid: bool, patch_grid: bool):
     pyplot.show()
 
 
-def write_yaml(filename: str):
+def write_yaml(filename: str) -> None:
     """Write the YAML export script with dimension record definitions.
 
     Parameters
@@ -370,7 +366,7 @@ def write_yaml(filename: str):
     patch_records = []
     for tract_id, tract_data in TRACT_DATA.items():
         tract_vertices = []
-        for patch_id, patch_data in tract_data["patches"].items():
+        for patch_id, patch_data in tract_data.items():
             patch_polygon = PATCH_GRID_PIX.pixel(patch_data["region"])
             tract_vertices.extend(patch_polygon.getVertices())
             patch_record = patch_data.copy()
@@ -379,8 +375,7 @@ def write_yaml(filename: str):
             patch_record["tract"] = tract_id
             patch_record["skymap"] = SKYMAP_NAME
             patch_records.append(patch_record)
-        tract_record = tract_data.copy()
-        del tract_record["patches"]
+        tract_record: dict[str, Any] = {}
         tract_record["id"] = tract_id
         tract_record["skymap"] = SKYMAP_NAME
         tract_record["region"] = ConvexPolygon(tract_vertices)
@@ -428,7 +423,7 @@ def write_yaml(filename: str):
         yaml.dump(document, file, sort_keys=False)
 
 
-def lonlat_tuple(position: LonLat | Vector3d):
+def lonlat_tuple(position: LonLat | Vector3d) -> tuple[float, float]:
     """Transform a `lsst.sphgeom.LonLat` or `lsst.sphgeom.Vector3d` to a
     2-tuple of `float` degrees.
     """
@@ -505,7 +500,7 @@ def plot_hull(
     pixelization: Pixelization,
     wcs: WCS,
     indices: Iterable[int],
-    *callbacks: Callable[[None, np.ndarray, np.ndarray], None],
+    *callbacks: Callable[[list[int], np.ndarray, np.ndarray], None],
 ) -> None:
     """Perform plotting actions defined by callbacks on the convex hull of
     a series of skypix pixels.
@@ -529,13 +524,13 @@ def plot_hull(
         polygon = pixelization.pixel(index)
         vertices.extend(polygon.getVertices())
     polygon = ConvexPolygon(vertices)
-    center = project_polygon_center(wcs, polygon)
-    vertices = project_polygon_vertices(wcs, polygon)
+    projected_center = project_polygon_center(wcs, polygon)
+    projected_vertices = project_polygon_vertices(wcs, polygon)
     for callback in callbacks:
-        callback(indices, center, vertices)
+        callback(indices, projected_center, projected_vertices)
 
 
-def polygons(label: str | None = None, **kwargs: Any):
+def polygons(label: str | None = None, **kwargs: Any) -> Callable[[Any, np.ndarray, np.ndarray], None]:
     """Return a callback for use with `plot_pixels` and `plot_hull` that plots
     polygon vertices.
 
@@ -546,10 +541,15 @@ def polygons(label: str | None = None, **kwargs: Any):
         legend will only contain one entry for each call.
     **kwargs
         Forwarded to `matplotlib.pyplot.fill`.
+
+    Returns
+    -------
+    func : `~collections.abc.Callable`
+        Callable for use with `plot_hull` or `plot_pixels`.
     """
     labels_used = set()
 
-    def func(index, center, vertices):
+    def func(index: Any, center: np.ndarray, vertices: np.ndarray) -> None:
         if label is not None and label in labels_used:
             label_to_use = None
         else:
@@ -565,7 +565,7 @@ def polygons(label: str | None = None, **kwargs: Any):
     return func
 
 
-def index_labels(**kwargs: Any):
+def index_labels(**kwargs: Any) -> Callable[[int, np.ndarray, np.ndarray], None]:
     """Return a callback for use with `plot_pixels` and `plot_hull` that adds
     text annotations with pixel indices at pixel centers.
 
@@ -575,7 +575,7 @@ def index_labels(**kwargs: Any):
         Forwarded to `matplotlib.pyplot.text`.
     """
 
-    def func(index, center, vertices):
+    def func(index: int, center: np.ndarray, vertices: np.ndarray) -> None:
         pyplot.text(
             center[0],
             center[1],
@@ -587,7 +587,7 @@ def index_labels(**kwargs: Any):
     return func
 
 
-def labels(text: str, **kwargs: Any):
+def labels(text: str, **kwargs: Any) -> Callable[[Any, np.ndarray, np.ndarray], None]:
     """Return a callback for use with `plot_pixels` and `plot_hull` that adds
     text annotations with the given text.
 
@@ -599,7 +599,7 @@ def labels(text: str, **kwargs: Any):
         Forwarded to `matplotlib.pyplot.text`.
     """
 
-    def func(index, center, vertices):
+    def func(index: Any, center: np.ndarray, vertices: np.ndarray) -> None:
         pyplot.text(center[0], center[1], text, ha="center", va="center", **kwargs)
 
     return func
