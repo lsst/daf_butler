@@ -1,3 +1,74 @@
+Butler v29.1.0 (2025-06-13)
+===========================
+
+New Features
+------------
+
+- Added support in user expressions for explicit specification of bind identifiers with a preceding colon symbol.
+  Legacy format of bind identifiers without colon is still supported, but will be deprecated in the future. (`DM-38497 <https://rubinobs.atlassian.net/browse/DM-38497>`_)
+- Added a new ``--show-dataset-types`` argument (``-t``) to ``butler query-collections`` to list the dataset types in each collection.
+  Also added a new ``--exclude-dataset-types`` which allows a comma-separated list of string globs to be passed in for exclusion when dataset types are shown. (`DM-48975 <https://rubinobs.atlassian.net/browse/DM-48975>`_)
+- Added Pydantic serialization for ``DimensionRecordSet``. (`DM-49622 <https://rubinobs.atlassian.net/browse/DM-49622>`_)
+- Added ``FileDataset.to_simple`` and ``FileDataset.from_simple`` for serializing ``FileDataset`` instances. (`DM-49670 <https://rubinobs.atlassian.net/browse/DM-49670>`_)
+- Added a ``join_data_coordinate_table`` method to the ``Query`` class for uploading data IDs from Astropy tables.
+  This includes support for filling in required-dimension columns using constraints from a ``where`` string (for example now a table with just ``visit`` IDs along with ``instrument='LSSTCam'`` in the ``where`` string will work). (`DM-49949 <https://rubinobs.atlassian.net/browse/DM-49949>`_)
+- Added support to the user expression language for a ``GLOB(expression, pattern)`` function.
+  The function performs case-sensitive match of the string expression against the pattern.
+  The pattern can include ``*`` and ``?`` meta-characters that match any number or a single character. (`DM-50191 <https://rubinobs.atlassian.net/browse/DM-50191>`_)
+- Added the ability for Zip ingest to register any missing dimension records.
+  Note that if any datasets use ``visit`` that require registration then the records being registered will not fully define the visit and so can not be usable for graph building.
+  It is recommended that visits be defined first before ingest at this time. (`DM-50313 <https://rubinobs.atlassian.net/browse/DM-50313>`_)
+- Added support to the user expression language for UUID literals that can be used to query dataset IDs.
+  UUID literals are specified using function call syntax: ``UUID('hex-string')``. (`DM-50451 <https://rubinobs.atlassian.net/browse/DM-50451>`_)
+- Added ability for Butler to record timing metrics such as the amount of time spent in ``get()`` or ``put()`` and the number of times those are called.
+  A metrics object can be given to the ``Butler`` constructor to record everything, or alternatively a new context manager ``Butler.record_metrics`` can be used to record metrics for a specific usage. (`DM-50491 <https://rubinobs.atlassian.net/browse/DM-50491>`_)
+- ``RemoteButler`` can now be used as a source Butler in ``transfer_from``. (`DM-51075 <https://rubinobs.atlassian.net/browse/DM-51075>`_)
+
+
+API Changes
+-----------
+
+- * The ``unstore`` parameter for ``Butler.removeRuns()`` has been deprecated.
+    We now always remove the file artifacts when removing the collection.
+  * Added a ``unlink_from_chains`` parameter to ``Butler.removeRuns()`` to allow the RUN collections to be unlinked from their parent chains automatically. (`DM-50996 <https://rubinobs.atlassian.net/browse/DM-50996>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed an issue where ``find_first=False`` dataset queries would sometimes return duplicate results if more than one collection was being searched. (`DM-47201 <https://rubinobs.atlassian.net/browse/DM-47201>`_)
+- Query expressions now allow float columns to be compared with ``int`` literals.
+  Query expressions now allow ``OVERLAPS`` to be used to compare timespans with ``ingest_date.`` (`DM-47644 <https://rubinobs.atlassian.net/browse/DM-47644>`_)
+- ``Butler.ingest()`` will now register missing run collections instead of raising a ``MissingCollectionError``. (`DM-49670 <https://rubinobs.atlassian.net/browse/DM-49670>`_)
+- Fixed handling of expressions like ``"id=2"`` in contexts where ``"id"`` resolves unambigously to a dimension primary key column. (`DM-50465 <https://rubinobs.atlassian.net/browse/DM-50465>`_)
+- ``butler remove-runs`` will no longer block if a parallel process calls ``butler remove-runs`` on a run contained in the same collection chain. (`DM-50855 <https://rubinobs.atlassian.net/browse/DM-50855>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- ``Butler.transfer_from()`` now uses fewer database queries when inserting datasets of multiple dataset types, when some of the dataset types have the same dimensions. (`DM-49513 <https://rubinobs.atlassian.net/browse/DM-49513>`_)
+- Improve the performance of certain queries by moving ``WHERE`` clause terms down into subqueries. (`DM-50969 <https://rubinobs.atlassian.net/browse/DM-50969>`_)
+- ``Butler.transfer_from`` now uses fewer database queries. (`DM-51302 <https://rubinobs.atlassian.net/browse/DM-51302>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- ``retrieveArtifacts`` and ``transfer_from`` now transfer their artifacts using multiple threads. (`DM-31824 <https://rubinobs.atlassian.net/browse/DM-31824>`_)
+- * Reorganized the code for ``Butler.ingest`` and ``Butler.ingest_zip`` to share the code from ``Butler.transfer_from`` in order to provide consistent error messages for incompatible dataset types and to allow a future possibility of registering dataset types and dimension records as part of ``ingest_zip``.
+  * Removed the ``use_cache`` parameter from the ``DimensionUniverse`` constructor.
+    The universe is always cached and the remote butler now uses that cache and does not need to disable the cache. (`DM-50044 <https://rubinobs.atlassian.net/browse/DM-50044>`_)
+- Significantly sped up ``Butler.pruneDatasets`` by using parallelized artifact deletions. (`DM-50724 <https://rubinobs.atlassian.net/browse/DM-50724>`_)
+- Modified trash emptying in datastore such that only the datasets to be removed as part of the original butler request are the ones that are trashed immediately. (`DM-50727 <https://rubinobs.atlassian.net/browse/DM-50727>`_)
+- Modified CLI tooling to work with both click 8.1 and click 8.2. (`DM-50823 <https://rubinobs.atlassian.net/browse/DM-50823>`_)
+- Fixed handling of ``FileDatastore.transfer_from()`` such that it now works with chained datastores. (`DM-50935 <https://rubinobs.atlassian.net/browse/DM-50935>`_)
+- Reorganized ``Butler.removeRuns()`` to remove datasets in chunks to provide more feedback to the user and allow for restarting if the command fails for some reason. (`DM-50996 <https://rubinobs.atlassian.net/browse/DM-50996>`_)
+- Added a ``fallback_instrument`` to ObsCore configurations.
+  This instrument is used when an ObsCore record is constructed from a dataset type that has no instrument defined. (`DM-51269 <https://rubinobs.atlassian.net/browse/DM-51269>`_)
+- ``Butler.transfer_from()`` will now raise a `FileNotFoundError` while transferring files if a file listed in the database is not actually available on the filesystem.  Previously, it would silently skip the file. (`DM-51302 <https://rubinobs.atlassian.net/browse/DM-51302>`_)
+
+
 Butler v29.0.0 (2025-03-25)
 ===========================
 
