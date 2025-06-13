@@ -158,7 +158,9 @@ class DimensionTestCase(unittest.TestCase):
         seen: set[str] = set()
         for element_name in group.lookup_order:
             element = self.universe[element_name]
-            with self.subTest(required=group.required, implied=group.implied, element=element):
+            with self.subTest(
+                required=repr(group.required), implied=repr(group.implied), element=repr(element)
+            ):
                 seen.add(element_name)
                 self.assertLessEqual(element.minimal_group.required, seen)
                 if element_name in group.implied:
@@ -622,7 +624,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
             for dataId in split.chain():
-                with self.subTest(dataId=dataId):
+                with self.subTest(dataId=repr(dataId)):
                     self.assertEqual(dataId.required.keys(), dataId.dimensions.required)
                     self.assertEqual(
                         list(dataId.required.values()), [dataId[d] for d in dataId.dimensions.required]
@@ -632,7 +634,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                     )
                     self.assertEqual(dataId.required.keys(), dataId.dimensions.required)
             for dataId in itertools.chain(split.complete, split.expanded):
-                with self.subTest(dataId=dataId):
+                with self.subTest(dataId=repr(dataId)):
                     self.assertTrue(dataId.hasFull())
                     self.assertEqual(dataId.dimensions.names, dataId.mapping.keys())
                     self.assertEqual(
@@ -730,7 +732,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                         DataCoordinate.standardize(dataId, dimensions=newDimensions, htm7=12),
                     ]
                     for newDataId in newDataIds:
-                        with self.subTest(newDataId=newDataId, type=type(dataId)):
+                        with self.subTest(newDataId=repr(newDataId), type=repr(type(dataId))):
                             commonKeys = dataId.dimensions.required & newDataId.dimensions.required
                             self.assertTrue(commonKeys)
                             self.assertEqual(
@@ -775,7 +777,9 @@ class DataCoordinateTestCase(unittest.TestCase):
                     ),
                 ]
                 for newDataId in newCompleteDataIds:
-                    with self.subTest(dataId=dataId, newDataId=newDataId, type=type(dataId)):
+                    with self.subTest(
+                        dataId=repr(dataId), newDataId=repr(newDataId), type=repr(type(dataId))
+                    ):
                         self.assertEqual(dataId, newDataId)
                         self.assertTrue(newDataId.hasFull())
 
@@ -796,7 +800,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             (parentDataId,) = parentDataIds
             for lhs, rhs in itertools.product(split1.chain(), split2.chain()):
                 unioned = lhs.union(rhs)
-                with self.subTest(lhs=lhs, rhs=rhs, unioned=unioned):
+                with self.subTest(lhs=repr(lhs), rhs=repr(rhs), unioned=repr(unioned)):
                     self.assertEqual(unioned.dimensions, group1.union(group2))
                     self.assertEqual(unioned, parentDataId.subset(unioned.dimensions))
                     if unioned.hasFull():

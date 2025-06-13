@@ -318,7 +318,7 @@ class ButlerPutGetTests(TestCaseMixin):
             butler.collections.register(this_run)
             expected_collections.update({this_run})
 
-            with self.subTest(args=args):
+            with self.subTest(args=repr(args)):
                 kwargs: dict[str, Any] = {}
                 if not isinstance(args[0], DatasetRef):  # type: ignore
                     kwargs["run"] = this_run
@@ -1777,7 +1777,7 @@ class FileDatastoreButlerTests(ButlerTests):
                     )
                 importButler = Butler.from_config(importDir, run=self.default_run)
                 for ref in datasets:
-                    with self.subTest(ref=ref):
+                    with self.subTest(ref=repr(ref)):
                         # Test for existence by passing in the DatasetType and
                         # data ID separately, to avoid lookup by dataset_id.
                         self.assertTrue(importButler.exists(ref.datasetType, ref.dataId))

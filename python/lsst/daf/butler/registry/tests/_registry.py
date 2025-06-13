@@ -465,7 +465,7 @@ class RegistryTests(ABC):
         # Try a normal integer and something that looks like an int but
         # is not.
         for visit_id in (42, np.int64(42)):
-            with self.subTest(visit_id=visit_id, id_type=type(visit_id).__name__):
+            with self.subTest(visit_id=repr(visit_id), id_type=type(visit_id).__name__):
                 expanded = registry.expandDataId({"instrument": "DummyCam", "visit": visit_id})
                 self.assertEqual(expanded["visit"], int(visit_id))
                 self.assertIsInstance(expanded["visit"], int)
@@ -706,7 +706,7 @@ class RegistryTests(ABC):
 
         # Test for non-unique IDs, they can be re-imported multiple times.
         for run, idGenMode in ((2, DatasetIdGenEnum.DATAID_TYPE), (4, DatasetIdGenEnum.DATAID_TYPE_RUN)):
-            with self.subTest(idGenMode=idGenMode):
+            with self.subTest(idGenMode=repr(idGenMode)):
                 # Make dataset ref with reproducible dataset ID.
                 ref = DatasetRef(datasetTypeBias, dataIdBias1, run=f"run{run}", id_generation_mode=idGenMode)
                 (ref1,) = registry._importDatasets([ref])
@@ -3305,7 +3305,7 @@ class RegistryTests(ABC):
             )
 
         for test in test_data:
-            with self.subTest(test=test):
+            with self.subTest(test=repr(test)):
                 order_by = test.order_by.split(",")
                 keys = test.keys.split(",")
                 query = do_query(keys, test.datasets, test.collections).order_by(*order_by)

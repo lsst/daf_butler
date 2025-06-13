@@ -293,7 +293,7 @@ class CliLogTestBase:
 
     def _test_levels(self, log_levels: tuple[tuple[str, str, int, int, int, Any, Any, int], ...]) -> None:
         for level1, level2, x_pyroot, x_pylsst, x_pybutler, x_lsstroot, x_lsstbutler, x_lsstx in log_levels:
-            with self.subTest("Test different log levels", level1=level1, level2=level2):
+            with self.subTest("Test different log levels", level1=repr(level1), level2=repr(level2)):
                 self.runTest(
                     partial(
                         self.runner.invoke,

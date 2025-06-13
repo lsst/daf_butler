@@ -395,7 +395,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         deserialize_value.
         """
         for element, records in self.records.items():
-            with self.subTest(element=element):
+            with self.subTest(element=repr(element)):
                 for record1 in records:
                     raw1 = record1.serialize_key_value()
                     self.assertIsInstance(raw1, list)
@@ -412,7 +412,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         """
         adapter = pydantic.TypeAdapter(list[SerializedKeyValueDimensionRecord])
         for element, records in self.records.items():
-            with self.subTest(element=element):
+            with self.subTest(element=repr(element)):
                 rs1 = DimensionRecordSet(element, records, universe=self.universe)
                 raw = adapter.validate_json(adapter.dump_json(rs1.serialize_records()))
                 rs2 = DimensionRecordSet(element, universe=self.universe)
