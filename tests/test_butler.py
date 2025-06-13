@@ -1790,8 +1790,7 @@ class FileDatastoreButlerTests(ButlerTests):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         butler = self.create_empty_butler(writeable=True)
         # Load registry data with dimensions to hang datasets off of.
-        registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
-        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
+        butler.import_(filename=ResourcePath("resource://lsst.daf.butler/tests/registry_data/base.yaml"))
         # Add some RUN-type collection.
         run1 = "run1"
         butler.collections.register(run1)
@@ -3221,9 +3220,8 @@ def setup_module(module: types.ModuleType) -> None:
     clean_environment()
 
 
-def _get_test_data_path(filename: str) -> str:
-    registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
-    return os.path.join(registryDataDir, filename)
+def _get_test_data_path(filename: str) -> ResourcePath:
+    return ResourcePath(f"resource://lsst.daf.butler/tests/registry_data/{filename}")
 
 
 if __name__ == "__main__":

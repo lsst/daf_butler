@@ -29,12 +29,10 @@ from __future__ import annotations
 
 __all__ = ()
 
-import os
 import unittest
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from operator import attrgetter
-from typing import ClassVar
 from uuid import UUID
 
 import astropy.coordinates
@@ -93,9 +91,6 @@ class ButlerQueryTests(ABC, TestCaseMixin):
     implementations.
     """
 
-    data_dir: ClassVar[str]
-    """Root directory containing test data YAML files."""
-
     @abstractmethod
     def make_butler(self, *args: str) -> Butler:
         """Make Butler instance populated with data used in the tests below.
@@ -127,7 +122,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             Location of test data.
         """
         butler.import_(
-            filename=os.path.join(self.data_dir, filename),
+            filename=f"resource://lsst.daf.butler/tests/registry_data/{filename}",
             without_datastore=True,
         )
 
@@ -1145,45 +1140,49 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         ID or ``where`` string) constrains a different spatial dimension in the
         query result columns.
         """
-        butler = self.make_butler("hsc-rc2-subset.yaml")
+        butler = self.make_butler("base.yaml", "spatial.yaml")
         with butler.query() as query:
-            # This tests the case where the 'patch' region is needed for
+            # This tests the case where the 'tract' region is needed for
             # postprocessing, to compare against the visit region, but is not
             # needed in the resulting data ID.
-            self.assertEqual(
-                [(9813, 72)],
+            self.assertCountEqual(
+                [0],
                 [
-                    (data_id["tract"], data_id["patch"])
-                    for data_id in query.data_ids(["patch"]).where({"instrument": "HSC", "visit": 318})
+                    data_id["tract"]
+                    for data_id in query.data_ids(["tract"]).where({"instrument": "Cam1", "visit": 1})
                 ],
             )
-            self.assertEqual(
-                [(9813, 72)],
+            self.assertCountEqual(
+                [0],
                 [
-                    (data_id["tract"], data_id["patch"])
-                    for data_id in butler.query_data_ids(["patch"], instrument="HSC", visit=318)
+                    data_id["tract"]
+                    for data_id in butler.query_data_ids(["tract"], instrument="Cam1", visit=1)
                 ],
             )
 
-            # This tests the case where the 'patch' region is needed in
+            # This tests the case where the 'tract' region is needed in
             # postprocessing AND is also returned in the result rows.
             region_hex = (
-                "70cc2b4a68b7ecebbf32d931ecb816df3fffe573df5ab9a93f6d2ac3c7faf9ebbf39dad585e2e6de3fa"
-                "88934c311b9a93f55833497bef8ebbf15b3fe207ce5de3fae43c0300f6eab3f3e8709597bebebbf77d66"
-                "efa5115df3f05874a255d6eab3f"
+                "7022408b0df0feef3f20378b0df0fe6f3fe23d8b0df0fe8f3ff1d8af0460ffef3f"
+                "efcfaf0460ff6f3f75e0830388ff873f31aaeb0730ffef3fb0a5eb0730ff7f3f65"
+                "bdf00564ff873f31aaeb0730ffef3fb1aeeb0730ff7f3f65bdf00564ff873f3e1c"
+                "2f0fe0feef3f6e57630b28ff873fef52630b28ff873f911ade5e30fdef3f2d9626"
+                "47e4fd873f0d952647e4fd973f553df64a80fdef3fd438f64a80fd7f3f20af3838"
+                "20fe973f58462440b0fdef3f573d2440b0fd6f3fe2351b3044fe973f22408b0df0"
+                "feef3f20378b0df0fe6f3f61428b0df0fe8f3f"
             )
             self.assertEqual(
-                [(9813, 72, region_hex)],
+                [(0, region_hex)],
                 [
-                    (record.tract, record.id, record.region.encode().hex())
-                    for record in query.dimension_records("patch").where({"instrument": "HSC", "visit": 318})
+                    (record.id, record.region.encode().hex())
+                    for record in query.dimension_records("tract").where({"instrument": "Cam1", "visit": 1})
                 ],
             )
             self.assertEqual(
-                [(9813, 72, region_hex)],
+                [(0, region_hex)],
                 [
-                    (record.tract, record.id, record.region.encode().hex())
-                    for record in butler.query_dimension_records("patch", instrument="HSC", visit=318)
+                    (record.id, record.region.encode().hex())
+                    for record in butler.query_dimension_records("tract", instrument="Cam1", visit=1)
                 ],
             )
 
@@ -1732,16 +1731,16 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         expressions.
         """
         # Exposure is the only dimension that has boolean columns, and this set
-        # of data has all the pre-requisites for exposure set up.
-        butler = self.make_butler("hsc-rc2-subset.yaml")
+        # of data has most of the pre-requisites for exposure set up.
+        butler = self.make_butler("base.yaml", "spatial.yaml")
+        butler.registry.insertDimensionData("group", {"instrument": "Cam1", "name": "1"})
 
-        base_data = {"instrument": "HSC", "physical_filter": "HSC-R", "group": "903342", "day_obs": 20130617}
+        base_data = {"instrument": "Cam1", "physical_filter": "Cam1-R1", "group": "1", "day_obs": 20210909}
 
         TRUE_ID = 1000
         FALSE_ID_1 = 2001
         FALSE_ID_2 = 2002
         NULL_ID_1 = 3000
-        NULL_ID_2 = 903342  # already exists in the YAML file
         records = [
             {"id": TRUE_ID, "obs_id": "true-1", "can_see_sky": True},
             {"id": FALSE_ID_1, "obs_id": "false-1", "can_see_sky": False, "observation_type": "science"},
@@ -1755,18 +1754,18 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # This can be removed once the old query system is removed.
         def _run_registry_query(where: str) -> list[int]:
             return _get_exposure_ids_from_dimension_records(
-                butler.registry.queryDimensionRecords("exposure", where=where, instrument="HSC")
+                butler.registry.queryDimensionRecords("exposure", where=where, instrument="Cam1")
             )
 
         def _run_simple_query(where: str) -> list[int]:
             return _get_exposure_ids_from_dimension_records(
-                butler.query_dimension_records("exposure", where=where, instrument="HSC")
+                butler.query_dimension_records("exposure", where=where, instrument="Cam1")
             )
 
         def _run_query(where: str) -> list[int]:
             with butler.query() as query:
                 return _get_exposure_ids_from_dimension_records(
-                    query.dimension_records("exposure").where(where, instrument="HSC")
+                    query.dimension_records("exposure").where(where, instrument="Cam1")
                 )
 
         # Test boolean columns in the `where` string syntax.
@@ -1796,7 +1795,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # `= NULL` syntax never had test coverage in the old query system and
         # doesn't work for any column types.  Not worth fixing since we are
         # dropping that code soon.
-        nulls = [NULL_ID_1, NULL_ID_2]
+        nulls = [NULL_ID_1]
         non_nulls = [TRUE_ID, FALSE_ID_1, FALSE_ID_2]
         self.assertCountEqual(_run_query("exposure.can_see_sky = NULL"), nulls)
         self.assertCountEqual(_run_query("exposure.can_see_sky != NULL"), non_nulls)
@@ -1827,7 +1826,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
             def do_query(constraint: Predicate) -> list[int]:
                 return _get_exposure_ids_from_dimension_records(
-                    query.dimension_records("exposure").where(constraint, instrument="HSC")
+                    query.dimension_records("exposure").where(constraint, instrument="Cam1")
                 )
 
             # Boolean columns should be usable standalone as a Predicate.
@@ -1841,7 +1840,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
 
             # Searching for nulls works.
-            self.assertCountEqual(do_query(x.exposure.can_see_sky.is_null), [NULL_ID_1, NULL_ID_2])
+            self.assertCountEqual(do_query(x.exposure.can_see_sky.is_null), [NULL_ID_1])
 
             # Attempting to use operators that only apply to non-boolean types
             # is an error.

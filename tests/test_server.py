@@ -116,8 +116,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # these imports do not point at real files.
         direct_butler = server_instance.direct_butler
         DatastoreMock.apply(direct_butler)
-        direct_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        direct_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        direct_butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        direct_butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/datasets.yaml")
 
     def test_health_check(self):
         try:

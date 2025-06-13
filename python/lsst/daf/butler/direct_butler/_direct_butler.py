@@ -1879,18 +1879,15 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if format is None:
-            if filename is None:
-                raise TypeError("At least one of 'filename' or 'format' must be provided.")
-            else:
-                _, format = os.path.splitext(filename)  # type: ignore
-        elif filename is None:
+        if filename is None and format is not None:
             filename = ResourcePath(f"export.{format}", forceAbsolute=False)
         if directory is not None:
             directory = ResourcePath(directory, forceDirectory=True)
         # mypy doesn't think this will work but it does in python >= 3.10.
         if isinstance(filename, ResourcePathExpression):  # type: ignore
             filename = ResourcePath(filename, forceAbsolute=False)  # type: ignore
+            if format is None:
+                format = filename.getExtension()
             if not filename.isabs() and directory is not None:
                 potential = directory.join(filename)
                 exists_in_cwd = filename.exists()
@@ -1914,6 +1911,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     raise FileNotFoundError(
                         f"Export file could not be found in {filename.abspath()} or {potential.abspath()}."
                     )
+        elif format is None:
+            format = ".yaml"
         BackendClass: type[RepoImportBackend] = get_class_of(
             self._config["repo_transfer_formats"][format]["import"]
         )
