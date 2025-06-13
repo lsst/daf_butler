@@ -197,6 +197,9 @@ class RecordFactory:
         if dataset_config.datalink_url_fmt:
             record["access_url"] = dataset_config.datalink_url_fmt.format(**fmt_kws)
 
+        if self.config.obs_publisher_did_fmt:
+            record["obs_publisher_did"] = self.config.obs_publisher_did_fmt.format(**fmt_kws)
+
         extra_columns = {}
         if self.config.extra_columns:
             extra_columns.update(self.config.extra_columns)
