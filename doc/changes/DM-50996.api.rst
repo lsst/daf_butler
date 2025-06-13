@@ -1,3 +1,0 @@
-* The ``unstore`` parameter for ``Butler.removeRuns()`` has been deprecated.
-  We now always remove the file artifacts when removing the collection.
-* Added a ``unlink_from_chains`` parameter to ``Butler.removeRuns()`` to allow the RUN collections to be unlinked from their parent chains automatically.

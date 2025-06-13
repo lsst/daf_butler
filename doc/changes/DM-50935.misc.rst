@@ -1,1 +1,0 @@
-Fixed handling of ``FileDatastore.transfer_from()`` such that it now works with chained datastores.

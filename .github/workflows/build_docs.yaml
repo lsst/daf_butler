@@ -47,7 +47,7 @@ jobs:
         run: sudo apt-get install graphviz
 
       - name: Install documenteer
-        run: uv pip install --system 'documenteer[pipelines]==0.8.2'
+        run: uv pip install --system 'documenteer[pipelines]==0.8.2' sphinx-automodapi==0.19
 
       - name: Build documentation
         working-directory: ./doc
