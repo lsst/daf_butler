@@ -1,2 +1,0 @@
-Added ability for Butler to record timing metrics such as the amount of time spent in ``get()`` or ``put()`` and the number of times those are called.
-A metrics object can be given to the ``Butler`` constructor to record everything, or alternatively a new context manager ``Butler.record_metrics`` can be used to record metrics for a specific usage.
