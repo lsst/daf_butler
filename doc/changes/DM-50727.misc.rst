@@ -1,1 +1,0 @@
-Modified trash emptying in datastore such that only the datasets to be removed as part of the original butler request are the ones that are trashed immediately.

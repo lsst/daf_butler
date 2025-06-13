@@ -1,1 +1,0 @@
-``retrieveArtifacts`` and ``transfer_from`` now transfer their artifacts using multiple threads.
