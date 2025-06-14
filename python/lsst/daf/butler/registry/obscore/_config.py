@@ -183,6 +183,11 @@ class ObsCoreConfig(pydantic.BaseModel):
     dimension. Will be left unset if `None`. Can be dangerous to set this
     in a repository containing data from multiple instruments."""
 
+    obs_publisher_did_fmt: str | None = None
+    """Format string to generate an obs_publisher_did for a record. Assumes
+    that a single string is suitable for all results.
+    """
+
 
 class ConfigCollectionType(str, enum.Enum):
     """Enum class defining possible values for configuration attributes."""

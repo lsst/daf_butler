@@ -6,6 +6,7 @@ facility_name: daf_butler_test
 facility_map:
   DummyCam: derived_facility
 obs_collection: daf_butler_obs_collection
+obs_publisher_did_fmt: "ivo://org.rubinobs/something?id={id}"
 collections: []
 use_butler_uri: false
 dataset_types:
