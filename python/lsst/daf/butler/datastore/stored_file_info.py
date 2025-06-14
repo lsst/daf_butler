@@ -32,7 +32,7 @@ __all__ = ("SerializedStoredFileInfo", "StoredDatastoreItemInfo", "StoredFileInf
 import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pydantic
 
@@ -192,30 +192,44 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         The formatter to use for this dataset.
     path : `str`
         Path to the artifact associated with this dataset.
-    storageClass : `StorageClass`
-        The storage class associated with this dataset.
+    storageClass : `StorageClass` or `None`
+        The storage class associated with this dataset.  If `None`,
+        ``storage_class_name`` must be provided as a keyword argument.
     component : `str` or `None`, optional
         The component if disassembled.
     checksum : `str` or `None`, optional
         The checksum of the artifact.
     file_size : `int`
         The size of the file in bytes. -1 indicates the size is not known.
+    storage_class_name : `str`, optional
+        Name of the storage class.  This may be passed instead of
+        ``storageClass`` to defer loading storage class definitions (e.g. if a
+        butler configuration may not have been loaded yet).  Note that
+        ``storageClass=None`` must be passed explicitly (for backward
+        compatibility, it remains a positional argument with no default).
     """
 
-    storageClassFactory = StorageClassFactory()
+    storageClassFactory: ClassVar[StorageClassFactory] = StorageClassFactory()
 
     def __init__(
         self,
         formatter: FormatterParameter,
         path: str,
-        storageClass: StorageClass,
+        storageClass: StorageClass | None,
         component: str | None,
         checksum: str | None,
         file_size: int,
+        *,
+        storage_class_name: str | None = None,
     ):
         # Use these shenanigans to allow us to use a frozen dataclass
         object.__setattr__(self, "path", path)
-        object.__setattr__(self, "storageClass", storageClass)
+        if storageClass is not None:
+            object.__setattr__(self, "storage_class_name", storageClass.name)
+        else:
+            if storage_class_name is None:
+                raise TypeError("At least one of 'storageClass' and 'storage_class_name' must be provided.")
+            object.__setattr__(self, "storage_class_name", storage_class_name)
         object.__setattr__(self, "component", component)
         object.__setattr__(self, "checksum", checksum)
         object.__setattr__(self, "file_size", file_size)
@@ -238,8 +252,8 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     path: str
     """Path to dataset within Datastore."""
 
-    storageClass: StorageClass
-    """StorageClass associated with Dataset."""
+    storage_class_name: str
+    """Name of the storage class associated with this dataset."""
 
     component: str | None
     """Component associated with this file. Can be `None` if the file does
@@ -250,6 +264,11 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     file_size: int
     """Size of the serialized dataset in bytes."""
+
+    @property
+    def storageClass(self) -> StorageClass:
+        """Storage class associated with this dataset."""
+        return self.storageClassFactory.getStorageClass(self.storage_class_name)
 
     def rebase(self, ref: DatasetRef) -> StoredFileInfo:
         """Return a copy of the record suitable for a specified reference.
@@ -287,7 +306,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return dict(
             formatter=self.formatter,
             path=self.path,
-            storage_class=self.storageClass.name,
+            storage_class=self.storage_class_name,
             component=component,
             checksum=self.checksum,
             file_size=self.file_size,
@@ -336,12 +355,12 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             The newly-constructed item corresponding to the record.
         """
         # Convert name of StorageClass to instance
-        storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
         component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
         info = cls(
             formatter=record["formatter"],
             path=record["path"],
-            storageClass=storageClass,
+            storageClass=None,
+            storage_class_name=record["storage_class"],
             component=component,
             checksum=record["checksum"],
             file_size=record["file_size"],
@@ -353,7 +372,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return cls.from_record(dict(model))
 
     def update(self, **kwargs: Any) -> StoredFileInfo:
-        new_args = {}
+        new_args: dict[str, Any] = {"storageClass": None}  # so `storage_class_name` can be passed.
         for k in self.__slots__:
             if k in kwargs:
                 new_args[k] = kwargs.pop(k)
