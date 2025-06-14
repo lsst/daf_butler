@@ -755,7 +755,7 @@ class DatastoreTests(DatastoreTestsBase):
             if mode == "auto" and "auto" in self.ingestTransferModes and not self.canIngestNoTransferAuto:
                 continue
 
-            with self.subTest(mode=mode):
+            with self.subTest(mode=repr(mode)):
                 datastore = self.makeDatastore()
 
                 def succeed(
@@ -825,7 +825,7 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestTransfer(self) -> None:
         """Test ingesting existing files after transferring them."""
         for mode in ("copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"):
-            with self.subTest(mode=mode):
+            with self.subTest(mode=repr(mode)):
                 datastore = self.makeDatastore(mode)
 
                 def succeed(
@@ -1353,7 +1353,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
         # Try formatter that fails and formatter that fails and leaves
         # a file behind
         for formatter in (BadWriteFormatter, BadNoWriteFormatter):
-            with self.subTest(formatter=formatter):
+            with self.subTest(formatter=repr(formatter)):
                 # Monkey patch the formatter
                 datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 
@@ -1547,7 +1547,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
             # Choose different temp file depending on StorageClass
             testfile = testfile_j if sc.name.endswith("Json") else testfile_y
 
-            with self.subTest(datasetTypeName=typeName, dataId=dataId, sc=sc.name):
+            with self.subTest(datasetTypeName=typeName, dataId=repr(dataId), sc=sc.name):
                 ref = self.makeDatasetRef(typeName, dimensions, sc, dataId)
                 if any(accept):
                     datastore.put(metrics, ref)

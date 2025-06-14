@@ -275,7 +275,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
         for glob in (("*",), ("test_metric_comp",)):
-            with self.subTest(glob=glob):
+            with self.subTest(glob=repr(glob)):
                 tables = self._queryDatasets(
                     repo=testRepo.butler,
                     where="instrument='DummyCamComp' AND visit=423",

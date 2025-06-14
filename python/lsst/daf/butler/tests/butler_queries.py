@@ -1774,7 +1774,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             ("new-query", _run_query),
             ("simple", _run_simple_query),
         ]:
-            with self.subTest(test):
+            with self.subTest(repr(test)):
                 # Boolean columns should be usable standalone as an expression.
                 self.assertCountEqual(query_func("exposure.can_see_sky"), [TRUE_ID])
 
@@ -2438,7 +2438,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Limit of 3 lands at the boundary of a dataset type.
         # Limit of 4 is in the middle of a dataset type.
         for limit in [3, 4]:
-            with self.subTest(limit=limit):
+            with self.subTest(limit=repr(limit)):
                 results = butler._query_all_datasets("imported_g", limit=limit)
                 self.assertEqual(len(results), limit)
                 with self.assertLogs(level="WARNING") as log:

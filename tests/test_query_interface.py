@@ -806,7 +806,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                 (self.x.detector <= 5, "detector <= 5", detector <= 5),
                 (self.x.detector >= 5, "detector >= 5", detector >= 5),
             ]:
-                with self.subTest(string=string, detector=detector):
+                with self.subTest(string=string, detector=repr(detector)):
                     self.assertEqual(predicate.column_type, "bool")
                     self.assertEqual(str(predicate), string)
                     columns = qt.ColumnSet(self.universe.empty)
