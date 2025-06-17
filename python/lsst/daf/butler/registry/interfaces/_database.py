@@ -324,6 +324,7 @@ class Database(ABC):
         origin: int,
         namespace: str | None = None,
         writeable: bool = True,
+        allow_temporary_tables: bool = True,
     ) -> Database:
         """Construct a database from a SQLAlchemy URI.
 
@@ -342,15 +343,22 @@ class Database(ABC):
         writeable : `bool`, optional
             If `True`, allow write operations on the database, including
             ``CREATE TABLE``.
+        allow_temporary_tables : `bool`, optional
+            If `True`, database operations will be allowed to use temporary
+            tables.
+            If `False`, other SQL constructs will be used instead of temporary
+            tables when possible.
 
         Returns
         -------
         db : `Database`
             A new `Database` instance.
         """
-        return cls.fromEngine(
+        db = cls.fromEngine(
             cls.makeEngine(uri, writeable=writeable), origin=origin, namespace=namespace, writeable=writeable
         )
+        db._allow_temporary_tables = allow_temporary_tables
+        return db
 
     @abstractmethod
     def clone(self) -> Database:

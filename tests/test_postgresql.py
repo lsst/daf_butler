@@ -39,7 +39,7 @@ import sqlalchemy
 from lsst.daf.butler import Butler, ButlerConfig, StorageClassFactory, Timespan, ddl
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.direct_butler import DirectButler
-from lsst.daf.butler.registry import _RegistryFactory
+from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
 from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 
 try:
@@ -215,8 +215,9 @@ class PostgresqlRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def make_butler(self) -> Butler:
-        config = self.makeRegistryConfig()
+    def make_butler(self, config: RegistryConfig | None = None) -> Butler:
+        if config is None:
+            config = self.makeRegistryConfig()
         self.postgres.patch_registry_config(config)
         registry = _RegistryFactory(config).create_from_config()
 

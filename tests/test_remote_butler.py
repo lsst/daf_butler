@@ -36,6 +36,7 @@ from lsst.daf.butler._exceptions import UnknownButlerUserError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
+from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.tests import RegistryTests
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.resources import ResourcePath
@@ -179,7 +180,7 @@ class RemoteButlerRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.join(TESTDIR, "data", "registry")
 
-    def make_butler(self) -> Butler:
+    def make_butler(self, registry_config: RegistryConfig | None = None) -> Butler:
         return self.server_instance.hybrid_butler
 
     def testBasicTransaction(self):

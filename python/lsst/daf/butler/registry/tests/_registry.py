@@ -75,6 +75,7 @@ from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate, DataCoordinateSet, DimensionUniverse, SkyPixDimension
+from ...direct_butler import DirectButler
 from .._collection_summary import CollectionSummary
 from .._config import RegistryConfig
 from .._exceptions import (
@@ -85,7 +86,7 @@ from .._exceptions import (
     NoDefaultCollectionError,
     OrphanedRecordError,
 )
-from ..interfaces import ButlerAttributeExistsError
+from ..interfaces import ButlerAttributeExistsError, ReadOnlyDatabaseError
 from ..sql_registry import SqlRegistry
 
 _T = TypeVar("_T")
@@ -170,8 +171,13 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def make_butler(self) -> Butler:
+    def make_butler(self, registry_config: RegistryConfig | None = None) -> Butler:
         """Return the butler to be tested.
+
+        Parameters
+        ----------
+        registry_config : `RegistryConfig`, optional
+            Registry configuration used when instantiating the Butler.
 
         Returns
         -------
@@ -4228,3 +4234,15 @@ class RegistryTests(ABC):
         # Note that instrument governor resurrects here, even though there are
         # no datasets left with that governor.
         self.assertEqual(summary.governors, {"instrument": {"Cam1"}, "skymap": {"SkyMap1"}})
+
+    def test_temp_table_config(self) -> None:
+        config = self.makeRegistryConfig()
+        config["temporary_tables"] = False
+        self.assertEqual(config.areTemporaryTablesAllowed, False)
+        butler = self.make_butler(config)
+        if not isinstance(butler, DirectButler):
+            raise unittest.SkipTest("Test only makes sense for registry with direct database connection.")
+        self.assertEqual(butler._registry._db.supports_temporary_tables, False)
+        with self.assertRaisesRegex(ReadOnlyDatabaseError, "temporary tables"):
+            with butler._registry._db.temporary_table(...):
+                pass

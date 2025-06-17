@@ -35,7 +35,7 @@ from contextlib import contextmanager
 import sqlalchemy
 
 from lsst.daf.butler import Butler, Config, ddl
-from lsst.daf.butler.registry import _RegistryFactory
+from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests import makeTestRepo
@@ -207,9 +207,11 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def make_butler(self) -> Butler:
+    def make_butler(self, registry_config: RegistryConfig | None = None) -> Butler:
         config = Config()
-        config["registry"] = self.makeRegistryConfig()
+        if registry_config is None:
+            registry_config = self.makeRegistryConfig()
+        config["registry"] = registry_config
         return makeTestRepo(self.root, config=config)
 
 
@@ -231,8 +233,8 @@ class ClonedSqliteFileRegistryNameKeyCollMgrUUIDTestCase(
 ):
     """Test that NameKeyCollectionManager still works after cloning."""
 
-    def make_butler(self) -> Butler:
-        original = super().make_butler()
+    def make_butler(self, registry_config: RegistryConfig | None = None) -> Butler:
+        original = super().make_butler(registry_config)
         return original.clone()
 
 
@@ -259,10 +261,12 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def make_butler(self) -> Butler:
+    def make_butler(self, registry_config: RegistryConfig | None = None) -> Butler:
         # This helper function always return in-memory registry
         # with default managers.
-        return create_populated_sqlite_registry()
+        if registry_config is None:
+            registry_config = self.makeRegistryConfig()
+        return create_populated_sqlite_registry(registry_config=registry_config)
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which
