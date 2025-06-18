@@ -38,6 +38,7 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
+    import fastapi
     import httpx
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
@@ -650,6 +651,24 @@ def _timeout_twice():
         return DEFAULT
 
     return timeout
+
+
+@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
+class QueryLimitsTestCase(unittest.IsolatedAsyncioTestCase):
+    """Test details of the code that limits the maximum number of concurrent
+    queries in the server.
+    """
+
+    async def test_query_limits(self):
+        limits = lsst.daf.butler.remote_butler.server.handlers._query_limits.QueryLimits()
+
+        await limits.enforce_query_limits("user1")  # under limit, doesn't raise
+        async with limits.track_query("user1"):
+            await limits.enforce_query_limits("user1")  # under limit, doesn't raise
+            async with limits.track_query("user1"):
+                with self.assertRaises(fastapi.HTTPException) as exc:
+                    await limits.enforce_query_limits("user1")
+                self.assertEqual(exc.exception.status_code, 429)
 
 
 if __name__ == "__main__":

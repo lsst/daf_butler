@@ -73,7 +73,7 @@ class StreamingQuery(Protocol[_TContext]):
         """
 
 
-async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
+async def execute_streaming_query(query: StreamingQuery, user: str) -> StreamingResponse:
     """Run a query, streaming the response incrementally, one page at a time,
     as newline-separated chunks of JSON.
 
@@ -83,6 +83,8 @@ async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
         Callers should define a class implementing the ``StreamingQuery``
         protocol to specify the inner logic that will be called during
         query execution.
+    user : `str`
+        Name of user running the query -- used to enforce usage limits.
 
     Returns
     -------
@@ -109,9 +111,9 @@ async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
     # streaming queries will be started, but there is no guarantee that the
     # StreamingResponse generator function will ever be called, so we can't
     # guarantee that we release the slot if we reserve one here.
-    await _query_limits.enforce_query_limits()
+    await _query_limits.enforce_query_limits(user)
 
-    output_generator = _stream_query_pages(query)
+    output_generator = _stream_query_pages(query, user)
     return StreamingResponse(
         output_generator,
         media_type="application/jsonlines",
@@ -123,7 +125,7 @@ async def execute_streaming_query(query: StreamingQuery) -> StreamingResponse:
     )
 
 
-async def _stream_query_pages(query: StreamingQuery) -> AsyncIterator[str]:
+async def _stream_query_pages(query: StreamingQuery, user: str) -> AsyncIterator[str]:
     """Stream the query output with one page object per line, as
     newline-delimited JSON records in the "JSON Lines" format
     (https://jsonlines.org/).
@@ -131,7 +133,7 @@ async def _stream_query_pages(query: StreamingQuery) -> AsyncIterator[str]:
     When it takes longer than 15 seconds to get a response from the DB,
     sends a keep-alive message to prevent clients from timing out.
     """
-    async with _query_limits.track_query():
+    async with _query_limits.track_query(user):
         # `None` signals that there is no more data to send.
         queue = asyncio.Queue[QueryExecuteResultData | None](1)
         async with asyncio.TaskGroup() as tg:

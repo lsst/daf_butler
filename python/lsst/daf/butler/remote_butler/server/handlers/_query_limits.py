@@ -27,10 +27,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from logging import getLogger
 
 from fastapi import HTTPException
+
+_LOG = getLogger(__name__)
 
 # Restrict the maximum number of streaming queries that can be running
 # simultaneously, to prevent the database connection pool and the thread pool
@@ -46,10 +50,13 @@ _QUERY_RETRY_SECONDS = 5
 
 
 class QueryLimits:
+    """Tracks number of concurrent running queries, and applies limits."""
+
     def __init__(self) -> None:
         self._active_queries = 0
+        self._active_users: Counter[str] = Counter()
 
-    async def enforce_query_limits(self) -> None:
+    async def enforce_query_limits(self, user: str) -> None:
         if self._active_queries >= _MAXIMUM_CONCURRENT_STREAMING_QUERIES:
             await _block_retry_for_unit_test()
             raise HTTPException(
@@ -58,13 +65,29 @@ class QueryLimits:
                 headers={"retry-after": str(_QUERY_RETRY_SECONDS)},
             )
 
+        # This is kind of a bad hack, but is better than nothing for now.  The
+        # effect of this will be to limit users to 2 queries per server
+        # replica, which is a non-deterministic but small number.
+        # There will be some backpressure from the 429 responses as they
+        # attempt to bounce to other replicas on retry.
+        if self._active_users[user] >= 2:
+            _LOG.warning(f"User '{user}' is running many queries simultaneously.")
+            raise HTTPException(
+                status_code=429,  # too many requests
+                detail=f"User {user} has too many queries running already."
+                " Wait for your existing queries to complete, then try again.",
+                headers={"retry-after": str(_QUERY_RETRY_SECONDS)},
+            )
+
     @asynccontextmanager
-    async def track_query(self) -> AsyncIterator[None]:
+    async def track_query(self, user: str) -> AsyncIterator[None]:
         try:
             self._active_queries += 1
+            self._active_users[user] += 1
             await _block_query_for_unit_test()
             yield
         finally:
+            self._active_users[user] -= 1
             self._active_queries -= 1
 
 
