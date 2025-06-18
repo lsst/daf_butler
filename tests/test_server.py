@@ -43,6 +43,7 @@ try:
     from fastapi.testclient import TestClient
 
     import lsst.daf.butler.remote_butler._query_results
+    import lsst.daf.butler.remote_butler.server.handlers._query_limits
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
     from lsst.daf.butler.remote_butler._authentication import (
@@ -517,20 +518,20 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         with (
             patch.object(
-                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                lsst.daf.butler.remote_butler.server.handlers._query_limits,
                 "_MAXIMUM_CONCURRENT_STREAMING_QUERIES",
                 new=1,
             ),
             patch.object(
-                lsst.daf.butler.remote_butler.server.handlers._query_streaming, "_QUERY_RETRY_SECONDS", new=1
+                lsst.daf.butler.remote_butler.server.handlers._query_limits, "_QUERY_RETRY_SECONDS", new=1
             ),
             patch.object(
-                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                lsst.daf.butler.remote_butler.server.handlers._query_limits,
                 "_block_query_for_unit_test",
                 new=AsyncMock(wraps=block_first_request),
             ) as mock_first_client,
             patch.object(
-                lsst.daf.butler.remote_butler.server.handlers._query_streaming,
+                lsst.daf.butler.remote_butler.server.handlers._query_limits,
                 "_block_retry_for_unit_test",
                 new=AsyncMock(wraps=block_second_request),
             ) as mock_second_client,
