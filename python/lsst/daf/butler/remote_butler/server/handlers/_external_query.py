@@ -31,10 +31,11 @@ __all__ = ("query_router",)
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import NamedTuple
+from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from safir.dependencies.gafaelfawr import auth_dependency
 
 from lsst.daf.butler import Butler, DataCoordinate, DimensionGroup
 from lsst.daf.butler.remote_butler.server_models import (
@@ -90,10 +91,12 @@ class _StreamQueryDriverExecute(StreamingQuery[_QueryContext]):
 
 @query_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
 async def query_execute(
-    request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
+    request: QueryExecuteRequestModel,
+    factory: Annotated[Factory, Depends(factory_dependency)],
+    user_name: Annotated[str, Depends(auth_dependency)],
 ) -> StreamingResponse:
     query = _StreamQueryDriverExecute(request, factory)
-    return await execute_streaming_query(query)
+    return await execute_streaming_query(query, user_name)
 
 
 class _QueryAllDatasetsContext(NamedTuple):
@@ -135,10 +138,12 @@ class _StreamQueryAllDatasets(StreamingQuery[_QueryAllDatasetsContext]):
     "/v1/query/all_datasets", summary="Query the Butler database across multiple dataset types."
 )
 async def query_all_datasets_execute(
-    request: QueryAllDatasetsRequestModel, factory: Factory = Depends(factory_dependency)
+    request: QueryAllDatasetsRequestModel,
+    factory: Annotated[Factory, Depends(factory_dependency)],
+    user_name: Annotated[str, Depends(auth_dependency)],
 ) -> StreamingResponse:
     query = _StreamQueryAllDatasets(request, factory)
-    return await execute_streaming_query(query)
+    return await execute_streaming_query(query, user_name)
 
 
 @query_router.post(
