@@ -187,7 +187,10 @@ class SqlRegistry:
 
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
-            config.connectionString, origin=config.get("origin", 0), namespace=config.get("namespace")
+            config.connectionString,
+            origin=config.get("origin", 0),
+            namespace=config.get("namespace"),
+            allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
         managerTypes = RegistryManagerTypes.fromConfig(config)
         managers = managerTypes.makeRepo(database, dimensionConfig)
@@ -230,6 +233,7 @@ class SqlRegistry:
             origin=config.get("origin", 0),
             namespace=config.get("namespace"),
             writeable=writeable,
+            allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
         managerTypes = RegistryManagerTypes.fromConfig(config)
         with database.session():

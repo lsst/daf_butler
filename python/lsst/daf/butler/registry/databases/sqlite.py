@@ -74,6 +74,11 @@ class SqliteDatabase(Database):
     writeable : `bool`, optional
         If `True`, allow write operations on the database, including
         ``CREATE TABLE``.
+    allow_temporary_tables : `bool`, optional
+        If `True`, database operations will be allowed to use temporary
+        tables.
+        If `False`, other SQL constructs will be used instead of temporary
+        tables when possible.
 
     Notes
     -----
@@ -90,6 +95,7 @@ class SqliteDatabase(Database):
         origin: int,
         namespace: str | None = None,
         writeable: bool = True,
+        allow_temporary_tables: bool = True,
     ):
         filename = _find_database_filename(engine, namespace)
         self._init(
@@ -99,6 +105,7 @@ class SqliteDatabase(Database):
             writeable=writeable,
             filename=filename,
             metadata=None,
+            allow_temporary_tables=allow_temporary_tables,
         )
 
     def _init(
@@ -110,9 +117,16 @@ class SqliteDatabase(Database):
         writeable: bool = True,
         filename: str | None,
         metadata: DatabaseMetadata | None,
+        allow_temporary_tables: bool,
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
-        super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
+        super().__init__(
+            origin=origin,
+            engine=engine,
+            namespace=namespace,
+            metadata=metadata,
+            allow_temporary_tables=allow_temporary_tables,
+        )
         self._writeable = writeable
         self.filename = filename
 
@@ -125,6 +139,7 @@ class SqliteDatabase(Database):
             writeable=self._writeable,
             filename=self.filename,
             metadata=self._metadata,
+            allow_temporary_tables=self._allow_temporary_tables,
         )
         return clone
 

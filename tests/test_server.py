@@ -73,6 +73,7 @@ from lsst.daf.butler import (
     DatasetNotFoundError,
     DatasetRef,
     DatasetType,
+    InvalidQueryError,
     LabeledButlerFactory,
     MissingDatasetTypeError,
     NoDefaultCollectionError,
@@ -581,6 +582,14 @@ class ButlerClientServerTestCase(unittest.TestCase):
             ),
         ).json()
         self.assertCountEqual(json["collections"], ["imported_g", "imported_r"])
+
+    def test_oversized_data_coordinate_upload(self):
+        with self.butler.query() as query:
+            ref = self.simple_dataset_ref
+            data_id = ref.dataId
+            data_coordinates = [DataCoordinate.standardize(data_id, visit=x) for x in range(100_001)]
+            with self.assertRaisesRegex(InvalidQueryError, "data coordinate rows"):
+                list(query.join_data_coordinates(data_coordinates).datasets(ref.datasetType, ref.run))
 
 
 @unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")

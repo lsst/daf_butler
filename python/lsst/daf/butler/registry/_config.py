@@ -119,3 +119,24 @@ class RegistryConfig(ConfigSubset):
         (`sqlalchemy.engine.url.URL`).
         """
         return ConnectionStringFactory.fromConfig(self)
+
+    @property
+    def areTemporaryTablesAllowed(self) -> bool:
+        """Return `True` if the database allows creating temporary tables for
+        read operations; `False` otherwise.
+
+        By default this is `True`, because there is a performance penalty
+        for some queries if temporary tables cannot be used.
+
+        This should be set to `False` when using a Postgres hot standby using
+        physical replication or an AlloyDB read pool, since these backends
+        do not support temporary tables.
+        """
+        key = "temporary_tables"
+        value = self.get(key)
+        if value is None:
+            return True
+        elif isinstance(value, bool):
+            return value
+
+        raise ValueError(f"Unexpected value '{value}' for '{key}' in registry configuration")

@@ -65,6 +65,10 @@ class PostgresqlDatabase(Database):
     writeable : `bool`, optional
         If `True`, allow write operations on the database, including
         ``CREATE TABLE``.
+    allow_temporary_tables : `bool`, optional
+        If `True`, database operations will be allowed to use temporary tables.
+        If `False`, other SQL constructs will be used instead of temporary
+        tables when possible.
 
     Notes
     -----
@@ -85,6 +89,7 @@ class PostgresqlDatabase(Database):
         origin: int,
         namespace: str | None = None,
         writeable: bool = True,
+        allow_temporary_tables: bool = True,
     ):
         with engine.connect() as connection:
             # `Any` to make mypy ignore the line below, can't use type: ignore
@@ -114,6 +119,7 @@ class PostgresqlDatabase(Database):
             dbname=dsn.get("dbname"),
             metadata=None,
             pg_version=pg_version,
+            allow_temporary_tables=allow_temporary_tables,
         )
 
     def _init(
@@ -126,9 +132,16 @@ class PostgresqlDatabase(Database):
         dbname: str,
         metadata: DatabaseMetadata | None,
         pg_version: tuple[int, int],
+        allow_temporary_tables: bool = True,
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
-        super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
+        super().__init__(
+            origin=origin,
+            engine=engine,
+            namespace=namespace,
+            metadata=metadata,
+            allow_temporary_tables=allow_temporary_tables,
+        )
         self._writeable = writeable
         self.dbname = dbname
         self._pg_version = pg_version
@@ -143,6 +156,7 @@ class PostgresqlDatabase(Database):
             dbname=self.dbname,
             metadata=self._metadata,
             pg_version=self._pg_version,
+            allow_temporary_tables=self._allow_temporary_tables,
         )
         return clone
 

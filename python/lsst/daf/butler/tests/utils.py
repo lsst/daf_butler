@@ -47,7 +47,7 @@ from .. import Butler, ButlerConfig, Config, DatasetRef, StorageClassFactory, Ti
 from .._collection_type import CollectionType
 from ..datastore import NullDatastore
 from ..direct_butler import DirectButler
-from ..registry.sql_registry import SqlRegistry
+from ..registry.sql_registry import RegistryConfig, SqlRegistry
 from ..tests import MetricsExample, addDatasetType
 
 if TYPE_CHECKING:
@@ -129,13 +129,18 @@ def safeTestTempDir(default_base: str) -> Iterator[str]:
         removeTestTempDir(root)
 
 
-def create_populated_sqlite_registry(*args: ResourcePathExpression) -> Butler:
+def create_populated_sqlite_registry(
+    *args: ResourcePathExpression, registry_config: RegistryConfig | None = None
+) -> Butler:
     """Create an in-memory registry-only sqlite butler and populate it.
 
     Parameters
     ----------
     *args : convertible to `lsst.resources.ResourcePath`
         Paths to export YAML files that should be imported.
+    registry_config : ``RegistryConfig``, optional
+        Registry configuration to use as the basis for the Butler
+        configuration.
 
     Returns
     -------
@@ -143,6 +148,8 @@ def create_populated_sqlite_registry(*args: ResourcePathExpression) -> Butler:
         New butler populated with the specified import files.
     """
     config = ButlerConfig()
+    if registry_config is not None:
+        config["registry"] = registry_config
     config[".registry.db"] = "sqlite://"
     registry = SqlRegistry.createFromConfig(config["registry"])
     butler = DirectButler(
