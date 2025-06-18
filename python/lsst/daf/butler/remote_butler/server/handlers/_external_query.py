@@ -51,6 +51,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryInputs,
 )
 
+from ...._exceptions import InvalidQueryError
 from ...._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
 from ....queries import Query
 from ....queries.driver import QueryDriver, QueryTree
@@ -189,8 +190,12 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
         default_collections=(),
         default_data_id=DataCoordinate.from_simple(query.default_data_id, universe=butler.dimensions),
     ) as driver:
+        max_upload_rows = 100_000
+        uploaded_rows = 0
         for input in query.additional_query_inputs:
             if input.type == "materialized":
+                if not driver.db.supports_temporary_tables:
+                    raise InvalidQueryError("'materialize' is not currently supported by Butler server")
                 driver.materialize(
                     input.tree.to_query_tree(butler.dimensions),
                     DimensionGroup.from_simple(input.dimensions, butler.dimensions),
@@ -199,12 +204,15 @@ def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryC
                     allow_duplicate_overlaps=input.allow_duplicate_overlaps,
                 )
             elif input.type == "upload":
-                (
-                    driver.upload_data_coordinates(
-                        DimensionGroup.from_simple(input.dimensions, butler.dimensions),
-                        [tuple(r) for r in input.rows],
-                        key=input.key,
-                    ),
+                uploaded_rows += len(input.rows)
+                if len(input.rows) > max_upload_rows:
+                    raise InvalidQueryError(
+                        f"Uploaded data coordinate rows exceed limit of {max_upload_rows}"
+                    )
+                driver.upload_data_coordinates(
+                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
+                    [tuple(r) for r in input.rows],
+                    key=input.key,
                 )
 
         yield _QueryContext(driver=driver, tree=tree)
