@@ -430,10 +430,10 @@ class DafButlerRecordFactory(RecordFactory):
         if timespan is not None:
             if timespan.begin is not None:
                 t_min = cast(astropy.time.Time, timespan.begin)
-                record["t_min"] = float(t_min.mjd)
+                record["t_min"] = float(t_min.utc.mjd)
             if timespan.end is not None:
                 t_max = cast(astropy.time.Time, timespan.end)
-                record["t_max"] = float(t_max.mjd)
+                record["t_max"] = float(t_max.utc.mjd)
 
         region = dataId.region
         if self.exposure.name in dataId:
