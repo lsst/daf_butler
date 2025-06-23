@@ -179,6 +179,10 @@ class RecordFactory:
             record["obs_collection"] = self.config.obs_collection
         record["access_format"] = dataset_config.access_format
 
+        if dataset_config.s_xel is not None:
+            record["s_xel1"] = dataset_config.s_xel[0]
+            record["s_xel2"] = dataset_config.s_xel[1]
+
         dataId = ref.dataId
         dataset_type_name = ref.datasetType.name
 
@@ -190,6 +194,11 @@ class RecordFactory:
         fmt_kws.update(run=ref.run)
         fmt_kws.update(dataset_type=dataset_type_name)
         fmt_kws.update(record)
+
+        # In some cases we would like some keys to be duplicated
+        # with different names. For example making an exposure be a visit.
+        self.finalize_format_keywords(fmt_kws)
+
         if dataset_config.obs_id_fmt:
             record["obs_id"] = dataset_config.obs_id_fmt.format(**fmt_kws)
             fmt_kws["obs_id"] = record["obs_id"]
@@ -330,6 +339,17 @@ class RecordFactory:
                 raise
         return record
 
+    def finalize_format_keywords(self, format_kws: dict[str, Any]) -> None:
+        """Modify the formatting dict as required after it has been populated
+        with generic content.
+
+        Parameters
+        ----------
+        format_kws : `dict`
+            Dictionary that might be modified in place.
+        """
+        pass
+
     @classmethod
     def get_record_type_from_universe(cls, universe: DimensionUniverse) -> type[RecordFactory]:
         namespace = universe.namespace
@@ -469,3 +489,9 @@ class DafButlerRecordFactory(RecordFactory):
             else:
                 return None, None
         return region_dim, "region"
+
+    def finalize_format_keywords(self, format_kws: dict[str, Any]) -> None:
+        # If we have an exposure but do not have a visit, copy the exposure
+        # into the visit field.
+        if "exposure" in format_kws and "visit" not in format_kws:
+            format_kws["visit"] = format_kws["exposure"]
