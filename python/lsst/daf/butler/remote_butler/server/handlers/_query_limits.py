@@ -57,6 +57,7 @@ class QueryLimits:
         self._active_users: Counter[str] = Counter()
 
     async def enforce_query_limits(self, user: str) -> None:
+        return
         if self._active_queries >= _MAXIMUM_CONCURRENT_STREAMING_QUERIES:
             await _block_retry_for_unit_test()
             raise HTTPException(
