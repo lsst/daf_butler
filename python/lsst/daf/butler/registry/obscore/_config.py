@@ -101,6 +101,11 @@ class DatasetTypeConfig(pydantic.BaseModel):
     """Value for the ``obs_collection`` column, if specified it overrides
     global value in `ObsCoreConfig`."""
 
+    s_xel: tuple[int, int] | None = None
+    """The number of pixels in the first and second dimension of the dataset
+    type.
+    """
+
     extra_columns: (
         None | (dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig])
     ) = None

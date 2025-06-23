@@ -179,6 +179,10 @@ class RecordFactory:
             record["obs_collection"] = self.config.obs_collection
         record["access_format"] = dataset_config.access_format
 
+        if dataset_config.s_xel is not None:
+            record["s_xel1"] = dataset_config.s_xel[0]
+            record["s_xel2"] = dataset_config.s_xel[1]
+
         dataId = ref.dataId
         dataset_type_name = ref.datasetType.name
 
