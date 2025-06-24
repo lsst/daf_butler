@@ -60,7 +60,7 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
 
         for regConf, fileName in zip(regConfigs, self.configFiles, strict=True):
             conStr = ConnectionStringFactory.fromConfig(regConf, db_auth_path=self.db_auth_path)
-            with self.subTest(confFile=fileName):
+            with self.subTest(confFile=repr(fileName)):
                 self.assertEqual(
                     conStr.render_as_string(hide_password=False),
                     regConf["expected"],
