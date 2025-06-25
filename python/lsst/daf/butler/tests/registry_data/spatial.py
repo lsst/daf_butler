@@ -58,6 +58,7 @@ from matplotlib import pyplot
 import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
 from lsst.sphgeom import (
     ConvexPolygon,
+    HealpixPixelization,
     HtmPixelization,
     LonLat,
     Mq3cPixelization,
@@ -183,6 +184,20 @@ def main() -> None:
         help="Show the skypix grid used to define patch regions.",
     )
     parser.add_argument(
+        "--no-common-skypix-grid",
+        dest="common_skypix_grid",
+        action="store_false",
+        default=True,
+        help="Do not show the common skypix grid.",
+    )
+    parser.add_argument(
+        "--show-healpix-grid",
+        type=int,
+        default=[],
+        help="Show a HEALPIX grid of this level.",
+        action="append",
+    )
+    parser.add_argument(
         "--no-plot", action="store_false", dest="make_plots", default=True, help="Do not plot the regions."
     )
     parser.add_argument(
@@ -194,12 +209,19 @@ def main() -> None:
     )
     namespace = parser.parse_args()
     if namespace.make_plots:
-        make_plots(detector_grid=namespace.show_detector_grid, patch_grid=namespace.show_patch_grid)
+        make_plots(
+            detector_grid=namespace.show_detector_grid,
+            patch_grid=namespace.show_patch_grid,
+            healpix_grids=namespace.show_healpix_grid,
+            common_skypix_grid=namespace.common_skypix_grid,
+        )
     if namespace.write_yaml:
         write_yaml(namespace.filename)
 
 
-def make_plots(detector_grid: bool, patch_grid: bool) -> None:
+def make_plots(
+    detector_grid: bool, patch_grid: bool, common_skypix_grid: bool = True, healpix_grids: Iterable[int] = ()
+) -> None:
     """Plot the regions of the dimension records defined by this script.
 
     Parameters
@@ -209,6 +231,10 @@ def make_plots(detector_grid: bool, patch_grid: bool) -> None:
         regions.
     patch_grid : `bool`
         If `True`, show the skypix grid used to define tract and patch regions.
+    common_skypix_grid : `bool`, optional
+        If `True`, show the common skypix grid.
+    healpix_grids : `~collections.abc.Iterable` [`int`], optional
+        Levels of healpix grids to display.
     """
     parent_index = PARENT_PIX.index(UnitVector3d(1, 0, 0))
     parent_pixel = PARENT_PIX.pixel(parent_index)
@@ -219,13 +245,14 @@ def make_plots(detector_grid: bool, patch_grid: bool) -> None:
     labels_used = set()
     pyplot.figure(figsize=(16, 16))
     pyplot.axis("off")
-    plot_pixels(
-        COMMON_PIX,
-        wcs,
-        flatten_ranges(common_ranges),
-        polygons(facecolor="none", edgecolor="black", label="htm7"),
-        index_labels(color="black", alpha=0.5),
-    )
+    if common_skypix_grid:
+        plot_pixels(
+            COMMON_PIX,
+            wcs,
+            flatten_ranges(common_ranges),
+            polygons(facecolor="none", edgecolor="black", label="htm7"),
+            index_labels(color="black", alpha=0.5),
+        )
     if detector_grid:
         plot_pixels(
             DETECTOR_GRID_PIX,
@@ -253,6 +280,23 @@ def make_plots(detector_grid: bool, patch_grid: bool) -> None:
                 facecolor="none",
             ),
             index_labels(color="black", alpha=0.5),
+        )
+    for healpix_level in healpix_grids:
+        pixelization = HealpixPixelization(healpix_level)
+        healpix_ranges = pixelization.envelope(parent_pixel)
+        plot_pixels(
+            pixelization,
+            wcs,
+            flatten_ranges(healpix_ranges),
+            polygons(
+                edgecolor="magenta",
+                linewidth=1,
+                alpha=0.5,
+                linestyle=":",
+                facecolor="none",
+                label=f"healpix{healpix_level}",
+            ),
+            index_labels(color="magenta", alpha=0.5),
         )
     colors = iter(["red", "blue", "cyan", "green"])
     for (visit_id, visit_data), color in zip(VISIT_DATA.items(), colors, strict=False):
@@ -582,6 +626,7 @@ def index_labels(**kwargs: Any) -> Callable[[int, np.ndarray, np.ndarray], None]
             str(index),
             ha="center",
             va="center",
+            **kwargs,
         )
 
     return func
