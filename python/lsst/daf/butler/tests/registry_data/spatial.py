@@ -58,6 +58,7 @@ from matplotlib import pyplot
 import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
 from lsst.sphgeom import (
     ConvexPolygon,
+    HealpixPixelization,
     HtmPixelization,
     LonLat,
     Mq3cPixelization,
@@ -183,6 +184,13 @@ def main() -> None:
         help="Show the skypix grid used to define patch regions.",
     )
     parser.add_argument(
+        "--show-healpix-grid",
+        type=int,
+        default=[],
+        help="Show a HEALPIX grid of this level.",
+        action="append",
+    )
+    parser.add_argument(
         "--no-plot", action="store_false", dest="make_plots", default=True, help="Do not plot the regions."
     )
     parser.add_argument(
@@ -194,12 +202,16 @@ def main() -> None:
     )
     namespace = parser.parse_args()
     if namespace.make_plots:
-        make_plots(detector_grid=namespace.show_detector_grid, patch_grid=namespace.show_patch_grid)
+        make_plots(
+            detector_grid=namespace.show_detector_grid,
+            patch_grid=namespace.show_patch_grid,
+            healpix_grids=namespace.show_healpix_grid,
+        )
     if namespace.write_yaml:
         write_yaml(namespace.filename)
 
 
-def make_plots(detector_grid: bool, patch_grid: bool) -> None:
+def make_plots(detector_grid: bool, patch_grid: bool, healpix_grids: Iterable[int] = ()) -> None:
     """Plot the regions of the dimension records defined by this script.
 
     Parameters
@@ -209,6 +221,8 @@ def make_plots(detector_grid: bool, patch_grid: bool) -> None:
         regions.
     patch_grid : `bool`
         If `True`, show the skypix grid used to define tract and patch regions.
+    healpix_grids : `~collections.abc.Iterable` [`int`], optional
+        Levels of healpix grids to display.
     """
     parent_index = PARENT_PIX.index(UnitVector3d(1, 0, 0))
     parent_pixel = PARENT_PIX.pixel(parent_index)
@@ -245,6 +259,22 @@ def make_plots(detector_grid: bool, patch_grid: bool) -> None:
             PATCH_GRID_PIX,
             wcs,
             flatten_ranges(patch_grid_ranges),
+            polygons(
+                edgecolor="black",
+                linewidth=1,
+                alpha=0.5,
+                linestyle=":",
+                facecolor="none",
+            ),
+            index_labels(color="black", alpha=0.5),
+        )
+    for healpix_level in healpix_grids:
+        pixelization = HealpixPixelization(healpix_level)
+        healpix_ranges = pixelization.envelope(parent_pixel)
+        plot_pixels(
+            pixelization,
+            wcs,
+            flatten_ranges(healpix_ranges),
             polygons(
                 edgecolor="black",
                 linewidth=1,
