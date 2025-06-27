@@ -822,12 +822,11 @@ class DimensionDataAttacher:
             Data IDs with dimension records attached, in the same order as the
             original iterable.
         """
-        incomplete: list[_InProgressRecordDicts] = []
         lookup_helpers = [
             _DimensionRecordLookupHelper.build(dimensions, element_name, self)
             for element_name in dimensions.lookup_order
         ]
-        records = [_InProgressRecordDicts(n, data_id) for n, data_id in enumerate(data_ids)]
+        records = [_InProgressRecordDicts(data_id) for data_id in data_ids]
         for lookup_helper in lookup_helpers:
             for r in records:
                 lookup_helper.lookup(r)
@@ -848,7 +847,6 @@ class DimensionDataAttacher:
 
 @dataclasses.dataclass
 class _InProgressRecordDicts:
-    index: int  # Index of the data ID these are for in the result list.
     data_id: DataCoordinate
     done: dict[str, DimensionRecord] = dataclasses.field(default_factory=dict)
 
