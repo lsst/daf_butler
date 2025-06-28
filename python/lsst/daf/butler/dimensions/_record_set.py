@@ -809,8 +809,7 @@ class DimensionDataAttacher:
             been referenced in at least one of the constructor arguments.
         data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to attach dimension records to (not in place; data
-            coordinates are immutable).  Must have full values (i.e. implied
-            as well as required dimensions).
+            coordinates are immutable).
         query : `.queries.Query`, optional
             A butler query that can be used to look up missing dimension
             records.  Records fetched via query are cached in the `records`
@@ -899,8 +898,28 @@ class _DimensionRecordLookupHelper:
             records.done[self.element] = result
 
     def _get_required_values(self, records: _InProgressRecordDicts) -> tuple[DataIdValue, ...]:
-        full_data_id_values = records.data_id.full_values
-        return tuple([full_data_id_values[i] for i in self.indices])
+        if records.data_id.hasFull():
+            full_values = records.data_id.full_values
+            return tuple([full_values[i] for i in self.indices])
+        else:
+            values = []
+            dimensions = self.record_set.element.minimal_group.required
+            for dimension in dimensions:
+                value = records.data_id.get(dimension)
+                if value is None:
+                    value = self._find_implied_value(dimension, records)
+                values.append(value)
+            return tuple(values)
+
+    def _find_implied_value(self, implied_dimension: str, records: _InProgressRecordDicts) -> DataIdValue:
+        for rec in records.done.values():
+            if implied_dimension in rec.definition.implied:
+                return rec.toDict()[implied_dimension]
+
+        raise LookupError(
+            f"Implied value for dimension '{implied_dimension}' not found in records for"
+            f" {list(records.done.keys())}"
+        )
 
     def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord | None:
         return None
