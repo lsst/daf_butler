@@ -34,6 +34,7 @@ __all__ = ("SqlRegistry",)
 import contextlib
 import logging
 import warnings
+from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -61,6 +62,7 @@ from ..dimensions import (
     DataCoordinate,
     DataId,
     DimensionConfig,
+    DimensionDataAttacher,
     DimensionElement,
     DimensionGroup,
     DimensionRecord,
@@ -1060,16 +1062,15 @@ class SqlRegistry:
                 f"Given collection is of type {runRecord.type.name}; RUN collection required."
             )
         assert isinstance(runRecord, RunRecord)
-        progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
+
+        expandedDataIds = [
+            DataCoordinate.standardize(dataId, dimensions=datasetType.dimensions) for dataId in dataIds
+        ]
         if expand:
-            expandedDataIds = [
-                self.expandDataId(dataId, dimensions=datasetType.dimensions)
-                for dataId in progress.wrap(dataIds, f"Expanding {datasetType.name} data IDs")
-            ]
-        else:
-            expandedDataIds = [
-                DataCoordinate.standardize(dataId, dimensions=datasetType.dimensions) for dataId in dataIds
-            ]
+            _LOG.debug("Expanding %d data IDs", len(expandedDataIds))
+            expandedDataIds = self.expand_data_ids(expandedDataIds)
+            _LOG.debug("Finished expanding data IDs")
+
         try:
             refs = list(
                 self._managers.datasets.insert(datasetType.name, runRecord, expandedDataIds, idGenerationMode)
@@ -1161,12 +1162,10 @@ class SqlRegistry:
             )
         assert isinstance(runRecord, RunRecord)
 
-        progress = Progress("daf.butler.Registry.importDatasets", level=logging.DEBUG)
         if expand:
-            datasets = [
-                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=dataset.datasetType.dimensions))
-                for dataset in progress.wrap(datasets, "Expanding data IDs")
-            ]
+            _LOG.debug("Expanding %d data IDs", len(datasets))
+            datasets = self.expand_refs(datasets)
+            _LOG.debug("Finished expanding data IDs")
 
         try:
             self._managers.datasets.import_(runRecord, datasets)
@@ -1544,6 +1543,34 @@ class SqlRegistry:
                         "have inconsistent values.",
                     )
         return DataCoordinate.standardize(keys, dimensions=standardized.dimensions).expanded(records=records)
+
+    def expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        output = list(data_ids)
+
+        grouped_by_dimensions: defaultdict[DimensionGroup, list[int]] = defaultdict(list)
+        for i, data_id in enumerate(data_ids):
+            if not data_id.hasRecords():
+                grouped_by_dimensions[data_id.dimensions].append(i)
+
+        if not grouped_by_dimensions:
+            # All given DataCoordinate values are already expanded.
+            return output
+
+        attacher = DimensionDataAttacher(
+            cache=self.dimension_record_cache,
+            dimensions=DimensionGroup.union(*grouped_by_dimensions.keys(), universe=self.dimensions),
+        )
+        with self._query() as query:
+            for dimensions, indexes in grouped_by_dimensions.items():
+                expanded = attacher.attach(dimensions, (output[index] for index in indexes), query)
+                for index, data_id in zip(indexes, expanded):
+                    output[index] = data_id
+
+        return output
+
+    def expand_refs(self, dataset_refs: list[DatasetRef]) -> list[DatasetRef]:
+        expanded_ids = self.expand_data_ids([ref.dataId for ref in dataset_refs])
+        return [ref.expanded(data_id) for ref, data_id in zip(dataset_refs, expanded_ids)]
 
     def insertDimensionData(
         self,
