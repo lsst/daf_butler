@@ -90,6 +90,9 @@ class _Visitor(TreeVisitor):
     def visitCircleNode(self, ra, dec, radius, node):
         return f"CIRCLE({ra}, {dec}, {radius})"
 
+    def visitBoxNode(self, ra, dec, width, height, node):
+        return f"BOX({ra}, {dec}, {width}, {height})"
+
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
 
@@ -510,6 +513,33 @@ class ParserYaccTestCase(unittest.TestCase):
             tree = parser.parse("Circle(0., 0., 0., 0.)")
         with self.assertRaises(ValueError):
             tree = parser.parse("Circle('1', 1, 1)")
+
+    def testBoxNode(self):
+        """Tests for BOX() function"""
+        parser = ParserYacc()
+
+        tree = parser.parse("BOX(Object.ra, Object.dec, 0.1, 2.)")
+        self.assertIsInstance(tree, exprTree.BoxNode)
+        self.assertIsInstance(tree.ra, exprTree.Identifier)
+        self.assertEqual(tree.ra.name, "Object.ra")
+        self.assertIsInstance(tree.dec, exprTree.Identifier)
+        self.assertEqual(tree.dec.name, "Object.dec")
+        self.assertIsInstance(tree.width, exprTree.NumericLiteral)
+        self.assertEqual(tree.width.value, "0.1")
+        self.assertIsInstance(tree.height, exprTree.NumericLiteral)
+        self.assertEqual(tree.height.value, "2.")
+
+        tree = parser.parse("box(0.5 + 0.1, -1 * :bind_name, 1 / 10, 42.)")
+        self.assertIsInstance(tree, exprTree.BoxNode)
+
+        with self.assertRaises(ValueError):
+            tree = parser.parse("box()")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("box(0., 0.)")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("box(0., 0., 0., 0., 1)")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("box(:a IN (100), 1, 1, 1)")
 
     def testGlobNode(self):
         """Tests for GLOB() function"""

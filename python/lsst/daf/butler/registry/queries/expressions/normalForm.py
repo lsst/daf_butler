@@ -1101,8 +1101,19 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
     def visitCircleNode(
         self, ra: TransformationWrapper, dec: TransformationWrapper, radius: TransformationWrapper, node: Node
     ) -> TransformationWrapper:
-        # Docstring inherited from TreeVisitor.visitPointNode
+        # Docstring inherited from TreeVisitor.visitCircleNode
         raise NotImplementedError("CIRCLE() function is not supported yet")
+
+    def visitBoxNode(
+        self,
+        ra: TransformationWrapper,
+        dec: TransformationWrapper,
+        width: TransformationWrapper,
+        height: TransformationWrapper,
+        node: Node,
+    ) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitBoxNode
+        raise NotImplementedError("BOX() function is not supported yet")
 
     def visitGlobNode(
         self, expression: TransformationWrapper, pattern: TransformationWrapper, node: Node

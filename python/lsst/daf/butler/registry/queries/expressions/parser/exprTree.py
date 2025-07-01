@@ -39,6 +39,7 @@ from __future__ import annotations
 
 __all__ = [
     "BinaryOp",
+    "BoxNode",
     "CircleNode",
     "FunctionCall",
     "Identifier",
@@ -519,6 +520,40 @@ class CircleNode(Node):
         return f"CIRCLE({self.ra}, {self.dec}, {self.radius})"
 
 
+class BoxNode(Node):
+    """Node representing box region in ADQL notation (ra, dec, width, height).
+
+    Parameters
+    ----------
+    ra : `Node`
+        Node representing box center ra value.
+    dec : `Node`
+        Node representing box center dec value.
+    width : `Node`
+        Node representing box ra width value.
+    height : `Node`
+        Node representing box dec height value.
+    """
+
+    def __init__(self, ra: Node, dec: Node, width: Node, height: Node):
+        super().__init__((ra, dec, width, height))
+        self.ra = ra
+        self.dec = dec
+        self.width = width
+        self.height = height
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        ra = self.ra.visit(visitor)
+        dec = self.dec.visit(visitor)
+        width = self.width.visit(visitor)
+        height = self.height.visit(visitor)
+        return visitor.visitBoxNode(ra, dec, width, height, self)
+
+    def __str__(self) -> str:
+        return f"BOX({self.ra}, {self.dec}, {self.width}, {self.height})"
+
+
 class GlobNode(Node):
     """Node representing a call to GLOB(pattern, expression) function.
 
@@ -579,6 +614,14 @@ def function_call(function: str, args: list[Node]) -> Node:
             if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
                 raise ValueError(f"CIRCLE {name} argument must be either numeric expression or bind value.")
         return CircleNode(*args)
+    elif function.upper() == "BOX":
+        if len(args) != 4:
+            raise ValueError("CIRCLE requires four arguments (ra, dec, width, height)")
+        # Check types of arguments, we want to support expressions too.
+        for name, arg in zip(("ra", "dec", "width", "height"), args, strict=True):
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError(f"BOX {name} argument must be either numeric expression or bind value.")
+        return BoxNode(*args)
     elif function.upper() == "GLOB":
         if len(args) != 2:
             raise ValueError("GLOB requires two arguments (pattern, expression)")

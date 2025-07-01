@@ -41,6 +41,7 @@ from ..column_spec import ColumnType
 from ..dimensions import DimensionUniverse
 from ..registry.queries.expressions.categorize import ExpressionConstant, categorizeConstant
 from ..registry.queries.expressions.parser import (
+    BoxNode,
     CircleNode,
     Node,
     PointNode,
@@ -276,6 +277,25 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         vec = lsst.sphgeom.UnitVector3d(lon_lat)
         circle = lsst.sphgeom.Circle(vec, open_angle)
         return _make_literal(circle)
+
+    def visitBoxNode(
+        self,
+        ra: _VisitorResult,
+        dec: _VisitorResult,
+        width: _VisitorResult,
+        height: _VisitorResult,
+        node: BoxNode,
+    ) -> _VisitorResult:
+        ra_value = _get_float_literal_value(ra, node.ra, "BOX")
+        dec_value = _get_float_literal_value(dec, node.dec, "BOX")
+        width_value = _get_float_literal_value(width, node.width, "BOX")
+        height_value = _get_float_literal_value(height, node.height, "BOX")
+
+        lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra_value, dec_value)
+        half_width = lsst.sphgeom.Angle.fromDegrees(width_value / 2)
+        half_height = lsst.sphgeom.Angle.fromDegrees(height_value / 2)
+        box = lsst.sphgeom.Box(lon_lat, half_width, half_height)
+        return _make_literal(box)
 
     def visitRangeLiteral(
         self, start: int, stop: int, stride: int | None, node: RangeLiteral
