@@ -922,7 +922,7 @@ class _DimensionRecordLookupHelper:
     def _find_implied_value(self, implied_dimension: str, records: _InProgressRecordDicts) -> DataIdValue:
         for rec in records.done.values():
             if implied_dimension in rec.definition.implied:
-                return rec.toDict()[implied_dimension]
+                return rec.get(implied_dimension)
 
         raise LookupError(
             f"Implied value for dimension '{implied_dimension}' not found in records for"
