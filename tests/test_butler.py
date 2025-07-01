@@ -1015,6 +1015,10 @@ class ButlerTests(ButlerPutGetTests):
             "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
         )
         butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
+        for detector in (1, 2):
+            butler.registry.insertDimensionData(
+                "detector", {"instrument": "DummyCamComp", "id": detector, "full_name": f"detector{detector}"}
+            )
 
         butler.registry.insertDimensionData(
             "visit",
@@ -1033,16 +1037,6 @@ class ButlerTests(ButlerPutGetTests):
                 "day_obs": 20250101,
             },
         )
-
-        for detector in (1, 2):
-            butler.registry.insertDimensionData(
-                "detector", {"instrument": "DummyCamComp", "id": detector, "full_name": f"detector{detector}"}
-            )
-            for visit in (423, 424):
-                butler.registry.insertDimensionData(
-                    "visit_detector_region",
-                    {"instrument": "DummyCamComp", "visit": visit, "detector": detector},
-                )
 
         formatter = doImportType("lsst.daf.butler.formatters.yaml.YamlFormatter")
         dataRoot = os.path.join(TESTDIR, "data", "basic")

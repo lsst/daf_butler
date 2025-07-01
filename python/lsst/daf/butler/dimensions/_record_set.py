@@ -829,17 +829,25 @@ class DimensionDataAttacher:
         for lookup_helper in lookup_helpers:
             for r in records:
                 lookup_helper.lookup(r)
-            if query is not None:
-                lookup_helper.fetch_missing(query)
-
             incomplete = lookup_helper.incomplete_records
             if incomplete:
-                raise LookupError(
-                    f"No dimension record for element '{lookup_helper.element}' "
-                    f"for data ID {incomplete[0].data_id}.  "
-                    f"{len(incomplete)} data ID{' was' if len(incomplete) == 1 else 's were'} "
-                    "missing at least one record."
-                )
+                if query is not None:
+                    lookup_helper.fetch_missing(query)
+                    # We may still be missing records at this point, if they
+                    # were not available in the database.
+                    # This is intentional, because in existing Butler
+                    # repositories dimension records are not always fully
+                    # populated. (For example, it is common for a visit to
+                    # exist without corresponding visit_detector_region
+                    # records, since these are populated at different times
+                    # by different processes.)
+                else:
+                    raise LookupError(
+                        f"No dimension record for element '{lookup_helper.element}' "
+                        f"for data ID {incomplete[0].data_id}.  "
+                        f"{len(incomplete)} data ID{' was' if len(incomplete) == 1 else 's were'} "
+                        "missing at least one record."
+                    )
 
         return [r.data_id.expanded(r.done) for r in records]
 
