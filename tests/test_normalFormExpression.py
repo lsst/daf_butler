@@ -129,6 +129,9 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     def visitBoxNode(self, ra: float, dec: float, width: float, height: float, node: Node) -> bool:
         raise NotImplementedError("Not implemented for bool operations")
 
+    def visitPolygonNode(self, vertices: list[tuple[float, float]], node: Node) -> bool:
+        raise NotImplementedError("Not implemented for bool operations")
+
     def visitTupleNode(self, items: tuple, node: Node) -> bool:
         raise NotImplementedError("Not implemented for bool operations")
 

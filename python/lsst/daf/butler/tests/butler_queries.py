@@ -1903,6 +1903,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             ("BOX(320, -0.25, 5, 5)", False, 33),  # Match everything.
             ("BOX(321.0, -0.4, 0.01, 0.01)", False, 1),  # Should be small region on 1 detector.
             ("BOX(321.0, -0.5, 0.01, 0.01)", False, 0),  # No overlap.
+            ("POLYGON(320, -10, 320, 10, 340, 10, 340, -10)", False, 33),  # Match everything.
+            ("POLYGON(320.99, -0.401, 320.99, -0.399, 321.01, -0.399, 321.01, -0.401)", False, 1),
+            ("POLYGON(320.99, -0.501, 320.99, -0.499, 321.01, -0.499, 321.01, -0.501)", False, 0),
         ):
             if use_bind:
                 overlap_where = "visit_detector_region.region OVERLAPS :POS"

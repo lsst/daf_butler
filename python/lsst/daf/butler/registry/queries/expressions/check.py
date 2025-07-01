@@ -291,6 +291,10 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from base class
         return TreeSummary()
 
+    def visitPolygonNode(self, vertices: list[tuple[TreeSummary, TreeSummary]], node: Node) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
     def visitBoxNode(
         self, ra: TreeSummary, dec: TreeSummary, width: TreeSummary, height: TreeSummary, node: Node
     ) -> TreeSummary:

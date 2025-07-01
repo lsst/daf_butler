@@ -28,6 +28,7 @@
 """Simple unit test for exprParser subpackage module."""
 
 import unittest
+from itertools import chain
 
 import astropy.time
 
@@ -92,6 +93,10 @@ class _Visitor(TreeVisitor):
 
     def visitBoxNode(self, ra, dec, width, height, node):
         return f"BOX({ra}, {dec}, {width}, {height})"
+
+    def visitPolygonNode(self, vertices, node):
+        params = ", ".join(str(param) for param in chain.from_iterable(vertices))
+        return f"POLYGON({params})"
 
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
@@ -541,6 +546,30 @@ class ParserYaccTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             tree = parser.parse("box(:a IN (100), 1, 1, 1)")
 
+    def testPolygonNode(self):
+        """Tests for POLYGON() function"""
+        parser = ParserYacc()
+
+        tree = parser.parse("POLYGON(0, 0, 1, 0, 1, 1)")
+        self.assertIsInstance(tree, exprTree.PolygonNode)
+        self.assertEqual(len(tree.vertices), 3)
+        for ra, dec in tree.vertices:
+            self.assertIsInstance(ra, exprTree.NumericLiteral)
+            self.assertIsInstance(dec, exprTree.NumericLiteral)
+        self.assertEqual([ra.value for ra, dec in tree.vertices], ["0", "1", "1"])
+        self.assertEqual([dec.value for ra, dec in tree.vertices], ["0", "0", "1"])
+
+        with self.assertRaisesRegex(ValueError, "POLYGON requires at least three vertices"):
+            tree = parser.parse("POLYGON()")
+        with self.assertRaisesRegex(ValueError, "POLYGON requires at least three vertices"):
+            tree = parser.parse("POLYGON(0., 0., 1., 1.)")
+        with self.assertRaisesRegex(ValueError, "POLYGON requires even number of arguments"):
+            tree = parser.parse("polygon(0, 0, 1, 0, 1, 1, 2)")
+        with self.assertRaisesRegex(
+            ValueError, "POLYGON argument must be either numeric expression or bind value"
+        ):
+            tree = parser.parse("Polygon(:a IN (100), 1, 1, 1, 2, 2)")
+
     def testGlobNode(self):
         """Tests for GLOB() function"""
         parser = ParserYacc()
@@ -697,6 +726,14 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("circle(ra, :dec, 1.5)")
         result = tree.visit(visitor)
         self.assertEqual(result, "CIRCLE(ID(ra), :(dec), N(1.5))")
+
+        tree = parser.parse("box(ra, :dec, 1.5, 10)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "BOX(ID(ra), :(dec), N(1.5), N(10))")
+
+        tree = parser.parse("Polygon(ra, :dec, 0, 0, 180, 0)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "POLYGON(ID(ra), :(dec), N(0), N(0), N(180), N(0))")
 
         tree = parser.parse("glob(group, 'prefix#*')")
         result = tree.visit(visitor)

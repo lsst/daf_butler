@@ -48,6 +48,7 @@ __all__ = [
     "NumericLiteral",
     "Parens",
     "PointNode",
+    "PolygonNode",
     "RangeLiteral",
     "StringLiteral",
     "TimeLiteral",
@@ -554,6 +555,29 @@ class BoxNode(Node):
         return f"BOX({self.ra}, {self.dec}, {self.width}, {self.height})"
 
 
+class PolygonNode(Node):
+    """Node representing polygon region in ADQL notation.
+
+    Parameters
+    ----------
+    vertices : `list`[`tuple`[`Node`, `Node`]]
+        Node representing vertices of polygon.
+    """
+
+    def __init__(self, vertices: list[tuple[Node, Node]]):
+        super().__init__(sum(vertices, start=()))
+        self.vertices = vertices
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        vertices = [(ra.visit(visitor), dec.visit(visitor)) for ra, dec in self.vertices]
+        return visitor.visitPolygonNode(vertices, self)
+
+    def __str__(self) -> str:
+        params = ", ".join(str(param) for param in self.children)
+        return f"BOX({params})"
+
+
 class GlobNode(Node):
     """Node representing a call to GLOB(pattern, expression) function.
 
@@ -602,11 +626,12 @@ def function_call(function: str, args: list[Node]) -> Node:
     functions. Tree visitors will most likely raise an error when visiting
     `FunctionCall` nodes.
     """
-    if function.upper() == "POINT":
+    function_name = function.upper()
+    if function_name == "POINT":
         if len(args) != 2:
             raise ValueError("POINT requires two arguments (ra, dec)")
         return PointNode(*args)
-    elif function.upper() == "CIRCLE":
+    elif function_name == "CIRCLE":
         if len(args) != 3:
             raise ValueError("CIRCLE requires three arguments (ra, dec, radius)")
         # Check types of arguments, we want to support expressions too.
@@ -614,7 +639,7 @@ def function_call(function: str, args: list[Node]) -> Node:
             if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
                 raise ValueError(f"CIRCLE {name} argument must be either numeric expression or bind value.")
         return CircleNode(*args)
-    elif function.upper() == "BOX":
+    elif function_name == "BOX":
         if len(args) != 4:
             raise ValueError("CIRCLE requires four arguments (ra, dec, width, height)")
         # Check types of arguments, we want to support expressions too.
@@ -622,7 +647,18 @@ def function_call(function: str, args: list[Node]) -> Node:
             if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
                 raise ValueError(f"BOX {name} argument must be either numeric expression or bind value.")
         return BoxNode(*args)
-    elif function.upper() == "GLOB":
+    elif function_name == "POLYGON":
+        if len(args) % 2 != 0:
+            raise ValueError("POLYGON requires even number of arguments")
+        if len(args) < 6:
+            raise ValueError("POLYGON requires at least three vertices")
+        # Check types of arguments, we want to support expressions too.
+        for arg in args:
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError("POLYGON argument must be either numeric expression or bind value.")
+        vertices = list(zip(args[::2], args[1::2]))
+        return PolygonNode(vertices)
+    elif function_name == "GLOB":
         if len(args) != 2:
             raise ValueError("GLOB requires two arguments (pattern, expression)")
         expression, pattern = (_strip_parens(arg) for arg in args)
@@ -631,7 +667,7 @@ def function_call(function: str, args: list[Node]) -> Node:
         if not isinstance(pattern, StringLiteral | BindName):
             raise TypeError("glob() second argument must be a string or a bind name (prefixed with colon)")
         return GlobNode(expression, pattern)
-    elif function.upper() == "UUID":
+    elif function_name == "UUID":
         if len(args) != 1:
             raise ValueError("UUID() requires a single arguments (uuid-string)")
         argument = _strip_parens(args[0])

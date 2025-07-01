@@ -45,6 +45,7 @@ from ..registry.queries.expressions.parser import (
     CircleNode,
     Node,
     PointNode,
+    PolygonNode,
     RangeLiteral,
     TreeVisitor,
     parse_expression,
@@ -296,6 +297,19 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         half_height = lsst.sphgeom.Angle.fromDegrees(height_value / 2)
         box = lsst.sphgeom.Box(lon_lat, half_width, half_height)
         return _make_literal(box)
+
+    def visitPolygonNode(
+        self, vertices: list[tuple[_VisitorResult, _VisitorResult]], node: PolygonNode
+    ) -> _VisitorResult:
+        sphgeom_vertices = []
+        for ra, dec in vertices:
+            ra_value = _get_float_literal_value(ra, node, "POLYGON")
+            dec_value = _get_float_literal_value(dec, node, "POLYGON")
+            lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra_value, dec_value)
+            sphgeom_vertices.append(lsst.sphgeom.UnitVector3d(lon_lat))
+
+        polygon = lsst.sphgeom.ConvexPolygon(sphgeom_vertices)
+        return _make_literal(polygon)
 
     def visitRangeLiteral(
         self, start: int, stop: int, stride: int | None, node: RangeLiteral
