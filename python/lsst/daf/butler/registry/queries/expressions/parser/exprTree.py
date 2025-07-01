@@ -39,6 +39,7 @@ from __future__ import annotations
 
 __all__ = [
     "BinaryOp",
+    "CircleNode",
     "FunctionCall",
     "Identifier",
     "IsIn",
@@ -488,6 +489,36 @@ class PointNode(Node):
         return f"POINT({self.ra}, {self.dec})"
 
 
+class CircleNode(Node):
+    """Node representing a circle, (ra, dec, radius) pair.
+
+    Parameters
+    ----------
+    ra : `Node`
+        Node representing circle center ra value.
+    dec : `Node`
+        Node representing circle center dec value.
+    radius : `Node`
+        Node representing circle radius value.
+    """
+
+    def __init__(self, ra: Node, dec: Node, radius: Node):
+        super().__init__((ra, dec, radius))
+        self.ra = ra
+        self.dec = dec
+        self.radius = radius
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        ra = self.ra.visit(visitor)
+        dec = self.dec.visit(visitor)
+        radius = self.radius.visit(visitor)
+        return visitor.visitCircleNode(ra, dec, radius, self)
+
+    def __str__(self) -> str:
+        return f"CIRCLE({self.ra}, {self.dec}, {self.radius})"
+
+
 class GlobNode(Node):
     """Node representing a call to GLOB(pattern, expression) function.
 
@@ -540,6 +571,14 @@ def function_call(function: str, args: list[Node]) -> Node:
         if len(args) != 2:
             raise ValueError("POINT requires two arguments (ra, dec)")
         return PointNode(*args)
+    elif function.upper() == "CIRCLE":
+        if len(args) != 3:
+            raise ValueError("CIRCLE requires three arguments (ra, dec, radius)")
+        # Check types of arguments, we want to support expressions too.
+        for name, arg in zip(("ra", "dec", "radius"), args, strict=True):
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError(f"CIRCLE {name} argument must be either numeric expression or bind value.")
+        return CircleNode(*args)
     elif function.upper() == "GLOB":
         if len(args) != 2:
             raise ValueError("GLOB requires two arguments (pattern, expression)")

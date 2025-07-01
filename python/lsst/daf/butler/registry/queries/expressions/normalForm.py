@@ -1098,6 +1098,12 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitPointNode
         raise NotImplementedError("POINT() function is not supported yet")
 
+    def visitCircleNode(
+        self, ra: TransformationWrapper, dec: TransformationWrapper, radius: TransformationWrapper, node: Node
+    ) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitPointNode
+        raise NotImplementedError("CIRCLE() function is not supported yet")
+
     def visitGlobNode(
         self, expression: TransformationWrapper, pattern: TransformationWrapper, node: Node
     ) -> TransformationWrapper:

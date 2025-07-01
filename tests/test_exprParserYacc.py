@@ -87,6 +87,9 @@ class _Visitor(TreeVisitor):
     def visitPointNode(self, ra, dec, node):
         return f"POINT({ra}, {dec})"
 
+    def visitCircleNode(self, ra, dec, radius, node):
+        return f"CIRCLE({ra}, {dec}, {radius})"
+
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
 
@@ -483,6 +486,31 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("Point(1, 1)")
         self.assertIsInstance(tree, exprTree.PointNode)
 
+    def testCircleNode(self):
+        """Tests for CIRCLE() function"""
+        parser = ParserYacc()
+
+        tree = parser.parse("CIRCLE(Object.ra, Object.dec, 0.1)")
+        self.assertIsInstance(tree, exprTree.CircleNode)
+        self.assertIsInstance(tree.ra, exprTree.Identifier)
+        self.assertEqual(tree.ra.name, "Object.ra")
+        self.assertIsInstance(tree.dec, exprTree.Identifier)
+        self.assertEqual(tree.dec.name, "Object.dec")
+        self.assertIsInstance(tree.radius, exprTree.NumericLiteral)
+        self.assertEqual(tree.radius.value, "0.1")
+
+        tree = parser.parse("Circle(0.5 + 0.1, -1 * :bind_name, 1 / 10)")
+        self.assertIsInstance(tree, exprTree.CircleNode)
+
+        with self.assertRaises(ValueError):
+            tree = parser.parse("Circle()")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("Circle(0., 0.)")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("Circle(0., 0., 0., 0.)")
+        with self.assertRaises(ValueError):
+            tree = parser.parse("Circle('1', 1, 1)")
+
     def testGlobNode(self):
         """Tests for GLOB() function"""
         parser = ParserYacc()
@@ -635,6 +663,10 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("point(ra, :dec)")
         result = tree.visit(visitor)
         self.assertEqual(result, "POINT(ID(ra), :(dec))")
+
+        tree = parser.parse("circle(ra, :dec, 1.5)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "CIRCLE(ID(ra), :(dec), N(1.5))")
 
         tree = parser.parse("glob(group, 'prefix#*')")
         result = tree.visit(visitor)

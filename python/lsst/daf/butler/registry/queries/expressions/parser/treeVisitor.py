@@ -36,7 +36,7 @@ from uuid import UUID
 if TYPE_CHECKING:
     import astropy.time
 
-    from .exprTree import GlobNode, Node, PointNode, RangeLiteral
+    from .exprTree import CircleNode, GlobNode, Node, PointNode, RangeLiteral
 
 
 T = TypeVar("T")
@@ -263,6 +263,20 @@ class TreeVisitor(Generic[T], ABC):
             methods of this class as a result of transformation of function
             arguments.
         node : `PointNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitCircleNode(self, ra: T, dec: T, radius: T, node: CircleNode) -> T:
+        """Visit CircleNode node.
+
+        Parameters
+        ----------
+        ra, dec, radius : `object`
+            Representation of 'ra', 'dec', and 'radius' values, objects
+            returned by methods of this class as a result of transformation of
+            function arguments.
+        node : `CircleNode`
             Corresponding tree node, mostly useful for diagnostics.
         """
 

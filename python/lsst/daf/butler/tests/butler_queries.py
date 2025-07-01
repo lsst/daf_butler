@@ -1889,21 +1889,27 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             records = list(query.dimension_records("visit_detector_region").where(**data_id))  # type: ignore
             self.assertEqual(len(records), 1)
 
-        for pos, count in (
-            ("CIRCLE 320. -0.25 10.", 33),  # Match everything.
-            ("CIRCLE 321.0 -0.4 0.01", 1),  # Should be small region on 1 detector.
-            ("CIRCLE 321.1 -0.35 0.02", 2),
-            ("CIRCLE 321.1 -0.48 0.05", 1),  # Center off the region.
-            ("CIRCLE 321.0 -0.5 0.01", 0),  # No overlap.
-            (first_visit_region.to_ivoa_pos(), 33),  # Visit region overlaps everything.
-            (records[0].region.to_ivoa_pos(), 17),  # Some overlap.
+        for pos, use_bind, count in (
+            ("CIRCLE 320. -0.25 10.", True, 33),  # Match everything.
+            ("CIRCLE 321.0 -0.4 0.01", True, 1),  # Should be small region on 1 detector.
+            ("CIRCLE 321.1 -0.35 0.02", True, 2),
+            ("CIRCLE 321.1 -0.48 0.05", True, 1),  # Center off the region.
+            ("CIRCLE 321.0 -0.5 0.01", True, 0),  # No overlap.
+            (first_visit_region.to_ivoa_pos(), True, 33),  # Visit region overlaps everything.
+            (records[0].region.to_ivoa_pos(), True, 17),  # Some overlap.
+            ("CIRCLE(320., -0.25, 10.)", False, 33),  # Match everything.
+            ("CIRCLE(321.0, -0.4, 0.01)", False, 1),  # Should be small region on 1 detector.
+            ("CIRCLE(321.0, -0.5, 0.01)", False, 0),  # No overlap.
         ):
+            if use_bind:
+                overlap_where = "visit_detector_region.region OVERLAPS :POS"
+                bind = {"POS": Region.from_ivoa_pos(pos)}
+            else:
+                overlap_where = f"visit_detector_region.region OVERLAPS {pos}"
+                bind = {}
             with butler.query() as query:
                 results = query.datasets("calexp", collections=run)
-                results = results.where(
-                    "instrument = 'HSC' AND visit_detector_region.region OVERLAPS(:POS)",
-                    bind={"POS": Region.from_ivoa_pos(pos)},
-                )
+                results = results.where(f"instrument = 'HSC' AND {overlap_where}", bind=bind)
                 refs = list(results)
                 self.assertEqual(len(refs), count, f"POS={pos} REFS={refs}")
 
@@ -1911,8 +1917,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     "calexp",
                     collections=run,
                     instrument="HSC",
-                    where="visit_detector_region.region OVERLAPS(:POS)",
-                    bind={"POS": Region.from_ivoa_pos(pos)},
+                    where=overlap_where,
+                    bind=bind,
                     explain=False,
                 )
                 self.assertCountEqual(refs, simple_refs)

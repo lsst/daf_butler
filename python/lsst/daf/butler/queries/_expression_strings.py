@@ -40,7 +40,14 @@ from .._timespan import Timespan
 from ..column_spec import ColumnType
 from ..dimensions import DimensionUniverse
 from ..registry.queries.expressions.categorize import ExpressionConstant, categorizeConstant
-from ..registry.queries.expressions.parser import Node, PointNode, RangeLiteral, TreeVisitor, parse_expression
+from ..registry.queries.expressions.parser import (
+    CircleNode,
+    Node,
+    PointNode,
+    RangeLiteral,
+    TreeVisitor,
+    parse_expression,
+)
 from ._identifiers import IdentifierContext, interpret_identifier
 from .tree import (
     BinaryExpression,
@@ -251,11 +258,24 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         return expression
 
     def visitPointNode(self, ra: _VisitorResult, dec: _VisitorResult, node: PointNode) -> _VisitorResult:
-        ra_value = _get_float_literal_value(ra, node.ra)
-        dec_value = _get_float_literal_value(dec, node.dec)
+        ra_value = _get_float_literal_value(ra, node.ra, "POINT")
+        dec_value = _get_float_literal_value(dec, node.dec, "POINT")
 
         lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra_value, dec_value)
         return _make_literal(lon_lat)
+
+    def visitCircleNode(
+        self, ra: _VisitorResult, dec: _VisitorResult, radius: _VisitorResult, node: CircleNode
+    ) -> _VisitorResult:
+        ra_value = _get_float_literal_value(ra, node.ra, "CIRCLE")
+        dec_value = _get_float_literal_value(dec, node.dec, "CIRCLE")
+        radius_value = _get_float_literal_value(radius, node.radius, "CIRCLE")
+
+        lon_lat = lsst.sphgeom.LonLat.fromDegrees(ra_value, dec_value)
+        open_angle = lsst.sphgeom.Angle.fromDegrees(radius_value * 2)
+        vec = lsst.sphgeom.UnitVector3d(lon_lat)
+        circle = lsst.sphgeom.Circle(vec, open_angle)
+        return _make_literal(circle)
 
     def visitRangeLiteral(
         self, start: int, stop: int, stride: int | None, node: RangeLiteral
@@ -379,7 +399,7 @@ def _get_boolean_column_reference(predicate: Predicate) -> ColumnReference | Non
     return None
 
 
-def _get_float_literal_value(value: _VisitorResult, node: Node) -> float:
+def _get_float_literal_value(value: _VisitorResult, node: Node, name: str) -> float:
     """If the given ``value`` is a literal `float` or `int` expression, return
     it as a float.  Otherwise raise an `InvalidQueryError` identifying a
     problem with the given ``node``.
@@ -391,6 +411,6 @@ def _get_float_literal_value(value: _VisitorResult, node: Node) -> float:
         elif expr.expression_type == "int":
             return float(expr.value)
         elif expr.expression_type == "unary" and expr.operator == "-":
-            return -1 * _get_float_literal_value(_ColExpr(expr.operand), node)
+            return -1 * _get_float_literal_value(_ColExpr(expr.operand), node, name)
 
-    raise InvalidQueryError(f"Expression '{node}' in POINT() is not a literal number.")
+    raise InvalidQueryError(f"Expression '{node}' in {name}() is not a literal number.")
