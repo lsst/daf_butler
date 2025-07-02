@@ -809,8 +809,7 @@ class DimensionDataAttacher:
             been referenced in at least one of the constructor arguments.
         data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to attach dimension records to (not in place; data
-            coordinates are immutable).  Must have full values (i.e. implied
-            as well as required dimensions).
+            coordinates are immutable).
         query : `.queries.Query`, optional
             A butler query that can be used to look up missing dimension
             records.  Records fetched via query are cached in the `records`
@@ -822,49 +821,41 @@ class DimensionDataAttacher:
             Data IDs with dimension records attached, in the same order as the
             original iterable.
         """
-        incomplete: list[_InProgressRecordDicts] = []
         lookup_helpers = [
             _DimensionRecordLookupHelper.build(dimensions, element_name, self)
-            for element_name in dimensions.elements
+            for element_name in dimensions.lookup_order
         ]
-        result: list[DataCoordinate] = []
-        for n, data_id in enumerate(data_ids):
-            records = _InProgressRecordDicts(n)
-            for lookup_helper in lookup_helpers:
-                lookup_helper.lookup(data_id.full_values, records)
-            if records.missing:
-                incomplete.append(records)
-            else:
-                data_id = data_id.expanded(records.done)
-            result.append(data_id)
-        if query is not None:
-            for lookup_helper in lookup_helpers:
-                lookup_helper.fetch_missing(query)
-            for records in incomplete:
-                for element, required_values in records.missing.items():
-                    records.done[element] = self.records[element].find_with_required_values(required_values)
-                result[records.index] = result[records.index].expanded(records.done)
-        else:
-            # Other logic branches also raise LookupError internally (e.g. in
-            # find_with_required_values); this one has a better message (i.e.
-            # about all failures, not just the first one) just because we
-            # happen to have any information at hand, while we don't in other
-            # branches.
-            for records in incomplete:
-                raise LookupError(
-                    f"No dimension record for element(s) {list(records.missing.keys())} "
-                    f"for data ID {result[records.index]}.  "
-                    f"{len(incomplete)} data ID{' was' if len(incomplete) == 1 else 's were'} "
-                    "missing at least one record."
-                )
-        return result
+        records = [_InProgressRecordDicts(data_id) for data_id in data_ids]
+        for lookup_helper in lookup_helpers:
+            for r in records:
+                lookup_helper.lookup(r)
+            incomplete = lookup_helper.incomplete_records
+            if incomplete:
+                if query is not None:
+                    lookup_helper.fetch_missing(query)
+                    # We may still be missing records at this point, if they
+                    # were not available in the database.
+                    # This is intentional, because in existing Butler
+                    # repositories dimension records are not always fully
+                    # populated. (For example, it is common for a visit to
+                    # exist without corresponding visit_detector_region
+                    # records, since these are populated at different times
+                    # by different processes.)
+                else:
+                    raise LookupError(
+                        f"No dimension record for element '{lookup_helper.element}' "
+                        f"for data ID {incomplete[0].data_id}.  "
+                        f"{len(incomplete)} data ID{' was' if len(incomplete) == 1 else 's were'} "
+                        "missing at least one record."
+                    )
+
+        return [r.data_id.expanded(r.done) for r in records]
 
 
 @dataclasses.dataclass
 class _InProgressRecordDicts:
-    index: int  # Index of the data ID these are for in the result list.
+    data_id: DataCoordinate
     done: dict[str, DimensionRecord] = dataclasses.field(default_factory=dict)
-    missing: dict[str, tuple[DataIdValue, ...]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -873,7 +864,7 @@ class _DimensionRecordLookupHelper:
     # tuple in the to-be-expanded data ID's full-values tuple.
     indices: list[int]
     record_set: DimensionRecordSet
-    missing: set[tuple[DataIdValue, ...]] = dataclasses.field(default_factory=set)
+    incomplete_records: list[_InProgressRecordDicts] = dataclasses.field(default_factory=list)
 
     @property
     def element(self) -> str:
@@ -902,32 +893,61 @@ class _DimensionRecordLookupHelper:
         else:
             return _DimensionRecordLookupHelper(indices, attacher.records[element])
 
-    def lookup(self, full_data_id_values: tuple[DataIdValue, ...], records: _InProgressRecordDicts) -> None:
-        required_values = tuple([full_data_id_values[i] for i in self.indices])
+    def lookup(self, records: _InProgressRecordDicts) -> None:
+        required_values = self._get_required_values(records)
         if (result := self.record_set._by_required_values.get(required_values)) is None:
             result = self.fallback(required_values)
             if result is not None:
                 self.record_set.add(result)
                 records.done[self.element] = result
             else:
-                records.missing[self.element] = required_values
-                self.missing.add(required_values)
+                self.incomplete_records.append(records)
         else:
             records.done[self.element] = result
+
+    def _get_required_values(self, records: _InProgressRecordDicts) -> tuple[DataIdValue, ...]:
+        if records.data_id.hasFull():
+            full_values = records.data_id.full_values
+            return tuple([full_values[i] for i in self.indices])
+        else:
+            values = []
+            dimensions = self.record_set.element.minimal_group.required
+            for dimension in dimensions:
+                value = records.data_id.get(dimension)
+                if value is None:
+                    value = self._find_implied_value(dimension, records)
+                values.append(value)
+            return tuple(values)
+
+    def _find_implied_value(self, implied_dimension: str, records: _InProgressRecordDicts) -> DataIdValue:
+        for rec in records.done.values():
+            if implied_dimension in rec.definition.implied:
+                return rec.get(implied_dimension)
+
+        raise LookupError(
+            f"Implied value for dimension '{implied_dimension}' not found in records for"
+            f" {list(records.done.keys())}"
+        )
 
     def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord | None:
         return None
 
     def fetch_missing(self, query: Query) -> None:
-        if self.missing:
+        if self.incomplete_records:
+            missing_values = set(self._get_required_values(r) for r in self.incomplete_records)
             self.record_set.update(
                 query.join_data_coordinates(
                     [
-                        DataCoordinate.from_required_values(self.record_set.element.minimal_group, row)
-                        for row in self.missing
+                        DataCoordinate.from_required_values(self.record_set.element.minimal_group, values)
+                        for values in missing_values
                     ]
                 ).dimension_records(self.record_set.element.name)
             )
+
+        missing = self.incomplete_records
+        self.incomplete_records = list()
+        for record in missing:
+            self.lookup(record)
 
 
 @dataclasses.dataclass

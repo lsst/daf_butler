@@ -174,13 +174,9 @@ class RepoExportContext:
                     element = self._butler.dimensions[element]
                 if element.has_own_table:
                     standardized_elements.add(element)
-        for dataId in dataIds:
-            # This is potentially quite slow, because it's approximately
-            # len(dataId.graph.elements) queries per data ID.  But it's a no-op
-            # if the data ID is already expanded, and DM-26692 will add (or at
-            # least start to add / unblock) query functionality that should
-            # let us speed this up internally as well.
-            dataId = self._butler.registry.expandDataId(dataId)
+
+        expanded_data_ids = self._butler._registry.expand_data_ids(dataIds)
+        for dataId in expanded_data_ids:
             for element_name in dataId.dimensions.elements:
                 record = dataId.records[element_name]
                 if record is not None and record.definition in standardized_elements:

@@ -34,15 +34,7 @@ from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
 import pydantic
-from pydantic import (
-    BaseModel,
-    Field,
-    StrictBool,
-    StrictFloat,
-    StrictInt,
-    StrictStr,
-    create_model,
-)
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
@@ -532,6 +524,29 @@ class DimensionRecord:
                 results["datetime_begin"] = timespan.begin
                 results["datetime_end"] = timespan.end
         return results
+
+    def get(self, name: str) -> Any:
+        """Return a single metadata value associated with this record.
+
+        Parameters
+        ----------
+        name : `str`
+            Key of the metadata value to be retrieved.
+
+        Returns
+        -------
+        value
+            The metadata value.
+
+        Raises
+        ------
+        KeyError
+            If the given name is not a valid key in this dimension record.
+        """
+        if name not in self.__slots__:
+            raise KeyError(f"'{name}' is not a valid record key for dimension '{self.definition.name}'")
+
+        return getattr(self, name)
 
     def serialize_key_value(self) -> SerializedKeyValueDimensionRecord:
         """Serialize this record to a `list` that can be sliced into a key
