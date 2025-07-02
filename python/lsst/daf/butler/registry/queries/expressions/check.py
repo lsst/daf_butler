@@ -295,6 +295,10 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from base class
         return TreeSummary()
 
+    def visitRegionNode(self, pos: TreeSummary, node: Node) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
     def visitBoxNode(
         self, ra: TreeSummary, dec: TreeSummary, width: TreeSummary, height: TreeSummary, node: Node
     ) -> TreeSummary:

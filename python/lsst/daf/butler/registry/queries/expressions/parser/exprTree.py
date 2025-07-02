@@ -50,6 +50,7 @@ __all__ = [
     "PointNode",
     "PolygonNode",
     "RangeLiteral",
+    "RegionNode",
     "StringLiteral",
     "TimeLiteral",
     "TupleNode",
@@ -578,6 +579,28 @@ class PolygonNode(Node):
         return f"BOX({params})"
 
 
+class RegionNode(Node):
+    """Node representing region using IVOA SIAv2 POS notation.
+
+    Parameters
+    ----------
+    pos : `Node`
+        IVOA SIAv2 POS string representation of a region.
+    """
+
+    def __init__(self, pos: Node):
+        super().__init__((pos,))
+        self.pos = pos
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        pos = self.pos.visit(visitor)
+        return visitor.visitRegionNode(pos, self)
+
+    def __str__(self) -> str:
+        return f"REGION({self.pos})"
+
+
 class GlobNode(Node):
     """Node representing a call to GLOB(pattern, expression) function.
 
@@ -658,6 +681,12 @@ def function_call(function: str, args: list[Node]) -> Node:
                 raise ValueError("POLYGON argument must be either numeric expression or bind value.")
         vertices = list(zip(args[::2], args[1::2]))
         return PolygonNode(vertices)
+    elif function_name == "REGION":
+        if len(args) != 1:
+            raise ValueError("REGION requires a single string argument")
+        if not isinstance(args[0], StringLiteral | BindName | Identifier):
+            raise ValueError("REGION argument must be either a string or a bind value")
+        return RegionNode(args[0])
     elif function_name == "GLOB":
         if len(args) != 2:
             raise ValueError("GLOB requires two arguments (pattern, expression)")

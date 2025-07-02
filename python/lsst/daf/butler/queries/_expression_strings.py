@@ -47,6 +47,7 @@ from ..registry.queries.expressions.parser import (
     PointNode,
     PolygonNode,
     RangeLiteral,
+    RegionNode,
     TreeVisitor,
     parse_expression,
 )
@@ -310,6 +311,16 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
 
         polygon = lsst.sphgeom.ConvexPolygon(sphgeom_vertices)
         return _make_literal(polygon)
+
+    def visitRegionNode(self, pos: _VisitorResult, node: RegionNode) -> _VisitorResult:
+        if isinstance(pos, _ColExpr):
+            expr = pos.value
+            if expr.expression_type == "string":
+                pos_str = expr.value
+                region = lsst.sphgeom.Region.from_ivoa_pos(pos_str)
+                return _make_literal(region)
+
+        raise InvalidQueryError(f"Expression '{node.pos}' in REGION() is not a literal string.")
 
     def visitRangeLiteral(
         self, start: int, stop: int, stride: int | None, node: RangeLiteral

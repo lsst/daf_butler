@@ -1118,8 +1118,12 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
     def visitPolygonNode(
         self, vertices: list[tuple[TransformationWrapper, TransformationWrapper]], node: Node
     ) -> TransformationWrapper:
-        # Docstring inherited from TreeVisitor.visitPlygonNode
+        # Docstring inherited from TreeVisitor.visitPolygonNode
         raise NotImplementedError("POLYGON() function is not supported yet")
+
+    def visitRegionNode(self, pos: TransformationWrapper, node: Node) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitRegionNode
+        raise NotImplementedError("REGION() function is not supported yet")
 
     def visitGlobNode(
         self, expression: TransformationWrapper, pattern: TransformationWrapper, node: Node

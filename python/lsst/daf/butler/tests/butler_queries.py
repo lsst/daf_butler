@@ -1906,6 +1906,10 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             ("POLYGON(320, -10, 320, 10, 340, 10, 340, -10)", False, 33),  # Match everything.
             ("POLYGON(320.99, -0.401, 320.99, -0.399, 321.01, -0.399, 321.01, -0.401)", False, 1),
             ("POLYGON(320.99, -0.501, 320.99, -0.499, 321.01, -0.499, 321.01, -0.501)", False, 0),
+            ("REGION('CIRCLE 320. -0.25 10.')", False, 33),  # Match everything.
+            ("REGION('RANGE 310 330 -10 10')", False, 33),  # Match everything.
+            ("REGION('RANGE 320.99 321.01 -0.401 -0.399')", False, 1),  # Small region on 1 detector.
+            ("REGION('POLYGON 320.99 -0.501 320.99 -0.499 321.01 -0.499 321.01 -0.501')", False, 0),
         ):
             if use_bind:
                 overlap_where = "visit_detector_region.region OVERLAPS :POS"

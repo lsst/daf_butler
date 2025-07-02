@@ -98,6 +98,9 @@ class _Visitor(TreeVisitor):
         params = ", ".join(str(param) for param in chain.from_iterable(vertices))
         return f"POLYGON({params})"
 
+    def visitRegionNode(self, pos, node):
+        return f"REGION({pos})"
+
     def visitTupleNode(self, expression, node):
         return f"TUPLE({expression})"
 
@@ -570,6 +573,22 @@ class ParserYaccTestCase(unittest.TestCase):
         ):
             tree = parser.parse("Polygon(:a IN (100), 1, 1, 1, 2, 2)")
 
+    def testRegionNode(self):
+        """Tests for REGION() function"""
+        parser = ParserYacc()
+
+        tree = parser.parse("REGION('CIRCLE 0 0 1')")
+        self.assertIsInstance(tree, exprTree.RegionNode)
+        self.assertIsInstance(tree.pos, exprTree.StringLiteral)
+        self.assertEqual(tree.pos.value, "CIRCLE 0 0 1")
+
+        with self.assertRaisesRegex(ValueError, "REGION requires a single string argument"):
+            tree = parser.parse("REGION()")
+        with self.assertRaisesRegex(ValueError, "REGION requires a single string argument"):
+            tree = parser.parse("REGION('CIRCLE', '0 1 1')")
+        with self.assertRaisesRegex(ValueError, "REGION argument must be either a string or a bind value"):
+            tree = parser.parse("region(a = b)")
+
     def testGlobNode(self):
         """Tests for GLOB() function"""
         parser = ParserYacc()
@@ -734,6 +753,10 @@ class ParserYaccTestCase(unittest.TestCase):
         tree = parser.parse("Polygon(ra, :dec, 0, 0, 180, 0)")
         result = tree.visit(visitor)
         self.assertEqual(result, "POLYGON(ID(ra), :(dec), N(0), N(0), N(180), N(0))")
+
+        tree = parser.parse("region('CIRCLE 0 0 1.')")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "REGION(S(CIRCLE 0 0 1.))")
 
         tree = parser.parse("glob(group, 'prefix#*')")
         result = tree.visit(visitor)
