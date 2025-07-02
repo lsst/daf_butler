@@ -56,8 +56,8 @@ class FileTransferSource(Protocol):
         dataset_ids : `~collections.abc.Iterable` [ `DatasetId` ]
             List of dataset IDs for which we will retrieve file information.
 
-        Return
-        ------
+        Returns
+        -------
         transfer_map : `FileTransferMap`
             Dictionary from `DatasetId` to a list of files found for that
             dataset.  If information about any  given dataset IDs could not
@@ -78,8 +78,8 @@ class FileTransferSource(Protocol):
             Optional mapping of datastore artifact to existence. Updated by
             this method with details of all artifacts tested.
 
-        Return
-        ------
+        Returns
+        -------
         transfer_map : `FileTransferMap`
             Dictionary from `DatasetId` to a list of files found for that
             dataset.  If information about any  given dataset IDs could not

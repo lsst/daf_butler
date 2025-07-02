@@ -1828,7 +1828,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             provided, the default collections are used. Can be a wildcard if
             ``find_first`` is `False` (if find first is requested the order
             of collections matters and wildcards make the order indeterminate).
-             See :ref:`daf_butler_collection_expressions` for more information.
+            See :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in

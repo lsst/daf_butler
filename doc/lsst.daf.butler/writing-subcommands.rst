@@ -433,6 +433,8 @@ An example implementation is:
 
 Which should be sufficient for most implementations where the commands are already stored in ``__all__``.
 
+.. _Manifest:
+
 Manifest (Deprecated)
 ---------------------
 
