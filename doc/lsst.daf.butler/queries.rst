@@ -327,6 +327,12 @@ where ``ra`` and ``dec`` are specified as an ICRS sky position in degrees.
 
     visit.region OVERLAPS POINT(53.6, -32.7)
 
+All types of regions supported by the language will work with ``OVERLAP`` as well.
+
+.. code-block:: sql
+
+    visit.region OVERLAPS BOX(53.6, -32.7, 1, 1)
+
 You can check overlaps with arbitrary sky regions by binding values (see
 :ref:`daf_butler_dimension_expressions_identifiers`).  Bound region values may
 be specified as the following object types:
@@ -364,15 +370,36 @@ consists of an identifier followed by zero or more comma-separated arguments
 enclosed in parentheses (e.g. ``func(1, 2, 3)``). An argument to a function
 can be any expression. Names of the functions are not case-sensitive.
 
-Presently the following functions are implemented in the query language:
+A small set of functions is implemented in the query language presently.
 
-- ``POINT(ra, dec)`` - function which declares (or returns) sky coordinates
-  similarly to ADQL syntax.
+Functions supporting operations on strings:
+
 - ``GLOB(expression, pattern)`` - performs case-sensitive match of a string
   ``expression`` against ``pattern``. Pattern can include ``*`` and ``?``
   meta-characters, matching any number of characters or a single character
   respectfully. All other characters in pattern are matched literally, and
   whole expression string has to match for ``GLOB()`` to return ``True``.
+
+Functions for defining sky coordinates or regions. All these functions accept
+either numeric literals or bind identifiers (``:name`` syntax):
+
+- ``POINT(ra, dec)`` - function which declares (or returns) sky coordinates
+  similarly to ADQL syntax, arguments are in degrees.
+- ``CIRCLE(ra, dec, radius)`` - function which returns circular sky region,
+  all arguments are in degrees.
+- ``BOX(center_ra, center_dec, width, height)`` - function which returns box
+  sky region, all arguments are in degrees.
+- ``POLYGON(ra1, dec1, ra2, dec2, ...)`` - function which returns polygonal
+  sky region, all arguments are in degrees, at least three pairs of coordinates
+  have to be provided. Note that implementation for this function is based on
+  ``lsst.sphgeom.ConvexPolygon`` class which builds a convex hull out of all
+  vertices, thus ignoring their order. This is not strictly consistent with
+  ADQL definition that relies on ordering of the vertices and allows non-convex
+  polygons.
+- ``REGION('string')`` - function returning sky region, string argument uses
+  `IVOA SIAv2 POS`_ syntax. Same caveat applies as for ``POLYGON`` function.
+
+.. _IVOA SIAv2 POS: https://ivoa.net/documents/SIA/20151223/REC-SIA-2.0-20151223.html#toc12
 
 
 .. _time-literals-syntax:

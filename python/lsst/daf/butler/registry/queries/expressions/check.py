@@ -285,6 +285,26 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from base class
         return TreeSummary()
 
+    def visitCircleNode(
+        self, ra: TreeSummary, dec: TreeSummary, radius: TreeSummary, node: Node
+    ) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
+    def visitPolygonNode(self, vertices: list[tuple[TreeSummary, TreeSummary]], node: Node) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
+    def visitRegionNode(self, pos: TreeSummary, node: Node) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
+    def visitBoxNode(
+        self, ra: TreeSummary, dec: TreeSummary, width: TreeSummary, height: TreeSummary, node: Node
+    ) -> TreeSummary:
+        # Docstring inherited from base class
+        return TreeSummary()
+
     def visitGlobNode(self, expression: TreeSummary, pattern: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from base class
         # pattern is a literal, but expression should refer to a dimension.

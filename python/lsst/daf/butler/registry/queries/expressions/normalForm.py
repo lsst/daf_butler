@@ -1098,6 +1098,33 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitPointNode
         raise NotImplementedError("POINT() function is not supported yet")
 
+    def visitCircleNode(
+        self, ra: TransformationWrapper, dec: TransformationWrapper, radius: TransformationWrapper, node: Node
+    ) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitCircleNode
+        raise NotImplementedError("CIRCLE() function is not supported yet")
+
+    def visitBoxNode(
+        self,
+        ra: TransformationWrapper,
+        dec: TransformationWrapper,
+        width: TransformationWrapper,
+        height: TransformationWrapper,
+        node: Node,
+    ) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitBoxNode
+        raise NotImplementedError("BOX() function is not supported yet")
+
+    def visitPolygonNode(
+        self, vertices: list[tuple[TransformationWrapper, TransformationWrapper]], node: Node
+    ) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitPolygonNode
+        raise NotImplementedError("POLYGON() function is not supported yet")
+
+    def visitRegionNode(self, pos: TransformationWrapper, node: Node) -> TransformationWrapper:
+        # Docstring inherited from TreeVisitor.visitRegionNode
+        raise NotImplementedError("REGION() function is not supported yet")
+
     def visitGlobNode(
         self, expression: TransformationWrapper, pattern: TransformationWrapper, node: Node
     ) -> TransformationWrapper:

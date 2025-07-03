@@ -36,7 +36,16 @@ from uuid import UUID
 if TYPE_CHECKING:
     import astropy.time
 
-    from .exprTree import GlobNode, Node, PointNode, RangeLiteral
+    from .exprTree import (
+        BoxNode,
+        CircleNode,
+        GlobNode,
+        Node,
+        PointNode,
+        PolygonNode,
+        RangeLiteral,
+        RegionNode,
+    )
 
 
 T = TypeVar("T")
@@ -263,6 +272,62 @@ class TreeVisitor(Generic[T], ABC):
             methods of this class as a result of transformation of function
             arguments.
         node : `PointNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitCircleNode(self, ra: T, dec: T, radius: T, node: CircleNode) -> T:
+        """Visit CircleNode node.
+
+        Parameters
+        ----------
+        ra, dec, radius : `object`
+            Representation of 'ra', 'dec', and 'radius' values, objects
+            returned by methods of this class as a result of transformation of
+            function arguments.
+        node : `CircleNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitBoxNode(self, ra: T, dec: T, width: T, height: T, node: BoxNode) -> T:
+        """Visit BoxNode node.
+
+        Parameters
+        ----------
+        ra, dec, width, height : `object`
+            Representation of BoxNode parameters values, objects returned by
+            methods of this class as a result of transformation of function
+            arguments.
+        node : `BoxNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitPolygonNode(self, vertices: list[tuple[T, T]], node: PolygonNode) -> T:
+        """Visit BoxNode node.
+
+        Parameters
+        ----------
+        vertices : `list` [`tuple`]
+            Representation of BoxNode vertices, objects returned by
+            methods of this class as a result of transformation of function
+            arguments.
+        node : `PolygonNode`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitRegionNode(self, pos: T, node: RegionNode) -> T:
+        """Visit RegionNode node.
+
+        Parameters
+        ----------
+        pos : `object`
+            Representation of RegionNode argument, object returned by
+            methods of this class as a result of transformation of function
+            arguments.
+        node : `RegionNode`
             Corresponding tree node, mostly useful for diagnostics.
         """
 

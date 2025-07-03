@@ -39,6 +39,8 @@ from __future__ import annotations
 
 __all__ = [
     "BinaryOp",
+    "BoxNode",
+    "CircleNode",
     "FunctionCall",
     "Identifier",
     "IsIn",
@@ -46,7 +48,9 @@ __all__ = [
     "NumericLiteral",
     "Parens",
     "PointNode",
+    "PolygonNode",
     "RangeLiteral",
+    "RegionNode",
     "StringLiteral",
     "TimeLiteral",
     "TupleNode",
@@ -218,7 +222,7 @@ class TimeLiteral(LiteralNode):
         return visitor.visitTimeLiteral(self.value, self)
 
     def __str__(self) -> str:
-        return "'{value}'".format(**vars(self))
+        return "T'{value}'".format(**vars(self))
 
 
 class NumericLiteral(LiteralNode):
@@ -263,7 +267,7 @@ class UuidLiteral(LiteralNode):
         return visitor.visitUuidLiteral(self.value, self)
 
     def __str__(self) -> str:
-        return str(self.value)
+        return f"UUID('{self.value}')"
 
 
 class Identifier(Node):
@@ -310,7 +314,7 @@ class BindName(Node):
         return visitor.visitBind(self.name, self)
 
     def __str__(self) -> str:
-        return "{name}".format(**vars(self))
+        return ":{name}".format(**vars(self))
 
 
 class RangeLiteral(LiteralNode):
@@ -488,6 +492,115 @@ class PointNode(Node):
         return f"POINT({self.ra}, {self.dec})"
 
 
+class CircleNode(Node):
+    """Node representing a circle, (ra, dec, radius) pair.
+
+    Parameters
+    ----------
+    ra : `Node`
+        Node representing circle center ra value.
+    dec : `Node`
+        Node representing circle center dec value.
+    radius : `Node`
+        Node representing circle radius value.
+    """
+
+    def __init__(self, ra: Node, dec: Node, radius: Node):
+        super().__init__((ra, dec, radius))
+        self.ra = ra
+        self.dec = dec
+        self.radius = radius
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        ra = self.ra.visit(visitor)
+        dec = self.dec.visit(visitor)
+        radius = self.radius.visit(visitor)
+        return visitor.visitCircleNode(ra, dec, radius, self)
+
+    def __str__(self) -> str:
+        return f"CIRCLE({self.ra}, {self.dec}, {self.radius})"
+
+
+class BoxNode(Node):
+    """Node representing box region in ADQL notation (ra, dec, width, height).
+
+    Parameters
+    ----------
+    ra : `Node`
+        Node representing box center ra value.
+    dec : `Node`
+        Node representing box center dec value.
+    width : `Node`
+        Node representing box ra width value.
+    height : `Node`
+        Node representing box dec height value.
+    """
+
+    def __init__(self, ra: Node, dec: Node, width: Node, height: Node):
+        super().__init__((ra, dec, width, height))
+        self.ra = ra
+        self.dec = dec
+        self.width = width
+        self.height = height
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        ra = self.ra.visit(visitor)
+        dec = self.dec.visit(visitor)
+        width = self.width.visit(visitor)
+        height = self.height.visit(visitor)
+        return visitor.visitBoxNode(ra, dec, width, height, self)
+
+    def __str__(self) -> str:
+        return f"BOX({self.ra}, {self.dec}, {self.width}, {self.height})"
+
+
+class PolygonNode(Node):
+    """Node representing polygon region in ADQL notation.
+
+    Parameters
+    ----------
+    vertices : `list`[`tuple`[`Node`, `Node`]]
+        Node representing vertices of polygon.
+    """
+
+    def __init__(self, vertices: list[tuple[Node, Node]]):
+        super().__init__(sum(vertices, start=()))
+        self.vertices = vertices
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        vertices = [(ra.visit(visitor), dec.visit(visitor)) for ra, dec in self.vertices]
+        return visitor.visitPolygonNode(vertices, self)
+
+    def __str__(self) -> str:
+        params = ", ".join(str(param) for param in self.children)
+        return f"POLYGON({params})"
+
+
+class RegionNode(Node):
+    """Node representing region using IVOA SIAv2 POS notation.
+
+    Parameters
+    ----------
+    pos : `Node`
+        IVOA SIAv2 POS string representation of a region.
+    """
+
+    def __init__(self, pos: Node):
+        super().__init__((pos,))
+        self.pos = pos
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        pos = self.pos.visit(visitor)
+        return visitor.visitRegionNode(pos, self)
+
+    def __str__(self) -> str:
+        return f"REGION({self.pos})"
+
+
 class GlobNode(Node):
     """Node representing a call to GLOB(pattern, expression) function.
 
@@ -536,11 +649,45 @@ def function_call(function: str, args: list[Node]) -> Node:
     functions. Tree visitors will most likely raise an error when visiting
     `FunctionCall` nodes.
     """
-    if function.upper() == "POINT":
+    function_name = function.upper()
+    if function_name == "POINT":
         if len(args) != 2:
             raise ValueError("POINT requires two arguments (ra, dec)")
         return PointNode(*args)
-    elif function.upper() == "GLOB":
+    elif function_name == "CIRCLE":
+        if len(args) != 3:
+            raise ValueError("CIRCLE requires three arguments (ra, dec, radius)")
+        # Check types of arguments, we want to support expressions too.
+        for name, arg in zip(("ra", "dec", "radius"), args, strict=True):
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError(f"CIRCLE {name} argument must be either numeric expression or bind value.")
+        return CircleNode(*args)
+    elif function_name == "BOX":
+        if len(args) != 4:
+            raise ValueError("CIRCLE requires four arguments (ra, dec, width, height)")
+        # Check types of arguments, we want to support expressions too.
+        for name, arg in zip(("ra", "dec", "width", "height"), args, strict=True):
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError(f"BOX {name} argument must be either numeric expression or bind value.")
+        return BoxNode(*args)
+    elif function_name == "POLYGON":
+        if len(args) % 2 != 0:
+            raise ValueError("POLYGON requires even number of arguments")
+        if len(args) < 6:
+            raise ValueError("POLYGON requires at least three vertices")
+        # Check types of arguments, we want to support expressions too.
+        for arg in args:
+            if not isinstance(arg, NumericLiteral | BindName | Identifier | BinaryOp | UnaryOp):
+                raise ValueError("POLYGON argument must be either numeric expression or bind value.")
+        vertices = list(zip(args[::2], args[1::2]))
+        return PolygonNode(vertices)
+    elif function_name == "REGION":
+        if len(args) != 1:
+            raise ValueError("REGION requires a single string argument")
+        if not isinstance(args[0], StringLiteral | BindName | Identifier):
+            raise ValueError("REGION argument must be either a string or a bind value")
+        return RegionNode(args[0])
+    elif function_name == "GLOB":
         if len(args) != 2:
             raise ValueError("GLOB requires two arguments (pattern, expression)")
         expression, pattern = (_strip_parens(arg) for arg in args)
@@ -549,7 +696,7 @@ def function_call(function: str, args: list[Node]) -> Node:
         if not isinstance(pattern, StringLiteral | BindName):
             raise TypeError("glob() second argument must be a string or a bind name (prefixed with colon)")
         return GlobNode(expression, pattern)
-    elif function.upper() == "UUID":
+    elif function_name == "UUID":
         if len(args) != 1:
             raise ValueError("UUID() requires a single arguments (uuid-string)")
         argument = _strip_parens(args[0])

@@ -457,6 +457,40 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         # do not support actual use just yet.
         raise NotImplementedError("POINT() function is not supported yet")
 
+    def visitCircleNode(
+        self, ra: VisitorResult, dec: VisitorResult, radius: VisitorResult, node: Node
+    ) -> VisitorResult:
+        # Docstring inherited.
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("CIRCLE() function is not supported yet")
+
+    def visitBoxNode(
+        self, ra: VisitorResult, dec: VisitorResult, width: VisitorResult, height: VisitorResult, node: Node
+    ) -> VisitorResult:
+        # Docstring inherited.
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("BOX() function is not supported yet")
+
+    def visitPolygonNode(
+        self, vertices: list[tuple[VisitorResult, VisitorResult]], node: Node
+    ) -> VisitorResult:
+        # Docstring inherited.
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("POLYGON() function is not supported yet")
+
+    def visitRegionNode(self, pos: VisitorResult, node: Node) -> VisitorResult:
+        # Docstring inherited.
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("REGION() function is not supported yet")
+
     def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> VisitorResult:
         # Docstring inherited.
         return ColumnContainer.range_literal(range(start, stop + 1, stride or 1))
