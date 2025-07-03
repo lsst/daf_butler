@@ -391,9 +391,13 @@ either numeric literals or bind identifiers (``:name`` syntax):
   sky region, all arguments are in degrees.
 - ``POLYGON(ra1, dec1, ra2, dec2, ...)`` - function which returns polygonal
   sky region, all arguments are in degrees, at least three pairs of coordinates
-  have to be provided.
+  have to be provided. Note that implementation for this function is based on
+  ``lsst.sphgeom.ConvexPolygon`` class which builds a convex hull out of all
+  vertices, thus ignoring their order. This is not strictly consistent with
+  ADQL definition that relies on ordering of the vertices and allows non-convex
+  polygons.
 - ``REGION('string')`` - function returning sky region, string argument uses
-  `IVOA SIAv2 POS`_ syntax.
+  `IVOA SIAv2 POS`_ syntax. Same caveat applies as for ``POLYGON`` function.
 
 .. _IVOA SIAv2 POS: https://ivoa.net/documents/SIA/20151223/REC-SIA-2.0-20151223.html#toc12
 
