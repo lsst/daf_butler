@@ -222,7 +222,7 @@ class TimeLiteral(LiteralNode):
         return visitor.visitTimeLiteral(self.value, self)
 
     def __str__(self) -> str:
-        return "'{value}'".format(**vars(self))
+        return "T'{value}'".format(**vars(self))
 
 
 class NumericLiteral(LiteralNode):
@@ -267,7 +267,7 @@ class UuidLiteral(LiteralNode):
         return visitor.visitUuidLiteral(self.value, self)
 
     def __str__(self) -> str:
-        return str(self.value)
+        return f"UUID('{self.value}')"
 
 
 class Identifier(Node):
@@ -314,7 +314,7 @@ class BindName(Node):
         return visitor.visitBind(self.name, self)
 
     def __str__(self) -> str:
-        return "{name}".format(**vars(self))
+        return ":{name}".format(**vars(self))
 
 
 class RangeLiteral(LiteralNode):
@@ -576,7 +576,7 @@ class PolygonNode(Node):
 
     def __str__(self) -> str:
         params = ", ".join(str(param) for param in self.children)
-        return f"BOX({params})"
+        return f"POLYGON({params})"
 
 
 class RegionNode(Node):
