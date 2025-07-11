@@ -484,11 +484,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         )
 
     def _fetch_dataset_type_record(self, name: str) -> _DatasetTypeRecord | None:
-        """Retrieve all dataset types defined in database.
+        """Retrieve a single dataset types definition from the database.
 
-        Yields
-        ------
-        dataset_types : `_DatasetTypeRecord`
+        Returns
+        -------
+        dataset_type : `_DatasetTypeRecord`
             Information from a single database record.
         """
         c = self._static.dataset_type.columns
@@ -536,7 +536,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # - getDatasetRef is a special case for a dataset type that should
         #   already exist, but is looked up via a dataset ID rather than its
         #   name.  It also never changes whether the cache is full, and it's
-        #   handles separately essentially as an optimization: we can fetch a
+        #   handled separately essentially as an optimization: we can fetch a
         #   single dataset type definition record in a join when we query for
         #   the dataset type based on the dataset ID, and this is better than
         #   blindly fetching all dataset types in a separate query.
