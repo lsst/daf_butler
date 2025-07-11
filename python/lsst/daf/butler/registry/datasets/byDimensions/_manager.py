@@ -603,7 +603,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
         # Docstring inherited from DatasetRecordStorageManager.
-        summaries = self._summaries.fetch_summaries([collection], None, self._dataset_type_from_row)
+        summaries = self.fetch_summaries([collection], None)
         return summaries[collection.key]
 
     def fetch_summaries(
