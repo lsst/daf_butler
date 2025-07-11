@@ -646,11 +646,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 non_chains.append(collection)
         # Actually do the fetch for the non-chain collections.
         summaries.update(
-            self._summaries.fetch_summaries(
+            self._fetch_synthetic_summaries(
                 non_chains,
                 # Fetch summaries for all dataset types if we are caching.
                 (dataset_type_names if self._caching_context.collection_summaries is None else None),
-                self._dataset_type_from_row,
             )
         )
         # Add empty summary for any missing collection.
@@ -664,6 +663,99 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         if self._caching_context.collection_summaries is not None:
             self._caching_context.collection_summaries.update(summaries)
         return summaries
+
+    def _fetch_synthetic_summaries(
+        self,
+        collections: Iterable[CollectionRecord] | None,
+        dataset_type_names: Iterable[str] | None,
+    ) -> Mapping[Any, CollectionSummary]:
+        tables_by_dimensions: dict[DimensionGroup, DynamicTables] = {}
+        dataset_type_ids_by_dimensions: dict[DimensionGroup, list[int]] = {}
+        if dataset_type_names is None:
+            if not self._cache.dimensions_full or not self._cache.full:
+                self.preload_cache()
+            dataset_types_by_id = {
+                dataset_type_id: dataset_type for dataset_type, dataset_type_id in self._cache.items()
+            }
+            tables_by_dimensions.update(self._cache.by_dimensions_items())
+        else:
+            dataset_types_by_id = {}
+            dataset_type_ids_by_dimensions = {}
+            for dataset_type_name in dataset_type_names:
+                dataset_record_storage = self._find_storage(dataset_type_name)
+                tables_by_dimensions[dataset_record_storage.dataset_type.dimensions] = (
+                    dataset_record_storage.dynamic_tables
+                )
+                dataset_type_ids_by_dimensions.setdefault(
+                    dataset_record_storage.dataset_type.dimensions, []
+                ).append(dataset_record_storage.dataset_type_id)
+                dataset_types_by_id[dataset_record_storage.dataset_type_id] = (
+                    dataset_record_storage.dataset_type
+                )
+        sql_selects = []
+        for dimensions, dynamic_tables in tables_by_dimensions.items():
+            sql_selects.append(
+                self._make_synthetic_summary_select(
+                    dimensions,
+                    dynamic_tables.tags(self._db, type(self._collections), self._cache.tables),
+                    collections,
+                    dataset_type_ids_by_dimensions.get(dimensions, None),
+                )
+            )
+            if dynamic_tables.calibs_name is not None:
+                sql_selects.append(
+                    self._make_synthetic_summary_select(
+                        dimensions,
+                        dynamic_tables.calibs(self._db, type(self._collections), self._cache.tables),
+                        collections,
+                        dataset_type_ids_by_dimensions.get(dimensions, None),
+                    )
+                )
+        summaries: dict[Any, CollectionSummary] = {}
+        if not sql_selects:
+            return summaries
+        sql = sqlalchemy.union(*sql_selects)
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
+            collection_key = row["collection_key"]
+            dataset_type = dataset_types_by_id[row["dataset_type_id"]]
+            if (summary := summaries.get(collection_key)) is None:
+                summary = CollectionSummary()
+                summaries[collection_key] = summary
+            summary.dataset_types.add(dataset_type)
+            for dimension_name in dataset_type.dimensions.governors:
+                value = row[dimension_name]
+                if value is not None:
+                    summary.governors.setdefault(dimension_name, set()).add(value)
+        return summaries
+
+    def _make_synthetic_summary_select(
+        self,
+        dimensions: DimensionGroup,
+        table: sqlalchemy.Table,
+        collections: Iterable[CollectionRecord] | None,
+        dataset_type_ids: Iterable[int] | None,
+    ) -> sqlalchemy.Select:
+        collection_column = table.columns[self._collections.getCollectionForeignKeyName()]
+        dataset_type_column = table.columns["dataset_type_id"]
+        columns = [
+            collection_column.label("collection_key"),
+            dataset_type_column.label("dataset_type_id"),
+        ]
+        group_by = [collection_column, dataset_type_column]
+        for dimension in self._dimensions.universe.getGovernorDimensions():
+            if dimension.name in dimensions:
+                columns.append(table.columns[dimension.name].label(dimension.name))
+                group_by.append(table.columns[dimension.name])
+            else:
+                columns.append(sqlalchemy.null().label(dimension.name))
+        sql = sqlalchemy.select(*columns).group_by(*group_by)
+        if collections is not None:
+            sql = sql.where(collection_column.in_([c.key for c in collections]))
+        if dataset_type_ids is not None:
+            sql = sql.where(dataset_type_column.in_(dataset_type_ids))
+        return sql
 
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""

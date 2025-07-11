@@ -4211,29 +4211,10 @@ class RegistryTests(ABC):
         refs = list(registry.queryDatasets(..., collections=[tagged_coll]))
         registry.disassociate(tagged_coll, refs)
 
-        # Summaries should not have changed.
+        # Summaries should reflect deletions
         summary = registry.getCollectionSummary(tagged_coll)
-        self.assertEqual(summary.dataset_types.names, {"bias", "flat"})
-        self.assertEqual(summary.governors, {"instrument": {"Cam1"}})
-
-        # Cleanup summaries.
-        registry.refresh_collection_summaries()
-        summary = registry.getCollectionSummary(tagged_coll)
-        self.assertFalse(summary.dataset_types.names)
-        # We do not clean governor summaries yet, but because how the query is
-        # run, it returns empty governors when collection is missing from
-        # summaries.
-        self.assertFalse(summary.governors)
-
-        # Add dataset with different governor, this is to test that governors
-        # are not actually cleaned.
-        refs = registry.insertDatasets("test", [{"skymap": "SkyMap1", "tract": 0, "patch": 0}], "imported_g")
-        registry.associate(tagged_coll, refs)
-        summary = registry.getCollectionSummary(tagged_coll)
-        self.assertEqual(summary.dataset_types.names, {"test"})
-        # Note that instrument governor resurrects here, even though there are
-        # no datasets left with that governor.
-        self.assertEqual(summary.governors, {"instrument": {"Cam1"}, "skymap": {"SkyMap1"}})
+        self.assertEqual(summary.dataset_types.names, set())
+        self.assertEqual(summary.governors, {})
 
     def test_temp_table_config(self) -> None:
         config = self.makeRegistryConfig()
