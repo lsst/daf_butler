@@ -115,7 +115,7 @@ class DatasetTypeCache:
 
     def set(
         self,
-        data: Iterable[tuple[DatasetType, int]],
+        data: Iterable[tuple[DatasetType, int]] | None = None,
         *,
         full: bool = False,
         dimensions_data: Iterable[tuple[DimensionGroup, DynamicTables]] | None = None,
@@ -125,20 +125,25 @@ class DatasetTypeCache:
 
         Parameters
         ----------
-        data : `~collections.abc.Iterable`
-            Sequence of tuples of `DatasetType` and an extra opaque object.
+        data : `~collections.abc.Iterable`, optional
+            Sequence of tuples of `DatasetType` and an extra opaque object. If
+            `None`, the by-name cache is not modified.
         full : `bool`, optional
             If `True` then ``data`` contains all known dataset types.
         dimensions_data : `~collections.abc.Iterable`, optional
             Sequence of tuples of `DimensionGroup` and an extra opaque object.
         dimensions_full : `bool`, optional
             If `True` then ``data`` contains all known dataset type dimensions.
+            If `None`, the by-dimensions cache is not modified.
         """
-        self.clear()
-        for item in data:
-            self._by_name_cache[item[0].name] = item
-        self._full = full
+        if data is not None:
+            self._by_name_cache.clear()
+            for item in data:
+                self._by_name_cache[item[0].name] = item
+            self._full = False
+            self._full = full
         if dimensions_data is not None:
+            self._by_dimensions_cache.clear()
             self._by_dimensions_cache.update(dimensions_data)
             self._dimensions_full = dimensions_full
 
