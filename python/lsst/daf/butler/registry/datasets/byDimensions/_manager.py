@@ -30,7 +30,7 @@ from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
 from ...queries import SqlQueryContext  # old registry query system
-from ...wildcards import DatasetTypeWildcard
+from ...wildcards import CollectionWildcard, DatasetTypeWildcard
 from ._dataset_type_cache import DatasetTypeCache
 from .summaries import CollectionSummaryManager
 from .tables import DynamicTables, addDatasetForeignKey, makeStaticTableSpecs, makeTagTableSpec
@@ -194,7 +194,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             collections=collections,
             dimensions=dimensions,
             dataset_type_table=static.dataset_type,
-            caching_context=caching_context,
         )
         return cls(
             db=db,
@@ -277,7 +276,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             collections=collections,
             dimensions=dimensions,
             static=self._static,
-            summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
+            summaries=self._summaries.clone(db=db, collections=collections),
             registry_schema_version=self._registry_schema_version,
             caching_context=caching_context,
             # See notes on DatasetTypeCache.clone() about cache behavior after
@@ -618,10 +617,53 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         dataset_types: Iterable[DatasetType] | Iterable[str] | None = None,
     ) -> Mapping[Any, CollectionSummary]:
         # Docstring inherited from DatasetRecordStorageManager.
+        summaries: dict[Any, CollectionSummary] = {}
         dataset_type_names: Iterable[str] | None = None
         if dataset_types is not None:
             dataset_type_names = set(get_dataset_type_name(dt) for dt in dataset_types)
-        return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
+        # Check what we have in cache first.
+        if self._caching_context.collection_summaries is not None:
+            summaries, missing_keys = self._caching_context.collection_summaries.find_summaries(
+                [record.key for record in collections]
+            )
+            if not missing_keys:
+                return summaries
+            else:
+                collections = [record for record in collections if record.key in missing_keys]
+        # Need to expand all chained collections first.
+        non_chains: list[CollectionRecord] = []
+        chains: dict[CollectionRecord, list[CollectionRecord]] = {}
+        for collection in collections:
+            if collection.type is CollectionType.CHAINED:
+                children = self._collections.resolve_wildcard(
+                    CollectionWildcard.from_names([collection.name]),
+                    flatten_chains=True,
+                    include_chains=False,
+                )
+                non_chains += children
+                chains[collection] = children
+            else:
+                non_chains.append(collection)
+        # Actually do the fetch for the non-chain collections.
+        summaries.update(
+            self._summaries.fetch_summaries(
+                non_chains,
+                # Fetch summaries for all dataset types if we are caching.
+                (dataset_type_names if self._caching_context.collection_summaries is None else None),
+                self._dataset_type_from_row,
+            )
+        )
+        # Add empty summary for any missing collection.
+        for collection in non_chains:
+            if collection.key not in summaries:
+                summaries[collection.key] = CollectionSummary()
+        # Merge children into their chains summaries.
+        for chain, children in chains.items():
+            summaries[chain.key] = CollectionSummary.union(*(summaries[child.key] for child in children))
+        # Update the cache if it's active.
+        if self._caching_context.collection_summaries is not None:
+            self._caching_context.collection_summaries.update(summaries)
+        return summaries
 
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""
