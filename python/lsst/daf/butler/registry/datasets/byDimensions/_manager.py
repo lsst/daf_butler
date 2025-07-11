@@ -134,6 +134,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
+    caching_context : `CachingContext`
+        Object controlling caching of information returned by managers.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
     _cache : `None`, optional
@@ -148,6 +150,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
         _cache: DatasetTypeCache | None = None,
     ):
@@ -157,6 +160,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
+        self._caching_context = caching_context
         self._cache = _cache if _cache is not None else DatasetTypeCache()
         self._use_astropy_ingest_date = self.ingest_date_dtype() is ddl.AstropyTimeNsecTai
         self._run_key_column = collections.getRunForeignKeyName()
@@ -198,6 +202,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=static,
             summaries=summaries,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -274,6 +279,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             static=self._static,
             summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
             registry_schema_version=self._registry_schema_version,
+            caching_context=caching_context,
             # See notes on DatasetTypeCache.clone() about cache behavior after
             # cloning.
             _cache=self._cache.clone(),
