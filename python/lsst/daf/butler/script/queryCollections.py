@@ -145,31 +145,32 @@ def _getTable(
             for row in collection_table:
                 table.add_row(row)
 
-    collections = sorted(
-        butler.collections.query_info(
-            glob or "*",
-            collection_types=frozenset(collection_type),
-            include_parents=inverse,
-            include_summary=show_dataset_types,
+    with butler.registry.caching_context():
+        collections = sorted(
+            butler.collections.query_info(
+                glob or "*",
+                collection_types=frozenset(collection_type),
+                include_parents=inverse,
+                include_summary=show_dataset_types,
+            )
         )
-    )
-    if inverse:
-        for info in collections:
-            addCollection(info, "parents")
-        # If none of the datasets has a parent dataset then remove the
-        # description column.
-        if not any(c for c in table[descriptionCol]):
-            del table[descriptionCol]
-    else:
-        for info in collections:
-            if info.type == CollectionType.CHAINED:
-                addCollection(info, "children")
-            else:
-                addCollection(info, "self")
-        # If there aren't any CHAINED datasets in the results then remove the
-        # description column.
-        if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
-            del table[descriptionCol]
+        if inverse:
+            for info in collections:
+                addCollection(info, "parents")
+            # If none of the datasets has a parent dataset then remove the
+            # description column.
+            if not any(c for c in table[descriptionCol]):
+                del table[descriptionCol]
+        else:
+            for info in collections:
+                if info.type == CollectionType.CHAINED:
+                    addCollection(info, "children")
+                else:
+                    addCollection(info, "self")
+            # If there aren't any CHAINED datasets in the results then remove
+            # the description column.
+            if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
+                del table[descriptionCol]
 
     return table
 
@@ -252,14 +253,15 @@ def _getTree(
                     cinfo = butler.collections.get_info(name, include_summary=show_dataset_types)
                     addCollection(cinfo, level + 1)
 
-    collections = butler.collections.query_info(
-        glob or "*",
-        collection_types=frozenset(collection_type),
-        include_parents=inverse,
-        include_summary=show_dataset_types,
-    )
-    for collection in sorted(collections):
-        addCollection(collection)
+    with butler.registry.caching_context():
+        collections = butler.collections.query_info(
+            glob or "*",
+            collection_types=frozenset(collection_type),
+            include_parents=inverse,
+            include_summary=show_dataset_types,
+        )
+        for collection in sorted(collections):
+            addCollection(collection)
     return table
 
 
@@ -319,16 +321,17 @@ def _getList(
         for row in collection_table:
             table.add_row(row)
 
-    collections = list(
-        butler.collections.query_info(
-            glob or "*",
-            collection_types=frozenset(collection_type),
-            flatten_chains=flatten_chains,
-            include_summary=show_dataset_types,
+    with butler.registry.caching_context():
+        collections = list(
+            butler.collections.query_info(
+                glob or "*",
+                collection_types=frozenset(collection_type),
+                flatten_chains=flatten_chains,
+                include_summary=show_dataset_types,
+            )
         )
-    )
-    for collection in collections:
-        addCollection(collection)
+        for collection in collections:
+            addCollection(collection)
 
     return table
 
