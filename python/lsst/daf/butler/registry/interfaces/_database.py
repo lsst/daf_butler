@@ -1867,14 +1867,15 @@ class Database(ABC):
         value.
         """
         if os.environ.get("DAF_BUTLER_DEBUG_QUERIES", False):
-            assert isinstance(sql, sqlalchemy.SelectBase)
-            compiled = sql.compile(connection)
-            print(
-                f"Executing SQL statement:\n{compiled}\nBind parameters: {compiled.params}", file=sys.stderr
-            )
+            if isinstance(sql, sqlalchemy.SelectBase):
+                compiled = sql.compile(connection)
+                print(
+                    f"Executing SQL statement:\n{compiled}\nBind parameters: {compiled.params}",
+                    file=sys.stderr,
+                )
 
-            query_plan = get_query_plan(connection, sql)
-            print(f"Query plan:\n{query_plan}", file=sys.stderr)
+                query_plan = get_query_plan(connection, sql)
+                print(f"Query plan:\n{query_plan}", file=sys.stderr)
 
     @abstractmethod
     def constant_rows(
