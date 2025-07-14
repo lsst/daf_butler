@@ -693,21 +693,32 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     dataset_record_storage.dataset_type
                 )
         sql_selects = []
+        tag_collections: list[CollectionRecord] | None = None
+        calib_collections: list[CollectionRecord] | None = None
+        if collections is not None:
+            tag_collections = []
+            calib_collections = []
+            for record in collections:
+                if record.type is CollectionType.CALIBRATION:
+                    calib_collections.append(record)
+                else:
+                    tag_collections.append(record)
         for dimensions, dynamic_tables in tables_by_dimensions.items():
-            sql_selects.append(
-                self._make_synthetic_summary_select(
-                    dimensions,
-                    dynamic_tables.tags(self._db, type(self._collections), self._cache.tables),
-                    collections,
-                    dataset_type_ids_by_dimensions.get(dimensions, None),
+            if tag_collections or tag_collections is None:
+                sql_selects.append(
+                    self._make_synthetic_summary_select(
+                        dimensions,
+                        dynamic_tables.tags(self._db, type(self._collections), self._cache.tables),
+                        tag_collections,
+                        dataset_type_ids_by_dimensions.get(dimensions, None),
+                    )
                 )
-            )
-            if dynamic_tables.calibs_name is not None:
+            if dynamic_tables.calibs_name is not None and (calib_collections or calib_collections is None):
                 sql_selects.append(
                     self._make_synthetic_summary_select(
                         dimensions,
                         dynamic_tables.calibs(self._db, type(self._collections), self._cache.tables),
-                        collections,
+                        calib_collections,
                         dataset_type_ids_by_dimensions.get(dimensions, None),
                     )
                 )
