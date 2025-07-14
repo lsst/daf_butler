@@ -325,8 +325,8 @@ class ButlerCollections(ABC, Sequence):
             Whether the returned information includes dataset type and
             governor information for the collections.
         include_doc : `bool`, optional
-            Whether the returned information includes collection documentation
-            string.
+            Whether the returned information includes the collection
+            documentation string.
         summary_datasets : `~collections.abc.Iterable` [ `DatasetType` ] or \
             `~collections.abc.Iterable` [ `str` ], optional
             Dataset types to include in returned summaries. Only used if
@@ -351,7 +351,11 @@ class ButlerCollections(ABC, Sequence):
 
     @abstractmethod
     def get_info(
-        self, name: str, include_parents: bool = False, include_summary: bool = False
+        self,
+        name: str,
+        include_parents: bool = False,
+        include_summary: bool = False,
+        include_doc: bool = False,
     ) -> CollectionInfo:
         """Obtain information for a specific collection.
 
@@ -364,6 +368,9 @@ class ButlerCollections(ABC, Sequence):
         include_summary : `bool`, optional
            If `True` dataset type names and governor dimensions of datasets
            stored in this collection will be included in the result.
+        include_doc : `bool`, optional
+            Whether the returned information includes the collection
+            documentation string.
 
         Returns
         -------
