@@ -427,11 +427,13 @@ class DefaultCollectionManager(CollectionManager[K]):
         cache: CollectionRecordCache | None = None
         result: list[CollectionRecord[K]] = []
         done_keys: set[K] = set()
+        explicit_names = list(wildcard.strings)
         if wildcard.patterns:
-            if wildcard.strings:
+            if explicit_names or flatten_chains:
                 # To be efficient in case both patterns and strings are
                 # specified we want to have caching enabled for at least the
-                # duration of this call.
+                # duration of this call. Chains flattening can also produce
+                # additional names to look for.
                 cache = self._caching_context.collection_records or CollectionRecordCache()
             all_records = self._fetch_all(cache)
             for record in filter_types(all_records):
@@ -439,11 +441,17 @@ class DefaultCollectionManager(CollectionManager[K]):
                     if any(p.fullmatch(record.name) for p in wildcard.patterns):
                         result.append(record)
                         done_keys.add(record.key)
+            if flatten_chains:
+                # If flattening include children names of all matching chains.
+                for record in all_records:
+                    if isinstance(record, ChainedCollectionRecord):
+                        if any(p.fullmatch(record.name) for p in wildcard.patterns):
+                            explicit_names.extend(record.children)
 
-        if wildcard.strings:
+        if explicit_names:
             # _find_many() returns correctly ordered records, but there may be
             # duplicates.
-            for record in filter_types(self._find_many(wildcard.strings, flatten_chains, cache)):
+            for record in filter_types(self._find_many(explicit_names, flatten_chains, cache)):
                 if record.key not in done_keys:
                     result.append(record)
                     done_keys.add(record.key)
