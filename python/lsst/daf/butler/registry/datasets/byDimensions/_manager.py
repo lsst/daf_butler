@@ -669,6 +669,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collections: Iterable[CollectionRecord] | None,
         dataset_type_names: Iterable[str] | None,
     ) -> Mapping[Any, CollectionSummary]:
+        _LOG.debug("Preparing query for fetching synthetic collection summaries.")
         tables_by_dimensions: dict[DimensionGroup, DynamicTables] = {}
         dataset_type_ids_by_dimensions: dict[DimensionGroup, list[int]] = {}
         if dataset_type_names is None:
@@ -726,8 +727,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         if not sql_selects:
             return summaries
         sql = sqlalchemy.union(*sql_selects)
+        _LOG.debug("Executing query for fetching synthetic collection summaries.")
         with self._db.query(sql) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
+        _LOG.debug("Processing query results for synthetic collection summaries.")
         for row in sql_rows:
             collection_key = row["collection_key"]
             dataset_type = dataset_types_by_id[row["dataset_type_id"]]
