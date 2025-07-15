@@ -258,6 +258,12 @@ class CollectionSummary:
     collection in the query.
     """
 
+    exact: bool = dataclasses.field(default=False)
+    """Whether the dataset types in this summary are exact (vs. a conservative
+    guess that may include dataset types that were fully purged from this
+    collection.
+    """
+
 
 def _copy_governors(governors: dict[str, set[str]]) -> dict[str, set[str]]:
     """Make an independent copy of the 'governors' data structure."""

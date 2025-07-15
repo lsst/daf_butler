@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 import logging
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import astropy.time
 import sqlalchemy
@@ -615,6 +615,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self,
         collections: Iterable[CollectionRecord],
         dataset_types: Iterable[DatasetType] | Iterable[str] | None = None,
+        mode: Literal["inexact", "synthetic", "hybrid"] = "inexact",
     ) -> Mapping[Any, CollectionSummary]:
         # Docstring inherited from DatasetRecordStorageManager.
         summaries: dict[Any, CollectionSummary] = {}
@@ -645,13 +646,24 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             else:
                 non_chains.append(collection)
         # Actually do the fetch for the non-chain collections.
-        summaries.update(
-            self._fetch_synthetic_summaries(
-                non_chains,
-                # Fetch summaries for all dataset types if we are caching.
-                (dataset_type_names if self._caching_context.collection_summaries is None else None),
+        if mode != "synthetic":
+            _LOG.debug("Fetching inexact collection summaries from summary tables.")
+            summaries.update(
+                self._summaries.fetch_summaries(
+                    non_chains,
+                    (dataset_type_names if self._caching_context.collection_summaries is None else None),
+                    self._dataset_type_from_row,
+                )
             )
-        )
+        if mode != "inexact":
+            summaries.update(
+                self._fetch_synthetic_summaries(
+                    [c for c in non_chains if (s := summaries.get(c.key)) and not s.exact],
+                    # Fetch summaries for all dataset types if we are caching.
+                    (dataset_type_names if self._caching_context.collection_summaries is None else None),
+                    existing=summaries if mode == "hybrid" else None,
+                )
+            )
         # Add empty summary for any missing collection.
         for collection in non_chains:
             if collection.key not in summaries:
@@ -666,8 +678,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def _fetch_synthetic_summaries(
         self,
-        collections: Iterable[CollectionRecord] | None,
+        collections: Iterable[CollectionRecord],
         dataset_type_names: Iterable[str] | None,
+        existing: Mapping[Any, CollectionSummary] | None,
     ) -> Mapping[Any, CollectionSummary]:
         _LOG.debug("Preparing query for fetching synthetic collection summaries.")
         tables_by_dimensions: dict[DimensionGroup, DynamicTables] = {}
@@ -694,18 +707,25 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     dataset_record_storage.dataset_type
                 )
         sql_selects = []
-        tag_collections: list[CollectionRecord] | None = None
-        calib_collections: list[CollectionRecord] | None = None
-        if collections is not None:
-            tag_collections = []
-            calib_collections = []
+        tag_collections: list[CollectionRecord] = []
+        calib_collections: list[CollectionRecord] = []
+        if existing is None:
             for record in collections:
                 if record.type is CollectionType.CALIBRATION:
                     calib_collections.append(record)
                 else:
                     tag_collections.append(record)
         for dimensions, dynamic_tables in tables_by_dimensions.items():
-            if tag_collections or tag_collections is None:
+            if existing is not None:
+                tag_collections: list[CollectionRecord] = []
+                calib_collections: list[CollectionRecord] = []
+                for record in collections:
+                    if any(dt.dimensions == dimensions for dt in existing[record.key].dataset_types):
+                        if record.type is CollectionType.CALIBRATION:
+                            calib_collections.append(record)
+                        else:
+                            tag_collections.append(record)
+            if tag_collections:
                 sql_selects.append(
                     self._make_synthetic_summary_select(
                         dimensions,
@@ -714,7 +734,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                         dataset_type_ids_by_dimensions.get(dimensions, None),
                     )
                 )
-            if dynamic_tables.calibs_name is not None and (calib_collections or calib_collections is None):
+            if dynamic_tables.calibs_name is not None and calib_collections:
                 sql_selects.append(
                     self._make_synthetic_summary_select(
                         dimensions,
@@ -735,7 +755,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             collection_key = row["collection_key"]
             dataset_type = dataset_types_by_id[row["dataset_type_id"]]
             if (summary := summaries.get(collection_key)) is None:
-                summary = CollectionSummary()
+                summary = CollectionSummary(exact=True)
                 summaries[collection_key] = summary
             summary.dataset_types.add(dataset_type)
             for dimension_name in dataset_type.dimensions.governors:
