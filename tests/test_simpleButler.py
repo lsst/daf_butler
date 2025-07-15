@@ -82,6 +82,10 @@ class SimpleButlerTests(TestCaseMixin):
     def makeButler(self, writeable: bool = False) -> Butler:
         raise NotImplementedError()
 
+    def import_test_datasets(self, butler: Butler) -> None:
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+
     def comparableRef(self, ref: DatasetRef) -> DatasetRef:
         """Return a DatasetRef that can be compared to a DatasetRef from
         other repository.
@@ -146,8 +150,7 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler1)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
@@ -170,8 +173,7 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler1)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
@@ -194,8 +196,7 @@ class SimpleButlerTests(TestCaseMixin):
         """Test exporting and then importing collections of various types."""
         # Populate a registry with some datasets.
         butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler1.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler1)
         registry1 = butler1.registry
         # Add some more collections.
         registry1.registerRun("run1")
@@ -271,8 +272,7 @@ class SimpleButlerTests(TestCaseMixin):
         """Test that butler.get can work with different variants."""
         # Import data to play with.
         butler = self.makeButler(writeable=True)
-        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler)
 
         # Find the DatasetRef for a flat
         coll = "imported_g"
@@ -355,8 +355,7 @@ class SimpleButlerTests(TestCaseMixin):
         """
         # Import data to play with.
         butler = self.makeButler(writeable=True)
-        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler)
         # Certify some biases into a CALIBRATION collection.
         registry = butler.registry
         registry.registerCollection("calibs", CollectionType.CALIBRATION)
@@ -553,8 +552,7 @@ class SimpleButlerTests(TestCaseMixin):
         database backend at all.
         """
         butler = self.makeButler(writeable=True)
-        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler)
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
@@ -624,8 +622,7 @@ class SimpleButlerTests(TestCaseMixin):
     def testJson(self):
         """Test JSON serialization mediated by registry."""
         butler = self.makeButler(writeable=True)
-        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
-        butler.import_(filename=f"resource://lsst.daf.butler/tests/registry_data/{self.datasetsImportFile}")
+        self.import_test_datasets(butler)
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
