@@ -561,8 +561,6 @@ class Database(ABC):
             try:
                 yield table
             finally:
-                with self._transaction():
-                    table.drop(connection)
                 self._temp_tables.remove(table.key)
                 self._metadata.remove_table(table.name)
 
