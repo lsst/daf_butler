@@ -838,9 +838,13 @@ class RegistryTests(ABC):
         # Chained collection exists, but has no collections in it.
         self.assertFalse(registry.getCollectionChain(chain1))
         # If we query for all collections, we should get the chained collection
-        # only if we don't ask to flatten it (i.e. yield only its children).
+        # if we don't ask to flatten it (i.e. yield only its children) or if we
+        # explicitly ask to include it too.
         self.assertEqual(set(registry.queryCollections(flattenChains=False)), {tag1, run1, run2, chain1})
         self.assertEqual(set(registry.queryCollections(flattenChains=True)), {tag1, run1, run2})
+        self.assertEqual(
+            set(registry.queryCollections(flattenChains=True, includeChains=True)), {tag1, run1, run2, chain1}
+        )
         # Attempt to set its child collections to something circular; that
         # should fail.
         with self.assertRaises(ValueError):
@@ -903,6 +907,26 @@ class RegistryTests(ABC):
         self.assertCountEqual(
             list(registry.queryCollections(["imported_*", "chain1"], flattenChains=False)),
             ["imported_r", "imported_g", "chain1"],
+        )
+        # Query for collection matching chain names, by flattening it should
+        # only return non-chain names.
+        self.assertCountEqual(list(registry.queryCollections("chain?", flattenChains=True)), [tag1, run2])
+        # Query for collection matching chain name, by flattening and
+        # asking to include chains it should return everything.
+        self.assertCountEqual(
+            list(registry.queryCollections("chain*", flattenChains=True, includeChains=True)),
+            [tag1, run2, chain1, chain2],
+        )
+        # Order of children in chained collections is preserved.
+        self.assertEqual(list(registry.queryCollections("chain1", flattenChains=True)), [tag1, run2])
+        self.assertEqual(list(registry.queryCollections("cha*2", flattenChains=True)), [run2, tag1])
+        self.assertEqual(
+            list(registry.queryCollections("chain1", flattenChains=True, includeChains=True)),
+            [chain1, tag1, run2],
+        )
+        self.assertEqual(
+            list(registry.queryCollections("chain2", flattenChains=True, includeChains=True)),
+            [chain2, run2, chain1, tag1],
         )
 
         # Search for bias with dataId1 should find it via tag1 in chain2,
