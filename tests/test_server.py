@@ -47,9 +47,9 @@ try:
     import lsst.daf.butler.remote_butler.server.handlers._query_limits
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
-    from lsst.daf.butler.remote_butler._authentication import (
+    from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
-        get_authentication_headers,
+        RubinAuthenticationProvider,
     )
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._config import mock_config
@@ -388,7 +388,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx.Response:
             uri = generate_file_download_uri("http://unittest.test/", TEST_REPOSITORY_NAME, id, component)
             return self.client.get(
-                uri, follow_redirects=False, headers=get_authentication_headers("mock-token")
+                uri,
+                follow_redirects=False,
+                headers=RubinAuthenticationProvider("mock-token").get_server_headers(),
             )
 
         # Test behavior of a single-file dataset.

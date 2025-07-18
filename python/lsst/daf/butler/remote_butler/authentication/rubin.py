@@ -25,18 +25,52 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ()
+from __future__ import annotations
 
 import os
 from fnmatch import fnmatchcase
 from urllib.parse import urlparse
+
+from .interface import RemoteButlerAuthenticationProvider
+
+
+class RubinAuthenticationProvider(RemoteButlerAuthenticationProvider):
+    """Provide HTTP headers required for authenticating the user via Rubin
+    Science Platform's Gafaelfawr service.
+
+    Parameters
+    ----------
+    access_token : `str`
+        Rubin Science Platform Gafaelfawr access token.
+    """
+
+    def __init__(self, access_token: str):
+        # Access tokens are opaque bearer tokens. See https://sqr-069.lsst.io/
+        self._headers = {"Authorization": f"Bearer {access_token}"}
+
+    @staticmethod
+    def create_from_environment(server_url: str) -> RubinAuthenticationProvider:
+        access_token = _get_authentication_token_from_environment(server_url)
+        if access_token is None:
+            raise RuntimeError(
+                "Attempting to connect to Butler server,"
+                " but no access credentials were found in the environment."
+            )
+        return RubinAuthenticationProvider(access_token)
+
+    def get_server_headers(self) -> dict[str, str]:
+        return self._headers
+
+    def get_datastore_headers(self) -> dict[str, str]:
+        return {}
+
 
 _SERVER_WHITELIST = ["*.lsst.cloud", "*.slac.stanford.edu"]
 _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY = "BUTLER_RUBIN_ACCESS_TOKEN"
 _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY = "ACCESS_TOKEN"
 
 
-def get_authentication_token_from_environment(server_url: str) -> str | None:
+def _get_authentication_token_from_environment(server_url: str) -> str | None:
     """Search the environment for a Rubin Science Platform access token.
 
     The token may come from the following sources in this order:
@@ -76,21 +110,3 @@ def get_authentication_token_from_environment(server_url: str) -> str | None:
         return notebook_token
 
     return None
-
-
-def get_authentication_headers(access_token: str) -> dict[str, str]:
-    """Return HTTP headers required for authenticating the user via Rubin
-    Science Platform's Gafaelfawr service.
-
-    Parameters
-    ----------
-    access_token : `str`
-        Rubin Science Platform access token.
-
-    Returns
-    -------
-    header_map : `dict` [`str`, `str`]
-        HTTP header names and values as a mapping from name to value.
-    """
-    # Access tokens are opaque bearer tokens. See https://sqr-069.lsst.io/
-    return {"Authorization": f"Bearer {access_token}"}
