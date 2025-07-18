@@ -65,6 +65,7 @@ from ...server_models import (
 )
 from .._dependencies import factory_dependency
 from .._factory import Factory
+from ._file_info import get_file_info_payload
 from ._utils import generate_file_download_uri, set_default_data_id
 
 external_router = APIRouter()
@@ -184,7 +185,7 @@ def get_file(
     ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
         raise DatasetNotFoundError(f"Dataset ID {dataset_id} not found")
-    return _get_file_by_ref(butler, ref)
+    return _get_file_info_response(butler, ref)
 
 
 @external_router.post(
@@ -205,13 +206,11 @@ def get_file_by_data_id(
         datastore_records=True,
         timespan=request.timespan,
     )
-    return _get_file_by_ref(butler, ref)
+    return _get_file_info_response(butler, ref)
 
 
-def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
-    """Return file information associated with ``ref``."""
-    payload = butler._datastore.prepare_get_for_external_client(ref)
-    return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+def _get_file_info_response(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
+    return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=get_file_info_payload(butler, ref))
 
 
 @external_router.get(
@@ -228,7 +227,7 @@ def redirect_to_dataset_download(
     if ref is None:
         raise HTTPException(404, f"Dataset id '{dataset_id}' not found in repository '{factory.repository}'")
 
-    payload = butler._datastore.prepare_get_for_external_client(ref)
+    payload = get_file_info_payload(butler, ref)
     if payload is None or len(payload.file_info) == 0:
         raise HTTPException(
             404, f"No files are available for dataset id '{dataset_id}' in repository '{factory.repository}'"
