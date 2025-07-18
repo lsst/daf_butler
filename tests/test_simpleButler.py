@@ -50,6 +50,7 @@ from lsst.daf.butler import (
     DatasetId,
     DatasetRef,
     DatasetType,
+    DimensionValueError,
     LabeledButlerFactory,
     StorageClass,
     Timespan,
@@ -869,6 +870,28 @@ class SimpleButlerTests(TestCaseMixin):
         butler2.registry.refresh()
         self.assertEqual(butler2.get_dataset_type("a"), a)
         self.assertEqual(butler2.get_dataset_type("b"), b)
+
+    def test_find_dataset_invalid_data_ids(self) -> None:
+        butler = self.makeButler(writeable=True)
+        self.import_test_datasets(butler)
+
+        # Set up a dataset type that includes tract.
+        # tract/patch are the only dimensions with integer keys and no string
+        # fallback.
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/spatial.yaml")
+        butler.registry.registerDatasetType(DatasetType("dt", ["skymap", "tract"]))
+
+        with self.assertRaises(DimensionValueError):
+            butler.find_dataset("dt", {"skyMap": "SkyMap1", "tract": "not-a-number"})
+
+        # detector is integer primary key, with a string fallback key.
+        with self.assertRaises(DimensionValueError):
+            butler.find_dataset("bias", {"instrument": "Cam1", "detector": "fish"}, collections="imported_g")
+        with self.assertRaises(DimensionValueError):
+            butler.find_dataset("bias", {"instrument": "Cam1", "detector": None}, collections="imported_g")
+
+        # with self.assertRaises(DimensionValueError):
+        # butler.find_dataset("bias", {"instrument": 3, "detector": "fish"}, collections="imported_g")
 
 
 class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):

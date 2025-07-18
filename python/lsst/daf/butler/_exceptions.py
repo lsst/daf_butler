@@ -36,6 +36,7 @@ __all__ = (
     "DatasetNotFoundError",
     "DatasetTypeNotSupportedError",
     "DimensionNameError",
+    "DimensionValueError",
     "EmptyQueryResultError",
     "InconsistentDataIdError",
     "InvalidQueryError",
