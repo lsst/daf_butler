@@ -36,10 +36,10 @@ from lsst.daf.butler.repo_relocation import replaceRoot
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from ..registry import RegistryDefaults
-from ._authentication import get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
 from ._http_connection import RemoteButlerHttpConnection
 from ._remote_butler import RemoteButler, RemoteButlerCache
+from .authentication.rubin import RubinAuthenticationProvider
 
 
 class RemoteButlerFactory:
@@ -99,36 +99,43 @@ class RemoteButlerFactory:
     def create_factory_for_url(server_url: str) -> RemoteButlerFactory:
         return RemoteButlerFactory(server_url)
 
-    def create_butler_for_access_token(
+    def _create_butler(
         self,
-        access_token: str,
         *,
-        butler_options: ButlerInstanceOptions | None = None,
-        use_disabled_datastore_cache: bool = True,
+        auth: RubinAuthenticationProvider,
+        butler_options: ButlerInstanceOptions | None,
+        enable_datastore_cache: bool = False,
     ) -> RemoteButler:
         if butler_options is None:
             butler_options = ButlerInstanceOptions()
         return RemoteButler(
             connection=RemoteButlerHttpConnection(
-                http_client=self.http_client, server_url=self.server_url, access_token=access_token
+                http_client=self.http_client, server_url=self.server_url, auth=auth
             ),
             defaults=RegistryDefaults.from_butler_instance_options(butler_options),
             cache=self._cache,
-            use_disabled_datastore_cache=use_disabled_datastore_cache,
+            use_disabled_datastore_cache=not enable_datastore_cache,
+        )
+
+    def create_butler_for_access_token(
+        self,
+        access_token: str,
+        *,
+        butler_options: ButlerInstanceOptions | None = None,
+        enable_datastore_cache: bool = False,
+    ) -> RemoteButler:
+        auth = RubinAuthenticationProvider(access_token)
+        return self._create_butler(
+            auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
         )
 
     def create_butler_with_credentials_from_environment(
         self,
         *,
         butler_options: ButlerInstanceOptions | None = None,
-        use_disabled_datastore_cache: bool = True,
+        enable_datastore_cache: bool = True,
     ) -> RemoteButler:
-        token = get_authentication_token_from_environment(self.server_url)
-        if token is None:
-            raise RuntimeError(
-                "Attempting to connect to Butler server,"
-                " but no access credentials were found in the environment."
-            )
-        return self.create_butler_for_access_token(
-            token, butler_options=butler_options, use_disabled_datastore_cache=use_disabled_datastore_cache
+        auth = RubinAuthenticationProvider.create_from_environment(self.server_url)
+        return self._create_butler(
+            auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
         )

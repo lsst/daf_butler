@@ -89,10 +89,6 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
     unpack_zips,
 )
-from lsst.daf.butler.datastores.fileDatastoreClient import (
-    FileDatastoreGetPayload,
-    FileDatastoreGetPayloadFileInfo,
-)
 from lsst.daf.butler.registry.interfaces import (
     DatabaseInsertMode,
     DatastoreRegistryBridge,
@@ -110,7 +106,6 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
 from ..datastore import FileTransferMap, FileTransferRecord
-from ..datastore.stored_file_info import make_datastore_path_relative
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -2304,27 +2299,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             allGetInfo, ref=ref, parameters=parameters, cache_manager=self.cacheManager
         )
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> list[DatasetLocationInformation] | None:
         # Docstring inherited
-
-        # 1 hour.  Chosen somewhat arbitrarily -- this is long enough that the
-        # client should have time to download a large file with retries if
-        # needed, but short enough that it will become obvious quickly that
-        # these URLs expire.
-        # From a strictly technical standpoint there is no reason this
-        # shouldn't be a day or more, but there seems to be a political issue
-        # where people think there is a risk of end users posting presigned
-        # URLs for people without access rights to download.
-        url_expiration_time_seconds = 1 * 60 * 60
 
         locations = self._get_dataset_locations_info(ref)
         if len(locations) == 0:
             return None
 
-        return FileDatastoreGetPayload(
-            datastore_type="file",
-            file_info=[_to_file_info_payload(info, url_expiration_time_seconds) for info in locations],
-        )
+        return locations
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef, provenance: DatasetProvenance | None = None) -> None:
@@ -3229,17 +3211,3 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
         return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(), StoredFileInfo)}
-
-
-def _to_file_info_payload(
-    info: DatasetLocationInformation, url_expiration_time_seconds: int
-) -> FileDatastoreGetPayloadFileInfo:
-    location, file_info = info
-
-    datastoreRecords = file_info.to_simple()
-    datastoreRecords.path = make_datastore_path_relative(datastoreRecords.path)
-
-    return FileDatastoreGetPayloadFileInfo(
-        url=location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds),
-        datastoreRecords=datastoreRecords,
-    )

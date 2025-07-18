@@ -45,10 +45,6 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     retrieve_and_zip,
     unpack_zips,
 )
-from lsst.daf.butler.datastores.fileDatastoreClient import (
-    FileDatastoreGetPayload,
-    get_dataset_as_python_object,
-)
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler, _DeprecatedDefault
@@ -70,6 +66,7 @@ from ..queries.tree import make_column_literal
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._defaults import DefaultsHolder
+from ._get import get_dataset_as_python_object
 from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 from ._query_driver import RemoteQueryDriver
 from ._query_results import convert_dataset_ref_results, read_query_results
@@ -79,6 +76,7 @@ from ._remote_butler_collections import RemoteButlerCollections
 from ._remote_file_transfer_source import RemoteFileTransferSource
 from .server_models import (
     CollectionList,
+    FileInfoPayload,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetDatasetTypeResponseModel,
@@ -734,7 +732,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return self._registry_defaults.get().dataId.to_simple(minimal=True).dataId
 
 
-def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
+def _to_file_payload(get_file_response: GetFileResponseModel) -> FileInfoPayload:
     if get_file_response.artifact is None:
         ref = get_file_response.dataset_ref
         raise DatasetNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
