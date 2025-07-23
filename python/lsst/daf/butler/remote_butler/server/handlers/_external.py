@@ -287,16 +287,27 @@ def _serialize_file_transfer_record(
     file_info = record.file_info.to_simple()
     file_info.path = make_datastore_path_relative(file_info.path)
 
-    return FileTransferRecordModel(
+    config = load_config()
+
+    if config.authentication == "rubin_science_platform":
         # Instead of directly returning a signed URL, return a "permanent" URL
         # based on the dataset ID that redirects to the signed URL.
         # This allows transfers to take longer than the URL expiration time.
-        url=generate_file_download_uri(
+        url = generate_file_download_uri(
             root_uri=base_url, repository=repository, dataset_id=dataset_id, component=file_info.component
-        ),
+        )
         # Instruct the client that it will need to provide Gafaelfawr
         # authentication headers to access these URLs.
-        auth="gafaelfawr",
+        auth = "gafaelfawr"
+    elif config.authentication == "cadc":
+        # Return the unmodified HTTP URL, and instruct the client that
+        # it needs to provide authentication headers to use it.
+        url = str(record.location.uri)
+        auth = "datastore"
+
+    return FileTransferRecordModel(
+        url=url,
+        auth=auth,
         file_info=file_info,
     )
 

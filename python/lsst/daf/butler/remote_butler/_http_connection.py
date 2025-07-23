@@ -72,10 +72,6 @@ class RemoteButlerHttpConnection:
         self.server_url = server_url
         self.auth = auth
 
-    @property
-    def authentication_headers(self) -> dict[str, str]:
-        return self.auth.get_server_headers()
-
     def post(self, path: str, model: BaseModel) -> httpx.Response:
         """Send a POST request to the Butler server.
 
