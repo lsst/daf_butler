@@ -347,7 +347,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                     without_datastore=without_datastore,
                 )
             case ButlerType.REMOTE:
-                from .remote_butler import RemoteButlerFactory
+                from .remote_butler._factory import RemoteButlerFactory
 
                 # Assume this is being created by a client who would like
                 # default caching of remote datasets.

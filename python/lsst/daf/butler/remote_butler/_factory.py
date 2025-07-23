@@ -36,9 +36,11 @@ from lsst.daf.butler.repo_relocation import replaceRoot
 from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from ..registry import RegistryDefaults
-from ._config import RemoteButlerConfigModel
+from ._config import RemoteButlerConfigModel, RemoteButlerOptionsModel
 from ._http_connection import RemoteButlerHttpConnection
 from ._remote_butler import RemoteButler, RemoteButlerCache
+from .authentication.cadc import CadcAuthenticationProvider
+from .authentication.interface import RemoteButlerAuthenticationProvider
 from .authentication.rubin import RubinAuthenticationProvider
 
 
@@ -49,9 +51,9 @@ class RemoteButlerFactory:
 
     Parameters
     ----------
-    server_url : `str`
-        The URL of the Butler server that RemoteButler instances created by
-        this factory will connect to.
+    config : `RemoteButlerOptionsModel`
+        `RemoteButler` configuration information (as read from `ButlerConfig`
+        YAML file).
     http_client : `httpx.Client`, optional
         The httpx connection pool that RemoteButler instances created by this
         factory will use for making HTTP requests.  If omitted, creates a new
@@ -60,11 +62,12 @@ class RemoteButlerFactory:
     Notes
     -----
     Most users should not directly call this constructor -- instead use
-    ``create_factory_from_config`` or ``create_factory_for_url``.
+    ``create_factory_from_config``.
     """
 
-    def __init__(self, server_url: str, http_client: httpx.Client | None = None):
-        self.server_url = server_url
+    def __init__(self, config: RemoteButlerOptionsModel, http_client: httpx.Client | None = None):
+        self._config = config
+        self.server_url = str(config.url)
         if http_client is not None:
             self.http_client = http_client
         else:
@@ -83,7 +86,9 @@ class RemoteButlerFactory:
         self._cache = RemoteButlerCache()
 
     @staticmethod
-    def create_factory_from_config(config: ButlerConfig) -> RemoteButlerFactory:
+    def create_factory_from_config(
+        config: ButlerConfig, http_client: httpx.Client | None = None
+    ) -> RemoteButlerFactory:
         # There is a convention in Butler config files where <butlerRoot> in a
         # configuration option refers to the directory containing the
         # configuration file. We allow this for the remote butler's URL so
@@ -93,16 +98,19 @@ class RemoteButlerFactory:
         if server_url_key in config:
             config[server_url_key] = replaceRoot(config[server_url_key], config.configDir)
         remote_config = RemoteButlerConfigModel.model_validate(config)
-        return RemoteButlerFactory.create_factory_for_url(str(remote_config.remote_butler.url))
+        return RemoteButlerFactory(remote_config.remote_butler, http_client=http_client)
 
     @staticmethod
-    def create_factory_for_url(server_url: str) -> RemoteButlerFactory:
-        return RemoteButlerFactory(server_url)
+    def create_factory_for_url(
+        server_url: str, http_client: httpx.Client | None = None
+    ) -> RemoteButlerFactory:
+        config = ButlerConfig(server_url)
+        return RemoteButlerFactory.create_factory_from_config(config, http_client=http_client)
 
     def _create_butler(
         self,
         *,
-        auth: RubinAuthenticationProvider,
+        auth: RemoteButlerAuthenticationProvider,
         butler_options: ButlerInstanceOptions | None,
         enable_datastore_cache: bool = False,
     ) -> RemoteButler:
@@ -124,7 +132,11 @@ class RemoteButlerFactory:
         butler_options: ButlerInstanceOptions | None = None,
         enable_datastore_cache: bool = False,
     ) -> RemoteButler:
-        auth = RubinAuthenticationProvider(access_token)
+        auth: RemoteButlerAuthenticationProvider
+        if self._config.authentication == "rubin_science_platform":
+            auth = RubinAuthenticationProvider(access_token)
+        else:
+            auth = CadcAuthenticationProvider()
         return self._create_butler(
             auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
         )
@@ -135,7 +147,12 @@ class RemoteButlerFactory:
         butler_options: ButlerInstanceOptions | None = None,
         enable_datastore_cache: bool = True,
     ) -> RemoteButler:
-        auth = RubinAuthenticationProvider.create_from_environment(self.server_url)
+        auth: RemoteButlerAuthenticationProvider
+        if self._config.authentication == "rubin_science_platform":
+            auth = RubinAuthenticationProvider.create_from_environment(self.server_url)
+        elif self._config.authentication == "cadc":
+            auth = CadcAuthenticationProvider()
+
         return self._create_butler(
             auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
         )

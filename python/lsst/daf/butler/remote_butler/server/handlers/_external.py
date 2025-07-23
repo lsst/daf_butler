@@ -63,6 +63,7 @@ from ...server_models import (
     QueryDatasetTypesRequestModel,
     QueryDatasetTypesResponseModel,
 )
+from .._config import load_config
 from .._dependencies import factory_dependency
 from .._factory import Factory
 from ._file_info import get_file_info_payload
@@ -100,7 +101,11 @@ access.
 async def get_client_config() -> dict[str, Any]:
     # We can return JSON data for both the YAML and JSON case because all JSON
     # files are parseable as YAML.
-    return {"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "<butlerRoot>"}}
+    config = load_config()
+    return {
+        "cls": "lsst.daf.butler.remote_butler.RemoteButler",
+        "remote_butler": {"url": "<butlerRoot>", "authentication": config.authentication},
+    }
 
 
 @external_router.get("/v1/universe")

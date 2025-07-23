@@ -4,6 +4,7 @@ from lsst.daf.butler.tests.utils import mock_env
 
 try:
     from lsst.daf.butler.remote_butler import RemoteButler
+    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
     from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
         _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY,
@@ -51,3 +52,8 @@ class TestButlerClientAuthentication(unittest.TestCase):
         # At the Rubin Science Platform, the server sends pre-signed URLs that
         # do not require authentication.
         self.assertEqual(auth.get_datastore_headers(), {})
+
+    def test_cadc_auth(self):
+        auth = CadcAuthenticationProvider()
+        self.assertEqual(auth.get_server_headers(), {})
+        self.assertEqual(auth.get_datastore_headers(), {"Authorization": "Bearer stub"})
