@@ -45,6 +45,7 @@ from lsst.daf.butler import (
     RegistryConfig,
     StorageClass,
 )
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import _RegistryFactory
@@ -453,6 +454,23 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         for ref in self.output_refs2:
             data = self.butler.get(ref)
             self.assertEqual(data, {"data": cast(int, ref.dataId["detector"]) ** 3})
+
+    def test_record_data_merge_mappings(self):
+        """Test DatastoreRecordData.merge_mappings."""
+        r1 = self.butler._datastore.export_records(self.input_refs)
+        r2 = self.butler._datastore.export_records(self.init_inputs_refs)
+        r3 = self.butler._datastore.export_records(self.input_refs)  # intentional duplicate
+        merged = DatastoreRecordData.merge_mappings(r1, r2, r3)
+        self.assertEqual(merged.keys(), r1.keys() | r2.keys())
+        for datastore_name in merged.keys():
+            if datastore_name in r1:
+                self.assertGreaterEqual(
+                    merged[datastore_name].records.keys(), r1[datastore_name].records.keys()
+                )
+            if datastore_name in r2:
+                self.assertGreaterEqual(
+                    merged[datastore_name].records.keys(), r2[datastore_name].records.keys()
+                )
 
 
 if __name__ == "__main__":
