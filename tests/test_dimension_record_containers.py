@@ -457,12 +457,12 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         del model1.root["patch"][-1]
         model2 = SerializableDimensionData.model_validate_json(model1.model_dump_json())
         with self.butler.query() as query:
-            attacher = DimensionDataAttacher(
+            attacher1 = DimensionDataAttacher(
                 deserializers=model2.make_deserializers(self.universe),
                 cache=query._driver._dimension_record_cache,
                 dimensions=dimensions,
             )
-            expanded_data_ids_2 = attacher.attach(dimensions, thin_data_ids, query=query)
+            expanded_data_ids_2 = attacher1.attach(dimensions, thin_data_ids, query=query)
         # This equality check is necessary but not sufficient for this test,
         # because DataCoordinate equality doesn't look at records.
         self.assertEqual(expanded_data_ids_1, expanded_data_ids_2)
@@ -476,19 +476,29 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         }
         self.assertGreater(len(all_values), 1)
         self.assertEqual(len(all_identities), len(all_values), msg=str(all_identities))
-        # Attach data IDs with the same attacher again, after clearing out its
-        # deserializers.  The cached records should all be present, and it
+        # Serialize and round-trip again, via attacher.serialized(), and attach
+        # all records again.
+        model3 = attacher1.serialized()
+        attacher2 = DimensionDataAttacher(
+            deserializers=model3.make_deserializers(self.universe), dimensions=dimensions
+        )
+        expanded_data_ids_4 = attacher2.attach(dimensions, thin_data_ids)
+        self.assertEqual(expanded_data_ids_1, expanded_data_ids_4)
+        for a, b in zip(expanded_data_ids_1, expanded_data_ids_4):
+            self.assertEqual(dict(a.records), dict(b.records))
+        # Attach data IDs with the original attacher again, after clearing out
+        # its deserializers.  The cached records should all be present, and it
         # should work without any butler queries.
-        attacher.deserializers.clear()
-        expanded_data_ids_3 = attacher.attach(dimensions, thin_data_ids)
+        attacher1.deserializers.clear()
+        expanded_data_ids_3 = attacher1.attach(dimensions, thin_data_ids)
         self.assertEqual(expanded_data_ids_1, expanded_data_ids_3)
         for a, b in zip(expanded_data_ids_1, expanded_data_ids_3):
             self.assertEqual(dict(a.records), dict(b.records))
         # Delete a record and try again to check error-handling.
-        removed_patch_data_id = next(iter(attacher.records["patch"])).dataId
-        attacher.records["patch"].remove(removed_patch_data_id)
+        removed_patch_data_id = next(iter(attacher1.records["patch"])).dataId
+        attacher1.records["patch"].remove(removed_patch_data_id)
         with self.assertRaisesRegex(LookupError, r"No dimension record.*patch.*"):
-            attacher.attach(dimensions, thin_data_ids)
+            attacher1.attach(dimensions, thin_data_ids)
 
 
 if __name__ == "__main__":

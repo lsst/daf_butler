@@ -850,6 +850,54 @@ class DimensionDataAttacher:
 
         return [r.data_id.expanded(r.done) for r in records]
 
+    def serialized(
+        self, *, ignore: Iterable[str] = (), ignore_cached: bool = False, include_skypix: bool = False
+    ) -> SerializableDimensionData:
+        """Serialize all dimension data in this attacher, with deduplication
+        across fully- and partially-deserialized records.
+
+        Parameters
+        ----------
+        ignore : `~collections.abc.Iterable` [ `str` ], optional
+            Names of dimension elements that should not be serialized.
+        ignore_cached : `bool`, optional
+            If `True`, ignore all dimension elements for which
+            `DimensionElement.is_cached` is `True`.
+        include_skypix : `bool`, optional
+            If `True`, include skypix dimensions.  These are ignored by default
+            because they can always be recomputed from their IDs on-the-fly.
+
+        Returns
+        -------
+        serialized : `SerializedDimensionData`
+            Serialized dimension records.
+        """
+        from ._skypix import SkyPixDimension
+
+        ignore = set(ignore)
+        result = SerializableDimensionData()
+        for record_set in self.records.values():
+            if record_set.element.name in ignore:
+                continue
+            if not include_skypix and isinstance(record_set.element, SkyPixDimension):
+                continue
+            if ignore_cached and record_set.element.is_cached:
+                continue
+            serialized_records: dict[tuple[DataIdValue, ...], SerializedKeyValueDimensionRecord] = {}
+            if (deserializer := self.deserializers.get(record_set.element.name)) is not None:
+                for key, value in deserializer._mapping.items():
+                    serialized_record = list(key)
+                    serialized_record.extend(value)
+                    serialized_records[key] = serialized_record
+            for key, record in record_set._by_required_values.items():
+                if key not in serialized_records:
+                    serialized_records[key] = record.serialize_key_value()
+            result.root[record_set.element.name] = list(serialized_records.values())
+        if self.cache is not None and not ignore_cached:
+            for record_set in self.cache.values():
+                result.root[record_set.element.name] = record_set.serialize_records()
+        return result
+
 
 @dataclasses.dataclass
 class _InProgressRecordDicts:
