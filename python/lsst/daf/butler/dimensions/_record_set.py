@@ -753,7 +753,6 @@ class SerializableDimensionData(pydantic.RootModel):
         ]
 
 
-@dataclasses.dataclass
 class DimensionDataAttacher:
     """A helper class for attaching dimension records to data IDs.
 
@@ -786,7 +785,7 @@ class DimensionDataAttacher:
         dimensions: DimensionGroup | None = None,
     ):
         self.records = {record_set.element.name: record_set for record_set in records}
-        self.deserializers = {}
+        self.deserializers: dict[str, DimensionRecordSetDeserializer] = {}
         for deserializer in deserializers:
             self.deserializers[deserializer.element.name] = deserializer
             if deserializer.element.name not in self.records:
