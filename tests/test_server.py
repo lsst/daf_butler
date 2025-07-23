@@ -630,7 +630,7 @@ class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
         with mock_config() as config:
             config.authentication = "cadc"
             with create_test_server(TESTDIR, server_config=config) as instance:
-                self.assertIsInstance(instance.remote_butler._connection._auth, CadcAuthenticationProvider)
+                self.assertIsInstance(instance.remote_butler._connection.auth, CadcAuthenticationProvider)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:

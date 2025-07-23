@@ -301,6 +301,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return get_dataset_as_python_object(
             ref,
             _to_file_payload(model),
+            auth=self._connection.auth,
             parameters=parameters,
             cache_manager=self._cache_manager,
         )

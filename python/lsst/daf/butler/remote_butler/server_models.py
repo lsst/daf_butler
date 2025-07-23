@@ -427,9 +427,12 @@ class GetFileTransferInfoRequestModel(pydantic.BaseModel):
     dataset_ids: Annotated[list[UUID], pydantic.Field(max_length=MAX_ITEMS_PER_REQUEST)]
 
 
+FileAuthenticationMode: TypeAlias = Literal["none", "gafaelfawr", "datastore"]
+
+
 class FileTransferRecordModel(pydantic.BaseModel):
     url: pydantic.AnyHttpUrl
-    auth: Literal["none", "gafaelfawr"]
+    auth: FileAuthenticationMode
     file_info: SerializedStoredFileInfo
 
 
@@ -449,6 +452,8 @@ class FileInfoRecord(pydantic.BaseModel):
 
     datastoreRecords: SerializedStoredFileInfo
     """`FileDatastore` metadata records for this file."""
+
+    auth: FileAuthenticationMode = "none"
 
 
 class FileInfoPayload(pydantic.BaseModel):

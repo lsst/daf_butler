@@ -215,7 +215,9 @@ def get_file_by_data_id(
 
 
 def _get_file_info_response(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
-    return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=get_file_info_payload(butler, ref))
+    return GetFileResponseModel(
+        dataset_ref=ref.to_simple(), artifact=get_file_info_payload(butler, ref, load_config())
+    )
 
 
 @external_router.get(
@@ -232,7 +234,7 @@ def redirect_to_dataset_download(
     if ref is None:
         raise HTTPException(404, f"Dataset id '{dataset_id}' not found in repository '{factory.repository}'")
 
-    payload = get_file_info_payload(butler, ref)
+    payload = get_file_info_payload(butler, ref, load_config())
     if payload is None or len(payload.file_info) == 0:
         raise HTTPException(
             404, f"No files are available for dataset id '{dataset_id}' in repository '{factory.repository}'"

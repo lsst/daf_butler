@@ -70,11 +70,11 @@ class RemoteButlerHttpConnection:
     ) -> None:
         self._client = http_client
         self.server_url = server_url
-        self._auth = auth
+        self.auth = auth
 
     @property
     def authentication_headers(self) -> dict[str, str]:
-        return self._auth.get_server_headers()
+        return self.auth.get_server_headers()
 
     def post(self, path: str, model: BaseModel) -> httpx.Response:
         """Send a POST request to the Butler server.
@@ -195,7 +195,7 @@ class RemoteButlerHttpConnection:
 
         request_id = str(uuid4())
         request_headers = {CLIENT_REQUEST_ID_HEADER_NAME: request_id, "user-agent": _USER_AGENT}
-        request_headers.update(self._auth.get_server_headers())
+        request_headers.update(self.auth.get_server_headers())
         if headers is not None:
             request_headers.update(headers)
 

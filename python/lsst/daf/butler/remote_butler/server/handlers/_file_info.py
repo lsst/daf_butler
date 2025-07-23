@@ -3,9 +3,12 @@ from ...._dataset_ref import DatasetRef
 from ....datastore.stored_file_info import make_datastore_path_relative
 from ....datastores.file_datastore.get import DatasetLocationInformation
 from ...server_models import FileInfoPayload, FileInfoRecord
+from .._config import ButlerServerConfig
 
 
-def get_file_info_payload(butler: Butler, ref: DatasetRef) -> FileInfoPayload | None:
+def get_file_info_payload(
+    butler: Butler, ref: DatasetRef, config: ButlerServerConfig
+) -> FileInfoPayload | None:
     """Return file information associated with ``ref``.
 
     Parameters
@@ -14,6 +17,8 @@ def get_file_info_payload(butler: Butler, ref: DatasetRef) -> FileInfoPayload | 
         Butler used to look up file information.
     ref : `DatasetRef`
         Dataset for which we will look up file information.
+    config : `ButlerServerConfig`
+        Configuration for the Butler server.
 
     Returns
     -------
@@ -36,19 +41,32 @@ def get_file_info_payload(butler: Butler, ref: DatasetRef) -> FileInfoPayload | 
 
     return FileInfoPayload(
         datastore_type="file",
-        file_info=[_to_file_info_payload(info, url_expiration_time_seconds) for info in locations],
+        file_info=[_to_file_info_payload(info, url_expiration_time_seconds, config) for info in locations],
     )
 
 
 def _to_file_info_payload(
-    info: DatasetLocationInformation, url_expiration_time_seconds: int
+    info: DatasetLocationInformation, url_expiration_time_seconds: int, config: ButlerServerConfig
 ) -> FileInfoRecord:
     location, file_info = info
 
     datastoreRecords = file_info.to_simple()
     datastoreRecords.path = make_datastore_path_relative(datastoreRecords.path)
 
+    if config.authentication == "rubin_science_platform":
+        # At the RSP, we pre-sign download URLs so that the client does not
+        # require authentication headers to access them.
+        url = location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds)
+        auth = "none"
+    elif config.authentication == "cadc":
+        # At the CADC, the HTTP service hosting the artifacts requires
+        # authentication.  We return the unmodified URL and instruct the
+        # client to provide authentication headers.
+        url = str(location.uri)
+        auth = "datastore"
+
     return FileInfoRecord(
-        url=location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds),
+        url=url,
+        auth=auth,
         datastoreRecords=datastoreRecords,
     )
