@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import AnyHttpUrl
 
+from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 
 from .._dataset_ref import DatasetRef
@@ -65,9 +66,19 @@ def get_dataset_as_python_object(
 
 def convert_http_url_to_resource_path(
     url: AnyHttpUrl, auth: RemoteButlerAuthenticationProvider, auth_mode: FileAuthenticationMode
-) -> HttpResourcePath:
-    # Converts an HTTP URL to a ResourcePath instance with authentication
-    # headers attached.
+) -> ResourcePath:
+    """Convert an HTTP URL to a ResourcePath instance with authentication
+    headers attached.
+
+    Parameters
+    ----------
+    url : `AnyHttpUrl`
+        URL to convert.
+    auth : `RemoteButlerAuthenticationProvider`
+        Provides authentication headers for the URL.
+    auth_mode : `FileAuthenticationMode`
+        Specifies which authentication headers to use.
+    """
     if auth_mode == "none":
         headers = None
     elif auth_mode == "gafaelfawr":

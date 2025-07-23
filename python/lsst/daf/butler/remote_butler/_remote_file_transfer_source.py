@@ -88,7 +88,7 @@ class RemoteFileTransferSource(FileTransferSource):
         )
 
 
-def _tweak_uri_for_unit_test(path: HttpResourcePath) -> HttpResourcePath:
+def _tweak_uri_for_unit_test(path: ResourcePath) -> ResourcePath:
     # Provide a place for unit tests to hook in and modify URLs, since there is
     # no actual HTTP server reachable via a domain name during testing.
     return path

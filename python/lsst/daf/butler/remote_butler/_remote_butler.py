@@ -66,7 +66,7 @@ from ..queries.tree import make_column_literal
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._defaults import DefaultsHolder
-from ._get import get_dataset_as_python_object
+from ._get import convert_http_url_to_resource_path, get_dataset_as_python_object
 from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 from ._query_driver import RemoteQueryDriver
 from ._query_results import convert_dataset_ref_results, read_query_results
@@ -354,7 +354,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         response = self._get_file_info(datasetRefOrType, dataId, collections, None, kwargs)
         file_info = _to_file_payload(response).file_info
         if len(file_info) == 1:
-            return DatasetRefURIs(primaryURI=ResourcePath(str(file_info[0].url)))
+            return DatasetRefURIs(
+                primaryURI=convert_http_url_to_resource_path(
+                    file_info[0].url, self._connection.auth, file_info[0].auth
+                )
+            )
         else:
             components = {}
             for f in file_info:
@@ -364,7 +368,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                         f"DatasetId {response.dataset_ref.id} has a component file"
                         " with no component name defined"
                     )
-                components[component] = ResourcePath(str(f.url))
+                components[component] = convert_http_url_to_resource_path(
+                    f.url, self._connection.auth, f.auth
+                )
             return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
