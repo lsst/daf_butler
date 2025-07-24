@@ -34,6 +34,8 @@ from functools import cache
 from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .._config import AuthenticationMode
+
 
 class RepositoryConfig(BaseModel):
     """Per-repository configuration for the Butler server."""
@@ -59,6 +61,8 @@ class ButlerServerConfig(BaseSettings):
     """URL to the top-level HTTP path where Gafaelfawr can be found (e.g.
     "https://data-int.lsst.cloud").
     """
+
+    authentication: AuthenticationMode
 
     static_files_path: str | None = None
     """Absolute path to a directory of files that will be served to end-users
@@ -100,6 +104,7 @@ def mock_config(temporary_config: ButlerServerConfig | None = None) -> Iterator[
             temporary_config = ButlerServerConfig(
                 repositories={},
                 gafaelfawr_url="http://gafaelfawr.example",
+                authentication="rubin_science_platform",
                 static_files_path=None,
             )
         _config = temporary_config

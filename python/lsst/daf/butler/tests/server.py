@@ -1,3 +1,4 @@
+import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -7,8 +8,9 @@ from tempfile import TemporaryDirectory
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from lsst.daf.butler import Butler, Config, LabeledButlerFactory
-from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
+from lsst.daf.butler import Butler, ButlerConfig, Config, LabeledButlerFactory
+from lsst.daf.butler.remote_butler import RemoteButler
+from lsst.daf.butler.remote_butler._factory import RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
 from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, RepositoryConfig, mock_config
 from lsst.daf.butler.remote_butler.server._dependencies import (
@@ -17,6 +19,7 @@ from lsst.daf.butler.remote_butler.server._dependencies import (
     butler_factory_dependency,
     reset_dependency_caches,
 )
+from lsst.resources import ResourcePath
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
 from ..direct_butler import DirectButler
@@ -122,7 +125,8 @@ def create_test_server(
                 reset_dependency_caches()
 
                 app = create_app()
-                add_auth_header_check_middleware(app)
+                if server_config.authentication == "rubin_science_platform":
+                    add_auth_header_check_middleware(app)
                 _add_root_exception_handler(app)
                 # Override the server's Butler initialization to point at our
                 # test repo
@@ -174,9 +178,12 @@ def create_test_server(
 
 
 def _make_remote_butler(client: TestClient) -> RemoteButler:
-    remote_butler_factory = RemoteButlerFactory(
-        f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}", client
-    )
+    config_endpoint = f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}/butler.yaml"
+    config_json = client.get(config_endpoint).read()
+    config = Config(json.loads(config_json))
+    config.configFile = ResourcePath(config_endpoint)
+    butler_config = ButlerConfig(config)
+    remote_butler_factory = RemoteButlerFactory.create_factory_from_config(butler_config, client)
     return remote_butler_factory.create_butler_for_access_token("fake-access-token")
 
 

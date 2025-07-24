@@ -63,8 +63,10 @@ from ...server_models import (
     QueryDatasetTypesRequestModel,
     QueryDatasetTypesResponseModel,
 )
+from .._config import load_config
 from .._dependencies import factory_dependency
 from .._factory import Factory
+from ._file_info import get_file_info_payload
 from ._utils import generate_file_download_uri, set_default_data_id
 
 external_router = APIRouter()
@@ -99,7 +101,11 @@ access.
 async def get_client_config() -> dict[str, Any]:
     # We can return JSON data for both the YAML and JSON case because all JSON
     # files are parseable as YAML.
-    return {"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "<butlerRoot>"}}
+    config = load_config()
+    return {
+        "cls": "lsst.daf.butler.remote_butler.RemoteButler",
+        "remote_butler": {"url": "<butlerRoot>", "authentication": config.authentication},
+    }
 
 
 @external_router.get("/v1/universe")
@@ -184,7 +190,7 @@ def get_file(
     ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
         raise DatasetNotFoundError(f"Dataset ID {dataset_id} not found")
-    return _get_file_by_ref(butler, ref)
+    return _get_file_info_response(butler, ref)
 
 
 @external_router.post(
@@ -205,13 +211,13 @@ def get_file_by_data_id(
         datastore_records=True,
         timespan=request.timespan,
     )
-    return _get_file_by_ref(butler, ref)
+    return _get_file_info_response(butler, ref)
 
 
-def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
-    """Return file information associated with ``ref``."""
-    payload = butler._datastore.prepare_get_for_external_client(ref)
-    return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+def _get_file_info_response(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
+    return GetFileResponseModel(
+        dataset_ref=ref.to_simple(), artifact=get_file_info_payload(butler, ref, load_config())
+    )
 
 
 @external_router.get(
@@ -228,7 +234,7 @@ def redirect_to_dataset_download(
     if ref is None:
         raise HTTPException(404, f"Dataset id '{dataset_id}' not found in repository '{factory.repository}'")
 
-    payload = butler._datastore.prepare_get_for_external_client(ref)
+    payload = get_file_info_payload(butler, ref, load_config())
     if payload is None or len(payload.file_info) == 0:
         raise HTTPException(
             404, f"No files are available for dataset id '{dataset_id}' in repository '{factory.repository}'"
@@ -281,16 +287,27 @@ def _serialize_file_transfer_record(
     file_info = record.file_info.to_simple()
     file_info.path = make_datastore_path_relative(file_info.path)
 
-    return FileTransferRecordModel(
+    config = load_config()
+
+    if config.authentication == "rubin_science_platform":
         # Instead of directly returning a signed URL, return a "permanent" URL
         # based on the dataset ID that redirects to the signed URL.
         # This allows transfers to take longer than the URL expiration time.
-        url=generate_file_download_uri(
+        url = generate_file_download_uri(
             root_uri=base_url, repository=repository, dataset_id=dataset_id, component=file_info.component
-        ),
+        )
         # Instruct the client that it will need to provide Gafaelfawr
         # authentication headers to access these URLs.
-        auth="gafaelfawr",
+        auth = "gafaelfawr"
+    elif config.authentication == "cadc":
+        # Return the unmodified HTTP URL, and instruct the client that
+        # it needs to provide authentication headers to use it.
+        url = str(record.location.uri)
+        auth = "datastore"
+
+    return FileTransferRecordModel(
+        url=url,
+        auth=auth,
         file_info=file_info,
     )
 

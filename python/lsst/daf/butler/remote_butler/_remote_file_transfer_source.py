@@ -37,6 +37,7 @@ from lsst.utils.iteration import chunk_iterable
 from .._location import Location
 from ..datastore import FileTransferMap, FileTransferRecord, FileTransferSource
 from ..datastore.stored_file_info import StoredFileInfo
+from ._get import convert_http_url_to_resource_path
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import (
     FileTransferRecordModel,
@@ -78,15 +79,7 @@ class RemoteFileTransferSource(FileTransferSource):
         return {}
 
     def _deserialize_file_transfer_record(self, record: FileTransferRecordModel) -> FileTransferRecord:
-        # If the server tells us it is necessary, attach the Gafaelfawr
-        # authentication headers to the URL.
-        if record.auth == "none":
-            headers = None
-        elif record.auth == "gafaelfawr":
-            headers = self._connection.authentication_headers
-        else:
-            raise ValueError(f"Unknown authentication type {record.auth}")
-        resource_path = HttpResourcePath.create_http_resource_path(str(record.url), extra_headers=headers)
+        resource_path = convert_http_url_to_resource_path(record.url, self._connection.auth, record.auth)
         resource_path = _tweak_uri_for_unit_test(resource_path)
 
         return FileTransferRecord(
@@ -95,7 +88,7 @@ class RemoteFileTransferSource(FileTransferSource):
         )
 
 
-def _tweak_uri_for_unit_test(path: HttpResourcePath) -> HttpResourcePath:
+def _tweak_uri_for_unit_test(path: ResourcePath) -> ResourcePath:
     # Provide a place for unit tests to hook in and modify URLs, since there is
     # no actual HTTP server reachable via a domain name during testing.
     return path

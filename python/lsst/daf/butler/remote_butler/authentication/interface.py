@@ -25,24 +25,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
-from typing import Literal, TypeAlias
-
-from pydantic import AnyHttpUrl, BaseModel
+from typing import Protocol
 
 
-class RemoteButlerConfigModel(BaseModel):
-    """ButlerConfig properties for RemoteButler."""
+class RemoteButlerAuthenticationProvider(Protocol):
+    """Interface for looking up authentication headers for use with Butler
+    server. Objects implementing this interface must also be
+    pickleable, because internal methods for accessing files sometimes execute
+    code in other processes.
+    """
 
-    remote_butler: RemoteButlerOptionsModel
+    def get_server_headers(self) -> dict[str, str]:
+        """Return HTTP headers that must be sent to the Butler server to
+        authenticate API requests.
+        """
 
-
-class RemoteButlerOptionsModel(BaseModel):
-    """Model representing the remote server connection."""
-
-    url: AnyHttpUrl
-    authentication: AuthenticationMode = "rubin_science_platform"
-
-
-AuthenticationMode: TypeAlias = Literal["rubin_science_platform", "cadc"]
+    def get_datastore_headers(self) -> dict[str, str]:
+        """Return HTTP headers that must be sent to the server hosting artifact
+        files to authenticate file downloads.
+        """

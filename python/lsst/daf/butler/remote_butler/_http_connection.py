@@ -42,12 +42,14 @@ from pydantic import BaseModel, ValidationError
 
 from lsst.daf.butler import __version__
 
-from ._authentication import get_authentication_headers
 from ._errors import deserialize_butler_user_error
+from .authentication.interface import RemoteButlerAuthenticationProvider
 from .server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
 """Generic type variable that accepts any Pydantic model class."""
+
+_USER_AGENT = f"RemoteButler/{__version__}"
 
 
 class RemoteButlerHttpConnection:
@@ -59,24 +61,16 @@ class RemoteButlerHttpConnection:
         HTTP connection pool we will use to connect to the server.
     server_url : `str`
         URL of the Butler server we will connect to.
-    access_token : `str`
-        Rubin Science Platform Gafaelfawr access token that will be used to
-        authenticate with the server.
+    auth : `RemoteButlerAuthenticationProvider`
+        Provides headers that will be used to authenticate with the server.
     """
 
-    def __init__(self, http_client: httpx.Client, server_url: str, access_token: str) -> None:
+    def __init__(
+        self, http_client: httpx.Client, server_url: str, auth: RemoteButlerAuthenticationProvider
+    ) -> None:
         self._client = http_client
         self.server_url = server_url
-        self._access_token = access_token
-
-        self._auth_headers = get_authentication_headers(access_token)
-        headers = {"user-agent": f"RemoteButler/{__version__}"}
-
-        self._headers = self._auth_headers | headers
-
-    @property
-    def authentication_headers(self) -> dict[str, str]:
-        return self._auth_headers
+        self.auth = auth
 
     def post(self, path: str, model: BaseModel) -> httpx.Response:
         """Send a POST request to the Butler server.
@@ -196,8 +190,8 @@ class RemoteButlerHttpConnection:
         url = self._get_url(path)
 
         request_id = str(uuid4())
-        request_headers = {CLIENT_REQUEST_ID_HEADER_NAME: request_id}
-        request_headers.update(self._headers)
+        request_headers = {CLIENT_REQUEST_ID_HEADER_NAME: request_id, "user-agent": _USER_AGENT}
+        request_headers.update(self.auth.get_server_headers())
         if headers is not None:
             request_headers.update(headers)
 

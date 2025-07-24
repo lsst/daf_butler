@@ -47,6 +47,7 @@ from lsst.daf.butler.datastore import (
 )
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
+from lsst.daf.butler.datastores.file_datastore.get import DatasetLocationInformation
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
@@ -60,8 +61,6 @@ if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from lsst.resources import ResourcePathExpression
-
-    from .fileDatastoreClient import FileDatastoreGetPayload
 
 log = getLogger(__name__)
 
@@ -411,7 +410,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> list[DatasetLocationInformation] | None:
         datastore = self._get_matching_datastore(ref)
         if datastore is None:
             return None

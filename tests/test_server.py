@@ -47,9 +47,10 @@ try:
     import lsst.daf.butler.remote_butler.server.handlers._query_limits
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
-    from lsst.daf.butler.remote_butler._authentication import (
+    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
+    from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
-        get_authentication_headers,
+        RubinAuthenticationProvider,
     )
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._config import mock_config
@@ -388,7 +389,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx.Response:
             uri = generate_file_download_uri("http://unittest.test/", TEST_REPOSITORY_NAME, id, component)
             return self.client.get(
-                uri, follow_redirects=False, headers=get_authentication_headers("mock-token")
+                uri,
+                follow_redirects=False,
+                headers=RubinAuthenticationProvider("mock-token").get_server_headers(),
             )
 
         # Test behavior of a single-file dataset.
@@ -596,11 +599,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
 @unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
 class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
-    """Test that group membership repository authorization is checked when
-    repository is accessed.
-    """
+    """Test authentication/authorization functionality."""
 
     def test_group_authorization(self):
+        """Test that group membership repository authorization is checked when
+        repository is accessed.
+        """
         with create_test_server(TESTDIR) as server_instance:
             mock = MockGafaelfawrGroupAuthorizer()
             server_instance.app.dependency_overrides[authorizer_dependency] = lambda: mock
@@ -620,6 +624,13 @@ class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
             mock.set_response(True)
             self.assertEqual(butler.get_dataset_type("bias").name, "bias")
             self.assertEqual(butler.query_datasets("bias", collections="collection", explain=False), [])
+
+    def test_cadc_auth(self):
+        """Test server running in CADC auth mode."""
+        with mock_config() as config:
+            config.authentication = "cadc"
+            with create_test_server(TESTDIR, server_config=config) as instance:
+                self.assertIsInstance(instance.remote_butler._connection.auth, CadcAuthenticationProvider)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:

@@ -32,7 +32,7 @@ from collections import defaultdict
 import httpx
 import pydantic
 
-from .._authentication import get_authentication_headers
+from ..authentication.rubin import RubinAuthenticationProvider
 
 
 class GafaelfawrClient:
@@ -54,7 +54,9 @@ class GafaelfawrClient:
         self._client = httpx.AsyncClient(base_url=base_url, transport=transport, timeout=20.0)
 
     async def get_groups(self, user_token: str) -> list[str]:
-        response = await self._client.get("/api/v1/user-info", headers=get_authentication_headers(user_token))
+        response = await self._client.get(
+            "/api/v1/user-info", headers=RubinAuthenticationProvider(user_token).get_server_headers()
+        )
         response.raise_for_status()
         info = _GafaelfawrUserInfo.model_validate_json(response.content)
         if info.groups is None:

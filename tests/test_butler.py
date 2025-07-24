@@ -3181,7 +3181,7 @@ class ButlerServerTests(FileDatastoreButlerTests):
     def testStringification(self) -> None:
         self.assertEqual(
             str(self.server_instance.remote_butler),
-            "RemoteButler(https://test.example/api/butler/repo/testrepo)",
+            "RemoteButler(https://test.example/api/butler/repo/testrepo/)",
         )
 
     def testTransaction(self) -> None:

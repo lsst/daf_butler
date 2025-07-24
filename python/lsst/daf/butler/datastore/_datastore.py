@@ -66,8 +66,8 @@ if TYPE_CHECKING:
     from .._dataset_ref import DatasetId, DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
+    from ..datastores.file_datastore.get import DatasetLocationInformation
     from ..datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo
-    from ..datastores.fileDatastoreClient import FileDatastoreGetPayload
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .record_data import DatastoreRecordData
     from .stored_file_info import StoredDatastoreItemInfo
@@ -614,8 +614,8 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
-        """Retrieve serializable data that can be used to execute a ``get()``.
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> list[DatasetLocationInformation] | None:
+        """Retrieve data that can be used to execute a ``get()``.
 
         Parameters
         ----------
@@ -624,11 +624,9 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Returns
         -------
-        payload : `object` | `None`
-            Serializable payload containing the information needed to perform a
-            get() operation.  This payload may be sent over the wire to another
-            system to perform the get().  Returns `None` if the dataset is not
-            known to this datastore.
+        payload : `list` [ `DatasetLocationInformation` ] | `None`
+            Information needed to perform a get() operation.  Returns `None` if
+            the dataset is not known to this datastore.
         """
         raise NotImplementedError()
 

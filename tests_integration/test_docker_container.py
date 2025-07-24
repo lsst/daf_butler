@@ -8,7 +8,7 @@ import unittest
 import httpx
 from testcontainers.core.container import DockerContainer
 
-from lsst.daf.butler.remote_butler import RemoteButlerFactory
+from lsst.daf.butler.remote_butler._factory import RemoteButlerFactory
 from lsst.daf.butler.tests.utils import MetricTestRepo
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -37,6 +37,7 @@ def _run_server_docker():
             .with_exposed_ports(port)
             .with_env("DAF_BUTLER_SERVER_REPOSITORIES", json.dumps(repository_config))
             .with_env("DAF_BUTLER_SERVER_GAFAELFAWR_URL", "http://gafaelfawr.example")
+            .with_env("DAF_BUTLER_SERVER_AUTHENTICATION", "rubin_science_platform")
             .with_volume_mapping(temp_dir, butler_root, "rw")
         )
 
@@ -91,9 +92,9 @@ class ButlerDockerTestCase(unittest.TestCase):
                 "X-Auth-Request-Token": "fake-delegated-token",
             }
         )
-        butler = RemoteButlerFactory(self.server_uri, client).create_butler_for_access_token(
-            "fake-access-token"
-        )
+        butler = RemoteButlerFactory.create_factory_for_url(
+            self.server_uri, client
+        ).create_butler_for_access_token("fake-access-token")
         dataset_type = butler.get_dataset_type("test_metric_comp")
         self.assertEqual(dataset_type.name, "test_metric_comp")
 
