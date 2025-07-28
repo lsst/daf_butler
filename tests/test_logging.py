@@ -270,6 +270,30 @@ class LoggingTestCase(unittest.TestCase):
         self.log.info("Message %d", i)
         self.assertEqual(self.handler.records[-1].format(fmt), f"xoriginal - Message {i}")
 
+    def testMDC_exception(self):
+        """Test that exceptions preserve MDC from the point of raising."""
+        ButlerMDC.add_mdc_log_record_factory()
+
+        ButlerMDC.MDC("foo", "bar")
+        try:
+            with ButlerMDC.set_mdc({"foo": "fum", "answer": "42"}):
+                raise RuntimeError("I take exception to that!")
+        except RuntimeError as e:
+            self.assertEqual(e.mdc, {"foo": "fum", "answer": "42"})
+            # Exception should hang on to old state
+            self.log.exception("Exception raised:")
+            self.log.warning("Implied exception", exc_info=True)
+            self.log.critical("Explicit exception", exc_info=e)
+            # Is original context used *only* when logging the exception?
+            self.log.error("Something went wrong")
+        for i in [-4, -3, -2]:
+            self.assertEqual(self.handler.records[i].MDC, {"foo": "fum", "answer": "42"})
+        self.assertEqual(self.handler.records[-1].MDC, {"foo": "bar"})
+
+        self.log.setLevel(logging.INFO)
+        self.log.info("Normal log")
+        self.assertEqual(self.handler.records[-1].MDC, {"foo": "bar"})
+
 
 class TestJsonLogging(unittest.TestCase):
     """Test logging using JSON."""
