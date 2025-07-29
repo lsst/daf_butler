@@ -655,11 +655,17 @@ class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
 
                 # At the CADC, paths used for file download should NOT be a
                 # signed URL, and should have authentication headers attached.
-                path = instance.remote_butler.getURI(ref)
-                assert isinstance(path, HttpResourcePath)
-                self.assertIsNotNone(path._extra_headers)
-                self.assertIsNotNone(path._extra_headers.get("Authorization"))
-                self.assertNotIn("X-Amz-Signature", str(path))
+                def check_path(path_to_check: ResourcePath):
+                    self.assertEqual(str(path_to_check), str(path))
+                    assert isinstance(path_to_check, HttpResourcePath)
+                    self.assertIsNotNone(path_to_check._extra_headers)
+                    self.assertIsNotNone(path_to_check._extra_headers.get("Authorization"))
+
+                check_path(instance.remote_butler.getURI(ref))
+                transfer_map = instance.remote_butler._file_transfer_source.get_file_info_for_transfer(
+                    [ref.id]
+                )
+                check_path(transfer_map[ref.id][0].location.pathInStore)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
