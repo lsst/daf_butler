@@ -30,6 +30,7 @@ import os.path
 import tempfile
 import threading
 import unittest
+import unittest.mock
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import DEFAULT, AsyncMock, NonCallableMock, patch
@@ -47,9 +48,10 @@ try:
     import lsst.daf.butler.remote_butler.server.handlers._query_limits
     import lsst.daf.butler.remote_butler.server.handlers._query_streaming
     from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
-    from lsst.daf.butler.remote_butler._authentication import (
+    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
+    from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
-        get_authentication_headers,
+        RubinAuthenticationProvider,
     )
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._config import mock_config
@@ -75,6 +77,7 @@ from lsst.daf.butler import (
     DatasetNotFoundError,
     DatasetRef,
     DatasetType,
+    FileDataset,
     InvalidQueryError,
     LabeledButlerFactory,
     MissingDatasetTypeError,
@@ -388,7 +391,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx.Response:
             uri = generate_file_download_uri("http://unittest.test/", TEST_REPOSITORY_NAME, id, component)
             return self.client.get(
-                uri, follow_redirects=False, headers=get_authentication_headers("mock-token")
+                uri,
+                follow_redirects=False,
+                headers=RubinAuthenticationProvider("mock-token").get_server_headers(),
             )
 
         # Test behavior of a single-file dataset.
@@ -596,11 +601,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
 @unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
 class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
-    """Test that group membership repository authorization is checked when
-    repository is accessed.
-    """
+    """Test authentication/authorization functionality."""
 
     def test_group_authorization(self):
+        """Test that group membership repository authorization is checked when
+        repository is accessed.
+        """
         with create_test_server(TESTDIR) as server_instance:
             mock = MockGafaelfawrGroupAuthorizer()
             server_instance.app.dependency_overrides[authorizer_dependency] = lambda: mock
@@ -620,6 +626,46 @@ class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
             mock.set_response(True)
             self.assertEqual(butler.get_dataset_type("bias").name, "bias")
             self.assertEqual(butler.query_datasets("bias", collections="collection", explain=False), [])
+
+    def test_cadc_auth(self) -> None:
+        """Test server running in CADC auth mode."""
+        with mock_config() as config:
+            config.authentication = "cadc"
+            with create_test_server(TESTDIR, server_config=config) as instance:
+                self.assertIsInstance(instance.remote_butler._connection.auth, CadcAuthenticationProvider)
+
+                # Set up a dataset backed by an HTTP URL.
+                # CADC uses a plain HTTP service, not S3, for hosting Butler
+                # artifacts.
+                dataset_type = DatasetType("test", [], "int", universe=instance.direct_butler.dimensions)
+                ref = DatasetRef(
+                    datasetType=dataset_type,
+                    dataId=DataCoordinate.makeEmpty(instance.direct_butler.dimensions),
+                    run="ingest/run",
+                )
+                path = ResourcePath("https://fake-server.example/some-directory/file.json")
+                dataset = FileDataset(path, ref)
+                # ingest() insists on doing file existence checks, and we don't
+                # have an HTTP server to point it at.
+                with unittest.mock.patch(
+                    "lsst.daf.butler.datastores.fileDatastore.FileDatastore._standardizeIngestPath"
+                ) as mock:
+                    mock.return_value = path
+                    instance.direct_butler.ingest(dataset, transfer="direct", record_validation_info=False)
+
+                # At the CADC, paths used for file download should NOT be a
+                # signed URL, and should have authentication headers attached.
+                def check_path(path_to_check: ResourcePath):
+                    self.assertEqual(str(path_to_check), str(path))
+                    assert isinstance(path_to_check, HttpResourcePath)
+                    self.assertIsNotNone(path_to_check._extra_headers)
+                    self.assertIsNotNone(path_to_check._extra_headers.get("Authorization"))
+
+                check_path(instance.remote_butler.getURI(ref))
+                transfer_map = instance.remote_butler._file_transfer_source.get_file_info_for_transfer(
+                    [ref.id]
+                )
+                check_path(transfer_map[ref.id][0].location.pathInStore)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:

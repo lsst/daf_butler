@@ -198,9 +198,9 @@ def _create_direct_butler_factory(config: ButlerConfig, preload_unsafe_caches: b
 
 
 def _create_remote_butler_factory(config: ButlerConfig) -> _FactoryFunction:
-    import lsst.daf.butler.remote_butler
+    import lsst.daf.butler.remote_butler._factory
 
-    factory = lsst.daf.butler.remote_butler.RemoteButlerFactory.create_factory_from_config(config)
+    factory = lsst.daf.butler.remote_butler._factory.RemoteButlerFactory.create_factory_from_config(config)
 
     def create_butler(access_token: str | None) -> Butler:
         if access_token is None:

@@ -4,11 +4,12 @@ from lsst.daf.butler.tests.utils import mock_env
 
 try:
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler._authentication import (
+    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
+    from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
         _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY,
-        get_authentication_headers,
-        get_authentication_token_from_environment,
+        RubinAuthenticationProvider,
+        _get_authentication_token_from_environment,
     )
 except ImportError:
     RemoteButler = None
@@ -27,24 +28,32 @@ class TestButlerClientAuthentication(unittest.TestCase):
                 _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY: "not-this-token",
             }
         ):
-            token = get_authentication_token_from_environment("https://untrustedserver.com")
+            token = _get_authentication_token_from_environment("https://untrustedserver.com")
             self.assertEqual(token, "token1")
 
     def test_jupyter_token_with_safe_server(self):
         with mock_env({_RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY: "token2"}):
-            token = get_authentication_token_from_environment("https://data.LSST.cloud/butler")
+            token = _get_authentication_token_from_environment("https://data.LSST.cloud/butler")
             self.assertEqual(token, "token2")
 
     def test_jupyter_token_with_unsafe_server(self):
         with mock_env({_RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY: "token2"}):
-            token = get_authentication_token_from_environment("https://untrustedserver.com/butler")
+            token = _get_authentication_token_from_environment("https://untrustedserver.com/butler")
             self.assertIsNone(token)
 
     def test_missing_token(self):
         with mock_env({}):
-            token = get_authentication_token_from_environment("https://data.lsst.cloud/butler")
+            token = _get_authentication_token_from_environment("https://data.lsst.cloud/butler")
             self.assertIsNone(token)
 
     def test_header_generation(self):
-        headers = get_authentication_headers("tokendata")
-        self.assertEqual(headers, {"Authorization": "Bearer tokendata"})
+        auth = RubinAuthenticationProvider("tokendata")
+        self.assertEqual(auth.get_server_headers(), {"Authorization": "Bearer tokendata"})
+        # At the Rubin Science Platform, the server sends pre-signed URLs that
+        # do not require authentication.
+        self.assertEqual(auth.get_datastore_headers(), {})
+
+    def test_cadc_auth(self):
+        auth = CadcAuthenticationProvider()
+        self.assertEqual(auth.get_server_headers(), {})
+        self.assertEqual(auth.get_datastore_headers(), {"Authorization": "Bearer stub"})

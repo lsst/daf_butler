@@ -27,22 +27,28 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias
-
-from pydantic import AnyHttpUrl, BaseModel
+from .interface import RemoteButlerAuthenticationProvider
 
 
-class RemoteButlerConfigModel(BaseModel):
-    """ButlerConfig properties for RemoteButler."""
+class CadcAuthenticationProvider(RemoteButlerAuthenticationProvider):
+    """Provide HTTP headers required for authenticating the user at the
+    Canadian Astronomy Data Centre.
+    """
 
-    remote_butler: RemoteButlerOptionsModel
+    # NOTE -- This object needs to be pickleable. It will sometimes be
+    # serialized and transferred to another process to execute file transfers.
 
+    def __init__(self) -> None:
+        # TODO: Load authentication information somehow
+        pass
 
-class RemoteButlerOptionsModel(BaseModel):
-    """Model representing the remote server connection."""
+    def get_server_headers(self) -> dict[str, str]:
+        # TODO: I think you mentioned that you might not require
+        # authentication for the Butler server REST API initially --
+        # if so, you can leave this blank.
+        return {}
 
-    url: AnyHttpUrl
-    authentication: AuthenticationMode = "rubin_science_platform"
-
-
-AuthenticationMode: TypeAlias = Literal["rubin_science_platform", "cadc"]
+    def get_datastore_headers(self) -> dict[str, str]:
+        # TODO: Supply the headers needed to access the Storage Inventory
+        # system.
+        return {"Authorization": "Bearer stub"}

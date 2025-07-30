@@ -25,7 +25,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 """Models used for client/server communication."""
+
+from __future__ import annotations
 
 __all__ = [
     "CLIENT_REQUEST_ID_HEADER_NAME",
@@ -36,6 +39,7 @@ __all__ = [
     "GetCollectionSummaryResponseModel",
     "GetFileResponseModel",
 ]
+
 
 from collections.abc import Iterable
 from typing import Annotated, Any, ClassVar, Literal, NewType, Self, TypeAlias
@@ -55,7 +59,6 @@ from lsst.daf.butler import (
     SerializedDimensionGroup,
     Timespan,
 )
-from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
 from ..datastore.stored_file_info import SerializedStoredFileInfo
@@ -121,7 +124,7 @@ class GetFileResponseModel(pydantic.BaseModel):
     """Response model for get_file and get_file_by_data_id."""
 
     dataset_ref: SerializedDatasetRef
-    artifact: FileDatastoreGetPayload | None
+    artifact: FileInfoPayload | None
     """The data needed to retrieve and use an artifact. If this is `None`, that
     means this dataset is known to the Butler but the associated files are no
     longer available ("known to registry but not known to datastore".)
@@ -424,11 +427,43 @@ class GetFileTransferInfoRequestModel(pydantic.BaseModel):
     dataset_ids: Annotated[list[UUID], pydantic.Field(max_length=MAX_ITEMS_PER_REQUEST)]
 
 
+FileAuthenticationMode: TypeAlias = Literal["none", "gafaelfawr", "datastore"]
+
+
 class FileTransferRecordModel(pydantic.BaseModel):
     url: pydantic.AnyHttpUrl
-    auth: Literal["none", "gafaelfawr"]
+    auth: FileAuthenticationMode
     file_info: SerializedStoredFileInfo
 
 
 class GetFileTransferInfoResponseModel(pydantic.BaseModel):
     files: dict[UUID, list[FileTransferRecordModel]]
+
+
+class FileInfoRecord(pydantic.BaseModel):
+    """Information required to read a single file stored in `FileDatastore`."""
+
+    # This is intentionally restricted to HTTP for security reasons.  Allowing
+    # arbitrary URLs here would allow the server to trick the client into
+    # fetching data from any file on its local filesystem or from remote
+    # storage using credentials laying around in the environment.
+    url: pydantic.AnyHttpUrl
+    """An HTTP URL that can be used to read the file."""
+
+    datastoreRecords: SerializedStoredFileInfo
+    """`FileDatastore` metadata records for this file."""
+
+    auth: FileAuthenticationMode = "none"
+
+
+class FileInfoPayload(pydantic.BaseModel):
+    """A serializable representation of the data needed for retrieving an
+    artifact and converting it to a python object.
+    """
+
+    datastore_type: Literal["file"]
+
+    file_info: list[FileInfoRecord]
+    """List of retrieval information for each file associated with this
+    artifact.
+    """
