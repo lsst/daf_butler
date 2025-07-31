@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cache
+from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,9 +58,12 @@ class ButlerServerConfig(BaseSettings):
     repositories: dict[str, RepositoryConfig]
     """Mapping from repository name to configuration for the repository."""
 
-    gafaelfawr_url: AnyHttpUrl
+    gafaelfawr_url: AnyHttpUrl | Literal["DISABLED"]
     """URL to the top-level HTTP path where Gafaelfawr can be found (e.g.
     "https://data-int.lsst.cloud").
+
+    This can instead be the special string "DISABLED" to turn off all features
+    requiring Gafaelfawr integration.
     """
 
     authentication: AuthenticationMode
