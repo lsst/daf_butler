@@ -31,17 +31,30 @@ import base64
 import re
 import time
 import logging
-import requests
+import httpx
+import ssl
+from pathlib import Path
 
 from .interface import RemoteButlerAuthenticationProvider
 
 # CADC Certificate Delegation Protocol (CDP) resource ID and feature ID
-CADC_AC_ENDPOINT = "https://ws-cadc.canfar.net/ac/authorize"
-CADC_PROXY_FILENAME = "cadcproxy.pem"
+CADC_OPENID_CONFIG_URL = "https://ws-cadc.canfar.net/ac/.well-known/openid-configuration"
+CADC_PROXY_FILENAME = os.path.join(Path.home(),".ssl","cadcproxy.pem")
 CADC_TOKEN_ENV_VAR = "CADC_TOKEN"
 
+def get_cadc_authorize_url() -> str:
+    """Query the CADC openid configuration to get the authorization URL."""
+    try:
+        response = httpx.get(CADC_OPENID_CONFIG_URL)
+        response.raise_for_status()
+        config = response.json()
+        return config["authorization_endpoint"]
+    except httpx.RequestError as e:
+        logging.error(f"Failed to retrieve CADC authorization URL: {e}")
+        raise RuntimeError("Could not retrieve CADC authorization URL") from e
 
-class CadcAuthenticationProvider:
+
+class CadcAuthenticationProvider(RemoteButlerAuthenticationProvider):
     """Provide HTTP headers required for authenticating the user at the
     Canadian Astronomy Data Centre.
     """
@@ -58,15 +71,21 @@ class CadcAuthenticationProvider:
             return self._token
 
         # Get a new token from CADC AC
-        cadcproxy_file = os.path.join(os.environ.get("HOME", ""), ".ssl", CADC_PROXY_FILENAME)
+        if not os.path.exists(CADC_PROXY_FILENAME):
+            logging.error(f"CADC proxy certificate file {CADC_PROXY_FILENAME} not found an CADC_TOKEN invalid.")
+            raise FileNotFoundError(f"CADC proxy certificate file not found: {CADC_PROXY_FILENAME}")
+        ctx = ssl.create_default_context()
+        ctx.load_cert_chain(certfile=CADC_PROXY_FILENAME)  # Optionally also keyfile or password.
         params = {'response_type': 'token'}
         try:
-            response = requests.get(CADC_AC_ENDPOINT, cert=cadcproxy_file, params=params)
-        except requests.exceptions.RequestException as e:
+            auth_url = get_cadc_authorize_url()
+            response = httpx.Client(verify=ctx).get(auth_url, params=params)
+            response.raise_for_status()
+        except httpx.RequestError as e:
             logging.error(f"Failed to retrieve CADC token: {e}")
-            raise
+            raise RuntimeError("Could not retrieve CADC token") from e
 
-        # update the token in the environment variable
+        # update the token in the environment variable for this session.
         os.environ[CADC_TOKEN_ENV_VAR] = response.text
         # update the internal token variable
         self._token = os.environ.get(CADC_TOKEN_ENV_VAR)
