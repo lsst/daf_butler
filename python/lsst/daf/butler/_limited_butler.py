@@ -321,7 +321,7 @@ class LimitedButler(ABC):
             Whether the dataset artifact exists in the datastore and can be
             retrieved.
         """
-        return self._datastore.exists(ref)
+        return self.stored_many([ref])[ref]
 
     def stored_many(
         self,
