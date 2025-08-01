@@ -32,7 +32,7 @@ __all__ = ("SerializedStoredFileInfo", "StoredDatastoreItemInfo", "StoredFileInf
 import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 import pydantic
 
@@ -209,8 +209,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         compatibility, it remains a positional argument with no default).
     """
 
-    storageClassFactory: ClassVar[StorageClassFactory] = StorageClassFactory()
-
     def __init__(
         self,
         formatter: FormatterParameter,
@@ -268,7 +266,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     @property
     def storageClass(self) -> StorageClass:
         """Storage class associated with this dataset."""
-        return self.storageClassFactory.getStorageClass(self.storage_class_name)
+        return StorageClassFactory().getStorageClass(self.storage_class_name)
 
     def rebase(self, ref: DatasetRef) -> StoredFileInfo:
         """Return a copy of the record suitable for a specified reference.
