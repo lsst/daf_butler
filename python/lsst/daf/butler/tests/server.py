@@ -15,9 +15,9 @@ from lsst.daf.butler.remote_butler.server import create_app
 from lsst.daf.butler.remote_butler.server._config import ButlerServerConfig, RepositoryConfig, mock_config
 from lsst.daf.butler.remote_butler.server._dependencies import (
     auth_delegated_token_dependency,
-    auth_dependency,
     butler_factory_dependency,
     reset_dependency_caches,
+    user_name_dependency,
 )
 from lsst.resources import ResourcePath
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
@@ -148,7 +148,7 @@ def create_test_server(
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
                 # In an actual deployment, these headers would be provided by
                 # the Gafaelfawr ingress.
-                app.dependency_overrides[auth_dependency] = lambda: "mock-username"
+                app.dependency_overrides[user_name_dependency] = lambda: "mock-username"
                 app.dependency_overrides[auth_delegated_token_dependency] = lambda: "mock-delegated-token"
 
                 # Using TestClient in a context manager ensures that it uses

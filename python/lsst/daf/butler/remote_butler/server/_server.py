@@ -62,13 +62,16 @@ def create_app() -> FastAPI:
     # factory_dependency().
     default_api_path = "/api/butler"
     prefix = f"{default_api_path}/repo/{{repository}}"
+    auth_dependencies = [Depends(repository_authorization_dependency)]
+    if not config.gafaelfawr_enabled:
+        auth_dependencies = []
     for router in (external_router, query_router):
         app.include_router(
             router,
             prefix=prefix,
             # Verify that users have permission to access repository-specific
             # resources.
-            dependencies=[Depends(repository_authorization_dependency)],
+            dependencies=auth_dependencies,
             # document that 422 responses will include a JSON-formatted error
             # message, from `butler_exception_handler()` below.
             responses={422: {"model": ErrorResponseModel}},
