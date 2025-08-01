@@ -270,11 +270,10 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         # Check component inheritance
         exposure = factory.getStorageClass("Exposure")
         exposureF = factory.getStorageClass("ExposureF")
-        self.assertIsInstance(exposureF, type(exposure))
-        self.assertIsInstance(exposure.components["image"], type(image))
-        self.assertNotIsInstance(exposure.components["image"], type(imageF))
-        self.assertIsInstance(exposureF.components["image"], type(image))
-        self.assertIsInstance(exposureF.components["image"], type(imageF))
+        self.assertEqual(exposure.components["image"], image)
+        self.assertNotEqual(exposure.components["image"], imageF)
+        self.assertNotEqual(exposureF.components["image"], image)
+        self.assertEqual(exposureF.components["image"], imageF)
         self.assertIn("wcs", exposure.components)
         self.assertIn("wcs", exposureF.components)
 
@@ -289,14 +288,6 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertNotIn("param3", thing1.parameters)
         param2.remove("param3")
         self.assertEqual(param1, param2)
-
-        # Check that we can't have a new StorageClass that does not
-        # inherit from StorageClass
-        with self.assertRaises(ValueError):
-            factory.makeNewStorageClass("ClassName", baseClass=StorageClassFactory)
-
-        sc = factory.makeNewStorageClass("ClassName")
-        self.assertIsInstance(sc(), StorageClass)
 
     def testPickle(self):
         """Test that we can pickle storageclasses."""

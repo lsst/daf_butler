@@ -39,6 +39,8 @@ from collections.abc import Callable, Collection, Mapping, Sequence, Set
 from threading import RLock
 from typing import Any
 
+import pydantic
+
 from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
 from lsst.utils.introspection import get_full_type_name
@@ -55,6 +57,18 @@ class StorageClassConfig(ConfigSubset):
 
     component = "storageClasses"
     defaultConfigFile = "storageClasses.yaml"
+
+
+class _StorageClassModel(pydantic.BaseModel):
+    """Model class used to validate storage class configuration."""
+
+    pytype: str | None = None
+    inheritsFrom: str | None = None
+    components: dict[str, str] = pydantic.Field(default_factory=dict)
+    derivedComponents: dict[str, str] = pydantic.Field(default_factory=dict)
+    parameters: list[str] = pydantic.Field(default_factory=list)
+    delegate: str | None = None
+    converters: dict[str, str] = pydantic.Field(default_factory=dict)
 
 
 class StorageClass:
@@ -81,17 +95,9 @@ class StorageClass:
         that python type to the valid type of this storage class.
     """
 
-    _cls_name: str = "BaseStorageClass"
-    _cls_components: dict[str, StorageClass] | None = None
-    _cls_derivedComponents: dict[str, StorageClass] | None = None
-    _cls_parameters: Set[str] | Sequence[str] | None = None
-    _cls_delegate: str | None = None
-    _cls_pytype: type | str | None = None
-    _cls_converters: dict[str, str] | None = None
-
     def __init__(
         self,
-        name: str | None = None,
+        name: str = "",
         pytype: type | str | None = None,
         components: dict[str, StorageClass] | None = None,
         derivedComponents: dict[str, StorageClass] | None = None,
@@ -99,23 +105,8 @@ class StorageClass:
         delegate: str | None = None,
         converters: dict[str, str] | None = None,
     ):
-        if name is None:
-            name = self._cls_name
-        if pytype is None:
-            pytype = self._cls_pytype
-        if components is None:
-            components = self._cls_components
-        if derivedComponents is None:
-            derivedComponents = self._cls_derivedComponents
-        if parameters is None:
-            parameters = self._cls_parameters
-        if delegate is None:
-            delegate = self._cls_delegate
-
         # Merge converters with class defaults.
         self._converters = {}
-        if self._cls_converters is not None:
-            self._converters.update(self._cls_converters)
         if converters:
             self._converters.update(converters)
 
@@ -682,68 +673,54 @@ StorageClasses
         # components or parents before their classes are defined
         # we have a helper function that we can call recursively
         # to extract definitions from the configuration.
-        def processStorageClass(name: str, _sconfig: StorageClassConfig, msg: str = "") -> None:
-            # Maybe we've already processed this through recursion
+        def processStorageClass(name: str, _sconfig: StorageClassConfig, msg: str = "") -> StorageClass:
+            # This might have already been processed through recursion, or
+            # already present in the factory.
             if name not in _sconfig:
-                return
-            info = _sconfig.pop(name)
-
-            # Always create the storage class so we can ensure that
-            # we are not trying to overwrite with a different definition
-            components = None
-
-            # Extract scalar items from dict that are needed for
-            # StorageClass Constructor
-            storageClassKwargs = {k: info[k] for k in ("pytype", "delegate", "parameters") if k in info}
-
-            if "converters" in info:
-                storageClassKwargs["converters"] = info["converters"].toDict()
-
-            for compName in ("components", "derivedComponents"):
-                if compName not in info:
-                    continue
-                components = {}
-                for cname, ctype in info[compName].items():
-                    if ctype not in self:
-                        processStorageClass(ctype, sconfig, msg)
-                    components[cname] = self.getStorageClass(ctype)
-
-                # Fill in other items
-                storageClassKwargs[compName] = components
-
-            # Create the new storage class and register it
-            baseClass = None
-            if "inheritsFrom" in info:
-                baseName = info["inheritsFrom"]
-
-                # The inheritsFrom feature requires that the storage class
-                # being inherited from is itself a subclass of StorageClass
-                # that was created with makeNewStorageClass. If it was made
-                # and registered with a simple StorageClass constructor it
-                # cannot be used here and we try to recreate it.
-                if baseName in self:
-                    baseClass = type(self.getStorageClass(baseName))
-                    if baseClass is StorageClass:
-                        log.warning(
-                            "Storage class %s is requested to inherit from %s but that storage class "
-                            "has not been defined to be a subclass of StorageClass and so can not "
-                            "be used. Attempting to recreate parent class from current configuration.",
-                            name,
-                            baseName,
-                        )
-                        processStorageClass(baseName, sconfig, msg)
-                else:
-                    processStorageClass(baseName, sconfig, msg)
-                baseClass = type(self.getStorageClass(baseName))
-                if baseClass is StorageClass:
-                    raise TypeError(
-                        f"Configuration for storage class {name} requests to inherit from "
-                        f" storage class {baseName} but that class is not defined correctly."
-                    )
-
-            newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
-            newStorageClass = newStorageClassType()
-            self.registerStorageClass(newStorageClass, msg=msg)
+                return self.getStorageClass(name)
+            try:
+                model = _StorageClassModel.model_validate(_sconfig.pop(name))
+            except Exception as err:
+                err.add_note(msg)
+                raise
+            components: dict[str, StorageClass] = {}
+            derivedComponents: dict[str, StorageClass] = {}
+            parameters: set[str] = set()
+            delegate: str | None = None
+            converters: dict[str, str] = {}
+            if model.inheritsFrom is not None:
+                base = processStorageClass(model.inheritsFrom, _sconfig, msg + f"; processing base of {name}")
+                pytype = base._pytypeName
+                components.update(base.components)
+                derivedComponents.update(base.derivedComponents)
+                parameters.update(base.parameters)
+                delegate = base._delegateClassName
+                converters.update(base.converters)
+            if model.pytype is not None:
+                pytype = model.pytype
+            for k, v in model.components.items():
+                components[k] = processStorageClass(
+                    v, _sconfig, msg + f"; processing component {k} of {name}"
+                )
+            for k, v in model.derivedComponents.items():
+                derivedComponents[k] = processStorageClass(
+                    v, _sconfig, msg + f"; processing derivedCmponent {k} of {name}"
+                )
+            parameters.update(model.parameters)
+            if model.delegate is not None:
+                delegate = model.delegate
+            converters.update(model.converters)
+            result = StorageClass(
+                name=name,
+                pytype=pytype,
+                components=components,
+                derivedComponents=derivedComponents,
+                parameters=parameters,
+                delegate=delegate,
+                converters=converters,
+            )
+            self.registerStorageClass(result, msg=msg)
+            return result
 
         # In case there is a problem, construct a context message for any
         # error reporting.
@@ -754,64 +731,6 @@ StorageClasses
         with self._lock:
             for name in list(sconfig.keys()):
                 processStorageClass(name, sconfig, context)
-
-    @staticmethod
-    def makeNewStorageClass(
-        name: str, baseClass: type[StorageClass] | None = StorageClass, **kwargs: Any
-    ) -> type[StorageClass]:
-        """Create a new Python class as a subclass of `StorageClass`.
-
-        Parameters
-        ----------
-        name : `str`
-            Name to use for this class.
-        baseClass : `type`, optional
-            Base class for this `StorageClass`. Must be either `StorageClass`
-            or a subclass of `StorageClass`. If `None`, `StorageClass` will
-            be used.
-        **kwargs
-            Additional parameter values to use as defaults for this class.
-            This can include ``components``, ``parameters``,
-            ``derivedComponents``, and ``converters``.
-
-        Returns
-        -------
-        newtype : `type` subclass of `StorageClass`
-            Newly created Python type.
-        """
-        if baseClass is None:
-            baseClass = StorageClass
-        if not issubclass(baseClass, StorageClass):
-            raise ValueError(f"Base class must be a StorageClass not {baseClass}")
-
-        # convert the arguments to use different internal names
-        clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}
-        clsargs["_cls_name"] = name
-
-        # Some container items need to merge with the base class values
-        # so that a child can inherit but override one bit.
-        # lists (which you get from configs) are treated as sets for this to
-        # work consistently.
-        for k in ("components", "parameters", "derivedComponents", "converters"):
-            classKey = f"_cls_{k}"
-            if classKey in clsargs:
-                baseValue = getattr(baseClass, classKey, None)
-                if baseValue is not None:
-                    currentValue = clsargs[classKey]
-                    if isinstance(currentValue, dict):
-                        newValue = baseValue.copy()
-                    else:
-                        newValue = set(baseValue)
-                    newValue.update(currentValue)
-                    clsargs[classKey] = newValue
-
-        # If we have parameters they should be a frozen set so that the
-        # parameters in the class can not be modified.
-        pk = "_cls_parameters"
-        if pk in clsargs:
-            clsargs[pk] = frozenset(clsargs[pk])
-
-        return type(f"StorageClass{name}", (baseClass,), clsargs)
 
     def getStorageClass(self, storageClassName: str) -> StorageClass:
         """Get a StorageClass instance associated with the supplied name.
