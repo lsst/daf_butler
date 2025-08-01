@@ -147,12 +147,7 @@ def _addFullStorageClass(butler: Butler, name: str, formatter: str, **kwargs: An
         previously found in the repository.
     """
     storageRegistry = butler._datastore.storageClassFactory
-
-    # Use the special constructor to allow a subclass of storage class
-    # to be created. This allows other test storage classes to inherit from
-    # this one.
-    storage_type = storageRegistry.makeNewStorageClass(name, None, **kwargs)
-    storage = storage_type()
+    storage = StorageClass(name, **kwargs)
     try:
         storageRegistry.registerStorageClass(storage)
     except ValueError:
