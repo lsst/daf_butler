@@ -659,37 +659,12 @@ StorageClasses
 {sep.join(f"{self._storageClasses[s]!r}" for s in sorted(self._storageClasses))}
 """
 
-    def __contains__(self, storageClassOrName: StorageClass | str) -> bool:
-        """Indicate whether the storage class exists in the factory.
-
-        Parameters
-        ----------
-        storageClassOrName : `str` or `StorageClass`
-            If `str` is given existence of the named StorageClass
-            in the factory is checked. If `StorageClass` is given
-            existence and equality are checked.
-
-        Returns
-        -------
-        in : `bool`
-            True if the supplied string is present, or if the supplied
-            `StorageClass` is present and identical.
-
-        Notes
-        -----
-        The two different checks (one for "key" and one for "value") based on
-        the type of the given argument mean that it is possible for
-        StorageClass.name to be in the factory but StorageClass to not be
-        in the factory.
-        """
+    def __contains__(self, storageClassOrName: object) -> bool:
         with self._lock:
             if isinstance(storageClassOrName, str):
                 return storageClassOrName in self._storageClasses
-            elif (
-                isinstance(storageClassOrName, StorageClass)
-                and storageClassOrName.name in self._storageClasses
-            ):
-                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+            elif isinstance(storageClassOrName, StorageClass):
+                return storageClassOrName.name in self._storageClasses
             return False
 
     def addFromConfig(self, config: StorageClassConfig | Config | str) -> None:
