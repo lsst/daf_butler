@@ -656,7 +656,7 @@ class StorageClassFactory(metaclass=Singleton):
 
 StorageClasses
 --------------
-{sep.join(f"{s}: {self._storageClasses[s]!r}" for s in sorted(self._storageClasses))}
+{sep.join(f"{self._storageClasses[s]!r}" for s in sorted(self._storageClasses))}
 """
 
     def __contains__(self, storageClassOrName: StorageClass | str) -> bool:
