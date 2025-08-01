@@ -634,7 +634,6 @@ class StorageClassFactory(metaclass=Singleton):
 
     def __init__(self, config: StorageClassConfig | str | None = None):
         self._storageClasses: dict[str, StorageClass] = {}
-        self._configs: list[StorageClassConfig] = []
         self._lock = RLock()
 
         # Always seed with the default config
@@ -778,7 +777,6 @@ StorageClasses
         log.debug("Adding definitions from config %s", ", ".join(files))
 
         with self._lock:
-            self._configs.append(sconfig)
             for name in list(sconfig.keys()):
                 processStorageClass(name, sconfig, context)
 
