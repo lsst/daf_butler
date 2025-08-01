@@ -73,7 +73,7 @@ class StreamingQuery(Protocol[_TContext]):
         """
 
 
-async def execute_streaming_query(query: StreamingQuery, user: str) -> StreamingResponse:
+async def execute_streaming_query(query: StreamingQuery, user: str | None) -> StreamingResponse:
     """Run a query, streaming the response incrementally, one page at a time,
     as newline-separated chunks of JSON.
 
@@ -83,7 +83,7 @@ async def execute_streaming_query(query: StreamingQuery, user: str) -> Streaming
         Callers should define a class implementing the ``StreamingQuery``
         protocol to specify the inner logic that will be called during
         query execution.
-    user : `str`
+    user : `str`, optional
         Name of user running the query -- used to enforce usage limits.
 
     Returns
@@ -125,7 +125,7 @@ async def execute_streaming_query(query: StreamingQuery, user: str) -> Streaming
     )
 
 
-async def _stream_query_pages(query: StreamingQuery, user: str) -> AsyncIterator[str]:
+async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncIterator[str]:
     """Stream the query output with one page object per line, as
     newline-delimited JSON records in the "JSON Lines" format
     (https://jsonlines.org/).

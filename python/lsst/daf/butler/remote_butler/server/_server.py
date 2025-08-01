@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
     default_api_path = "/api/butler"
     prefix = f"{default_api_path}/repo/{{repository}}"
     auth_dependencies = [Depends(repository_authorization_dependency)]
-    if config.gafaelfawr_url == "DISABLED":
+    if not config.gafaelfawr_enabled:
         auth_dependencies = []
     for router in (external_router, query_router):
         app.include_router(

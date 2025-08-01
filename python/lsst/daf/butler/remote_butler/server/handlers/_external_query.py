@@ -35,7 +35,6 @@ from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from safir.dependencies.gafaelfawr import auth_dependency
 
 from lsst.daf.butler import Butler, DataCoordinate, DimensionGroup
 from lsst.daf.butler.remote_butler.server_models import (
@@ -56,7 +55,7 @@ from ...._exceptions import InvalidQueryError
 from ...._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
 from ....queries import Query
 from ....queries.driver import QueryDriver, QueryTree
-from .._dependencies import factory_dependency
+from .._dependencies import factory_dependency, user_name_dependency
 from .._factory import Factory
 from ._query_serialization import convert_query_page
 from ._query_streaming import StreamingQuery, execute_streaming_query
@@ -93,7 +92,7 @@ class _StreamQueryDriverExecute(StreamingQuery[_QueryContext]):
 async def query_execute(
     request: QueryExecuteRequestModel,
     factory: Annotated[Factory, Depends(factory_dependency)],
-    user_name: Annotated[str, Depends(auth_dependency)],
+    user_name: Annotated[str | None, Depends(user_name_dependency)],
 ) -> StreamingResponse:
     query = _StreamQueryDriverExecute(request, factory)
     return await execute_streaming_query(query, user_name)
@@ -140,7 +139,7 @@ class _StreamQueryAllDatasets(StreamingQuery[_QueryAllDatasetsContext]):
 async def query_all_datasets_execute(
     request: QueryAllDatasetsRequestModel,
     factory: Annotated[Factory, Depends(factory_dependency)],
-    user_name: Annotated[str, Depends(auth_dependency)],
+    user_name: Annotated[str | None, Depends(user_name_dependency)],
 ) -> StreamingResponse:
     query = _StreamQueryAllDatasets(request, factory)
     return await execute_streaming_query(query, user_name)

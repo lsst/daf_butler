@@ -73,6 +73,10 @@ class ButlerServerConfig(BaseSettings):
     as static files from the `configs/` HTTP route.
     """
 
+    @property
+    def gafaelfawr_enabled(self) -> bool:
+        return self.gafaelfawr_url != "DISABLED"
+
 
 _config: ButlerServerConfig | None = None
 
