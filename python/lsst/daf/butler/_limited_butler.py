@@ -129,11 +129,6 @@ class LimitedButler(ABC):
         obj : `object`
             The dataset.
 
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if the supplied `DatasetRef` is unresolved.
-
         Notes
         -----
         In a `LimitedButler` the only allowable way to specify a dataset is
