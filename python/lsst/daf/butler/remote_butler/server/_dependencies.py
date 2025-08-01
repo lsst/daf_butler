@@ -27,8 +27,8 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
-from safir.dependencies.gafaelfawr import auth_delegated_token_dependency, auth_dependency
+from fastapi import Depends, Header, HTTPException
+from safir.dependencies.gafaelfawr import auth_delegated_token_dependency
 
 from lsst.daf.butler import LabeledButlerFactory
 
@@ -65,9 +65,29 @@ async def authorizer_dependency() -> GafaelfawrGroupAuthorizer:
     return _authorizer
 
 
+async def user_name_dependency(x_auth_request_user: Annotated[str | None, Header()] = None) -> str | None:
+    """Retrieve the user name from Gafaelfawr authentication headers.
+
+    Parameters
+    ----------
+    x_auth_request_user : FastAPI header
+        Header provided by FastAPI.
+
+    Returns
+    -------
+    user_name : `str` | `None`
+        The user name, if Gafaelfawr is available on this environment.  `None`
+        if Gafaelfawr is not available.
+    """
+    if x_auth_request_user is None and load_config().gafaelfawr_enabled:
+        raise HTTPException(status_code=403, detail="Required X-Auth-Request-User header was not provided")
+
+    return x_auth_request_user
+
+
 async def repository_authorization_dependency(
     repository: str,
-    user_name: Annotated[str, Depends(auth_dependency)],
+    user_name: Annotated[str | None, Depends(user_name_dependency)],
     user_token: Annotated[str, Depends(auth_delegated_token_dependency)],
     authorizer: Annotated[GafaelfawrGroupAuthorizer, Depends(authorizer_dependency)],
 ) -> None:
@@ -87,6 +107,7 @@ async def repository_authorization_dependency(
     authorizer : `GafaelfawrGroupAuthorizer`
         Authorization client that will be used to verify group membership.
     """
+    assert user_name is not None, "Gafaelfawr user name header should have been populated."
     if not await authorizer.is_user_authorized_for_repository(
         repository=repository, user_name=user_name, user_token=user_token
     ):

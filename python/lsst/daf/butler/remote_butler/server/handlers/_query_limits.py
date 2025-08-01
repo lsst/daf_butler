@@ -56,7 +56,7 @@ class QueryLimits:
         self._active_queries = 0
         self._active_users: Counter[str] = Counter()
 
-    async def enforce_query_limits(self, user: str) -> None:
+    async def enforce_query_limits(self, user: str | None) -> None:
         if self._active_queries >= _MAXIMUM_CONCURRENT_STREAMING_QUERIES:
             await _block_retry_for_unit_test()
             raise HTTPException(
@@ -70,7 +70,7 @@ class QueryLimits:
         # replica, which is a non-deterministic but small number.
         # There will be some backpressure from the 429 responses as they
         # attempt to bounce to other replicas on retry.
-        if self._active_users[user] >= 2:
+        if user is not None and self._active_users[user] >= 2:
             _LOG.warning(f"User '{user}' is running many queries simultaneously.")
             raise HTTPException(
                 status_code=429,  # too many requests
@@ -80,14 +80,16 @@ class QueryLimits:
             )
 
     @asynccontextmanager
-    async def track_query(self, user: str) -> AsyncIterator[None]:
+    async def track_query(self, user: str | None) -> AsyncIterator[None]:
         try:
             self._active_queries += 1
-            self._active_users[user] += 1
+            if user is not None:
+                self._active_users[user] += 1
             await _block_query_for_unit_test()
             yield
         finally:
-            self._active_users[user] -= 1
+            if user is not None:
+                self._active_users[user] -= 1
             self._active_queries -= 1
 
 
