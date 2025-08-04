@@ -251,6 +251,8 @@ storageClasses:
     pytype: lsst.obs.fiberspectrograph.FiberSpectrum
   PhotonTransferCurveDataset:
     pytype: lsst.ip.isr.PhotonTransferCurveDataset
+  FlatGradient:
+    pytype: lsst.ip.isr.FlatGradient
   StrayLightData:
     pytype: lsst.ip.isr.StrayLightData
   BrighterFatterKernel:
