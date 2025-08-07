@@ -631,6 +631,7 @@ class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
         """Test server running in CADC auth mode."""
         with mock_config() as config:
             config.authentication = "cadc"
+            config.gafaelfawr_url = "DISABLED"
             with create_test_server(TESTDIR, server_config=config) as instance:
                 self.assertIsInstance(instance.remote_butler._connection.auth, CadcAuthenticationProvider)
 
