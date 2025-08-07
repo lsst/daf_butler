@@ -129,11 +129,6 @@ class LimitedButler(ABC):
         obj : `object`
             The dataset.
 
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if the supplied `DatasetRef` is unresolved.
-
         Notes
         -----
         In a `LimitedButler` the only allowable way to specify a dataset is
@@ -326,7 +321,7 @@ class LimitedButler(ABC):
             Whether the dataset artifact exists in the datastore and can be
             retrieved.
         """
-        return self._datastore.exists(ref)
+        return self.stored_many([ref])[ref]
 
     def stored_many(
         self,

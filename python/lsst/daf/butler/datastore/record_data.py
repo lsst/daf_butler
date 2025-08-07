@@ -111,6 +111,28 @@ class DatastoreRecordData:
     """Opaque table data, indexed by dataset ID and grouped by opaque table
     name."""
 
+    @staticmethod
+    def merge_mappings(*args: Mapping[str, DatastoreRecordData]) -> dict[str, DatastoreRecordData]:
+        """Merge mappings of datastore record data.
+
+        Parameters
+        ----------
+        *args : `~collections.abc.Mapping` [ `str`, `DatastoreRecordData` ]
+            Mappings of record data, keyed by datastore name.
+
+        Returns
+        -------
+        merged : `~collections.abc.Mapping` [ `str`, `DatastoreRecordData` ]
+            Merged mapping of record data, keyed by datastore name.
+        """
+        result: dict[str, DatastoreRecordData] = {}
+        for arg in args:
+            for datastore_name, record_data in arg.items():
+                if datastore_name not in result:
+                    result[datastore_name] = DatastoreRecordData()
+                result[datastore_name].update(record_data)
+        return result
+
     def update(self, other: DatastoreRecordData) -> None:
         """Update contents of this instance with data from another instance.
 

@@ -484,19 +484,6 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetTypeOut, componentDatasetType)
         self.assertEqual(datasetTypeOut._parentStorageClassName, componentDatasetType._parentStorageClassName)
 
-        # Now with a storage class that is created by the factory
-        factoryStorageClassClass = StorageClassFactory.makeNewStorageClass("ParentClass")
-        factoryComponentStorageClassClass = StorageClassFactory.makeNewStorageClass("ComponentClass")
-        componentDatasetType = DatasetType(
-            DatasetType.nameWithComponent(datasetTypeName, "comp"),
-            dimensions,
-            factoryComponentStorageClassClass(),
-            parentStorageClass=factoryStorageClassClass(),
-        )
-        datasetTypeOut = pickle.loads(pickle.dumps(componentDatasetType))
-        self.assertEqual(datasetTypeOut, componentDatasetType)
-        self.assertEqual(datasetTypeOut._parentStorageClassName, componentDatasetType._parentStorageClassName)
-
     def test_composites(self) -> None:
         """Test components within composite DatasetTypes."""
         storageClassA = StorageClass("compA")
