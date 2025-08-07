@@ -1,10 +1,15 @@
+import base64
+import time
 import unittest
 
 from lsst.daf.butler.tests.utils import mock_env
 
 try:
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
+    from lsst.daf.butler.remote_butler.authentication.cadc import (
+        CADC_TOKEN_ENVIRONMENT_KEY,
+        CadcAuthenticationProvider,
+    )
     from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
         _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY,
@@ -54,6 +59,10 @@ class TestButlerClientAuthentication(unittest.TestCase):
         self.assertEqual(auth.get_datastore_headers(), {})
 
     def test_cadc_auth(self):
-        auth = CadcAuthenticationProvider()
-        self.assertEqual(auth.get_server_headers(), {})
-        self.assertEqual(auth.get_datastore_headers(), {"Authorization": "Bearer stub"})
+        mock_token = base64.b64encode(
+            bytes(f"TestToken.expirytime={time.time() + 1e6}.Done", "utf-8")
+        ).decode("utf-8")
+        with mock_env({CADC_TOKEN_ENVIRONMENT_KEY: mock_token}):
+            auth = CadcAuthenticationProvider()
+            self.assertEqual(auth.get_server_headers(), {})
+            self.assertEqual(auth.get_datastore_headers(), {"Authorization": f"Bearer {mock_token}"})
