@@ -1490,7 +1490,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             names = [info.name for info in collections_info]
 
             # Get all the datasets from these runs.
-            refs = self._query_all_datasets(names, find_first=False, limit=None)
+            refs = self.query_all_datasets(names, find_first=False, limit=None)
 
         # Call pruneDatasets since we are deliberately removing
         # datasets in chunks from the RUN collections rather than

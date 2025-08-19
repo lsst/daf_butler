@@ -2040,7 +2040,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return dimension_records
 
-    def _query_all_datasets(
+    def query_all_datasets(
         self,
         collections: str | Iterable[str] | None = None,
         *,

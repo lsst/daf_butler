@@ -2377,7 +2377,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         butler = self.make_butler("base.yaml", "datasets.yaml")
 
         # Make sure that refs are coming out well-formed.
-        datasets = butler._query_all_datasets("imported_r", where="detector = 2", instrument="Cam1")
+        datasets = butler.query_all_datasets("imported_r", where="detector = 2", instrument="Cam1")
         datasets.sort(key=lambda ref: ref.datasetType.name)
         self.assertEqual(len(datasets), 2)
         bias = datasets[0]
@@ -2396,29 +2396,29 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(flat.id, UUID("c1296796-56c5-4acf-9b49-40d920c6f840"))
 
         # Querying for everything finds everything.
-        results = butler._query_all_datasets("*", find_first=False)
+        results = butler.query_all_datasets("*", find_first=False)
         self.assertEqual(len(results), 13)
 
         # constraining by data ID works
         detector_1_ids = ("d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c", "e15ab039-bc8b-4135-87c5-90902a7c0b22")
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "*", data_id={"detector": 1, "instrument": "Cam1"}, find_first=False
         )
         self.assertCountEqual(detector_1_ids, _ref_uuids(results))
 
         # bind values work.
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "*", where="detector=:my_bind and instrument='Cam1'", bind={"my_bind": 1}, find_first=False
         )
         self.assertCountEqual(detector_1_ids, _ref_uuids(results))
 
         # find_first requires ordered collections.
         with self.assertRaisesRegex(InvalidQueryError, "Can not use wildcards"):
-            results = butler._query_all_datasets("*")
+            results = butler.query_all_datasets("*")
 
         butler.collections.register("chain", CollectionType.CHAINED)
         butler.collections.redefine_chain("chain", ["imported_g", "imported_r"])
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "chain", where="detector=2 and instrument = 'Cam1'", find_first=True
         )
         # find_first searches the collection chain in order.
@@ -2435,47 +2435,47 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         )
 
         # collection searches work.
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "*g", where="detector=1 and instrument = 'Cam1'", find_first=False
         )
         self.assertEqual(_ref_uuids(results), ["e15ab039-bc8b-4135-87c5-90902a7c0b22"])
 
         # we raise for missing collections with explicit names.
         with self.assertRaises(MissingCollectionError):
-            results = butler._query_all_datasets("nonexistent")
+            results = butler.query_all_datasets("nonexistent")
         # we don't raise for collection wildcard searches that find nothing.
-        results = butler._query_all_datasets("nonexistent*", find_first=False)
+        results = butler.query_all_datasets("nonexistent*", find_first=False)
         self.assertEqual(results, [])
 
         # dataset type searches work.
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "*", name="b*", where="detector=1 and instrument = 'Cam1'", find_first=False
         )
         self.assertEqual(_ref_uuids(results), ["e15ab039-bc8b-4135-87c5-90902a7c0b22"])
 
         # Missing dataset types raise.
         with self.assertRaises(MissingDatasetTypeError):
-            results = butler._query_all_datasets("chain", name=["notfound", "flat"])
+            results = butler.query_all_datasets("chain", name=["notfound", "flat"])
         with self.assertRaises(MissingDatasetTypeError):
-            results = butler._query_all_datasets("chain", name="notfound*")
+            results = butler.query_all_datasets("chain", name="notfound*")
 
         # Limit of 3 lands at the boundary of a dataset type.
         # Limit of 4 is in the middle of a dataset type.
         for limit in [3, 4]:
             with self.subTest(limit=limit):
-                results = butler._query_all_datasets("imported_g", limit=limit)
+                results = butler.query_all_datasets("imported_g", limit=limit)
                 self.assertEqual(len(results), limit)
                 with self.assertLogs(level="WARNING") as log:
-                    results = butler._query_all_datasets("imported_g", limit=-limit)
+                    results = butler.query_all_datasets("imported_g", limit=-limit)
                     self.assertEqual(len(results), limit)
                 self.assertIn("requested limit", log.output[0])
 
-        results = butler._query_all_datasets("imported_g", limit=0)
+        results = butler.query_all_datasets("imported_g", limit=0)
         self.assertEqual(len(results), 0)
 
         # 'where' constraints that don't apply to all dataset types follow the
         # same rules as query_datasets.
-        results = butler._query_all_datasets(
+        results = butler.query_all_datasets(
             "*", where="detector = 2 and band = 'g' and instrument = 'Cam1'", find_first=False
         )
         self.assertCountEqual(
@@ -2491,7 +2491,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         # Default collections and data ID apply.
         butler.registry.defaults = RegistryDefaults(collections="imported_g")
-        results = butler._query_all_datasets(where="detector = 2")
+        results = butler.query_all_datasets(where="detector = 2")
         self.assertCountEqual(
             _ref_uuids(results),
             ["51352db4-a47a-447c-b12d-a50b206b17cd", "60c8a65c-7290-4c38-b1de-e3b1cdcf872d"],
