@@ -41,6 +41,7 @@ __all__ = (
     "InvalidQueryError",
     "MissingCollectionError",
     "MissingDatasetTypeError",
+    "UnknownComponentError",
     "ValidationError",
 )
 
@@ -170,6 +171,14 @@ class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
     error_type = "missing_dataset_type"
 
 
+class UnknownComponentError(KeyError, ButlerUserError):
+    """Exception raised when the requested component of a DatasetType is not
+    known.
+    """
+
+    error_type = "unknown_component"
+
+
 class DatasetTypeNotSupportedError(RuntimeError):
     """A `DatasetType` is not handled by this routine.
 
@@ -227,6 +236,7 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     MissingDatasetTypeError,
     UnimplementedQueryError,
     UnknownButlerUserError,
+    UnknownComponentError,
 )
 _USER_ERROR_MAPPING = {e.error_type: e for e in _USER_ERROR_TYPES}
 assert len(_USER_ERROR_MAPPING) == len(_USER_ERROR_TYPES), (
