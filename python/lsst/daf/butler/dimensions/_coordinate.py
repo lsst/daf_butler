@@ -1005,10 +1005,12 @@ class _FullTupleDataCoordinate(_BasicTupleDataCoordinate):
         dimensions = self.universe.conform(dimensions)
         if self._dimensions == dimensions:
             return self
-        return DataCoordinate.from_full_values(
-            dimensions,
-            tuple(self[k] for k in dimensions.data_coordinate_keys),
-        )
+
+        try:
+            values = tuple(self[k] for k in dimensions.data_coordinate_keys)
+        except KeyError as e:
+            raise DimensionNameError(f"Data ID is missing value for dimension {str(e)}.")
+        return DataCoordinate.from_full_values(dimensions, values)
 
     def union(self, other: DataCoordinate) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
