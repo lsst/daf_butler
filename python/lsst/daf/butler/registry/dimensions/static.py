@@ -468,7 +468,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 distinct=True,
             ).into_joins_builder(postprocessing=None)
         if not element.has_own_table:
-            raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
+            raise UnimplementedQueryError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
         result = SqlJoinsBuilder(db=self._db, from_clause=table)
         for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
@@ -1055,7 +1055,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         # Reject spatial constraints that are nested inside OR or NOT, because
         # the postprocessing needed for those would be a lot harder.
         if flags & PredicateVisitFlags.INVERTED or flags & PredicateVisitFlags.HAS_OR_SIBLINGS:
-            raise NotImplementedError(
+            raise UnimplementedQueryError(
                 "Spatial overlap constraints nested inside OR or NOT are not supported."
             )
         # Delegate to super just because that's good practice with
@@ -1114,7 +1114,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 )
                 skypix = element
             case _:
-                raise NotImplementedError(
+                raise UnimplementedQueryError(
                     f"Spatial overlap constraint for dimension {element} not supported."
                 )
         # Convert the region-overlap constraint into a skypix

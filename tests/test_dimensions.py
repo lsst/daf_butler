@@ -48,6 +48,7 @@ from lsst.daf.butler import (
     DimensionConfig,
     DimensionElement,
     DimensionGroup,
+    DimensionNameError,
     DimensionPacker,
     DimensionUniverse,
     NamedKeyDict,
@@ -796,6 +797,10 @@ class DataCoordinateTestCase(unittest.TestCase):
                     with self.subTest(dataId=dataId, newDataId=newDataId, type=type(dataId)):
                         self.assertEqual(dataId, newDataId)
                         self.assertTrue(newDataId.hasFull())
+
+        coord = DataCoordinate.standardize({"instrument": "HSC"}, universe=self.allDataIds.universe)
+        with self.assertRaises(DimensionNameError):
+            coord.subset(["detector"])
 
     def testUnion(self):
         """Test `DataCoordinate.union`."""

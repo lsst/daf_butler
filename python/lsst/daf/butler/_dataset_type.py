@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
+from ._exceptions import UnknownComponentError
 from ._storage_class import StorageClass, StorageClassFactory
 from .dimensions import DimensionGroup
 from .json import from_json_pydantic, to_json_pydantic
@@ -492,7 +493,9 @@ class DatasetType:
         """
         if component in self.storageClass.allComponents():
             return self.nameWithComponent(self.name, component)
-        raise KeyError(f"Requested component ({component}) not understood by this DatasetType ({self})")
+        raise UnknownComponentError(
+            f"Requested component ({component}) not understood by this DatasetType ({self})"
+        )
 
     def makeCompositeDatasetType(self) -> DatasetType:
         """Return a composite dataset type from the component.

@@ -42,6 +42,7 @@ from lsst.daf.butler import (
     SerializedDatasetRefContainerV1,
     StorageClass,
     StorageClassFactory,
+    UnknownComponentError,
 )
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
@@ -516,8 +517,11 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetTypeComponentB.parentStorageClass, storageClass)
         self.assertIsNone(datasetTypeComposite.parentStorageClass)
 
-        with self.assertRaises(KeyError):
+        with self.assertRaises(UnknownComponentError):
             datasetTypeComposite.makeComponentDatasetType("compF")
+
+        with self.assertRaises(UnknownComponentError):
+            datasetTypeComposite.componentTypeName("unknown")
 
 
 class DatasetRefTestCase(unittest.TestCase):
