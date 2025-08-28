@@ -343,10 +343,6 @@ class RemoteButlerRegistry(RegistryBase):
     def storageClasses(self) -> StorageClassFactory:
         return self._butler.storageClasses
 
-    @storageClasses.setter
-    def storageClasses(self, value: StorageClassFactory) -> None:
-        raise NotImplementedError()
-
 
 def _is_component_dataset_type(dataset_type: DatasetType | str) -> bool:
     """Return true if the given dataset type refers to a component."""
