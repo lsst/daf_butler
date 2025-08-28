@@ -74,8 +74,8 @@ class CadcAuthenticationProvider(RemoteButlerAuthenticationProvider):
         return self._headers
 
 
-_SERVER_WHITELIST = ["*.canfar.net"]
-CADC_TOKEN_ENVIRONMENT_KEY = "CADC_TOKEN"
+_SERVER_WHITELIST = ["*.canfar.net", "host.docker.internal"]
+_CADC_TOKEN_ENVIRONMENT_KEY = "CADC_TOKEN"
 
 
 def _get_authentication_token_from_environment(server_url: str) -> str | None:
@@ -99,7 +99,7 @@ def _get_authentication_token_from_environment(server_url: str) -> str | None:
     """
     hostname = urlparse(server_url.lower()).hostname
     hostname_in_whitelist = any(hostname and fnmatchcase(hostname, pattern) for pattern in _SERVER_WHITELIST)
-    notebook_token = os.getenv(CADC_TOKEN_ENVIRONMENT_KEY)
+    notebook_token = os.getenv(_CADC_TOKEN_ENVIRONMENT_KEY)
     if hostname_in_whitelist and notebook_token:
         return notebook_token
 
