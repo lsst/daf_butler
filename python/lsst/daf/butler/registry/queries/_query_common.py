@@ -35,7 +35,7 @@ from typing import Any, Generic, Self, TypeAlias, TypeVar
 
 from ...dimensions import DataId
 from ...queries import Query, QueryResultsBase
-from ...registry.queries import QueryResultsBase as LegacyQueryResultsBase
+from ._results import QueryResultsBase as LegacyQueryResultsBase
 
 QueryFactory: TypeAlias = Callable[[], AbstractContextManager[Query]]
 """Function signature matching the interface of ``Butler._query``.  Returns a
