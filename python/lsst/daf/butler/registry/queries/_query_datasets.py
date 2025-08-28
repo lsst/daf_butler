@@ -28,7 +28,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from contextlib import AbstractContextManager
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
@@ -123,9 +122,6 @@ class QueryDriverDatasetRefQueryResults(
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         yield self
-
-    def materialize(self) -> AbstractContextManager[QueryDriverDatasetRefQueryResults]:
-        raise NotImplementedError()
 
     def expanded(self) -> QueryDriverDatasetRefQueryResults:
         return QueryDriverDatasetRefQueryResults(
