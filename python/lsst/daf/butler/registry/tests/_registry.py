@@ -1813,17 +1813,6 @@ class RegistryTests(ABC):
                     )
                 )
 
-        # Materialize the bias dataset queries (only) by putting the results
-        # into temporary tables, then repeat those tests.
-        with self.assertWarns(FutureWarning):
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=False
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedAllBiases)
-            with subsetDataIds.findDatasets(
-                bias, collections=["imported_r", "imported_g"], findFirst=True
-            ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
             self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
@@ -1842,16 +1831,6 @@ class RegistryTests(ABC):
                 ),
                 expectedDeduplicatedBiases,
             )
-            # Materialize the dataset queries, too.
-            with self.assertWarns(FutureWarning):
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=False
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedAllBiases)
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=True
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
             self.assertEqual(dataIds.dimensions, expected_dimensions)
@@ -1882,16 +1861,6 @@ class RegistryTests(ABC):
                 ),
                 expectedDeduplicatedBiases,
             )
-            # Materialize just the bias dataset queries.
-            with self.assertWarns(FutureWarning):
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=False
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedAllBiases)
-                with subsetDataIds.findDatasets(
-                    bias, collections=["imported_r", "imported_g"], findFirst=True
-                ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
             # Materialize the subset data ID query, but not the dataset
             # queries.
             with subsetDataIds.materialize() as subsetDataIds:
@@ -1913,17 +1882,6 @@ class RegistryTests(ABC):
                     ),
                     expectedDeduplicatedBiases,
                 )
-                # Materialize the bias dataset queries, too, so now we're
-                # materializing every single step.
-                with self.assertWarns(FutureWarning):
-                    with subsetDataIds.findDatasets(
-                        bias, collections=["imported_r", "imported_g"], findFirst=False
-                    ).materialize() as biases:
-                        self.assertCountEqual(list(biases), expectedAllBiases)
-                    with subsetDataIds.findDatasets(
-                        bias, collections=["imported_r", "imported_g"], findFirst=True
-                    ).materialize() as biases:
-                        self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
 
     def testStorageClassPropagation(self):
         """Test that queries for datasets respect the storage class passed in
