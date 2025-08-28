@@ -42,11 +42,9 @@ import itertools
 import warnings
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from types import EllipsisType
 from typing import Any, Self
-
-from deprecated.sphinx import deprecated
 
 from lsst.utils.introspection import find_outside_stacklevel
 
@@ -567,22 +565,6 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def materialize(self) -> AbstractContextManager[Self]:
-        """Insert this query's results into a temporary table.
-
-        Returns
-        -------
-        context : `typing.ContextManager` [ `DatasetQueryResults` ]
-            A context manager that ensures the temporary table is created and
-            populated in ``__enter__`` (returning a results object backed by
-            that table), and dropped in ``__exit__``.  If ``self`` is already
-            materialized, the context manager may do nothing (reflecting the
-            fact that an outer context manager should already take care of
-            everything else).
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def expanded(self) -> Self:
         """Return a `DatasetQueryResults` for which `DataCoordinate.hasRecords`
         returns `True` for all data IDs in returned `DatasetRef` objects.
@@ -679,17 +661,6 @@ class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
         # Docstring inherited from DatasetQueryResults.
         yield self
 
-    @contextmanager
-    @deprecated(
-        "This method should no longer be used. Will be removed after v28.",
-        version="v28",
-        category=FutureWarning,
-    )
-    def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
-        # Docstring inherited from DatasetQueryResults.
-        with self._query.open_context():
-            yield DatabaseParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
-
     @property
     def parentDatasetType(self) -> DatasetType:
         # Docstring inherited.
@@ -749,12 +720,6 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         return iter(self._chain)
-
-    @contextmanager
-    def materialize(self) -> Iterator[ChainedDatasetQueryResults]:
-        # Docstring inherited from DatasetQueryResults.
-        with ExitStack() as stack:
-            yield ChainedDatasetQueryResults([stack.enter_context(r.materialize()) for r in self._chain])
 
     def expanded(self) -> ChainedDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
