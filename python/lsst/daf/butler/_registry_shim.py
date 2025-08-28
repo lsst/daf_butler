@@ -37,6 +37,7 @@ from ._collection_type import CollectionType
 from ._dataset_association import DatasetAssociation
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
+from ._storage_class import StorageClassFactory
 from ._timespan import Timespan
 from .dimensions import (
     DataCoordinate,
@@ -393,3 +394,7 @@ class RegistryShim(Registry):
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
         # Docstring inherited from a base class.
         return self._registry.obsCoreTableManager
+
+    @property
+    def storageClasses(self) -> StorageClassFactory:
+        return self._registry.storageClasses
