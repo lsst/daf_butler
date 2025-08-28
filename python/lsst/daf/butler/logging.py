@@ -35,6 +35,7 @@ import traceback
 from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
+from types import TracebackType
 from typing import IO, Any, ClassVar, overload
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
@@ -127,6 +128,9 @@ class ButlerMDC:
     def set_mdc(cls, mdc: dict[str, str]) -> Generator[None, None, None]:
         """Set the MDC key for this context.
 
+        This context manager also adds a mapping named ``mdc`` to any
+        exceptions that escape it.
+
         Parameters
         ----------
         mdc : `dict` of `str`, `str`
@@ -143,6 +147,12 @@ class ButlerMDC:
 
         try:
             yield
+        except BaseException as e:
+            # In logging, inner context overrules outer context. Need the same
+            # for exceptions.
+            inner_context: MDCDict = e.mdc if hasattr(e, "mdc") else MDCDict()
+            e.mdc = cls._MDC.copy() | inner_context  # type: ignore[attr-defined]
+            raise
         finally:
             for k, v in previous.items():
                 if not v:
@@ -155,10 +165,31 @@ class ButlerMDC:
         """Add a log record factory that adds a MDC record to `LogRecord`."""
         old_factory = logging.getLogRecordFactory()
 
-        def record_factory(*args: Any, **kwargs: Any) -> LogRecord:
-            record = old_factory(*args, **kwargs)
+        # Need explicit args in case exc_info is called as an arg (and because
+        # the factory API has a parameter literally called `args`).
+        def record_factory(
+            name: str,
+            level: int,
+            fn: str,
+            lno: int,
+            msg: str,
+            args: tuple,
+            exc_info: tuple | None,
+            func: str | None = None,
+            sinfo: TracebackType | None = None,
+            **kwargs: Any,
+        ) -> LogRecord:
+            record = old_factory(name, level, fn, lno, msg, args, exc_info, func, sinfo, **kwargs)
             # Make sure we send a copy of the global dict in the record.
-            record.MDC = MDCDict(cls._MDC)
+            mdc = MDCDict(cls._MDC)
+            if exc_info is not None:
+                _, ex, _ = exc_info
+                # TODO: this doesn't handle chained exceptions, fix on DM-47546
+                if hasattr(ex, "mdc"):
+                    # Context at the point where the exception was raised
+                    # takes precedence.
+                    mdc.update(ex.mdc)
+            record.MDC = mdc
             return record
 
         cls._old_factory = old_factory
