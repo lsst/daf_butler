@@ -31,8 +31,8 @@ from collections.abc import Iterator
 
 from ...dimensions import DimensionElement, DimensionRecord
 from ...queries import DimensionRecordQueryResults, Query
-from ...registry.queries import DimensionRecordQueryResults as LegacyDimensionRecordQueryResults
 from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
+from ._results import DimensionRecordQueryResults as LegacyDimensionRecordQueryResults
 
 
 class QueryDriverDimensionRecordQueryResults(

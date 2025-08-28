@@ -34,8 +34,8 @@ from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ...dimensions import DimensionGroup
 from ...queries import DatasetRefQueryResults, Query
-from ...registry.queries import DataCoordinateQueryResults, ParentDatasetQueryResults
 from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
+from ._results import DataCoordinateQueryResults, ParentDatasetQueryResults
 
 
 class QueryDriverDatasetRefQueryResults(
