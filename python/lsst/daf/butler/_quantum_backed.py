@@ -27,8 +27,6 @@
 
 from __future__ import annotations
 
-from . import ddl
-
 __all__ = ("QuantumBackedButler", "QuantumProvenanceData")
 
 import itertools
@@ -51,54 +49,18 @@ from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from ._quantum import Quantum
+from ._standalone_datastore import instantiate_standalone_datastore
 from ._storage_class import StorageClass, StorageClassFactory
 from .datastore import Datastore
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from .dimensions import DimensionUniverse
-from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
-from .registry.databases.sqlite import SqliteDatabase
 from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStorageManager
-from .registry.opaque import ByNameOpaqueTableStorageManager
 
 if TYPE_CHECKING:
     from ._butler import Butler
 
 _LOG = logging.getLogger(__name__)
-
-
-class _DatasetRecordStorageManagerDatastoreConstructionMimic:
-    """A partial implementation of `DatasetRecordStorageManager` that exists
-    only to allow a `DatastoreRegistryBridgeManager` (and hence a `Datastore`)
-    to be constructed without a full `Registry`.
-
-    Notes
-    -----
-    The interface implemented by this class should probably be its own ABC,
-    and that ABC should probably be used in the definition of
-    `DatastoreRegistryBridgeManager`, but while prototyping I'm trying to keep
-    changes minimal.
-    """
-
-    @classmethod
-    def getIdColumnType(cls) -> type:
-        # Docstring inherited.
-        return ddl.GUID
-
-    @classmethod
-    def addDatasetForeignKey(
-        cls,
-        tableSpec: ddl.TableSpec,
-        *,
-        name: str = "dataset",
-        constraint: bool = True,
-        onDelete: str | None = None,
-        **kwargs: Any,
-    ) -> ddl.FieldSpec:
-        # Docstring inherited.
-        idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=ddl.GUID, **kwargs)
-        tableSpec.fields.add(idFieldSpec)
-        return idFieldSpec
 
 
 class QuantumBackedButler(LimitedButler):
@@ -190,9 +152,9 @@ class QuantumBackedButler(LimitedButler):
         config: Config | ResourcePathExpression,
         quantum: Quantum,
         dimensions: DimensionUniverse,
-        filename: str = ":memory:",
-        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        filename: str | None = None,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] | None = None,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] | None = None,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
         metrics: ButlerMetrics | None = None,
@@ -253,9 +215,9 @@ class QuantumBackedButler(LimitedButler):
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
         datastore_records: Mapping[str, DatastoreRecordData],
-        filename: str = ":memory:",
-        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        filename: str | None = None,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] | None = None,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] | None = None,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
         metrics: ButlerMetrics | None = None,
@@ -316,10 +278,10 @@ class QuantumBackedButler(LimitedButler):
         predicted_inputs: Iterable[DatasetId],
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
-        filename: str = ":memory:",
+        filename: str | None = None,
         datastore_records: Mapping[str, DatastoreRecordData] | None = None,
-        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] | None = None,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] | None = None,
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
         metrics: ButlerMetrics | None = None,
@@ -359,19 +321,9 @@ class QuantumBackedButler(LimitedButler):
             Metrics object for gathering butler statistics.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
-        butler_root = butler_config.get("root", butler_config.configDir)
-        db = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0)
-        with db.declareStaticTables(create=True) as context:
-            opaque_manager = OpaqueManagerClass.initialize(db, context)
-            bridge_manager = BridgeManagerClass.initialize(
-                db,
-                context,
-                opaque=opaque_manager,
-                # MyPy can tell it's a fake, but we know it shouldn't care.
-                datasets=_DatasetRecordStorageManagerDatastoreConstructionMimic,  # type: ignore
-                universe=dimensions,
-            )
-        datastore = Datastore.fromConfig(butler_config, bridge_manager, butler_root)
+        datastore, _ = instantiate_standalone_datastore(
+            butler_config, dimensions, filename, OpaqueManagerClass, BridgeManagerClass
+        )
 
         # TODO: We need to inform `Datastore` here that it needs to support
         # predictive reads; This only really works for file datastore but

@@ -92,6 +92,7 @@ from lsst.daf.butler import (
     ValidationError,
     script,
 )
+from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
@@ -110,7 +111,13 @@ from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
-from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
+from lsst.daf.butler.tests.utils import (
+    MetricTestRepo,
+    TestCaseMixin,
+    makeTestTempDir,
+    removeTestTempDir,
+    safeTestTempDir,
+)
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 from lsst.utils import doImportType
@@ -2253,6 +2260,36 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         with self.assertRaises(ValueError):
             DatasetProvenance.from_flat_dict({"unknown": 42}, butler)
+
+    def test_specialized_file_datasets_functions(self):
+        """Test a workflow used in Prompt Processing where we export datasets
+        from one repository and write them in-place to the datastore of
+        another, without immediately inserting registry entries for the
+        datasets.
+        """
+        repo = MetricTestRepo.create_from_butler(
+            self.create_empty_butler(writeable=True),
+            self.tmpConfigFile,
+            "StructuredCompositeReadCompNoDisassembly",
+        )
+        source_butler = repo.butler
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            target_repo_config = Butler.makeRepo(tempdir)
+            refs = [repo.ref1, repo.ref2]
+            datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
+            self.assertEqual(len(datasets), 2)
+            self.assertEqual({ref.id for ref in refs}, {dataset.refs[0].id for dataset in datasets})
+            for dataset in datasets:
+                path = ResourcePath(dataset.path, forceAbsolute=False)
+                # Paths should be relative paths to the target datastore.
+                self.assertFalse(path.isabs())
+                # Files should have been copied into the target datastore
+                self.assertTrue(ResourcePath(tempdir).join(path).exists())
+
+            # Giving an empty list of files is a no-op.
+            no_datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), [])
+            self.assertEqual(len(no_datasets), 0)
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
