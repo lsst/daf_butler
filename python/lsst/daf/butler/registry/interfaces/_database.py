@@ -287,6 +287,12 @@ class Database(ABC):
         self._metadata = metadata
         self._allow_temporary_tables = allow_temporary_tables
 
+    def dispose(self) -> None:
+        """Close all open database connections held by this `Database`
+        instance.
+        """
+        self._engine.dispose()
+
     def __repr__(self) -> str:
         # Rather than try to reproduce all the parameters used to create
         # the object, instead report the more useful information of the

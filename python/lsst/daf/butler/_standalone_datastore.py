@@ -37,7 +37,7 @@ from .datastore import Datastore
 from .dimensions import DimensionUniverse
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
 from .registry.databases.sqlite import SqliteDatabase
-from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStorageManager
+from .registry.interfaces import Database, DatastoreRegistryBridgeManager, OpaqueTableStorageManager
 from .registry.opaque import ByNameOpaqueTableStorageManager
 
 
@@ -47,7 +47,7 @@ def instantiate_standalone_datastore(
     filename: str | None = None,
     OpaqueManagerClass: type[OpaqueTableStorageManager] | None = None,
     BridgeManagerClass: type[DatastoreRegistryBridgeManager] | None = None,
-) -> Datastore:
+) -> tuple[Datastore, Database]:
     """Initialize a `Datastore` instance without an associated `Registry`.
 
     Parameters
@@ -67,6 +67,11 @@ def instantiate_standalone_datastore(
     BridgeManagerClass : `type`, optional
         A subclass of `DatastoreRegistryBridgeManager` to use for datastore
         location records.  Default is a SQL-backed implementation.
+
+    Returns
+    -------
+    datastore_and_database : `tuple` [ `Datastore` , `Database` ]
+        The temporary datastore, and the database instance backing it.
 
     Notes
     -----
@@ -92,7 +97,9 @@ def instantiate_standalone_datastore(
             datasets=_DatasetRecordStorageManagerDatastoreConstructionMimic,  # type: ignore
             universe=dimensions,
         )
-    return Datastore.fromConfig(butler_config, bridge_manager, butler_root)
+
+    datastore = Datastore.fromConfig(butler_config, bridge_manager, butler_root)
+    return (datastore, db)
 
 
 class _DatasetRecordStorageManagerDatastoreConstructionMimic:

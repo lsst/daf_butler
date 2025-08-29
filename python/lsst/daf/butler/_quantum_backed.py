@@ -321,7 +321,7 @@ class QuantumBackedButler(LimitedButler):
             Metrics object for gathering butler statistics.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
-        datastore = instantiate_standalone_datastore(
+        datastore, _ = instantiate_standalone_datastore(
             butler_config, dimensions, filename, OpaqueManagerClass, BridgeManagerClass
         )
 

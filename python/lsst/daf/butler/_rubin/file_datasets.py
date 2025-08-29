@@ -74,7 +74,9 @@ def transfer_datasets_to_datastore(
     datasets = list(source_butler._datastore.export(refs, directory=None, transfer="direct"))
 
     dimension_universe = datasets[0].refs[0].dimensions.universe
-    datastore = instantiate_standalone_datastore(output_config, dimension_universe)
-    datastore.ingest(*datasets, transfer="copy", record_validation_info=False)
-
-    return list(datastore.export(refs, directory=None, transfer=None))
+    datastore, db = instantiate_standalone_datastore(output_config, dimension_universe)
+    try:
+        datastore.ingest(*datasets, transfer="copy", record_validation_info=False)
+        return list(datastore.export(refs, directory=None, transfer=None))
+    finally:
+        db.dispose()
