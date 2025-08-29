@@ -71,12 +71,18 @@ def transfer_datasets_to_datastore(
     # Refs must contain dimension records to allow for filename template
     # expansion in the datastore.
     refs = source_butler._registry.expand_refs(list(refs))
+    # Read out the absolute URLs of the datasets we are about to transfer.
     datasets = list(source_butler._datastore.export(refs, directory=None, transfer="direct"))
 
+    # Set up a temporary, initially empty, in-memory DB for the target
+    # Datastore.
     dimension_universe = datasets[0].refs[0].dimensions.universe
     datastore, db = instantiate_standalone_datastore(output_config, dimension_universe)
     try:
+        # Write the files to their destination in the target datastore.
         datastore.ingest(*datasets, transfer="copy", record_validation_info=False)
+        # Read out the relative URLs of the files, for their location
+        # in the target datastore.
         return list(datastore.export(refs, directory=None, transfer=None))
     finally:
         db.dispose()
