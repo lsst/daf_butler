@@ -71,8 +71,7 @@ class IdentifierContext:  # numpydoc ignore=PR01
         if bind is None:
             self.bind = {}
         else:
-            # Make bind names case-insensitive.
-            self.bind = {k.lower(): v for k, v in bind.items()}
+            self.bind = dict(bind)
             if len(self.bind.keys()) != len(bind.keys()):
                 raise ValueError(f"Duplicate keys present in bind: {bind.keys()}")
 
@@ -96,9 +95,6 @@ def interpret_identifier(context: IdentifierContext, identifier: str) -> ColumnE
     dimensions = context.dimensions
     datasets = context.datasets
     bind = context.bind
-    # Make identifiers case-insensitive.
-    identifier = identifier.lower()
-
     if identifier in bind:
         return make_column_literal(bind[identifier])
     terms = identifier.split(".")
