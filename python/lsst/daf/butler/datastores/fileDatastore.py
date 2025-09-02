@@ -1385,6 +1385,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
         # Docstring inherited from the base class.
+        refs = list(refs)
 
         # The records themselves. Could be missing some entries.
         records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
