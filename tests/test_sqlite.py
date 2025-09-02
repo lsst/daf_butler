@@ -194,9 +194,6 @@ class SqliteFileRegistryTests(RegistryTests):
     work sublasses have to have this class first in the bases list.
     """
 
-    sometimesHasDuplicateQueryRows = True
-    supportsCalibrationCollectionInFindFirst = False
-
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
 
@@ -253,9 +250,6 @@ class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, 
 
 class SqliteMemoryRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database."""
-
-    sometimesHasDuplicateQueryRows = True
-    supportsCalibrationCollectionInFindFirst = False
 
     @classmethod
     def getDataDir(cls) -> str:

@@ -203,9 +203,6 @@ class PostgresqlRegistryTests(RegistryTests):
     work subclasses have to have this class first in the bases list.
     """
 
-    sometimesHasDuplicateQueryRows = True
-    supportsCalibrationCollectionInFindFirst = False
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -227,6 +224,12 @@ class PostgresqlRegistryTests(RegistryTests):
             datastore=NullDatastore(None, None),
             storageClasses=StorageClassFactory(),
         )
+
+    def testSkipCalibs(self):
+        if self.postgres.server_major_version() < 16:
+            # TODO DM-44875: This test currently fails for older Postgres.
+            self.skipTest("TODO DM-44875")
+        return super().testSkipCalibs()
 
 
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
