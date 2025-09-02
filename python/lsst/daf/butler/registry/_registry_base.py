@@ -48,7 +48,7 @@ from .queries import (
     DatasetQueryResults,
     DimensionRecordQueryResults,
 )
-from .queries._query_common import CommonQueryArguments
+from .queries._query_common import CommonQueryArguments, resolve_collections
 from .queries._query_data_coordinates import QueryDriverDataCoordinateQueryResults
 from .queries._query_datasets import QueryDriverDatasetRefQueryResults
 from .queries._query_dimension_records import QueryDriverDimensionRecordQueryResults
@@ -124,7 +124,7 @@ class RegistryBase(Registry):
 
         query_results = [
             QueryDriverDatasetRefQueryResults(
-                self._butler.query,
+                self._butler,
                 args,
                 dataset_type=dt,
                 find_first=findFirst,
@@ -160,7 +160,7 @@ class RegistryBase(Registry):
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )
         return QueryDriverDataCoordinateQueryResults(
-            self._butler.query, dimensions=dimensions, expanded=False, args=args
+            self._butler, dimensions=dimensions, expanded=False, args=args
         )
 
     def queryDimensionRecords(
@@ -183,7 +183,7 @@ class RegistryBase(Registry):
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )
 
-        return QueryDriverDimensionRecordQueryResults(self._butler.query, element, args)
+        return QueryDriverDimensionRecordQueryResults(self._butler, element, args)
 
     def _convert_common_query_arguments(
         self,
@@ -205,7 +205,7 @@ class RegistryBase(Registry):
             bind=dict(bind) if bind else None,
             kwargs=dict(kwargs),
             dataset_types=dataset_types,
-            collections=self._resolve_collections(collections, doomed_by),
+            collections=resolve_collections(self._butler, collections, doomed_by),
         )
 
     def queryDatasetAssociations(
@@ -230,21 +230,6 @@ class RegistryBase(Registry):
                 find_first=False,
             )
             yield from DatasetAssociation.from_query_result(result, datasetType)
-
-    def _resolve_collections(
-        self, collections: CollectionArgType | None, doomed_by: list[str] | None = None
-    ) -> list[str] | None:
-        if collections is None:
-            return list(self.defaults.collections)
-
-        wildcard = CollectionWildcard.from_expression(collections)
-        if wildcard.patterns:
-            result = list(self.queryCollections(collections))
-            if not result and doomed_by is not None:
-                doomed_by.append(f"No collections found matching expression {wildcard}")
-            return result
-        else:
-            return list(wildcard.strings)
 
     def _resolve_dataset_types(self, dataset_types: object | None) -> list[str]:
         if dataset_types is None:

@@ -55,7 +55,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
-from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iteration, sql
+from lsst.daf.relation import Relation, Transfer, iteration, sql
 
 from ... import Butler
 from ..._collection_type import CollectionType
@@ -2036,17 +2036,6 @@ class RegistryTests(ABC):
                     dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                     [dataset2],
                 )
-        # Repeat the materialization tests with a dimension element that isn't
-        # cached, so there's no way we can know when building the query where
-        # there are any rows are not (there aren't).
-        dataIds = registry.queryDataIds(["exposure"]).subset(registry.dimensions.empty, unique=True)
-        with dataIds.materialize() as dataIds:
-            self.checkQueryResults(dataIds, [])
-            self.checkQueryResults(
-                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False), []
-            )
-            self.checkQueryResults(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True), [])
-            self.checkQueryResults(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True), [])
         # Query for non-empty data IDs with a constraint on an empty-data-ID
         # dataset that exists.
         dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=...)
@@ -2412,19 +2401,6 @@ class RegistryTests(ABC):
                 (registry.expandDataId(instrument="Cam1", detector=2, exposure=2), bias2a),
             },
         )
-        self.assertEqual(
-            set(
-                registry.queryDataIds(
-                    ["exposure", "detector"], instrument="Cam1", detector=2
-                ).findRelatedDatasets("bias", findFirst=True, collections=[collection, "imported_r"])
-            ),
-            {
-                (registry.expandDataId(instrument="Cam1", detector=2, exposure=1), bias2a),
-                (registry.expandDataId(instrument="Cam1", detector=2, exposure=2), bias2a),
-                (registry.expandDataId(instrument="Cam1", detector=2, exposure=0), bias2b),
-                (registry.expandDataId(instrument="Cam1", detector=2, exposure=3), bias2b),
-            },
-        )
 
         # We should not be able to certify 2b with anything overlapping that
         # window.
@@ -2579,32 +2555,6 @@ class RegistryTests(ABC):
             {
                 (registry.expandDataId(instrument="Cam1", exposure=0, detector=3), bias3a),
                 (registry.expandDataId(instrument="Cam1", exposure=1, detector=3), bias3a),
-                (registry.expandDataId(instrument="Cam1", exposure=3, detector=3), bias3b),
-            },
-        )
-        self.assertEqual(
-            set(
-                registry.queryDataIds(
-                    ["exposure", "detector"], instrument="Cam1", detector=2
-                ).findRelatedDatasets("bias", collections=[collection, "imported_g"])
-            ),
-            {
-                (registry.expandDataId(instrument="Cam1", exposure=0, detector=2), bias2a),
-                (registry.expandDataId(instrument="Cam1", exposure=1, detector=2), bias2a),
-                (registry.expandDataId(instrument="Cam1", exposure=2, detector=2), bias2a),
-                (registry.expandDataId(instrument="Cam1", exposure=3, detector=2), bias2b),
-            },
-        )
-        self.assertEqual(
-            set(
-                registry.queryDataIds(
-                    ["exposure", "detector"], instrument="Cam1", detector=3
-                ).findRelatedDatasets("bias", collections=[collection, "imported_g"])
-            ),
-            {
-                (registry.expandDataId(instrument="Cam1", exposure=0, detector=3), bias3a),
-                (registry.expandDataId(instrument="Cam1", exposure=1, detector=3), bias3a),
-                (registry.expandDataId(instrument="Cam1", exposure=2, detector=3), bias3a),
                 (registry.expandDataId(instrument="Cam1", exposure=3, detector=3), bias3b),
             },
         )
@@ -3306,9 +3256,6 @@ class RegistryTests(ABC):
                 query = do_query(keys).order_by(*order_by)
                 if test.limit is not None:
                     query = query.limit(*test.limit)
-                with self.assertRaises(RelationalAlgebraError):
-                    with query.materialize():
-                        pass
 
         # Test exceptions for errors in a name.
         # Many of these raise slightly different diagnostics in the old query
