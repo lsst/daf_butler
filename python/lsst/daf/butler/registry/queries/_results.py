@@ -29,9 +29,6 @@ from __future__ import annotations
 __all__ = (
     "ChainedDatasetQueryResults",
     "DataCoordinateQueryResults",
-    "DatabaseDataCoordinateQueryResults",
-    "DatabaseDimensionRecordQueryResults",
-    "DatabaseParentDatasetQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",
@@ -39,18 +36,13 @@ __all__ = (
 )
 
 import itertools
-import warnings
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import AbstractContextManager, contextmanager
-from types import EllipsisType
+from contextlib import AbstractContextManager
 from typing import Any, Self
-
-from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ..._exceptions_legacy import DatasetTypeError
 from ...dimensions import (
     DataCoordinate,
     DataCoordinateIterable,
@@ -58,8 +50,6 @@ from ...dimensions import (
     DimensionGroup,
     DimensionRecord,
 )
-from ._query import Query
-from ._structs import OrderByClause
 
 
 class LimitedQueryResultsBase:
@@ -414,139 +404,6 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
         raise NotImplementedError()
 
 
-class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
-    """An enhanced implementation of `DataCoordinateIterable` that represents
-    data IDs retrieved from a database query.
-
-    Parameters
-    ----------
-    query : `Query`
-        Query object that backs this class.
-
-    Notes
-    -----
-    The `Query` class now implements essentially all of this class's
-    functionality; "QueryResult" classes like this one now exist only to
-    provide interface backwards compatibility and more specific iterator
-    types.
-    """
-
-    def __init__(self, query: Query):
-        self._query = query
-
-    __slots__ = ("_query",)
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        return self._query.iter_data_ids()
-
-    def __repr__(self) -> str:
-        return f"<DataCoordinate iterator with dimensions={self.dimensions}>"
-
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """The dimensions of the data IDs returned by this query."""
-        return self._query.dimensions
-
-    def hasFull(self) -> bool:
-        # Docstring inherited from DataCoordinateIterable.
-        return True
-
-    def hasRecords(self) -> bool:
-        # Docstring inherited from DataCoordinateIterable.
-        return self._query.has_record_columns is True or not self.dimensions
-
-    @contextmanager
-    def materialize(self) -> Iterator[DataCoordinateQueryResults]:
-        with self._query.open_context():
-            yield DatabaseDataCoordinateQueryResults(self._query.materialized())
-
-    def expanded(self) -> DataCoordinateQueryResults:
-        return DatabaseDataCoordinateQueryResults(self._query.with_record_columns(defer=True))
-
-    def subset(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | None = None,
-        *,
-        unique: bool = False,
-    ) -> DataCoordinateQueryResults:
-        if dimensions is None:
-            dimensions = self.dimensions
-        else:
-            dimensions = self.dimensions.universe.conform(dimensions)
-            if not dimensions.issubset(self.dimensions):
-                raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
-        query = self._query.projected(dimensions.names, unique=unique, defer=True, drop_postprocessing=True)
-        return DatabaseDataCoordinateQueryResults(query)
-
-    def findDatasets(
-        self,
-        datasetType: DatasetType | str,
-        collections: Any,
-        *,
-        findFirst: bool = True,
-        components: bool = False,
-    ) -> ParentDatasetQueryResults:
-        if components is not False:
-            raise DatasetTypeError(
-                "Dataset component queries are no longer supported by Registry.  Use "
-                "DatasetType methods to obtain components from parent dataset types instead."
-            )
-        resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, explicit_only=True
-        )
-        return DatabaseParentDatasetQueryResults(
-            self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
-            resolved_dataset_type,
-        )
-
-    def findRelatedDatasets(
-        self,
-        datasetType: DatasetType | str,
-        collections: Any,
-        *,
-        findFirst: bool = True,
-        dimensions: DimensionGroup | Iterable[str] | None = None,
-    ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
-        if dimensions is None:
-            dimensions = self.dimensions
-        else:
-            dimensions = self.universe.conform(dimensions)
-        parent_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, explicit_only=True
-        )
-        query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
-        return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
-
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        return self._query.count(exact=exact, discard=discard)
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        return self._query.any(execute=execute, exact=exact)
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        return self._query.explain_no_results(execute=execute)
-
-    def order_by(self, *args: str) -> Self:
-        clause = OrderByClause.parse_general(args, self._query.dimensions)
-        self._query = self._query.sorted(clause.terms, defer=True)
-        return self
-
-    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
-        if offset is not ...:
-            warnings.warn(
-                "'offset' parameter should no longer be used. It is not supported by the new query system."
-                " Will be removed after v28.",
-                FutureWarning,
-                stacklevel=find_outside_stacklevel(
-                    "lsst.daf.butler", allow_modules={"lsst.daf.butler.registry.tests"}
-                ),
-            )
-        if offset is None or offset is ...:
-            offset = 0
-        self._query = self._query.sliced(offset, offset + limit, defer=True)
-        return self
-
-
 class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
     """An interface for objects that represent the results of queries for
     datasets.
@@ -622,74 +479,6 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         raise NotImplementedError()
 
 
-class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
-    """An object that represents results from a query for datasets with a
-    single parent `DatasetType`.
-
-    Parameters
-    ----------
-    query : `Query`
-        Low-level query object that backs these results.
-    dataset_type : `DatasetType`
-        Parent dataset type for all datasets returned by this query.
-
-    Notes
-    -----
-    The `Query` class now implements essentially all of this class's
-    functionality; "QueryResult" classes like this one now exist only to
-    provide interface backwards compatibility and more specific iterator
-    types.
-    """
-
-    def __init__(
-        self,
-        query: Query,
-        dataset_type: DatasetType,
-    ):
-        self._query = query
-        self._dataset_type = dataset_type
-
-    __slots__ = ("_query", "_dataset_type")
-
-    def __iter__(self) -> Iterator[DatasetRef]:
-        return self._query.iter_dataset_refs(self._dataset_type)
-
-    def __repr__(self) -> str:
-        return f"<DatasetRef iterator for {self._dataset_type.name}>"
-
-    def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
-        # Docstring inherited from DatasetQueryResults.
-        yield self
-
-    @property
-    def parentDatasetType(self) -> DatasetType:
-        # Docstring inherited.
-        return self._dataset_type
-
-    @property
-    def dataIds(self) -> DataCoordinateQueryResults:
-        # Docstring inherited.
-        return DatabaseDataCoordinateQueryResults(self._query.projected(defer=True))
-
-    def expanded(self) -> DatabaseParentDatasetQueryResults:
-        # Docstring inherited from DatasetQueryResults.
-        return DatabaseParentDatasetQueryResults(
-            self._query.with_record_columns(defer=True), self._dataset_type
-        )
-
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        # Docstring inherited.
-        return self._query.count(exact=exact, discard=discard)
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        # Docstring inherited.
-        return self._query.any(execute=execute, exact=exact)
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        # Docstring inherited.
-        return self._query.explain_no_results(execute=execute)
-
-
 class ChainedDatasetQueryResults(DatasetQueryResults):
     """A `DatasetQueryResults` implementation that simply chains together
     other results objects, each for a different parent dataset type.
@@ -754,67 +543,3 @@ class DimensionRecordQueryResults(QueryResultsBase, Iterable[DimensionRecord]):
     @abstractmethod
     def run(self) -> DimensionRecordQueryResults:
         raise NotImplementedError()
-
-
-class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
-    """Implementation of DimensionRecordQueryResults using database query.
-
-    Parameters
-    ----------
-    query : `Query`
-        Query object that backs this class.
-    element : `DimensionElement`
-        Element whose records this object returns.
-
-    Notes
-    -----
-    The `Query` class now implements essentially all of this class's
-    functionality; "QueryResult" classes like this one now exist only to
-    provide interface backwards compatibility and more specific iterator
-    types.
-    """
-
-    def __init__(self, query: Query, element: DimensionElement):
-        self._query = query
-        self._element = element
-
-    @property
-    def element(self) -> DimensionElement:
-        return self._element
-
-    def __iter__(self) -> Iterator[DimensionRecord]:
-        return self._query.iter_dimension_records(self._element)
-
-    def run(self) -> DimensionRecordQueryResults:
-        return DatabaseDimensionRecordQueryResults(self._query.run(), self._element)
-
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        # Docstring inherited from base class.
-        return self._query.count(exact=exact)
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        # Docstring inherited from base class.
-        return self._query.any(execute=execute, exact=exact)
-
-    def order_by(self, *args: str) -> Self:
-        # Docstring inherited from base class.
-        clause = OrderByClause.parse_element(args, self._element)
-        self._query = self._query.sorted(clause.terms, defer=True)
-        return self
-
-    def limit(self, limit: int, offset: int | None | EllipsisType = ...) -> Self:
-        # Docstring inherited from base class.
-        if offset is not ...:
-            warnings.warn(
-                "'offset' parameter should no longer be used. It is not supported by the new query system."
-                " Will be removed after v28.",
-                FutureWarning,
-            )
-        if offset is None or offset is ...:
-            offset = 0
-        self._query = self._query.sliced(offset, offset + limit, defer=True)
-        return self
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        # Docstring inherited.
-        return self._query.explain_no_results(execute=execute)
