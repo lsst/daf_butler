@@ -29,11 +29,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
+from ..._butler import Butler
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ...dimensions import DimensionGroup
 from ...queries import DatasetRefQueryResults, Query
-from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
+from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin
 from ._results import DataCoordinateQueryResults, ParentDatasetQueryResults
 
 
@@ -45,8 +46,8 @@ class QueryDriverDatasetRefQueryResults(
 
     Parameters
     ----------
-    query_factory : `QueryFactory`
-        Function that can be called to access the new query system.
+    butler : `Butler`
+        Butler object used to execute queries.
     args : `CommonQueryArguments`
         User-facing arguments forwarded from
         ``registry.queryDatasets``.
@@ -72,7 +73,7 @@ class QueryDriverDatasetRefQueryResults(
 
     def __init__(
         self,
-        query_factory: QueryFactory,
+        butler: Butler,
         args: CommonQueryArguments,
         *,
         dataset_type: DatasetType,
@@ -81,7 +82,7 @@ class QueryDriverDatasetRefQueryResults(
         doomed_by: list[str],
         expanded: bool,
     ) -> None:
-        LegacyQueryResultsMixin.__init__(self, query_factory, args)
+        LegacyQueryResultsMixin.__init__(self, butler, args)
         ParentDatasetQueryResults.__init__(self)
         self._dataset_type = dataset_type
         self._find_first = find_first
@@ -125,7 +126,7 @@ class QueryDriverDatasetRefQueryResults(
 
     def expanded(self) -> QueryDriverDatasetRefQueryResults:
         return QueryDriverDatasetRefQueryResults(
-            self._query_factory,
+            self._butler,
             self._args,
             dataset_type=self._dataset_type,
             find_first=self._find_first,
