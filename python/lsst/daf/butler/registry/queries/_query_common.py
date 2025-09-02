@@ -29,18 +29,16 @@ from __future__ import annotations
 
 import dataclasses
 from abc import abstractmethod
-from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager, contextmanager
-from typing import Any, Generic, Self, TypeAlias, TypeVar
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from typing import Any, Generic, Self, TypeVar
 
+from ..._butler import Butler
 from ...dimensions import DataId
 from ...queries import Query, QueryResultsBase
+from .._registry import CollectionArgType
+from ..wildcards import CollectionWildcard
 from ._results import QueryResultsBase as LegacyQueryResultsBase
-
-QueryFactory: TypeAlias = Callable[[], AbstractContextManager[Query]]
-"""Function signature matching the interface of ``Butler._query``.  Returns a
-context manager that can be used to obtain a `Query` instance.
-"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,8 +54,12 @@ class CommonQueryArguments:
     bind: dict[str, Any] | None
     kwargs: dict[str, int | str]
 
+    def replaceCollections(self, collections: list[str]) -> CommonQueryArguments:
+        return dataclasses.replace(self, collections=collections)
+
 
 _T = TypeVar("_T", bound=QueryResultsBase)
+_U = TypeVar("_U", bound=QueryResultsBase)
 
 
 class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
@@ -66,8 +68,8 @@ class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
 
     Parameters
     ----------
-    query_factory : `QueryFactory`
-        Function that can be called to access the new query system.
+    butler : `Butler`
+        Butler object used to execute queries.
     args : `CommonQueryArguments`
         User-facing arguments forwarded from the original ``registry.query*``
         method.
@@ -75,10 +77,10 @@ class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
 
     def __init__(
         self,
-        query_factory: QueryFactory,
+        butler: Butler,
         args: CommonQueryArguments,
     ) -> None:
-        self._query_factory = query_factory
+        self._butler = butler
         self._args = args
         self._limit: int | None = None
         self._order_by: list[str] = []
@@ -109,26 +111,67 @@ class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
 
     @contextmanager
     def _build_query(self) -> Iterator[_T]:
-        with self._query_factory() as query:
+        with self._butler.query() as query:
             a = self._args
             for dataset_type in a.dataset_types:
                 query = query.join_dataset_search(dataset_type, a.collections)
 
             result = self._build_result(query)
-            result = result.limit(self._limit)
-            if self._order_by:
-                result = result.order_by(*self._order_by)
-
-            if a.where:
-                result = result.where(a.where, bind=a.bind)
-            if a.dataId or a.kwargs:
-                id_list = [a.dataId] if a.dataId else []
-                # dataId and kwargs have to be sent together as part of the
-                # same call to where() so that the kwargs can override values
-                # in the data ID.
-                result = result.where(*id_list, **a.kwargs, bind=None)
+            result = self._apply_result_modifiers(result)
             yield result
+
+    def _apply_result_modifiers(self, result: _U) -> _U:
+        a = self._args
+
+        result = result.limit(self._limit)
+        if self._order_by:
+            result = result.order_by(*self._order_by)
+
+        if a.where:
+            result = result.where(a.where, bind=a.bind)
+        if a.dataId or a.kwargs:
+            id_list = [a.dataId] if a.dataId else []
+            # dataId and kwargs have to be sent together as part of the
+            # same call to where() so that the kwargs can override values
+            # in the data ID.
+            result = result.where(*id_list, **a.kwargs, bind=None)
+
+        return result
 
     @abstractmethod
     def _build_result(self, query: Query) -> _T:
         raise NotImplementedError("Subclasses must implement _build_result")
+
+
+def resolve_collections(
+    butler: Butler, collections: CollectionArgType | None, doomed_by: list[str] | None = None
+) -> list[str]:
+    """Convert the collection argument used throughout the registry query
+    methods to a concrete list of collections.
+
+    Parameters
+    ----------
+    butler : `Butler`
+        Butler object used to execute queries.
+    collections : Any
+        Any of the values that can be passed as the collections argument to
+        Registry query methods.
+    doomed_by : `list` [ `str` ]
+        Diagnostic messages will be appended to this list.
+
+    Returns
+    -------
+    collections : `list` [ `str` ]
+        Concrete list of collection names to be used by the query.
+    """
+    if collections is None:
+        return list(butler.collections.defaults)
+
+    wildcard = CollectionWildcard.from_expression(collections)
+    if wildcard.patterns:
+        result = list(butler.registry.queryCollections(collections))
+        if not result and doomed_by is not None:
+            doomed_by.append(f"No collections found matching expression {wildcard}")
+        return result
+    else:
+        return list(wildcard.strings)
