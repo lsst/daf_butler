@@ -1077,6 +1077,13 @@ class ButlerTests(ButlerPutGetTests):
         uri2 = butler.getURI(datasetTypeName, dataId2, collections="a/new/run")
         self.assertFalse(self.are_uris_equivalent(uri1, uri2), f"Cf. {uri1} with {uri2}")
 
+        # Re-ingesting the same datasets raises an error with
+        # skip_existing=False.
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.ingest(*datasets, transfer="copy")
+        # skip_existing=True makes it a no-op to re-ingest the same datasets.
+        butler.ingest(*datasets, transfer="copy", skip_existing=True)
+
         # Now do a multi-dataset but single file ingest
         metricFile = os.path.join(dataRoot, "detectors.yaml")
         refs = []

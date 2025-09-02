@@ -1333,6 +1333,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         *datasets: FileDataset,
         transfer: str | None = "auto",
         record_validation_info: bool = True,
+        skip_existing: bool = False,
     ) -> None:
         """Store and register one or more datasets that already exist on disk.
 
@@ -1360,6 +1361,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             or file sizes. This can be useful if such information is tracked
             in an external system or if the file is to be compressed in place.
             It is up to the datastore whether this parameter is relevant.
+        skip_existing : `bool`, optional
+            If `True`, a dataset will not be ingested if a dataset with the
+            same dataset ID already exists in the datastore.
+            If `False` (the default), a `ConflictingDefinitionError` will be
+            raised if any datasets with the same dataset ID already exist
+            in the datastore.
 
         Raises
         ------
@@ -1375,6 +1382,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+        ConflictingDefinitionError
+            Raised if a dataset already exists in the repository and
+            ``skip_existing`` is `False`.
 
         Notes
         -----
