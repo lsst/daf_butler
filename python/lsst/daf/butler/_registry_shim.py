@@ -27,14 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("Registry",)
+__all__ = ("RegistryShim",)
 
 import contextlib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ._collection_type import CollectionType
-from ._dataset_association import DatasetAssociation
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._storage_class import StorageClassFactory
@@ -47,10 +46,9 @@ from .dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from .registry import Registry
 from .registry._collection_summary import CollectionSummary
 from .registry._defaults import RegistryDefaults
-from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from .registry._registry_base import RegistryBase
 
 if TYPE_CHECKING:
     from .direct_butler import DirectButler
@@ -58,7 +56,7 @@ if TYPE_CHECKING:
     from .registry.interfaces import ObsCoreTableManager
 
 
-class RegistryShim(Registry):
+class RegistryShim(RegistryBase):
     """Implementation of `Registry` interface exposed to clients by `Butler`.
 
     Parameters
@@ -75,7 +73,7 @@ class RegistryShim(Registry):
     """
 
     def __init__(self, butler: DirectButler):
-        self._butler = butler
+        super().__init__(butler)
         self._registry = butler._registry
 
     def isWriteable(self) -> bool:
@@ -298,96 +296,6 @@ class RegistryShim(Registry):
         # Docstring inherited from a base class.
         return self._registry.queryCollections(
             expression, datasetType, collectionTypes, flattenChains, includeChains
-        )
-
-    def queryDatasets(
-        self,
-        datasetType: Any,
-        *,
-        collections: CollectionArgType | None = None,
-        dimensions: Iterable[str] | None = None,
-        dataId: DataId | None = None,
-        where: str = "",
-        findFirst: bool = False,
-        bind: Mapping[str, Any] | None = None,
-        check: bool = True,
-        **kwargs: Any,
-    ) -> DatasetQueryResults:
-        # Docstring inherited from a base class.
-        return self._registry.queryDatasets(
-            datasetType,
-            collections=collections,
-            dimensions=dimensions,
-            dataId=dataId,
-            where=where,
-            findFirst=findFirst,
-            bind=bind,
-            check=check,
-            **kwargs,
-        )
-
-    def queryDataIds(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | str,
-        *,
-        dataId: DataId | None = None,
-        datasets: Any = None,
-        collections: CollectionArgType | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        check: bool = True,
-        **kwargs: Any,
-    ) -> DataCoordinateQueryResults:
-        # Docstring inherited from a base class.
-        return self._registry.queryDataIds(
-            dimensions,
-            dataId=dataId,
-            datasets=datasets,
-            collections=collections,
-            where=where,
-            bind=bind,
-            check=check,
-            **kwargs,
-        )
-
-    def queryDimensionRecords(
-        self,
-        element: DimensionElement | str,
-        *,
-        dataId: DataId | None = None,
-        datasets: Any = None,
-        collections: CollectionArgType | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        check: bool = True,
-        **kwargs: Any,
-    ) -> DimensionRecordQueryResults:
-        # Docstring inherited from a base class.
-        return self._registry.queryDimensionRecords(
-            element,
-            dataId=dataId,
-            datasets=datasets,
-            collections=collections,
-            where=where,
-            bind=bind,
-            check=check,
-            **kwargs,
-        )
-
-    def queryDatasetAssociations(
-        self,
-        datasetType: str | DatasetType,
-        collections: CollectionArgType | None = ...,
-        *,
-        collectionTypes: Iterable[CollectionType] = CollectionType.all(),
-        flattenChains: bool = False,
-    ) -> Iterator[DatasetAssociation]:
-        # Docstring inherited from a base class.
-        return self._registry.queryDatasetAssociations(
-            datasetType,
-            collections,
-            collectionTypes=collectionTypes,
-            flattenChains=flattenChains,
         )
 
     @property
