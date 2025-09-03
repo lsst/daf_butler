@@ -51,7 +51,7 @@ from ._limited_butler import LimitedButler
 from ._quantum import Quantum
 from ._standalone_datastore import instantiate_standalone_datastore
 from ._storage_class import StorageClass, StorageClassFactory
-from .datastore import Datastore
+from .datastore import Datastore, FileTransferSource
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from .dimensions import DimensionUniverse
@@ -144,6 +144,7 @@ class QuantumBackedButler(LimitedButler):
         self._metrics = metrics if metrics is not None else ButlerMetrics()
         if dataset_types is not None:
             self._dataset_types = dataset_types
+        self.__file_transfer_source: FileTransferSource = self._datastore
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
     @classmethod
@@ -613,6 +614,17 @@ class QuantumBackedButler(LimitedButler):
             actual_outputs={ref.id for ref in self._actual_output_refs},
             datastore_records=provenance_records,
         )
+
+    @property
+    def _file_transfer_source(self) -> FileTransferSource:
+        """Object that manages the transfer of files between Butler
+        repositories.
+        """
+        return self.__file_transfer_source
+
+    @_file_transfer_source.setter
+    def _file_transfer_source(self, value: FileTransferSource) -> None:
+        self.__file_transfer_source = value
 
 
 class QuantumProvenanceData(pydantic.BaseModel):
