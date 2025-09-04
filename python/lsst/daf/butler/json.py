@@ -68,7 +68,7 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
 
 def from_json_pydantic(
     cls_: type[SupportsSimple],
-    json_str: str,
+    json_str: str | bytes | bytearray,
     universe: DimensionUniverse | None = None,
     registry: Registry | None = None,
 ) -> SupportsSimple:
@@ -78,7 +78,7 @@ def from_json_pydantic(
     ----------
     cls_ : `type` of `SupportsSimple`
         The Python type being created.
-    json_str : `str`
+    json_str : `str` or `bytes` or `bytearray`
         The JSON string representing this object.
     universe : `DimensionUniverse` or `None`, optional
         The universe required to instantiate some models. Required if
