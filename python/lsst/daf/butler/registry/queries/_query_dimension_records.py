@@ -29,10 +29,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from ..._butler import Butler
 from ...dimensions import DimensionElement, DimensionRecord
 from ...queries import DimensionRecordQueryResults, Query
-from ...registry.queries import DimensionRecordQueryResults as LegacyDimensionRecordQueryResults
-from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
+from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin
+from ._results import DimensionRecordQueryResults as LegacyDimensionRecordQueryResults
 
 
 class QueryDriverDimensionRecordQueryResults(
@@ -44,8 +45,8 @@ class QueryDriverDimensionRecordQueryResults(
 
     Parameters
     ----------
-    query_factory : `QueryFactory`
-        Function that can be called to access the new query system.
+    butler : `Butler`
+        Butler object used to execute queries.
     element : `DimensionElement`
         The dimension element to obtain records for.
     args : `CommonQueryArguments`
@@ -53,10 +54,8 @@ class QueryDriverDimensionRecordQueryResults(
         ``registry.queryDimensionRecords``.
     """
 
-    def __init__(
-        self, query_factory: QueryFactory, element: DimensionElement, args: CommonQueryArguments
-    ) -> None:
-        LegacyQueryResultsMixin.__init__(self, query_factory, args)
+    def __init__(self, butler: Butler, element: DimensionElement, args: CommonQueryArguments) -> None:
+        LegacyQueryResultsMixin.__init__(self, butler, args)
         LegacyDimensionRecordQueryResults.__init__(self)
         self._element = element
 
