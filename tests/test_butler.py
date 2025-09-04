@@ -2281,6 +2281,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         )
         source_butler = repo.butler
 
+        # Test writing outputs to a FileDatastore.
         with tempfile.TemporaryDirectory() as tempdir:
             target_repo_config = Butler.makeRepo(tempdir)
             refs = [repo.ref1, repo.ref2]
@@ -2294,9 +2295,70 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
                 # Files should have been copied into the target datastore
                 self.assertTrue(ResourcePath(tempdir).join(path).exists())
 
+            # Make sure the target Butler can ingest the datasets.
+            target_butler = Butler(target_repo_config, writeable=True)
+            target_butler.transfer_dimension_records_from(source_butler, refs)
+            target_butler.ingest(*datasets, transfer=None)
+            self.assertIsNotNone(target_butler.get(repo.ref1))
+            self.assertIsNotNone(target_butler.get(repo.ref2))
+
             # Giving an empty list of files is a no-op.
             no_datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), [])
             self.assertEqual(len(no_datasets), 0)
+
+        # Test writing outputs to a ChainedDatastore.
+        with tempfile.TemporaryDirectory() as tempdir:
+            # Set up a second dataset type, so we can split the files across
+            # multiple datastore roots.
+            dt1 = repo.datasetType
+            dt2 = DatasetType("other", dt1.dimensions, dt1.storageClass)
+            source_butler.registry.registerDatasetType(dt2)
+            other_ref = repo.addDataset(repo.ref1.dataId, datasetType=dt2)
+            config = Config.fromString(
+                f"""
+            datastore:
+                cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+                datastore_constraints:
+                  - constraints:
+                      accept:
+                        - {dt1.name}
+                  - constraints:
+                      accept:
+                        - {dt2.name}
+                datastores:
+                  - datastore:
+                      cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+                      root: <butlerRoot>/FileDatastore_0
+                  - datastore:
+                      cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+                      root: <butlerRoot>/FileDatastore_1
+            """
+            )
+            target_repo_config = Butler.makeRepo(tempdir, config)
+            refs = [repo.ref1, repo.ref2, other_ref]
+            datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
+            self.assertEqual(len(datasets), 3)
+            self.assertEqual({ref.id for ref in refs}, {dataset.refs[0].id for dataset in datasets})
+            for dataset in datasets:
+                path = ResourcePath(dataset.path, forceAbsolute=False)
+                # Paths should be relative paths to the target datastore.
+                self.assertFalse(path.isabs())
+                # Files should have been split up between the two datastores
+                # in the chain.
+                datastore_root = ResourcePath(tempdir)
+                if dataset.refs[0].datasetType.name == dt1.name:
+                    datastore_root = datastore_root.join("FileDatastore_0")
+                else:
+                    datastore_root = datastore_root.join("FileDatastore_1")
+                self.assertTrue(datastore_root.join(path).exists())
+
+            # Make sure the target Butler can ingest the datasets.
+            target_butler = Butler(target_repo_config, writeable=True)
+            target_butler.transfer_dimension_records_from(source_butler, refs)
+            target_butler.ingest(*datasets, transfer=None)
+            self.assertIsNotNone(target_butler.get(repo.ref1))
+            self.assertIsNotNone(target_butler.get(repo.ref2))
+            self.assertIsNotNone(target_butler.get(other_ref))
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
