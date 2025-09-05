@@ -562,9 +562,6 @@ class ChainedDatastore(Datastore):
 
     def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
-        if transfer is None:
-            raise NotImplementedError("ChainedDatastore does not support transfer=None.")
-
         def isDatasetAcceptable(dataset: FileDataset, *, name: str, constraints: Constraints) -> bool:
             acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
             if not acceptable:
