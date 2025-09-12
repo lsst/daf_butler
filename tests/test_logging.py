@@ -289,11 +289,14 @@ class LoggingTestCase(unittest.TestCase):
             self.log.exception("Exception raised:")
             self.log.warning("Implied exception", exc_info=True)
             self.log.critical("Explicit exception", exc_info=e)
+            self.log.error("Explicit exception info", exc_info=(Exception, e, e.__traceback__))
             # Is original context used *only* when logging the exception?
             self.log.error("Something went wrong")
-        for i in [-4, -3, -2]:
+            self.log.error("Boolean disabled exc info", exc_info=False)
+        for i in [-6, -5, -4, -3]:
             self.assertEqual(self.handler.records[i].MDC, {"foo": "fum", "answer": "42"})
-        self.assertEqual(self.handler.records[-1].MDC, {"foo": "bar"})
+        for i in [-2, -1]:
+            self.assertEqual(self.handler.records[i].MDC, {"foo": "bar"})
 
         self.log.setLevel(logging.INFO)
         self.log.info("Normal log")
