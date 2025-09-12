@@ -118,8 +118,13 @@ class LoggingTestCase(unittest.TestCase):
         self.log.warning("warning message")
         self.log.critical("critical message")
         self.log.verbose("verbose message")
+        self.log.error("error message")
+        try:
+            raise RuntimeError("An error has occurred")
+        except RuntimeError:
+            self.log.exception("exception message")
 
-        self.assertEqual(len(self.handler.records), 4)
+        self.assertEqual(len(self.handler.records), 6)
 
         format_default = str(self.handler.records)
 
@@ -128,7 +133,7 @@ class LoggingTestCase(unittest.TestCase):
         format_override = str(self.handler.records)
 
         self.assertNotEqual(format_default, format_override)
-        self.assertEqual(format_override, "DEBUG\nWARNING\nCRITICAL\nVERBOSE")
+        self.assertEqual(format_override, "DEBUG\nWARNING\nCRITICAL\nVERBOSE\nERROR\nERROR")
 
         # Reset the log format and it should match the original text.
         self.handler.records.set_log_format(None)
