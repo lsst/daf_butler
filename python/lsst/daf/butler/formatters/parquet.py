@@ -54,6 +54,7 @@ import json
 import logging
 import re
 from collections.abc import Iterable, Sequence
+from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
@@ -154,14 +155,23 @@ class ParquetFormatter(FormatterV2):
 
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
-                    par_columns = list(dict.fromkeys(ensure_iterable(par_columns)))
+                    par_columns_in = list(dict.fromkeys(ensure_iterable(par_columns)))
                     file_columns = [name for name in schema.names if not name.startswith("__")]
 
-                    for par_column in par_columns:
-                        if par_column not in file_columns:
+                    # Do case-sensitive glob-style matching, again ensuring
+                    # uniqueness and ordering.
+                    par_columns = {}
+                    for par_column in par_columns_in:
+                        found = False
+                        for file_column in file_columns:
+                            if fnmatchcase(file_column, par_column):
+                                found = True
+                                par_columns[file_column] = True
+                        if not found:
                             raise ValueError(
                                 f"Column {par_column} specified in parameters not available in parquet file."
                             )
+                    par_columns = list(par_columns.keys())
                 else:
                     par_columns = _standardize_multi_index_columns(
                         arrow_schema_to_pandas_index(schema),
