@@ -3218,7 +3218,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             return ref
         dataset_type = self._retrieve_dataset_method(ref.datasetType.name)
         if dataset_type is not None:
-            ref = ref.overrideStorageClass(dataset_type.storageClass)
+            ref = ref.overrideStorageClass(dataset_type.storageClass_name)
         return ref
 
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
