@@ -16,3 +16,9 @@ PyPI: [lsst-daf-butler](https://pypi.org/project/lsst-daf-butler/)
 
 This software is dual licensed under the GNU General Public License (version 3 of the License, or (at your option) any later version, and also under a 3-clause BSD license).
 Recipients may choose which of these licenses to use; please see the files gpl-3.0.txt and/or bsd_license.txt, respectively.
+
+## Arrow Memory Leaks
+
+From version 18 of arrow we have seen significant memory leaks when accessing parquet files using the default memory allocator.
+If you see such leaks the workaround is to set the `ARROW_DEFAULT_MEMORY_POOL` environment variable to `jemalloc` following the advice from [apache/arrow#45882](https://github.com/apache/arrow/issues/45882).
+For EUPS users this variable is automatically set.
