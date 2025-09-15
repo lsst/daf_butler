@@ -8,7 +8,8 @@ Please cite [the SPIE paper](https://doi.org/10.1117/12.2629569) when using this
 
 This is a **Python 3 only** package (we assume Python 3.11 or higher).
 
-* SPIE Paper from 2022: [The Vera C. Rubin Observatory Data Butler and Pipeline Execution System](https://doi.org/10.1117/12.2629569) ([arXiv](https://arxiv.org/abs/2206.14941))
+* SPIE paper from 2024: [Converting Rubin Observatory's data butler to a client/server architecture](https://doi.org/10.1117/12.3019130) ([Tech note](https://dmtn-288.lsst.io))
+* SPIE Paper from 2022: [The Vera C. Rubin Observatory Data Butler and Pipeline Execution System](https://doi.org/10.1117/12.2629569) ([arXiv](https://arxiv.org/abs/2206.14941)) \[Primary reference]
 * ADASS paper from 2019: [Abstracting the Storage and Retrieval of Image Data at the LSST](https://ui.adsabs.harvard.edu/abs/2019ASPC..523..653J/abstract).
 * Early design note: [DMTN-056](https://dmtn-056.lsst.io)
 
