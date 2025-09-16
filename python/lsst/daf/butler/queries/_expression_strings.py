@@ -204,8 +204,6 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         return result
 
     def visitIdentifier(self, name: str, node: Node) -> _VisitorResult:
-        name = name.lower()
-
         if name in self.context.bind:
             value = self.context.bind[name]
             # Lists of values do not have a direct representation in the new
@@ -242,7 +240,6 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
             return _ColExpr(column_expression)
 
     def visitBind(self, name: str, node: Node) -> _VisitorResult:
-        name = name.lower()
         if name not in self.context.bind:
             raise InvalidQueryError("Name {name!r} is not in the bind map.")
         # Logic in visitIdentifier handles binds.

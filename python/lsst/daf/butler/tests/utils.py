@@ -46,6 +46,7 @@ from lsst.resources import ResourcePathExpression
 from .. import Butler, ButlerConfig, Config, DatasetRef, StorageClassFactory, Timespan
 from .._collection_type import CollectionType
 from ..datastore import NullDatastore
+from ..dimensions import DimensionConfig
 from ..direct_butler import DirectButler
 from ..registry.sql_registry import RegistryConfig, SqlRegistry
 from ..tests import MetricsExample, addDatasetType
@@ -130,7 +131,9 @@ def safeTestTempDir(default_base: str) -> Iterator[str]:
 
 
 def create_populated_sqlite_registry(
-    *args: ResourcePathExpression, registry_config: RegistryConfig | None = None
+    *args: ResourcePathExpression,
+    registry_config: RegistryConfig | None = None,
+    dimension_config: DimensionConfig | None = None,
 ) -> Butler:
     """Create an in-memory registry-only sqlite butler and populate it.
 
@@ -141,6 +144,8 @@ def create_populated_sqlite_registry(
     registry_config : ``RegistryConfig``, optional
         Registry configuration to use as the basis for the Butler
         configuration.
+    dimension_config : ``DimensionConfig``, optional
+        Dimension universe configuration.
 
     Returns
     -------
@@ -151,7 +156,7 @@ def create_populated_sqlite_registry(
     if registry_config is not None:
         config["registry"] = registry_config
     config[".registry.db"] = "sqlite://"
-    registry = SqlRegistry.createFromConfig(config["registry"])
+    registry = SqlRegistry.createFromConfig(config["registry"], dimension_config)
     butler = DirectButler(
         config=config,
         registry=registry,
