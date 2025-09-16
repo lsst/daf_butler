@@ -36,7 +36,7 @@ from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
 from types import TracebackType
-from typing import IO, Any, ClassVar, overload
+from typing import IO, Any, ClassVar, Literal, overload
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
 
@@ -174,7 +174,7 @@ class ButlerMDC:
             lno: int,
             msg: str,
             args: tuple,
-            exc_info: tuple | None,
+            exc_info: tuple | None | Literal[False],
             func: str | None = None,
             sinfo: TracebackType | None = None,
             **kwargs: Any,
@@ -182,7 +182,7 @@ class ButlerMDC:
             record = old_factory(name, level, fn, lno, msg, args, exc_info, func, sinfo, **kwargs)
             # Make sure we send a copy of the global dict in the record.
             mdc = MDCDict(cls._MDC)
-            if exc_info is not None:
+            if exc_info is not None and exc_info is not False:
                 _, ex, _ = exc_info
                 # TODO: this doesn't handle chained exceptions, fix on DM-47546
                 if hasattr(ex, "mdc"):
