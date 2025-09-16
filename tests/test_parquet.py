@@ -400,6 +400,10 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.assertTrue(df1.loc[:, ["ddd"]].equals(df6))
         df7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         self.assertTrue(df1.loc[:, ["a"]].equals(df7))
+        df8 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d*"]})
+        self.assertTrue(df1.loc[:, ["ddd", "dtn", "dtu"]].equals(df8))
+        df9 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d*", "d*"]})
+        self.assertTrue(df1.loc[:, ["ddd", "dtn", "dtu"]].equals(df9))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -989,6 +993,10 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         _checkAstropyTableEquality(tab1[("ddd",)], tab6)
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         _checkAstropyTableEquality(tab1[("a",)], tab7)
+        tab8 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d??"]})
+        _checkAstropyTableEquality(tab1[("ddd", "dtn", "dtu")], tab8)
+        tab9 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d??", "a*"]})
+        _checkAstropyTableEquality(tab1[("ddd", "dtn", "dtu", "a")], tab9)
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -1401,6 +1409,18 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             ],
             tab7,
         )
+        tab8 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d??", "a*"]})
+        _checkNumpyTableEquality(
+            tab1[
+                [
+                    "ddd",
+                    "dtn",
+                    "dtu",
+                    "a",
+                ]
+            ],
+            tab8,
+        )
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -1673,6 +1693,8 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         self.assertEqual(tab6, tab1.select(("ddd",)))
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         self.assertEqual(tab7, tab1.select(("a",)))
+        tab8 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a*", "d??"]})
+        self.assertEqual(tab8, tab1.select(("a", "ddd", "dtn", "dtu")))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
@@ -1984,6 +2006,9 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
         subdict = {key: dict1[key] for key in ["a"]}
         _checkNumpyDictEquality(subdict, tab7)
+        tab8 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d??", "a*"]})
+        subdict = {key: dict1[key] for key in ["ddd", "dtn", "dtu", "a"]}
+        _checkNumpyDictEquality(subdict, tab8)
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
