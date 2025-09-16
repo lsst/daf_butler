@@ -28,8 +28,8 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from typing import Any, cast
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import Any
 
 from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
@@ -50,7 +50,6 @@ from ..registry.queries import (
     DataCoordinateQueryResults,
     DatasetQueryResults,
     DimensionRecordQueryResults,
-    ParentDatasetQueryResults,
 )
 from ..registry.sql_registry import SqlRegistry
 
@@ -323,7 +322,7 @@ class HybridButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        remote = self._remote.queryDataIds(
+        return self._remote.queryDataIds(
             dimensions,
             dataId=dataId,
             datasets=datasets,
@@ -332,27 +331,6 @@ class HybridButlerRegistry(Registry):
             bind=bind,
             check=check,
             **kwargs,
-        )
-
-        # Defer creation of the DirectButler version until we really need the
-        # object for handling an unimplemented method.  This avoids masking of
-        # missing exception handling in the RemoteButler side -- otherwise
-        # exceptions from DirectButler would cause tests to pass.
-        def create_direct_result() -> DataCoordinateQueryResults:
-            return self._direct.queryDataIds(
-                dimensions,
-                dataId=dataId,
-                datasets=datasets,
-                collections=collections,
-                where=where,
-                bind=bind,
-                check=check,
-                **kwargs,
-            )
-
-        return cast(
-            DataCoordinateQueryResults,
-            _HybridDataCoordinateQueryResults(direct=create_direct_result, remote=remote),
         )
 
     def queryDimensionRecords(
@@ -397,72 +375,3 @@ class HybridButlerRegistry(Registry):
     @storageClasses.setter
     def storageClasses(self, value: StorageClassFactory) -> None:
         raise NotImplementedError()
-
-
-class _HybridDataCoordinateQueryResults:
-    """Shim DataCoordinateQueryResults so that DirectButler can
-    provide a few methods that aren't implemented yet.
-    """
-
-    def __init__(
-        self, *, direct: Callable[[], DataCoordinateQueryResults], remote: DataCoordinateQueryResults
-    ) -> None:
-        self._direct = direct
-        self._remote = remote
-
-    def __getattr__(self, name: str) -> Any:
-        # Send any methods not explicitly handled here to RemoteButler.
-        return getattr(self._remote, name)
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        return iter(self._remote)
-
-    def order_by(self, *args: str) -> _HybridDataCoordinateQueryResults:
-        return _HybridDataCoordinateQueryResults(
-            direct=lambda: self._direct().order_by(*args), remote=self._remote.order_by(*args)
-        )
-
-    def limit(self, limit: int, offset: int | None = 0) -> _HybridDataCoordinateQueryResults:
-        return _HybridDataCoordinateQueryResults(
-            direct=lambda: self._direct().limit(limit, offset), remote=self._remote.limit(limit, offset)
-        )
-
-    def materialize(self) -> contextlib.AbstractContextManager[DataCoordinateQueryResults]:
-        return self._direct().materialize()
-
-    def expanded(self) -> _HybridDataCoordinateQueryResults:
-        return _HybridDataCoordinateQueryResults(
-            remote=self._remote.expanded(), direct=lambda: self._direct().expanded()
-        )
-
-    def subset(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | None = None,
-        *,
-        unique: bool = False,
-    ) -> _HybridDataCoordinateQueryResults:
-        return _HybridDataCoordinateQueryResults(
-            direct=lambda: self._direct().subset(dimensions, unique=unique),
-            remote=self._remote.subset(dimensions, unique=unique),
-        )
-
-    def findDatasets(
-        self,
-        datasetType: DatasetType | str,
-        collections: Any,
-        *,
-        findFirst: bool = True,
-    ) -> ParentDatasetQueryResults:
-        return self._direct().findDatasets(datasetType, collections, findFirst=findFirst)
-
-    def findRelatedDatasets(
-        self,
-        datasetType: DatasetType | str,
-        collections: Any,
-        *,
-        findFirst: bool = True,
-        dimensions: DimensionGroup | Iterable[str] | None = None,
-    ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
-        return self._direct().findRelatedDatasets(
-            datasetType, collections, findFirst=findFirst, dimensions=dimensions
-        )
