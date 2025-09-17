@@ -26,80 +26,81 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import annotations
+
 import os
-import base64
-import re
-import time
-import logging
-import requests
+from fnmatch import fnmatchcase
+from urllib.parse import urlparse
 
 from .interface import RemoteButlerAuthenticationProvider
 
-# CADC Certificate Delegation Protocol (CDP) resource ID and feature ID
-CADC_AC_ENDPOINT = "https://ws-cadc.canfar.net/ac/authorize"
-CADC_PROXY_FILENAME = "cadcproxy.pem"
-CADC_TOKEN_ENV_VAR = "CADC_TOKEN"
 
+class CadcAuthenticationProvider(RemoteButlerAuthenticationProvider):
+    """
+    Represents an authentication provider for remote Butler services specific
+    to CADC connection requirements.
 
-class CadcAuthenticationProvider:
-    """Provide HTTP headers required for authenticating the user at the
-    Canadian Astronomy Data Centre.
+    This class handles the creation and management of authentication headers
+    required for interaction with remote Butler services by handling bearer
+    tokens. It ensures that the object is pickleable as it may need to be
+    serialized and transferred between processes for file transfer operations.
+
+    Parameters
+    ----------
+    access_token : `str`
+        The bearer token used for authentication with CADC StorageInventory.
     """
 
     # NOTE -- This object needs to be pickleable. It will sometimes be
     # serialized and transferred to another process to execute file transfers.
 
-    def __init__(self) -> None:
-        self._token = os.environ.get(CADC_TOKEN_ENV_VAR)
+    def __init__(self, access_token: str):
+        # Access tokens are opaque bearer tokens. See https://sqr-069.lsst.io/
+        self._headers = {"Authorization": f"Bearer {access_token}"}
 
-    @property
-    def token(self) -> str:
-        if self._token_is_valid:
-            return self._token
-
-        # Get a new token from CADC AC
-        cadcproxy_file = os.path.join(os.environ.get("HOME", ""), ".ssl", CADC_PROXY_FILENAME)
-        params = {'response_type': 'token'}
-        try:
-            response = requests.get(CADC_AC_ENDPOINT, cert=cadcproxy_file, params=params)
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to retrieve CADC token: {e}")
-            raise
-
-        # update the token in the environment variable
-        os.environ[CADC_TOKEN_ENV_VAR] = response.text
-        # update the internal token variable
-        self._token = os.environ.get(CADC_TOKEN_ENV_VAR)
-        # self-reference to ensure that the token is valid
-        return self.token
-
-    @property
-    def _token_is_valid(self) -> bool:
-        if self._token is None:
-            logging.debug("No CADC token found.")
-            return False
-        try:
-            # Decode the base64 string
-            decoded_bytes = base64.b64decode(self._token)
-            decoded_str = decoded_bytes.decode('utf-8')
-            logging.debug(f"Decoded CADC Token string: {decoded_str}")
-
-            # Search for expirytime using a regular expression
-            match = re.search(r"expirytime=(\d+)", decoded_str)
-            if not match:
-                return False
-
-            exp_time = int(match.group(1))
-            current_time = int(time.time())
-            logging.debug(f"CADC Token Expirytime: {exp_time} ({time.ctime(exp_time)})")
-            logging.debug(f"Current time: {current_time} ({time.ctime(current_time)})")
-            return exp_time > current_time
-        except Exception as e:
-            logging.debug(e)
-            return False
+    @staticmethod
+    def create_from_environment(server_url: str) -> CadcAuthenticationProvider:
+        access_token = _get_authentication_token_from_environment(server_url)
+        if access_token is None:
+            raise RuntimeError(
+                "Attempting to connect to Butler server,"
+                " but no access credentials were found in the environment."
+            )
+        return CadcAuthenticationProvider(access_token)
 
     def get_server_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"}
+        return {}
 
     def get_datastore_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"}
+        return self._headers
+
+
+_SERVER_WHITELIST = ["*.canfar.net", "host.docker.internal"]
+_CADC_TOKEN_ENVIRONMENT_KEY = "CADC_TOKEN"
+
+
+def _get_authentication_token_from_environment(server_url: str) -> str | None:
+    """
+    Retrieve an authentication token from the environment.
+
+    This function checks if the provided server URL's hostname matches any
+    pattern in the server whitelist and if a valid token is available in
+    the environment variable. If both conditions are satisfied, the token is
+    returned; otherwise, None is returned.
+
+    Parameters
+    ----------
+        server_url (str): The URL of the server for which an authentication
+            token is being retrieved.
+
+    Returns
+    -------
+        str | None: The authentication token if available and hostname matches
+        the whitelist; otherwise, None.
+    """
+    hostname = urlparse(server_url.lower()).hostname
+    hostname_in_whitelist = any(hostname and fnmatchcase(hostname, pattern) for pattern in _SERVER_WHITELIST)
+    notebook_token = os.getenv(_CADC_TOKEN_ENVIRONMENT_KEY)
+    if hostname_in_whitelist and notebook_token:
+        return notebook_token
+
+    return None
