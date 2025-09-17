@@ -1385,6 +1385,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
         # Docstring inherited from the base class.
+        refs = list(refs)
 
         # The records themselves. Could be missing some entries.
         records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
@@ -3050,17 +3051,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         if transfer == "auto" and directory is None:
             transfer = None
 
-        if transfer is not None and directory is None:
+        if transfer is not None and transfer != "direct" and directory is None:
             raise TypeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         if transfer == "move":
             raise TypeError("Can not export by moving files out of datastore.")
-        elif transfer == "direct":
-            # For an export, treat this as equivalent to None. We do not
-            # want an import to risk using absolute URIs to datasets owned
-            # by another datastore.
-            log.info("Treating 'direct' transfer mode as in-place export.")
-            transfer = None
 
         # Force the directory to be a URI object
         directoryUri: ResourcePath | None = None

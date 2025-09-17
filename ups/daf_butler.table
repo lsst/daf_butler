@@ -6,3 +6,7 @@ setupRequired(daf_relation)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+
+# Needed for https://github.com/apache/arrow/issues/45882
+# Memory leak in newer versions of pyarrow.
+envSet(ARROW_DEFAULT_MEMORY_POOL, jemalloc)

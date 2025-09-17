@@ -118,8 +118,13 @@ class LoggingTestCase(unittest.TestCase):
         self.log.warning("warning message")
         self.log.critical("critical message")
         self.log.verbose("verbose message")
+        self.log.error("error message")
+        try:
+            raise RuntimeError("An error has occurred")
+        except RuntimeError:
+            self.log.exception("exception message")
 
-        self.assertEqual(len(self.handler.records), 4)
+        self.assertEqual(len(self.handler.records), 6)
 
         format_default = str(self.handler.records)
 
@@ -128,7 +133,7 @@ class LoggingTestCase(unittest.TestCase):
         format_override = str(self.handler.records)
 
         self.assertNotEqual(format_default, format_override)
-        self.assertEqual(format_override, "DEBUG\nWARNING\nCRITICAL\nVERBOSE")
+        self.assertEqual(format_override, "DEBUG\nWARNING\nCRITICAL\nVERBOSE\nERROR\nERROR")
 
         # Reset the log format and it should match the original text.
         self.handler.records.set_log_format(None)
@@ -269,6 +274,33 @@ class LoggingTestCase(unittest.TestCase):
         i += 1
         self.log.info("Message %d", i)
         self.assertEqual(self.handler.records[-1].format(fmt), f"xoriginal - Message {i}")
+
+    def testMDC_exception(self):
+        """Test that exceptions preserve MDC from the point of raising."""
+        ButlerMDC.add_mdc_log_record_factory()
+
+        ButlerMDC.MDC("foo", "bar")
+        try:
+            with ButlerMDC.set_mdc({"foo": "fum", "answer": "42"}):
+                raise RuntimeError("I take exception to that!")
+        except RuntimeError as e:
+            self.assertEqual(e.mdc, {"foo": "fum", "answer": "42"})
+            # Exception should hang on to old state
+            self.log.exception("Exception raised:")
+            self.log.warning("Implied exception", exc_info=True)
+            self.log.critical("Explicit exception", exc_info=e)
+            self.log.error("Explicit exception info", exc_info=(Exception, e, e.__traceback__))
+            # Is original context used *only* when logging the exception?
+            self.log.error("Something went wrong")
+            self.log.error("Boolean disabled exc info", exc_info=False)
+        for i in [-6, -5, -4, -3]:
+            self.assertEqual(self.handler.records[i].MDC, {"foo": "fum", "answer": "42"})
+        for i in [-2, -1]:
+            self.assertEqual(self.handler.records[i].MDC, {"foo": "bar"})
+
+        self.log.setLevel(logging.INFO)
+        self.log.info("Normal log")
+        self.assertEqual(self.handler.records[-1].MDC, {"foo": "bar"})
 
 
 class TestJsonLogging(unittest.TestCase):

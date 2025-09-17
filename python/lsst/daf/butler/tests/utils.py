@@ -381,8 +381,8 @@ class MetricTestRepo:
             ),
         )
 
-        self.addDataset({"instrument": "DummyCamComp", "visit": 423})
-        self.addDataset({"instrument": "DummyCamComp", "visit": 424})
+        self.ref1 = self.addDataset({"instrument": "DummyCamComp", "visit": 423})
+        self.ref2 = self.addDataset({"instrument": "DummyCamComp", "visit": 424})
 
     def addDataset(
         self, dataId: dict[str, Any], run: str | None = None, datasetType: DatasetType | None = None

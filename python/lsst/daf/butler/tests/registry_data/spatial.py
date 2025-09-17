@@ -55,7 +55,7 @@ from astropy.time import Time
 from astropy.wcs import WCS
 from matplotlib import pyplot
 
-import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
+import lsst.daf.butler  # register Time/YAML conversions. # noqa: F401
 from lsst.sphgeom import (
     ConvexPolygon,
     HealpixPixelization,

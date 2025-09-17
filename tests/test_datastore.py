@@ -767,10 +767,19 @@ class DatastoreTests(DatastoreTestsBase):
                 ) -> None:
                     """Ingest a file already in the datastore root."""
                     # first move it into the root, and adjust the path
-                    # accordingly
-                    path = shutil.copy(path, datastore.root.ospath)
-                    path = os.path.relpath(path, start=datastore.root.ospath)
-                    datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
+                    # accordingly.
+                    # In the case of a ChainedDatastore, we have multiple
+                    # roots, all of which will accept the file, so we
+                    # have to copy it into all the roots.
+                    relative_path = None
+                    for root in datastore.roots.values():
+                        if root is not None:
+                            copied_path = shutil.copy(path, root.ospath)
+                            relative_path = os.path.relpath(copied_path, start=root.ospath)
+                    assert relative_path is not None, (
+                        "Running a FileDatastore test on a Datastore instance without any roots"
+                    )
+                    datastore.ingest(FileDataset(path=relative_path, refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
                 def failInputDoesNotExist(
@@ -1394,7 +1403,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
     canIngestNoTransferAuto = False
-    ingestTransferModes = ("copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
+    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True

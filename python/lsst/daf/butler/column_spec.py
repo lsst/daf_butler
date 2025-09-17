@@ -52,7 +52,6 @@ from typing import (
     Any,
     ClassVar,
     Literal,
-    Optional,
     TypeAlias,
     Union,
     final,
@@ -254,7 +253,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         """
         base = self._get_base_annotated_type()
         if self.nullable:
-            return Optional[base]
+            return base | None
         return base
 
     @abstractmethod

@@ -32,6 +32,7 @@ from __future__ import annotations
 __all__ = ["ArrowTableDelegate"]
 
 from collections.abc import Mapping
+from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
@@ -162,28 +163,33 @@ class ArrowTableDelegate(StorageClassDelegate):
                     parameters["columns"],
                     stringify=False,
                 )
+                # Ensure uniqueness, keeping order.
+                readColumns = list(dict.fromkeys(readColumns))
             else:
-                readColumns = list(ensure_iterable(parameters["columns"]))
+                readColumnsIn = list(dict.fromkeys(ensure_iterable(parameters["columns"])))
 
-                for column in readColumns:
+                if typeString == "pandas":
+                    # Exclude index columns from the subset.
+                    readColumnsIn = [
+                        name for name in readColumnsIn if name not in inMemoryDataset.index.names
+                    ]
+
+                readColumnsDict = {}
+                for column in readColumnsIn:
                     if not isinstance(column, str):
                         raise NotImplementedError(
                             f"InMemoryDataset of a {get_full_type_name(inMemoryDataset)} only "
                             "supports string column names."
                         )
-                    if column not in allColumns:
+                    found = False
+                    for allColumn in allColumns:
+                        if fnmatchcase(allColumn, column):
+                            found = True
+                            readColumnsDict[allColumn] = True
+                    if not found:
                         raise ValueError(f"Unrecognized column name {column!r}.")
 
-                if typeString == "pandas":
-                    # Exclude index columns from the subset.
-                    readColumns = [
-                        name
-                        for name in ensure_iterable(parameters["columns"])
-                        if name not in inMemoryDataset.index.names
-                    ]
-
-            # Ensure uniqueness, keeping order.
-            readColumns = list(dict.fromkeys(readColumns))
+                readColumns = list(readColumnsDict.keys())
 
             if typeString == "arrow":
                 return inMemoryDataset.select(readColumns)

@@ -1797,6 +1797,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         *datasets: FileDataset,
         transfer: str | None = "auto",
         record_validation_info: bool = True,
+        skip_existing: bool = False,
     ) -> None:
         # Docstring inherited.
         if not datasets:
@@ -1806,6 +1807,21 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
         progress = Progress("lsst.daf.butler.Butler.ingest", level=VERBOSE)
 
+        new_datasets, existing_datasets = self._partition_datasets_by_known(datasets)
+        if existing_datasets:
+            if skip_existing:
+                _LOG.info(
+                    "Skipping %d datasets which already exist in the repository.", len(existing_datasets)
+                )
+            else:
+                raise ConflictingDefinitionError(
+                    f"Datastore already contains {len(existing_datasets)} of the given datasets."
+                    f" Example: {existing_datasets[0]}"
+                )
+
+        # We use `datasets` rather `new_datasets` for the Registry
+        # portion of this, to let it confirm that everything matches the
+        # existing datasets.
         import_info = self._prepare_ingest_file_datasets(datasets, progress)
 
         with self.transaction():
@@ -1813,16 +1829,40 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
             # Bulk-insert everything into Datastore.
             # We do not know if any of the registry entries already existed
-            # (_importDatasets only complains if they exist but differ) so
-            # we have to catch IntegrityError explicitly.
+            # (_importDatasets only complains if they exist but differ).
+            # The _partition_datasets_by_known logic above should catch most
+            # instances where we attempt to re-ingest files that were already
+            # ingested, but a concurrent writer could cause a unique constraint
+            # violation here.
             try:
                 self._datastore.ingest(
-                    *datasets, transfer=transfer, record_validation_info=record_validation_info
+                    *new_datasets, transfer=transfer, record_validation_info=record_validation_info
                 )
             except IntegrityError as e:
                 raise ConflictingDefinitionError(
                     f"Datastore already contains one or more datasets: {e}"
                 ) from e
+
+    def _partition_datasets_by_known(
+        self, datasets: Iterable[FileDataset]
+    ) -> tuple[list[FileDataset], list[FileDataset]]:
+        """Divides the given `FileDataset` objects into two groups: those for
+        which the Datastore already has an entry, and those for which it does
+        not.
+        """
+        new_datasets = []
+        existing_datasets = []
+
+        refs = itertools.chain.from_iterable(dataset.refs for dataset in datasets)
+        known_refs = self._datastore.knows_these(refs)
+
+        for dataset in datasets:
+            if any(known_refs[ref] for ref in dataset.refs):
+                existing_datasets.append(dataset)
+            else:
+                new_datasets.append(dataset)
+
+        return new_datasets, existing_datasets
 
     @contextlib.contextmanager
     def export(

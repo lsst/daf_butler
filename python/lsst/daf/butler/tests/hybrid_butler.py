@@ -292,9 +292,13 @@ class HybridButler(Butler):
         *datasets: FileDataset,
         transfer: str | None = "auto",
         record_validation_info: bool = True,
+        skip_existing: bool = False,
     ) -> None:
         return self._direct_butler.ingest(
-            *datasets, transfer=transfer, record_validation_info=record_validation_info
+            *datasets,
+            transfer=transfer,
+            record_validation_info=record_validation_info,
+            skip_existing=skip_existing,
         )
 
     def export(

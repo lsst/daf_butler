@@ -1,0 +1,2 @@
+For EUPS users we now set the ``ARROW_DEFAULT_MEMORY_POOL`` environment variable to ``jemalloc``.
+This works around a memory leak reported in https://github.com/apache/arrow/issues/45882 for pyarrow v18 and newer.

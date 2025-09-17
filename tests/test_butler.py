@@ -92,6 +92,7 @@ from lsst.daf.butler import (
     ValidationError,
     script,
 )
+from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
@@ -110,7 +111,13 @@ from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
-from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
+from lsst.daf.butler.tests.utils import (
+    MetricTestRepo,
+    TestCaseMixin,
+    makeTestTempDir,
+    removeTestTempDir,
+    safeTestTempDir,
+)
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 from lsst.utils import doImportType
@@ -1069,6 +1076,13 @@ class ButlerTests(ButlerPutGetTests):
         uri1 = butler.getURI(datasetTypeName, dataId1)
         uri2 = butler.getURI(datasetTypeName, dataId2, collections="a/new/run")
         self.assertFalse(self.are_uris_equivalent(uri1, uri2), f"Cf. {uri1} with {uri2}")
+
+        # Re-ingesting the same datasets raises an error with
+        # skip_existing=False.
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.ingest(*datasets, transfer="copy")
+        # skip_existing=True makes it a no-op to re-ingest the same datasets.
+        butler.ingest(*datasets, transfer="copy", skip_existing=True)
 
         # Now do a multi-dataset but single file ingest
         metricFile = os.path.join(dataRoot, "detectors.yaml")
@@ -2253,6 +2267,98 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         with self.assertRaises(ValueError):
             DatasetProvenance.from_flat_dict({"unknown": 42}, butler)
+
+    def test_specialized_file_datasets_functions(self):
+        """Test a workflow used in Prompt Processing where we export datasets
+        from one repository and write them in-place to the datastore of
+        another, without immediately inserting registry entries for the
+        datasets.
+        """
+        repo = MetricTestRepo.create_from_butler(
+            self.create_empty_butler(writeable=True),
+            self.tmpConfigFile,
+            "StructuredCompositeReadCompNoDisassembly",
+        )
+        source_butler = repo.butler
+
+        # Test writing outputs to a FileDatastore.
+        with tempfile.TemporaryDirectory() as tempdir:
+            target_repo_config = Butler.makeRepo(tempdir)
+            refs = [repo.ref1, repo.ref2]
+            datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
+            self.assertEqual(len(datasets), 2)
+            self.assertEqual({ref.id for ref in refs}, {dataset.refs[0].id for dataset in datasets})
+            for dataset in datasets:
+                path = ResourcePath(dataset.path, forceAbsolute=False)
+                # Paths should be relative paths to the target datastore.
+                self.assertFalse(path.isabs())
+                # Files should have been copied into the target datastore
+                self.assertTrue(ResourcePath(tempdir).join(path).exists())
+
+            # Make sure the target Butler can ingest the datasets.
+            target_butler = Butler(target_repo_config, writeable=True)
+            target_butler.transfer_dimension_records_from(source_butler, refs)
+            target_butler.ingest(*datasets, transfer=None)
+            self.assertIsNotNone(target_butler.get(repo.ref1))
+            self.assertIsNotNone(target_butler.get(repo.ref2))
+
+            # Giving an empty list of files is a no-op.
+            no_datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), [])
+            self.assertEqual(len(no_datasets), 0)
+
+        # Test writing outputs to a ChainedDatastore.
+        with tempfile.TemporaryDirectory() as tempdir:
+            # Set up a second dataset type, so we can split the files across
+            # multiple datastore roots.
+            dt1 = repo.datasetType
+            dt2 = DatasetType("other", dt1.dimensions, dt1.storageClass)
+            source_butler.registry.registerDatasetType(dt2)
+            other_ref = repo.addDataset(repo.ref1.dataId, datasetType=dt2)
+            config = Config.fromString(
+                f"""
+            datastore:
+                cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+                datastore_constraints:
+                  - constraints:
+                      accept:
+                        - {dt1.name}
+                  - constraints:
+                      accept:
+                        - {dt2.name}
+                datastores:
+                  - datastore:
+                      cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+                      root: <butlerRoot>/FileDatastore_0
+                  - datastore:
+                      cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+                      root: <butlerRoot>/FileDatastore_1
+            """
+            )
+            target_repo_config = Butler.makeRepo(tempdir, config)
+            refs = [repo.ref1, repo.ref2, other_ref]
+            datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
+            self.assertEqual(len(datasets), 3)
+            self.assertEqual({ref.id for ref in refs}, {dataset.refs[0].id for dataset in datasets})
+            for dataset in datasets:
+                path = ResourcePath(dataset.path, forceAbsolute=False)
+                # Paths should be relative paths to the target datastore.
+                self.assertFalse(path.isabs())
+                # Files should have been split up between the two datastores
+                # in the chain.
+                datastore_root = ResourcePath(tempdir)
+                if dataset.refs[0].datasetType.name == dt1.name:
+                    datastore_root = datastore_root.join("FileDatastore_0")
+                else:
+                    datastore_root = datastore_root.join("FileDatastore_1")
+                self.assertTrue(datastore_root.join(path).exists())
+
+            # Make sure the target Butler can ingest the datasets.
+            target_butler = Butler(target_repo_config, writeable=True)
+            target_butler.transfer_dimension_records_from(source_butler, refs)
+            target_butler.ingest(*datasets, transfer=None)
+            self.assertIsNotNone(target_butler.get(repo.ref1))
+            self.assertIsNotNone(target_butler.get(repo.ref2))
+            self.assertIsNotNone(target_butler.get(other_ref))
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
