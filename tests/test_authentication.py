@@ -4,7 +4,11 @@ from lsst.daf.butler.tests.utils import mock_env
 
 try:
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler.authentication.cadc import CadcAuthenticationProvider
+    from lsst.daf.butler.remote_butler.authentication.cadc import (
+        _CADC_TOKEN_ENVIRONMENT_KEY,
+        CadcAuthenticationProvider,
+        _get_cadc_token_from_environment,
+    )
     from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
         _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY,
@@ -54,6 +58,9 @@ class TestButlerClientAuthentication(unittest.TestCase):
         self.assertEqual(auth.get_datastore_headers(), {})
 
     def test_cadc_auth(self):
-        auth = CadcAuthenticationProvider()
+        auth = CadcAuthenticationProvider("tokendata")
         self.assertEqual(auth.get_server_headers(), {})
-        self.assertEqual(auth.get_datastore_headers(), {"Authorization": "Bearer stub"})
+        self.assertEqual(auth.get_datastore_headers(), {"Authorization": "Bearer tokendata"})
+        with mock_env({_CADC_TOKEN_ENVIRONMENT_KEY: "tokendata"}):
+            token = _get_cadc_token_from_environment("https://www.canfar.net/butler")
+            self.assertEqual(token, "tokendata")
