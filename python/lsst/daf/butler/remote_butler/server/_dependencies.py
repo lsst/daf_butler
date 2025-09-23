@@ -29,6 +29,8 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
 from safir.dependencies.gafaelfawr import auth_delegated_token_dependency
+from safir.dependencies.logger import logger_dependency as safir_logger_dependency
+from structlog.stdlib import BoundLogger
 
 from lsst.daf.butler import LabeledButlerFactory
 
@@ -115,6 +117,31 @@ async def repository_authorization_dependency(
             status_code=403,
             detail=f"User {user_name} does not have permission to access Butler repository '{repository}'",
         )
+
+
+async def logger_dependency(
+    logger: Annotated[BoundLogger, Depends(safir_logger_dependency)],
+    repository: str,
+    user_name: Annotated[str | None, Depends(user_name_dependency)],
+    x_auth_request_service: Annotated[str | None, Header()] = None,
+) -> BoundLogger:
+    """Return a logger with additional bound context information.
+
+    Parameters
+    ----------
+    logger : `structlog.stdlib.BoundLogger`
+        Logger provided by Safir.
+    repository : `str`
+        Butler repository that is being accessed.
+    user_name : `str` or `None`
+        Name of the user accessing the repository, from Gafaelfawr headers.
+    x_auth_request_service : `str` or `None`
+        Name of the service being used to access the repository, from
+        Gafaelfawr headers.
+    """
+    return logger.bind(
+        butler_repo=repository, requester={"username": user_name, "service": x_auth_request_service}
+    )
 
 
 async def factory_dependency(
