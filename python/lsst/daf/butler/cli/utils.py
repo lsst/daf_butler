@@ -74,6 +74,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 import click
+import click.core
 import click.exceptions
 import click.testing
 import yaml
@@ -94,6 +95,11 @@ if _click_version >= Version("8.2.0"):
     _click_make_metavar_has_context = True
 else:
     _click_make_metavar_has_context = False
+
+# Starting from Click 8.3.0, a special `UNSET` sentinel value is used to
+# indicate the absence of a default value for a parameter.  Prior to 8.3.0,
+# they just used `None`.
+_CLICK_UNSET_SENTINEL = getattr(click.core, "UNSET", None)
 
 log = logging.getLogger(__name__)
 
@@ -554,7 +560,7 @@ def split_kv(
 
     if add_to_default:
         default = param.get_default(context)
-        if default:
+        if default and default != _CLICK_UNSET_SENTINEL:
             vals = tuple(v for v in itertools.chain(default, vals))  # Convert to tuple for mypy
 
     ret: RetDict | RetTuple
@@ -1013,7 +1019,8 @@ class MWCommand(click.Command):
                     captured_args.append(val)
             elif isinstance(param, click.Argument):
                 param_name = cast(str, param.name)
-                if (opt := opts[param_name]) is not None:
+                opt = opts[param_name]
+                if opt is not None and opt != _CLICK_UNSET_SENTINEL:
                     captured_args.append(opt)
             else:
                 raise AssertionError("All parameters should be an Option or an Argument")
