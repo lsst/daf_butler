@@ -30,10 +30,11 @@ from __future__ import annotations
 __all__ = ()
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from structlog.stdlib import BoundLogger
 
 from ...._butler import Butler
 from ...._collection_type import CollectionType
@@ -64,7 +65,7 @@ from ...server_models import (
     QueryDatasetTypesResponseModel,
 )
 from .._config import load_config
-from .._dependencies import factory_dependency
+from .._dependencies import factory_dependency, logger_dependency
 from .._factory import Factory
 from ._file_info import get_file_info_payload
 from ._utils import generate_file_download_uri, set_default_data_id
@@ -184,12 +185,14 @@ def expand_data_id(
 )
 def get_file(
     dataset_id: uuid.UUID,
+    logger: Annotated[BoundLogger, Depends(logger_dependency)],
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
     ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
         raise DatasetNotFoundError(f"Dataset ID {dataset_id} not found")
+    _log_file_access(logger, ref, "uuid")
     return _get_file_info_response(butler, ref)
 
 
@@ -200,6 +203,7 @@ def get_file(
 )
 def get_file_by_data_id(
     request: GetFileByDataIdRequestModel,
+    logger: Annotated[BoundLogger, Depends(logger_dependency)],
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
@@ -211,6 +215,7 @@ def get_file_by_data_id(
         datastore_records=True,
         timespan=request.timespan,
     )
+    _log_file_access(logger, ref, "data-id")
     return _get_file_info_response(butler, ref)
 
 
@@ -220,12 +225,21 @@ def _get_file_info_response(butler: Butler, ref: DatasetRef) -> GetFileResponseM
     )
 
 
+def _log_file_access(logger: BoundLogger, ref: DatasetRef, access_method: str) -> None:
+    logger.info(
+        "file-access",
+        dataset={"uuid": str(ref.id), "type": ref.datasetType.name, "data_id": dict(ref.dataId.required)},
+        file_access_endpoint=access_method,
+    )
+
+
 @external_router.get(
     "/v1/dataset/{dataset_id}/download",
     summary="Return an HTTP redirect to a location where you can download the artifact file for the dataset.",
 )
 def redirect_to_dataset_download(
     dataset_id: uuid.UUID,
+    logger: Annotated[BoundLogger, Depends(logger_dependency)],
     component: str | None = None,
     factory: Factory = Depends(factory_dependency),
 ) -> RedirectResponse:
@@ -245,6 +259,7 @@ def redirect_to_dataset_download(
         # files, and you must specify the component to pick which one you want
         # to download.
         if info.datastoreRecords.component == component:
+            _log_file_access(logger, ref, "uuid-redirect")
             return RedirectResponse(status_code=307, url=str(info.url))
 
     found_components = [info.datastoreRecords.component for info in payload.file_info]
