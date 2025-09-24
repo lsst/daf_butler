@@ -110,7 +110,7 @@ def is_dataset_field(s: str) -> TypeGuard[DatasetFieldName]:
 class QueryTreeBase(pydantic.BaseModel):
     """Base class for all non-primitive types in a query tree."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
+    model_config = pydantic.ConfigDict(frozen=True, strict=True)
 
 
 class ColumnExpressionBase(QueryTreeBase, ABC):
