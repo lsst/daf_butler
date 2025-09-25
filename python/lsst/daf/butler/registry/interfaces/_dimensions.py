@@ -328,46 +328,6 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_spatial_join_relation(
-        self,
-        element1: str,
-        element2: str,
-        context: queries.SqlQueryContext,
-        existing_relationships: Set[frozenset[str]] = frozenset(),
-    ) -> tuple[Relation, bool]:
-        """Create a relation that represents the spatial join between two
-        dimension elements.
-
-        Parameters
-        ----------
-        element1 : `str`
-            Name of one of the elements participating in the join.
-        element2 : `str`
-            Name of the other element participating in the join.
-        context : `.queries.SqlQueryContext`
-            Object that manages relation engines and database-side state
-            (e.g. temporary tables) for the query.
-        existing_relationships : `~collections.abc.Set` [ `frozenset` [ `str` \
-                ] ], optional
-            Relationships between dimensions that are already present in the
-            relation the result will be joined to.  Spatial join relations
-            that duplicate these relationships will not be included in the
-            result, which may cause an identity relation to be returned if
-            a spatial relationship has already been established.
-
-        Returns
-        -------
-        relation : `lsst.daf.relation.Relation`
-            New relation that represents a spatial join between the two given
-            elements.  Guaranteed to have key columns for all required
-            dimensions of both elements.
-        needs_refinement : `bool`
-            Whether the returned relation represents a conservative join that
-            needs refinement via native-iteration predicate.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
         """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
         dimension element table.
