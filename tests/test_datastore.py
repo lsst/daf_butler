@@ -988,6 +988,30 @@ class DatastoreTests(DatastoreTestsBase):
         data = datastore2.get(refs[2])
         self.assertIsNotNone(data)
 
+    def testExportPredictedRecords(self):
+        if self.isEphemeral:
+            raise unittest.SkipTest("in-memory datastore does not support record export/import")
+        sc = self.storageClassFactory.getStorageClass("ThingOne")
+        dimensions = self.universe.conform(("visit", "physical_filter"))
+        dataId = {
+            "instrument": "dummy",
+            "visit": 52,
+            "physical_filter": "V",
+            "band": "v",
+            "day_obs": 20250101,
+        }
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
+
+        datastore = self.makeDatastore("test_datastore")
+        names = {n for n in datastore.names if not n.startswith("InMemory")}
+        records = datastore.export_predicted_records([ref])
+
+        # Expect predicted records from all datastores.
+        self.assertEqual(set(records.keys()), names)
+
+        for record_data in records.values():
+            self.assertEqual(len(record_data.records), 1)
+
     def testExport(self) -> None:
         datastore, refs = self._populate_export_datastore("test_datastore")
 
@@ -1414,6 +1438,7 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
     validationCanFail = False
+    isEphemeral = True
 
 
 class DatastoreConstraintsTests(DatastoreTestsBase):
@@ -2124,6 +2149,8 @@ class NullDatastoreTestCase(DatasetTestHelper, unittest.TestCase):
             null.import_records({})
         with self.assertRaises(NotImplementedError):
             null.export_records([])
+        with self.assertRaises(NotImplementedError):
+            null.export_predicted_records([])
         with self.assertRaises(NotImplementedError):
             null.export([ref])
         with self.assertRaises(NotImplementedError):

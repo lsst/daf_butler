@@ -614,6 +614,34 @@ class QuantumBackedButler(LimitedButler):
             datastore_records=provenance_records,
         )
 
+    def export_predicted_datastore_records(
+        self, refs: Iterable[DatasetRef]
+    ) -> dict[str, DatastoreRecordData]:
+        """Export datastore records for a set of predicted output dataset
+        references.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            Dataset references for which to export datastore records. These
+            refs must be known to this butler.
+
+        Returns
+        -------
+        records : `dict` [ `str`, `DatastoreRecordData` ]
+            Predicted datastore records indexed by datastore name. No attempt
+            is made to ensure that the associated datasets exist on disk.
+        """
+        unknowns = [
+            ref
+            for ref in refs
+            if (ref.id not in self._predicted_outputs and ref.id not in self._predicted_inputs)
+        ]
+        if unknowns:
+            raise ValueError(f"Cannot export datastore records for unknown outputs: {unknowns}")
+
+        return self._datastore.export_predicted_records(refs)
+
 
 class QuantumProvenanceData(pydantic.BaseModel):
     """A serializable struct for per-quantum provenance information and

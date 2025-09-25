@@ -1165,6 +1165,25 @@ class ChainedDatastore(Datastore):
 
         return all_records
 
+    def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
+        # Docstring inherited from the base class.
+
+        all_records: dict[str, DatastoreRecordData] = {}
+
+        # Filter out datasets that this datastore is not allowed to contain.
+        refs = [ref for ref in refs if self.constraints.isAcceptable(ref)]
+
+        # Merge all sub-datastore records into one structure
+        for datastore in self.datastores:
+            sub_records = datastore.export_predicted_records(refs)
+            for name, record_data in sub_records.items():
+                # All datastore names must be unique in a chain.
+                if name in all_records:
+                    raise ValueError("Non-unique datastore name found in datastore {datastore}")
+                all_records[name] = record_data
+
+        return all_records
+
     def export(
         self,
         refs: Iterable[DatasetRef],
