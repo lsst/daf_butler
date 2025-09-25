@@ -102,6 +102,7 @@ class RegistryBase(Registry):
             datasets=None,
             collections=collections,
             doomed_by=doomed_by,
+            check=check,
         )
 
         if not args.collections:
@@ -157,7 +158,13 @@ class RegistryBase(Registry):
 
         dimensions = self.dimensions.conform(dimensions)
         args = self._convert_common_query_arguments(
-            dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
+            dataId=dataId,
+            where=where,
+            bind=bind,
+            kwargs=kwargs,
+            datasets=datasets,
+            collections=collections,
+            check=check,
         )
         return QueryDriverDataCoordinateQueryResults(
             self._butler, dimensions=dimensions, expanded=False, args=args
@@ -180,7 +187,13 @@ class RegistryBase(Registry):
             element = self.dimensions.elements[element]
 
         args = self._convert_common_query_arguments(
-            dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
+            dataId=dataId,
+            where=where,
+            bind=bind,
+            kwargs=kwargs,
+            datasets=datasets,
+            collections=collections,
+            check=check,
         )
 
         return QueryDriverDimensionRecordQueryResults(self._butler, element, args)
@@ -195,6 +208,7 @@ class RegistryBase(Registry):
         bind: Mapping[str, Any] | None = None,
         kwargs: dict[str, int | str],
         doomed_by: list[str] | None = None,
+        check: bool = True,
     ) -> CommonQueryArguments:
         dataset_types = self._resolve_dataset_types(datasets)
         if dataset_types and collections is None and not self.defaults.collections:
@@ -206,6 +220,7 @@ class RegistryBase(Registry):
             kwargs=dict(kwargs),
             dataset_types=dataset_types,
             collections=resolve_collections(self._butler, collections, doomed_by),
+            check=check,
         )
 
     def queryDatasetAssociations(
