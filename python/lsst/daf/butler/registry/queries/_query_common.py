@@ -53,6 +53,7 @@ class CommonQueryArguments:
     where: str
     bind: dict[str, Any] | None
     kwargs: dict[str, int | str]
+    check: bool
 
     def replaceCollections(self, collections: list[str]) -> CommonQueryArguments:
         return dataclasses.replace(self, collections=collections)
@@ -115,6 +116,8 @@ class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
             a = self._args
             for dataset_type in a.dataset_types:
                 query = query.join_dataset_search(dataset_type, a.collections)
+            if not a.check:
+                query = query._skip_governor_validation()
 
             result = self._build_result(query)
             result = self._apply_result_modifiers(result)

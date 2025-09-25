@@ -746,6 +746,10 @@ class Query(QueryBase):
             driver=self._driver,
         )
 
+    def _skip_governor_validation(self) -> Query:
+        tree = self._tree.model_copy(update={"validateGovernorConstraints": False})
+        return Query(tree=tree, driver=self._driver)
+
     def _join_dataset_search_impl(
         self,
         dataset_type: str | DatasetType,

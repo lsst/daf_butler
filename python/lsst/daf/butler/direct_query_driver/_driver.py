@@ -641,7 +641,11 @@ class DirectQueryDriver(QueryDriver):
         # datasets later.
         predicate_constraints = PredicateConstraintsSummary(tree.predicate)
         # Use the default data ID to apply additional constraints where needed.
-        predicate_constraints.apply_default_data_id(self._default_data_id, tree.dimensions)
+        predicate_constraints.apply_default_data_id(
+            self._default_data_id,
+            tree.dimensions,
+            validate_governor_constraints=tree.validateGovernorConstraints,
+        )
         predicate = predicate_constraints.predicate
         # Delegate to the dimensions manager to rewrite the predicate and start
         # a SqlSelectBuilder to cover any spatial overlap joins or constraints.

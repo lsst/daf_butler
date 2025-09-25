@@ -146,6 +146,11 @@ class QueryTree(QueryTreeBase):
     predicate: Predicate = Predicate.from_bool(True)
     """Boolean expression trees whose logical AND defines a row filter."""
 
+    validateGovernorConstraints: bool = True
+    """If True, enforce the requirement that governor dimensions must be
+    constrained if any dimensions that depend on them have constraints.
+    """
+
     def iter_all_dataset_searches(self) -> Iterator[tuple[str | AnyDatasetType, DatasetSearch]]:
         yield from self.datasets.items()
         if self.any_dataset is not None:
