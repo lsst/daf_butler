@@ -39,7 +39,7 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import timedelta
@@ -112,47 +112,6 @@ class RegistryTests(ABC):
     """True if the registry class being tested supports regex searches for
     collections."""
 
-    supportsDetailedQueryExplain: bool = False
-    """True if the registry class being tested can generate detailed
-    explanations for queries that return no rows by running additional queries
-    to diagnose the problem.
-    """
-
-    supportsQueryOffset: bool = False
-    """True if the registry class being tested supports the 'offset' parameter
-    to query methods.
-    """
-
-    supportsQueryGovernorValidation: bool = False
-    """True if the registry class being tested validates that values provided
-    by the user for governor dimensions are correct before running queries.
-    """
-
-    sometimesHasDuplicateQueryRows: bool = False
-    """True if the registry class being tested unintentionally returns
-    duplicate copies of rows in query results.  (The old query system had this
-    as a "known problem" -- the new query system is not supposed to return
-    duplicates anymore.)
-    """
-
-    supportsExtendedTimeQueryOperators: bool = False
-    """True if the registry class being tested supports ``<`` and ``>``
-    operators in expression strings for comparisons of `Timespan` vs
-    `Timespan`, or `Timespan` vs `Time`.
-    """
-
-    supportsCalibrationCollectionInFindFirst: bool = True
-    """True if the registry class being tested supports searching in
-    calibration collections in queryDatasets(findFirst=True).
-    (The old query system would ignore/"skip" calibration collections in these
-    searches.  The new one is able to search in these collections.)
-    """
-
-    supportsNonCommonSkypixQueries: bool = False
-    """True if the registry class being tested supports data ID constraints
-    like {'htm11' = ...}
-    """
-
     def makeRegistryConfig(self) -> RegistryConfig:
         """Create RegistryConfig used to create a registry.
 
@@ -219,17 +178,6 @@ class RegistryTests(ABC):
             self.assertTrue(results.any())
         else:
             self.assertFalse(results.any())
-
-    def _maybeDeduplicate(self, items: Iterable[_T]) -> tuple[_T]:
-        """If the registry class being tested has a known issue where query
-        rows are sometimes duplicated, return a deduplicated version of the
-        input as a tuple.  If the class does not have this duplication issue,
-        convert the input to a tuple without deduplicating it.
-        """
-        if not self.sometimesHasDuplicateQueryRows:
-            return tuple(items)
-
-        return tuple({k: True for k in items})
 
     def testOpaque(self):
         """Tests for `SqlRegistry.registerOpaqueTable`,
@@ -1472,15 +1420,7 @@ class RegistryTests(ABC):
                 dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
             ).toSet()
 
-        if self.supportsQueryGovernorValidation:
-            # Specifying non-existing skymap is an exception
-            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-                with self.assertWarns(FutureWarning):
-                    do_query()
-        else:
-            # New query system returns zero rows instead of raising an
-            # exception.
-            self.assertEqual(len(do_query()), 0)
+        self.assertEqual(len(do_query()), 0)
 
     def testSpatialJoin(self):
         """Test queries that involve spatial overlap joins."""
@@ -2668,23 +2608,10 @@ class RegistryTests(ABC):
         registry.registerCollection(chain, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain, coll_list)
 
-        # explicit list will raise if findFirst=True.
-        # For old query system, this is because it couldn't handle find-first
-        # lookups in calibration collections.
-        # For new query system, it's because it correctly determines that the
-        # lookup is ambiguous due to multiple datasets with the same data ID
+        # Lookup is ambiguous due to multiple datasets with the same data ID
         # in the calibration collection.
-        exception_type = (
-            CalibrationLookupError if self.supportsCalibrationCollectionInFindFirst else NotImplementedError
-        )
-        with self.assertRaises(exception_type):
+        with self.assertRaises(CalibrationLookupError):
             list(registry.queryDatasets("bias", collections=coll_list, findFirst=True))
-        if not self.supportsCalibrationCollectionInFindFirst:
-            # explicit list will raise if there are temporal dimensions
-            with self.assertRaises(NotImplementedError):
-                registry.queryDataIds(
-                    ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list
-                ).count()
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
@@ -2708,17 +2635,12 @@ class RegistryTests(ABC):
         datasets = list(registry.queryDatasets("bias", collections=...))
         self.assertGreater(len(datasets), 0)
 
-        if self.supportsCalibrationCollectionInFindFirst:
-            # New query system correctly determines that this search is
-            # ambiguous, because there are multiple datasets with the same
-            # {instrument=Cam1, detector=2} data ID in the calibration
-            # collection at the beginning of the chain.
-            with self.assertRaises(CalibrationLookupError):
-                datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
-        else:
-            # Old query system ignores calibration collection entirely.
+        # New query system correctly determines that this search is
+        # ambiguous, because there are multiple datasets with the same
+        # {instrument=Cam1, detector=2} data ID in the calibration
+        # collection at the beginning of the chain.
+        with self.assertRaises(CalibrationLookupError):
             datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
-            self.assertGreater(len(datasets), 0)
 
     def testIngestTimeQuery(self):
         butler = self.make_butler()
@@ -2833,13 +2755,9 @@ class RegistryTests(ABC):
         # t2 is exactly at the start of i2, but ends are exclusive, so these
         # should not include i2.
         self.assertEqual(ids[i1:i2], query("(:t1, :t2) OVERLAPS visit.timespan"))
-        if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[:i2], query("visit.timespan < (:t2, :t4)"))
         # t3 is in the middle of i3, so this should include i3.
         self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS :ts23"))
         # This one should not include t3 by the same reasoning.
-        if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (:t1, :t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
         self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}/tai', :t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
@@ -2848,11 +2766,6 @@ class RegistryTests(ABC):
         # Now some timespan vs. time scalar queries.
         self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS :t3"))
         self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}/tai' OVERLAPS visit.timespan"))
-        if self.supportsExtendedTimeQueryOperators:
-            self.assertEqual(ids[:i2], query("visit.timespan < :t2"))
-            self.assertEqual(ids[:i2], query(":t2 > visit.timespan"))
-            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > :t3"))
-            self.assertEqual(ids[i3 + 1 :], query(":t3 < visit.timespan"))
 
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (:t3, :t2)"))
@@ -2988,8 +2901,6 @@ class RegistryTests(ABC):
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
         self.assertEqual(query2.count(exact=True), 0)
-        if self.supportsDetailedQueryExplain:
-            self.assertTrue(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
@@ -3057,35 +2968,6 @@ class RegistryTests(ABC):
         with self.assertRaises(DatasetTypeExpressionError):
             registry.queryDataIds(["detector"], datasets=re.compile("^nonexistent$"), collections=...)
 
-        # These queries yield no results due to problems that can be identified
-        # by cheap follow-up queries, yielding helpful diagnostics.
-        if self.supportsDetailedQueryExplain:
-            for query, snippets in [
-                (
-                    # No records for one of the involved dimensions.
-                    registry.queryDataIds(["subfilter"]),
-                    ["no rows", "subfilter"],
-                ),
-                (
-                    # No records for one of the involved dimensions.
-                    registry.queryDimensionRecords("subfilter"),
-                    ["no rows", "subfilter"],
-                ),
-            ]:
-                self.assertFalse(query.any(execute=True, exact=False))
-                self.assertFalse(query.any(execute=True, exact=True))
-                self.assertEqual(query.count(exact=True), 0)
-                messages = list(query.explain_no_results())
-                self.assertTrue(messages)
-                # Want all expected snippets to appear in at least one message.
-                self.assertTrue(
-                    any(
-                        all(snippet in message for snippet in snippets)
-                        for message in query.explain_no_results()
-                    ),
-                    messages,
-                )
-
         # This query yields four overlaps in the database, but one is filtered
         # out in postprocessing.  The count queries aren't accurate because
         # they don't account for duplication that happens due to an internal
@@ -3128,10 +3010,6 @@ class RegistryTests(ABC):
         self.assertFalse(query4.any(execute=True, exact=True))
         self.assertGreaterEqual(query4.count(exact=False), 1)
         self.assertEqual(query4.count(exact=True, discard=True), 0)
-        if self.supportsDetailedQueryExplain:
-            messages = query4.explain_no_results()
-            self.assertTrue(messages)
-            self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
         # other, which is not registered.
         query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
@@ -3150,10 +3028,6 @@ class RegistryTests(ABC):
         )
         self.assertEqual(query6.count(exact=True), 0)
         self.assertFalse(query6.any())
-        if self.supportsDetailedQueryExplain:
-            messages = query6.explain_no_results()
-            self.assertTrue(messages)
-            self.assertTrue(any("no-purpose" in message for message in messages))
 
     def testQueryDataIdsExpressionError(self):
         """Test error checking of 'where' expressions in queryDataIds."""
@@ -3233,13 +3107,6 @@ class RegistryTests(ABC):
                 collections="imported_r",
             ),
         ]
-        if self.supportsQueryOffset:
-            test_data.extend(
-                [
-                    Test("tract,visit", "tract,visit", ((0, 2), (1, 2)), limit=(2, 3)),
-                    Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
-                ]
-            )
 
         for test in test_data:
             with self.subTest(test=test):
@@ -3248,7 +3115,7 @@ class RegistryTests(ABC):
                 query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
                 if test.limit is not None:
                     query = query.limit(*test.limit)
-                dataIds = self._maybeDeduplicate(tuple(dataId[k] for k in keys) for dataId in query)
+                dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in query)
                 self.assertEqual(dataIds, test.result)
 
                 # and materialize
@@ -3430,10 +3297,6 @@ class RegistryTests(ABC):
         for test in test_data:
             do_test(test)
 
-        if self.supportsQueryOffset:
-            with self.assertWarns(FutureWarning):
-                do_test(Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)))
-
         # errors in a name
         for order_by in ("", "-"):
             with self.assertRaisesRegex(
@@ -3490,33 +3353,6 @@ class RegistryTests(ABC):
         result = registry.queryDimensionRecords("detector", where="instrument=:instr", bind={"instr": "Cam1"})
         self.assertTrue(result.any())
         self.assertEqual(result.count(), 4)
-
-        if self.supportsQueryGovernorValidation:
-            with self.assertWarns(FutureWarning):
-                with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-                    result = registry.queryDimensionRecords("detector", instrument="NotCam1")
-                    result.count()
-
-            with self.assertWarns(FutureWarning):
-                with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-                    result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
-                    result.count()
-
-            with self.assertWarns(FutureWarning):
-                with self.assertRaisesRegex(
-                    DataIdValueError, "Unknown values specified for governor dimension"
-                ):
-                    result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
-                    result.count()
-
-            with self.assertWarns(FutureWarning):
-                with self.assertRaisesRegex(
-                    DataIdValueError, "Unknown values specified for governor dimension"
-                ):
-                    result = registry.queryDimensionRecords(
-                        "detector", where="instrument=:instr", bind={"instr": "NotCam1"}
-                    )
-                    result.count()
 
     def testDatasetConstrainedDimensionRecordQueries(self):
         """Test that queryDimensionRecords works even when given a dataset
@@ -3710,39 +3546,14 @@ class RegistryTests(ABC):
                 break
         else:
             raise RuntimeError("Could not find usable skypix ID for this dimension configuration.")
-        # New query system does not support non-common skypix constraints
-        # and we are deprecating it to replace with region-based constraints.
-        # TODO: Drop this tests once we remove support for non-common skypix.
-        if self.supportsNonCommonSkypixQueries:
-            with self.assertWarns(FutureWarning):
-                self.assertEqual(
-                    {
-                        (data_id["tract"], data_id["patch"])
-                        for data_id in registry.queryDataIds(
-                            ["patch"],
-                            dataId={skypix_dimension.name: skypix_id},
-                        )
-                    },
-                    overlapping_patches,
-                )
         # Test that a three-way join that includes the common skypix system in
         # the dimensions doesn't generate redundant join terms in the query.
-        # TODO: In the new query system this raises InvalidQueryError, change
-        # the test to assertRaises when direct butler switches to new queries.
-        with contextlib.suppress(InvalidQueryError):
-            full_data_ids = set(
+        with self.assertRaises(InvalidQueryError):
+            set(
                 registry.queryDataIds(
                     ["tract", "visit", "htm7"], skymap="SkyMap1", instrument="Cam1"
                 ).expanded()
             )
-            self.assertGreater(len(full_data_ids), 0)
-            for data_id in full_data_ids:
-                self.assertFalse(
-                    data_id.records["tract"].region.isDisjointFrom(data_id.records["htm7"].region)
-                )
-                self.assertFalse(
-                    data_id.records["visit"].region.isDisjointFrom(data_id.records["htm7"].region)
-                )
 
     def test_spatial_constraint_queries(self) -> None:
         """Test queries in which one spatial dimension in the constraint (data
