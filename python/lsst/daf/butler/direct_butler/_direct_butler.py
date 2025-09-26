@@ -1302,7 +1302,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         data_id, kwargs = self._rewrite_data_id(data_id, parent_type, **kwargs)
 
-        ref = self._registry.findDataset(
+        ref = self.registry.findDataset(
             parent_type,
             data_id,
             collections=collections,
