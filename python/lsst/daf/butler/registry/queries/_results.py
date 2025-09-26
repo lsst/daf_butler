@@ -163,17 +163,13 @@ class QueryResultsBase(LimitedQueryResultsBase):
         raise NotImplementedError()
 
     @abstractmethod
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
+    def limit(self, limit: int) -> Self:
         """Make the iterator return limited number of records.
 
         Parameters
         ----------
         limit : `int`
             Upper limit on the number of returned records.
-        offset : `int` or `None`, optional
-            The number of records to skip before returning at most ``limit``
-            records.  `None` is interpreted the same as zero for backwards
-            compatibility.
 
         Returns
         -------

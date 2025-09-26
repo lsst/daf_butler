@@ -98,12 +98,8 @@ class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
         self._order_by.extend(args)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> Self:
-        if offset is not None and offset != 0:
-            raise NotImplementedError("Offset is no longer supported.")
-
+    def limit(self, limit: int) -> Self:
         self._limit = limit
-
         return self
 
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
