@@ -230,8 +230,8 @@ class RegistryShim(RegistryBase):
                 return None
             else:
                 raise CalibrationLookupError(
-                    f"Ambiguous calibration lookup for {datasetType} in collections "
-                    f"{resolved_collections} with timespan {timespan}."
+                    f"Ambiguous calibration lookup for {datasetType} with timespan {timespan}"
+                    f" in collections {resolved_collections}."
                 )
 
     def insertDatasets(
