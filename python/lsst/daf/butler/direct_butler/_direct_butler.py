@@ -2107,7 +2107,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         dry_run: bool = False,
     ) -> _ImportDatasetsInfo:
         # Docstring inherited.
-        if not self.isWriteable():
+        if not self.isWriteable() and not dry_run:
             raise TypeError("Butler is read-only.")
 
         # Will iterate through the refs multiple times so need to convert
@@ -2312,7 +2312,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> collections.abc.Collection[DatasetRef]:
         # Docstring inherited.
         source_refs = list(source_refs)
-        if not self.isWriteable():
+        if not self.isWriteable() and not dry_run:
             raise TypeError("Butler is read-only.")
 
         progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
