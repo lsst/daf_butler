@@ -36,7 +36,7 @@ import logging
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -44,16 +44,10 @@ from lsst.resources import ResourcePathExpression
 from lsst.utils.iteration import ensure_iterable
 
 from .._collection_type import CollectionType
-from .._column_tags import DatasetColumnTag
 from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
-from .._exceptions import (
-    CalibrationLookupError,
-    DataIdValueError,
-    DimensionNameError,
-    InconsistentDataIdError,
-)
+from .._exceptions import DataIdValueError, DimensionNameError, InconsistentDataIdError
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
 from ..dimensions import (
@@ -90,7 +84,6 @@ if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
     from ..datastore._datastore import DatastoreOpaqueTable
     from ..datastore.stored_file_info import StoredDatastoreItemInfo
-    from ..registry._registry import CollectionArgType
     from ..registry.interfaces import (
         CollectionRecord,
         Database,
@@ -829,169 +822,6 @@ class SqlRegistry:
             Whether the given mode is supported.
         """
         return True
-
-    def findDataset(
-        self,
-        datasetType: DatasetType | str,
-        dataId: DataId | None = None,
-        *,
-        collections: CollectionArgType | None = None,
-        timespan: Timespan | None = None,
-        datastore_records: bool = False,
-        **kwargs: Any,
-    ) -> DatasetRef | None:
-        """Find a dataset given its `DatasetType` and data ID.
-
-        This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`. If the dataset is a component and can not
-        be found using the provided dataset type, a dataset ref for the parent
-        will be returned instead but with the correct dataset type.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.  If this is a `DatasetType`
-            instance, its storage class will be respected and propagated to
-            the output, even if it differs from the dataset type definition
-            in the registry, as long as the storage classes are convertible.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict`-like object containing the `Dimension` links that identify
-            the dataset within a collection.
-        collections : collection expression, optional
-            An expression that fully or partially identifies the collections to
-            search for the dataset; see
-            :ref:`daf_butler_collection_expressions` for more information.
-            Defaults to ``self.defaults.collections``.
-        timespan : `Timespan`, optional
-            A timespan that the validity range of the dataset must overlap.
-            If not provided, any `~CollectionType.CALIBRATION` collections
-            matched by the ``collections`` argument will not be searched.
-        datastore_records : `bool`, optional
-            Whether to attach datastore records to the `DatasetRef`.
-        **kwargs
-            Additional keyword arguments passed to
-            `DataCoordinate.standardize` to convert ``dataId`` to a true
-            `DataCoordinate` or augment an existing one.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A reference to the dataset, or `None` if no matching Dataset
-            was found.
-
-        Raises
-        ------
-        lsst.daf.butler.registry.NoDefaultCollectionError
-            Raised if ``collections`` is `None` and
-            ``self.defaults.collections`` is `None`.
-        LookupError
-            Raised if one or more data ID keys are missing.
-        lsst.daf.butler.registry.MissingDatasetTypeError
-            Raised if the dataset type does not exist.
-        lsst.daf.butler.registry.MissingCollectionError
-            Raised if any of ``collections`` does not exist in the registry.
-
-        Notes
-        -----
-        This method simply returns `None` and does not raise an exception even
-        when the set of collections searched is intrinsically incompatible with
-        the dataset type, e.g. if ``datasetType.isCalibration() is False``, but
-        only `~CollectionType.CALIBRATION` collections are being searched.
-        This may make it harder to debug some lookup failures, but the behavior
-        is intentional; we consider it more important that failed searches are
-        reported consistently, regardless of the reason, and that adding
-        additional collections that do not contain a match to the search path
-        never changes the behavior.
-
-        This method handles component dataset types automatically, though most
-        other registry operations do not.
-        """
-        if collections is None:
-            if not self.defaults.collections:
-                raise NoDefaultCollectionError(
-                    "No collections provided to findDataset, and no defaults from registry construction."
-                )
-            collections = self.defaults.collections
-        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
-        with backend.caching_context():
-            collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
-            if collection_wildcard.empty():
-                return None
-            matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
-            resolved_dataset_type = backend.resolve_single_dataset_type_wildcard(datasetType)
-            dataId = DataCoordinate.standardize(
-                dataId,
-                dimensions=resolved_dataset_type.dimensions,
-                universe=self.dimensions,
-                defaults=self.defaults.dataId,
-                **kwargs,
-            )
-            governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.dimensions.governors}
-            (filtered_collections,) = backend.filter_dataset_collections(
-                [resolved_dataset_type],
-                matched_collections,
-                governor_constraints=governor_constraints,
-            ).values()
-            if not filtered_collections:
-                return None
-            if timespan is None:
-                filtered_collections = [
-                    collection_record
-                    for collection_record in filtered_collections
-                    if collection_record.type is not CollectionType.CALIBRATION
-                ]
-            if filtered_collections:
-                requested_columns = {"dataset_id", "run", "collection"}
-                with backend.context() as context:
-                    predicate = context.make_data_coordinate_predicate(
-                        dataId.subset(resolved_dataset_type.dimensions), full=False
-                    )
-                    if timespan is not None:
-                        requested_columns.add("timespan")
-                        predicate = predicate.logical_and(
-                            context.make_timespan_overlap_predicate(
-                                DatasetColumnTag(resolved_dataset_type.name, "timespan"), timespan
-                            )
-                        )
-                    relation = backend.make_dataset_query_relation(
-                        resolved_dataset_type, filtered_collections, requested_columns, context
-                    ).with_rows_satisfying(predicate)
-                    rows = list(context.fetch_iterable(relation))
-            else:
-                rows = []
-            if not rows:
-                return None
-            elif len(rows) == 1:
-                best_row = rows[0]
-            else:
-                rank_by_collection_key = {record.key: n for n, record in enumerate(filtered_collections)}
-                collection_tag = DatasetColumnTag(resolved_dataset_type.name, "collection")
-                row_iter = iter(rows)
-                best_row = next(row_iter)
-                best_rank = rank_by_collection_key[best_row[collection_tag]]
-                have_tie = False
-                for row in row_iter:
-                    if (rank := rank_by_collection_key[row[collection_tag]]) < best_rank:
-                        best_row = row
-                        best_rank = rank
-                        have_tie = False
-                    elif rank == best_rank:
-                        have_tie = True
-                        assert timespan is not None, "Rank ties should be impossible given DB constraints."
-                if have_tie:
-                    raise CalibrationLookupError(
-                        f"Ambiguous calibration lookup for {resolved_dataset_type.name} in collections "
-                        f"{collection_wildcard.strings} with timespan {timespan}."
-                    )
-            reader = queries.DatasetRefReader(
-                resolved_dataset_type,
-                translate_collection=lambda k: self._managers.collections[k].name,
-            )
-            ref = reader.read(best_row, data_id=dataId)
-            if datastore_records:
-                ref = self.get_datastore_records(ref)
-
-            return ref
 
     @transactional
     def insertDatasets(
