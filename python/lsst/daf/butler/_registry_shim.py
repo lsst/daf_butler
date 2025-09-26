@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 from ._collection_type import CollectionType
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
+from ._exceptions import CalibrationLookupError
 from ._storage_class import StorageClassFactory
 from ._timespan import Timespan
 from .dimensions import (
@@ -48,7 +49,9 @@ from .dimensions import (
 )
 from .registry._collection_summary import CollectionSummary
 from .registry._defaults import RegistryDefaults
+from .registry._exceptions import NoDefaultCollectionError
 from .registry._registry_base import RegistryBase
+from .registry.queries._query_common import resolve_collections
 
 if TYPE_CHECKING:
     from .direct_butler import DirectButler
@@ -182,12 +185,38 @@ class RegistryShim(RegistryBase):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         # Docstring inherited from a base class.
-        return self._registry.findDataset(
-            datasetType, dataId, collections=collections, timespan=timespan, **kwargs
-        )
+        collections = resolve_collections(self._butler, collections)
+        if not collections:
+            raise NoDefaultCollectionError("No collections provided, and no default collections set")
+
+        with self._butler.query() as query:
+            result = query.datasets(datasetType, collections, find_first=True).limit(2)
+            dataset_type_name = result.dataset_type.name
+            if dataId is not None:
+                result = result.where(dataId)
+            if kwargs:
+                result = result.where(kwargs)
+            if timespan is not None and (timespan.begin is not None or timespan.end is not None):
+                _x = query.expression_factory
+                result = result.where(_x[dataset_type_name].timespan.overlaps(timespan))
+
+            datasets = list(result)
+            if len(datasets) == 1:
+                ref = datasets[0]
+                if datastore_records:
+                    ref = self._registry.get_datastore_records(ref)
+                return ref
+            elif len(datasets) == 0:
+                return None
+            else:
+                raise CalibrationLookupError(
+                    f"Ambiguous calibration lookup for {datasetType} in collections "
+                    f"{collections} with timespan {timespan}."
+                )
 
     def insertDatasets(
         self,
