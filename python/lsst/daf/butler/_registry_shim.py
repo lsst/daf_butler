@@ -189,13 +189,6 @@ class RegistryShim(RegistryBase):
         **kwargs: Any,
     ) -> DatasetRef | None:
         # Docstring inherited from a base class.
-        resolved_collections = resolve_collections(self._butler, collections)
-        if not resolved_collections:
-            if collections is None:
-                raise NoDefaultCollectionError("No collections provided, and no default collections set")
-            else:
-                return None
-
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
 
@@ -208,6 +201,13 @@ class RegistryShim(RegistryBase):
         )
 
         with self._butler.query() as query:
+            resolved_collections = resolve_collections(self._butler, collections)
+            if not resolved_collections:
+                if collections is None:
+                    raise NoDefaultCollectionError("No collections provided, and no default collections set")
+                else:
+                    return None
+
             result = query.datasets(datasetType, resolved_collections, find_first=True).limit(2)
             dataset_type_name = result.dataset_type.name
             result = result.where(dataId)
