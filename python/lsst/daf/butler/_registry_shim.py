@@ -208,6 +208,18 @@ class RegistryShim(RegistryBase):
                 else:
                     return None
 
+            if datasetType.isCalibration() and timespan is None:
+                # Filter out calibration collections, because with no timespan
+                # we have no way of selecting a dataset from them.
+                collection_info = self._butler.collections.query_info(
+                    resolved_collections, flatten_chains=True
+                )
+                resolved_collections = [
+                    info.name for info in collection_info if info.type != CollectionType.CALIBRATION
+                ]
+                if not resolved_collections:
+                    return None
+
             result = query.datasets(datasetType, resolved_collections, find_first=True).limit(2)
             dataset_type_name = result.dataset_type.name
             result = result.where(dataId)
