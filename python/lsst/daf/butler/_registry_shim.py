@@ -220,7 +220,9 @@ class RegistryShim(RegistryBase):
                 ref = datasets[0]
                 if datastore_records:
                     ref = self._registry.get_datastore_records(ref)
-                return ref
+                # Propagate storage class from user-provided DatasetType, which
+                # may not match the definition in the database.
+                return ref.overrideStorageClass(datasetType.storageClass_name)
             elif len(datasets) == 0:
                 return None
             else:
