@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "lsst-daf-butler"
 requires-python = ">=3.11.0"
 description = "An abstraction layer for reading and writing astronomical data to datastores."
-license = {text = "BSD 3-Clause License"}
+license = "BSD-3-Clause OR GPL-3.0-or-later"
+license-files = ["COPYRIGHT", "LICENSE", "bsd_license.txt", "gpl-v3.0.txt"]
 readme = "README.md"
 authors = [
     {name="Rubin Observatory Data Management", email="dm-admin@lists.lsst.org"},
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -74,7 +74,6 @@ where = ["python"]
 
 [tool.setuptools]
 zip-safe = true
-license-files = ["COPYRIGHT", "LICENSE", "bsd_license.txt", "gpl-v3.0.txt"]
 
 [tool.setuptools.package-data]
 "lsst.daf.butler" = ["py.typed", "configs/*.yaml", "configs/*/*.yaml", "tests/registry_data/*.yaml"]
