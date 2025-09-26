@@ -193,13 +193,21 @@ class RegistryShim(RegistryBase):
         if not collections:
             raise NoDefaultCollectionError("No collections provided, and no default collections set")
 
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
+
+        dataId = DataCoordinate.standardize(
+            dataId,
+            dimensions=datasetType.dimensions,
+            universe=self.dimensions,
+            defaults=self.defaults.dataId,
+            **kwargs,
+        )
+
         with self._butler.query() as query:
             result = query.datasets(datasetType, collections, find_first=True).limit(2)
             dataset_type_name = result.dataset_type.name
-            if dataId is not None:
-                result = result.where(dataId)
-            if kwargs:
-                result = result.where(kwargs)
+            result = result.where(dataId)
             if timespan is not None and (timespan.begin is not None or timespan.end is not None):
                 _x = query.expression_factory
                 result = result.where(_x[dataset_type_name].timespan.overlaps(timespan))
