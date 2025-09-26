@@ -241,7 +241,7 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
 
     def visitBind(self, name: str, node: Node) -> _VisitorResult:
         if name not in self.context.bind:
-            raise InvalidQueryError("Name {name!r} is not in the bind map.")
+            raise InvalidQueryError(f"Name {name!r} is not in the bind map.")
         # Logic in visitIdentifier handles binds.
         return self.visitIdentifier(name, node)
 
