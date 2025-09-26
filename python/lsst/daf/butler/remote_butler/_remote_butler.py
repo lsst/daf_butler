@@ -60,7 +60,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs, DatastoreConfig
 from ..datastore.cache_manager import AbstractDatastoreCacheManager, DatastoreCacheManager
-from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
+from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..queries.tree import make_column_literal
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
@@ -435,6 +435,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return None
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
+        if isinstance(data_id, DataCoordinate) and data_id.hasRecords():
+            ref = ref.expanded(data_id)
         return apply_storage_class_override(ref, dataset_type, storage_class)
 
     def _retrieve_artifacts(

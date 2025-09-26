@@ -661,7 +661,11 @@ class RegistryTests(ABC):
         )
         data_id = {"instrument": "Cam1", "physical_filter": "Cam1-G"}
         (implied_ref,) = registry.insertDatasets("dt_with_implied", dataIds=[data_id], run=run)
-        self.assertEqual(implied_ref, registry.findDataset("dt_with_implied", data_id, collections=[run]))
+        found_ref = registry.findDataset("dt_with_implied", data_id, collections=[run])
+        self.assertEqual(implied_ref, found_ref)
+        # The "full" data ID with implied values is looked up, even though we
+        # provided only the "required" values.
+        self.assertTrue(found_ref.dataId.hasFull())
         # The search ignores excess data ID values beyond the 'required' set.
         # This is not the correct band value for this physical_filter, but
         # the mismatch is ignored.
