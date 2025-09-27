@@ -239,6 +239,7 @@ class RemoteButlerRegistry(Registry):
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
+        assume_new: bool = False,
     ) -> list[DatasetRef]:
         raise NotImplementedError()
 
