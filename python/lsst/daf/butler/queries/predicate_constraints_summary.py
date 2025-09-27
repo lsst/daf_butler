@@ -71,7 +71,10 @@ class PredicateConstraintsSummary:
         )
 
     def apply_default_data_id(
-        self, default_data_id: DataCoordinate, query_dimensions: DimensionGroup
+        self,
+        default_data_id: DataCoordinate,
+        query_dimensions: DimensionGroup,
+        validate_governor_constraints: bool,
     ) -> None:
         """Augment the predicate and summary by adding missing constraints for
         governor dimensions using a default data ID.
@@ -81,9 +84,11 @@ class PredicateConstraintsSummary:
         default_data_id : `DataCoordinate`
             Data ID values that will be used to constrain the query if governor
             dimensions have not already been constrained by the predicate.
-
         query_dimensions : `DimensionGroup`
             The set of dimensions returned in result rows from the query.
+        validate_governor_constraints : `bool`
+            If `True`, enforce the requirement that governor dimensions must be
+            constrained if any dimensions that depend on them have constraints.
         """
         # Find governor dimensions required by the predicate.
         # If these are not constrained by the predicate or the default data ID,
@@ -108,7 +113,7 @@ class PredicateConstraintsSummary:
                     self.predicate = self.predicate.logical_and(
                         _create_data_id_predicate(governor, data_id_value, query_dimensions.universe)
                     )
-                elif governor in where_governors:
+                elif governor in where_governors and validate_governor_constraints:
                     # Check that the predicate doesn't reference any dimensions
                     # without constraining their governor dimensions, since
                     # that's a particularly easy mistake to make and it's
