@@ -763,6 +763,12 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         # In-memory Datastore records cannot be exported or imported
         return {}
 
+    def export_predicted_records(self, refs: Iterable[DatasetIdRef]) -> dict[str, DatastoreRecordData]:
+        # Docstring inherited from the base class.
+
+        # In-memory Datastore records cannot be exported or imported
+        return {}
+
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
         return {}

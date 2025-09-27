@@ -3188,6 +3188,24 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         record_data = DatastoreRecordData(records=records)
         return {self.name: record_data}
 
+    def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
+        # Docstring inherited from the base class.
+        refs = [self._cast_storage_class(ref) for ref in refs]
+        records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {}
+        for ref in refs:
+            if not self.constraints.isAcceptable(ref):
+                continue
+            fileLocations = self._get_expected_dataset_locations_info(ref)
+            if not fileLocations:
+                continue
+            dataset_records = records.setdefault(ref.id, {})
+            dataset_records.setdefault(self._table.name, [])
+            for _, storedFileInfo in fileLocations:
+                dataset_records[self._table.name].append(storedFileInfo)
+
+        record_data = DatastoreRecordData(records=records)
+        return {self.name: record_data}
+
     def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
         # Docstring inherited from the base class.
         self._retrieve_dataset_method = method

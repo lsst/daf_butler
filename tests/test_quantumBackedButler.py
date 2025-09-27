@@ -416,6 +416,19 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             for dataset_data in datastore_records.records[class_name].values():
                 self.assertEqual(set(dataset_data), {table_name})
 
+    def test_export_predicted_datastore_records(self) -> None:
+        """Test for export_predicted_datastore_records method"""
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
+
+        records = qbb.export_predicted_datastore_records(self.output_refs)
+        self.assertEqual(len(records["FileDatastore@<butlerRoot>/datastore"].records), len(self.output_refs))
+
+        with self.assertRaises(ValueError):
+            qbb.export_predicted_datastore_records(self.missing_refs)
+
     def test_collect_and_transfer(self) -> None:
         """Test for collect_and_transfer method"""
         quantum1 = self.make_quantum(1)

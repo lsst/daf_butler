@@ -1381,6 +1381,24 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
+        """Export predicted datastore records and locations to an in-memory
+        data structure.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            Datastore records that would be used if the given refs were to
+            exist in this datastore.  No attempt is made to determine if these
+            datasets actually exist.
+
+        Returns
+        -------
+        data : `~collections.abc.Mapping` [ `str`, `DatastoreRecordData` ]
+            Exported datastore records indexed by datastore name.
+        """
+        raise NotImplementedError()
+
     def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
         """Specify a method that can be used by datastore to retrieve
         registry-defined dataset type.
