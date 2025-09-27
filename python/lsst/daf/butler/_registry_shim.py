@@ -266,9 +266,11 @@ class RegistryShim(RegistryBase):
         # Docstring inherited from a base class.
         return self._registry.insertDatasets(datasetType, dataIds, run, expand, idGenerationMode)
 
-    def _importDatasets(self, datasets: Iterable[DatasetRef], expand: bool = True) -> list[DatasetRef]:
+    def _importDatasets(
+        self, datasets: Iterable[DatasetRef], expand: bool = True, assume_new: bool = False
+    ) -> list[DatasetRef]:
         # Docstring inherited from a base class.
-        return self._registry._importDatasets(datasets, expand)
+        return self._registry._importDatasets(datasets, expand, assume_new)
 
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from a base class.

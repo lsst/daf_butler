@@ -733,9 +733,14 @@ class RegistryTests(ABC):
         dataIdFlat1 = {"instrument": "Cam1", "detector": 1, "physical_filter": "Cam1-G", "band": "g"}
 
         ref = DatasetRef(datasetTypeBias, dataIdBias1, run="run0")
-        (ref1,) = registry._importDatasets([ref])
+        (ref1,) = registry._importDatasets([ref], assume_new=True)
         # UUID is used without change
         self.assertEqual(ref.id, ref1.id)
+
+        # Inserting this ref with assume_new=True should fail, since this
+        # dataset exists.
+        with self.assertRaises(ConflictingDefinitionError):
+            registry._importDatasets([ref], assume_new=True)
 
         # All different failure modes
         refs = (
