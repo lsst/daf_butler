@@ -424,7 +424,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def import_(self, run: RunRecord, refs: list[DatasetRef]) -> None:
+    def import_(self, run: RunRecord, refs: list[DatasetRef], assume_new: bool = False) -> None:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -435,6 +435,9 @@ class DatasetRecordStorageManager(VersionedExtension):
         refs : `list` [ `DatasetRef` ]
             List of datasets to be be inserted.  All of the ``DatasetRef``
             ``run`` attributes must match the ``run`` parameter.
+        assume_new : `bool`, optional
+            If `True`, assume all datasets are new and skip conflict resolution
+            logic.
         """
         raise NotImplementedError()
 
