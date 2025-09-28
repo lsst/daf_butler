@@ -503,6 +503,15 @@ class RegistryTests(ABC):
         registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
+    def test_fetch_run_dataset_ids(self):
+        butler = self.make_butler()
+        registry = butler._registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
+        dataset_ids = registry._fetch_run_dataset_ids("imported_r")
+        self.assertEqual(len(dataset_ids), 7)
+        refs = butler.query_all_datasets("imported_r")
+        self.assertCountEqual(dataset_ids, [ref.id for ref in refs])
+
     def testFindDataset(self):
         """Tests for `SqlRegistry.findDataset`."""
         butler = self.make_butler()

@@ -204,6 +204,9 @@ class HybridButlerRegistry(Registry):
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         return self._remote.getDataset(id)
 
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        return self._direct._fetch_run_dataset_ids(run)
+
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         return self._direct.removeDatasets(refs)
 

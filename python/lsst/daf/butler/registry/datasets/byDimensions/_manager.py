@@ -617,6 +617,14 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dataset_type_names = set(get_dataset_type_name(dt) for dt in dataset_types)
         return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
 
+    def fetch_run_dataset_ids(self, run: RunRecord) -> list[DatasetId]:
+        # Docstring inherited.
+        sql = sqlalchemy.select(self._static.dataset.c.id).where(
+            self._static.dataset.c[self._run_key_column] == run.key
+        )
+        with self._db.query(sql) as result:
+            return list(result.scalars())
+
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""
         schema_version = self.newSchemaVersion()
