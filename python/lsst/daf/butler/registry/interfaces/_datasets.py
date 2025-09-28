@@ -385,6 +385,23 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
+    def fetch_run_dataset_ids(self, run: RunRecord) -> list[DatasetId]:
+        """Return the IDs of all datasets in the given ``RUN``
+        collection.
+
+        Parameters
+        ----------
+        run : `RunRecord`
+            Record describing the collection.
+
+        Returns
+        -------
+        dataset_ids : `list` [`uuid.UUID`]
+            List of dataset IDs.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""
         raise NotImplementedError()

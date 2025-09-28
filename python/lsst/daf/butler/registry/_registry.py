@@ -701,6 +701,27 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        """Return the IDs of all datasets in the given ``RUN``
+        collection.
+
+        Parameters
+        ----------
+        run : `str`
+            Name of the collection.
+
+        Returns
+        -------
+        dataset_ids : `list` [`uuid.UUID`]
+            List of dataset IDs.
+
+        Notes
+        -----
+        This is a middleware-internal interface.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         """Remove datasets from the Registry.
 
