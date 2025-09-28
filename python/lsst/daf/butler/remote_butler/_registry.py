@@ -231,6 +231,9 @@ class RemoteButlerRegistry(RegistryBase):
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         return self._butler.get_dataset(id)
 
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        raise NotImplementedError()
+
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         raise NotImplementedError()
 

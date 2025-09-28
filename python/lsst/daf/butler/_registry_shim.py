@@ -276,6 +276,10 @@ class RegistryShim(RegistryBase):
         # Docstring inherited from a base class.
         return self._registry.getDataset(id)
 
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        # Docstring inherited.
+        return self._registry._fetch_run_dataset_ids(run)
+
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited from a base class.
         self._registry.removeDatasets(refs)

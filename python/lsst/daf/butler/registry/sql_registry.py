@@ -1024,6 +1024,29 @@ class SqlRegistry:
         """
         return self._managers.datasets.getDatasetRef(id)
 
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        """Return the IDs of all datasets in the given ``RUN``
+        collection.
+
+        Parameters
+        ----------
+        run : `str`
+            Name of the collection.
+
+        Returns
+        -------
+        dataset_ids : `list` [`uuid.UUID`]
+            List of dataset IDs.
+
+        Notes
+        -----
+        This is a middleware-internal interface.
+        """
+        run_record = self._managers.collections.find(run)
+        if not isinstance(run_record, RunRecord):
+            raise CollectionTypeError(f"{run!r} is not a RUN collection.")
+        return self._managers.datasets.fetch_run_dataset_ids(run_record)
+
     @transactional
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         """Remove datasets from the Registry.
