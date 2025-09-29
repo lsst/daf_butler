@@ -592,6 +592,43 @@ class RegistryTests(ABC):
                 "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
             ),
         )
+        self.assertIsNone(
+            registry.findDataset("bias", instrument="Cam1", detector=2, collections=["Cam1/calib"])
+        )
+        # Test non-calibration dataset type.
+        registry.registerDatasetType(
+            DatasetType("noncalibration", ["instrument", "detector"], "int", universe=butler.dimensions)
+        )
+        (non_calibration_ref,) = registry.insertDatasets("noncalibration", dataIds=[dataId2], run=run)
+        self.assertIsNone(
+            registry.findDataset("noncalibration", instrument="Cam1", detector=2, collections=["imported_g"])
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset("noncalibration", instrument="Cam1", detector=2, collections=[run]),
+        )
+        # Timespan parameter is ignored for non-calibration dataset types.
+        self.assertIsNone(
+            registry.findDataset(
+                "noncalibration", instrument="Cam1", detector=2, collections=["imported_g"], timespan=timespan
+            )
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset(
+                "noncalibration", instrument="Cam1", detector=2, collections=[run], timespan=timespan
+            ),
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset(
+                "noncalibration",
+                instrument="Cam1",
+                detector=2,
+                collections=["Cam1/calib", run],
+                timespan=timespan,
+            ),
+        )
 
     def testRemoveDatasetTypeSuccess(self):
         """Test that SqlRegistry.removeDatasetType works when there are no
