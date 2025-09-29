@@ -550,6 +550,11 @@ class RegistryTests(ABC):
                 "bias", instrument="Cam1", detector=2, collections=["empty", "imported_r", "imported_g"]
             ),
         )
+        # If the input data ID was an expanded DataCoordinate with records,
+        # then the output ref has records, too.
+        expanded_id = registry.expandDataId({"instrument": "Cam1", "detector": 2})
+        expanded_ref = registry.findDataset("bias", expanded_id, collections=["imported_r"])
+        self.assertTrue(expanded_ref.dataId.hasRecords())
         # Search more than one collection, with one of them a CALIBRATION
         # collection.
         registry.registerCollection("Cam1/calib", CollectionType.CALIBRATION)
