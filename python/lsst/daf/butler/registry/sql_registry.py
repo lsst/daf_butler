@@ -1185,17 +1185,14 @@ class SqlRegistry:
             ``collection.type is not CollectionType.CALIBRATION``.
         """
         progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
-        collectionRecord = self._managers.collections.find(collection)
-        for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.iter_by_type(refs), desc="Certifying datasets by type"
-        ):
-            self._managers.datasets.certify(
-                datasetType,
-                collectionRecord,
-                refsForType,
-                timespan,
-                context=queries.SqlQueryContext(self._db, self._managers.column_types),
-            )
+        with self._managers.caching_context.enable_collection_record_cache():
+            collectionRecord = self._managers.collections.find(collection)
+            for datasetType, refsForType in progress.iter_item_chunks(
+                DatasetRef.iter_by_type(refs), desc="Certifying datasets by type"
+            ):
+                self._managers.datasets.certify(
+                    datasetType, collectionRecord, refsForType, timespan, self._query
+                )
 
     @transactional
     def decertify(

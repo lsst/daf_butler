@@ -32,7 +32,8 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
@@ -42,6 +43,7 @@ from ..._dataset_type import DatasetType
 from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
+from ...queries import Query
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
@@ -524,7 +526,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         collection: CollectionRecord,
         datasets: Iterable[DatasetRef],
         timespan: Timespan,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -541,9 +543,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             `DatasetType` as ``dataset_type``, but this is not checked.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
+        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
 
         Raises
         ------
