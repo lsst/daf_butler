@@ -2101,6 +2101,24 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     (DataCoordinate.standardize(base_data_id, detector=3, exposure=3), bias3b),
                 ],
             )
+        # Query with an explicit timespan, but no calibration collections.
+        # This is a regression test for a bug where building the SQL would fail
+        # because the timespan columns are literal NULL values for the tags
+        # table, and SQLAlchemy does not permit comparison operators against
+        # NULL.
+        with butler.query() as query:
+            timespan_column = query.expression_factory["bias"].timespan
+            result = (
+                query.datasets("bias", collections=["imported_g"])
+                .where(instrument="Cam1", detector=2)
+                .where(
+                    timespan_column.overlaps(
+                        Timespan(begin=t1, end=t2),
+                    ).logical_or(timespan_column.is_null)
+                )
+            )
+            refs = list(result)
+            self.assertEqual([ref.id for ref in refs], [bias2a.id])
 
         # Query in multiple collections, with one of the collections being a
         # calibration collection.  This triggers special cases related to

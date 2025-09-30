@@ -574,6 +574,18 @@ class RegistryTests(ABC):
             ),
         )
         self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias",
+                instrument="Cam1",
+                detector=2,
+                # Calibration dataset type, with no calibration collection, but
+                # a timespan was provided.
+                collections=["imported_g"],
+                timespan=timespan,
+            ),
+        )
+        self.assertEqual(
             bias2,
             registry.findDataset(
                 "bias",
