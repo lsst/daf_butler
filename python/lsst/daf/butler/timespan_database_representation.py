@@ -615,6 +615,10 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
             return self.contains(other)
+
+        if self._is_null_literal() or other._is_null_literal():
+            return sqlalchemy.sql.null()
+
         return sqlalchemy.sql.and_(self._nsec[1] > other._nsec[0], other._nsec[1] > self._nsec[0])
 
     def contains(
@@ -652,6 +656,10 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return _CompoundTimespanDatabaseRepresentation(
             nsec=(func(self._nsec[0]), func(self._nsec[1])), name=self._name
         )
+
+    def _is_null_literal(self) -> bool:
+        null = sqlalchemy.sql.null()
+        return self._nsec[0] is null and self._nsec[1] is null
 
 
 TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation
