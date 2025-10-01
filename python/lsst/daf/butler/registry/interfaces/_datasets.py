@@ -550,7 +550,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -571,9 +571,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``dataset_type`` in ``collection`` will
             be decertified.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
+        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
 
         Raises
         ------

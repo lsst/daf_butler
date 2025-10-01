@@ -1056,7 +1056,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1072,17 +1072,13 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 f"of type {collection.type.name}; must be CALIBRATION."
             )
         TimespanReprClass = self._db.getTimespanRepresentation()
-        # Construct a SELECT query to find all rows that overlap our inputs.
         data_id_set: set[DataCoordinate] | None
         if data_ids is not None:
             data_id_set = set(data_ids)
         else:
             data_id_set = None
+
         relation = self._build_calib_overlap_query(dataset_type, collection, data_id_set, timespan, context)
-        calib_pkey_tag = DatasetColumnTag(dataset_type.name, "calib_pkey")
-        dataset_id_tag = DatasetColumnTag(dataset_type.name, "dataset_id")
-        timespan_tag = DatasetColumnTag(dataset_type.name, "timespan")
-        data_id_tags = [(name, DimensionKeyColumnTag(name)) for name in dataset_type.dimensions.required]
         # Set up collections to populate with the rows we'll want to modify.
         # The insert rows will have the same values for collection and
         # dataset type.
@@ -1096,10 +1092,19 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # between the SELECT and the DELETE and INSERT queries based on it.
         calibs_table = self._get_calibs_table(storage.dynamic_tables)
         with self._db.transaction(lock=[calibs_table], savepoint=True):
-            # Enter SqlQueryContext in case we need to use a temporary table to
-            # include the give data IDs in the query (see similar block in
-            # certify for details).
-            with context:
+            # Find rows overlapping our inputs.
+            with query_func() as query:
+                query = query.join_dataset_search(dataset_type, [collection.name])
+                if data_id_set is not None:
+                    query = query.join_data_coordinates(data_id_set)
+                timespan_column = query.expression_factory[dataset_type.name].timespan
+                query = query.where(timespan_column.overlaps(timespan))
+                result = query.general(
+                    dataset_type.dimensions,
+                    dataset_fields={dataset_type.name: {"calib_pkey", "dataset_id", "timespan"}},
+                    find_first=False,
+                )
+
                 for row in context.fetch_iterable(relation):
                     rows_to_delete.append({"id": row[calib_pkey_tag]})
                     # Construct the insert row(s) by copying the prototype row,
