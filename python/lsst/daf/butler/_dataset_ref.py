@@ -64,6 +64,7 @@ from lsst.utils.classes import immutable
 from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
 from ._named import NamedKeyDict
+from ._uuid import generate_uuidv7
 from .datastore.stored_file_info import StoredDatastoreItemInfo
 from .dimensions import (
     DataCoordinate,
@@ -182,7 +183,12 @@ class DatasetIdFactory:
             Dataset identifier.
         """
         if idGenerationMode is DatasetIdGenEnum.UNIQUE:
-            return uuid.uuid4()
+            # Earlier versions of this code used UUIDv4. However, totally
+            # random IDs create problems for Postgres insert performance,
+            # because it scatters index updates randomly around the disk.
+            # UUIDv7 has similar uniqueness properties to v4, but IDs generated
+            # at the same time are close together in the index.
+            return generate_uuidv7()
         else:
             # WARNING: If you modify this code make sure that the order of
             # items in the `items` list below never changes.
