@@ -42,7 +42,7 @@ import enum
 import logging
 import sys
 import uuid
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -52,6 +52,7 @@ from typing import (
     Protocol,
     Self,
     TypeAlias,
+    cast,
     runtime_checkable,
 )
 
@@ -559,7 +560,7 @@ class DatasetRef:
         return ref
 
     to_json = to_json_pydantic
-    from_json: ClassVar = classmethod(from_json_pydantic)
+    from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_pydantic))
 
     @classmethod
     def _unpickle(

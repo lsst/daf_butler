@@ -34,7 +34,8 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias, Union, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Self, TypeAlias, Union, cast
 
 import pydantic
 from pydantic_core import core_schema
@@ -212,7 +213,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return universe[simple]
 
     to_json = to_json_generic
-    from_json: ClassVar = classmethod(from_json_generic)
+    from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_generic))
 
     def hasTable(self) -> bool:
         """Indicate if this element is associated with a table.
