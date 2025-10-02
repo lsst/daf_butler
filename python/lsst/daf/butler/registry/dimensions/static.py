@@ -66,7 +66,6 @@ from ...direct_query_driver import (  # Future query system (direct,server).
 from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
 from ...queries.visitors import PredicateVisitFlags
-from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
 
 if TYPE_CHECKING:
@@ -382,83 +381,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         else:
             raise AssertionError(f"Unexpected definition of {element_name!r}.")
 
-    def make_spatial_join_relation(
-        self,
-        element1: str,
-        element2: str,
-        context: queries.SqlQueryContext,
-        existing_relationships: Set[frozenset[str]] = frozenset(),
-    ) -> tuple[Relation, bool]:
-        # Docstring inherited.
-        group1 = self.universe[element1].minimal_group
-        group2 = self.universe[element2].minimal_group
-        overlap_relationships = {
-            frozenset(a | b)
-            for a, b in itertools.product(
-                [group1.names, group1.required],
-                [group2.names, group2.required],
-            )
-        }
-        if not overlap_relationships.isdisjoint(existing_relationships):
-            return context.preferred_engine.make_join_identity_relation(), False
-
-        overlaps: Relation | None = None
-        needs_refinement: bool = False
-        if element1 == self.universe.commonSkyPix.name:
-            (element1, element2) = (element2, element1)
-
-        if element1 in self._overlap_tables:
-            if element2 in self._overlap_tables:
-                # Use commonSkyPix as an intermediary with post-query
-                # refinement.
-                have_overlap1_already = (
-                    frozenset(self.universe[element1].dimensions.names | {self.universe.commonSkyPix.name})
-                    in existing_relationships
-                )
-                have_overlap2_already = (
-                    frozenset(self.universe[element2].dimensions.names | {self.universe.commonSkyPix.name})
-                    in existing_relationships
-                )
-                overlap1 = context.preferred_engine.make_join_identity_relation()
-                overlap2 = context.preferred_engine.make_join_identity_relation()
-                if not have_overlap1_already:
-                    overlap1 = self._make_common_skypix_join_relation(self.universe[element1], context)
-                if not have_overlap2_already:
-                    overlap2 = self._make_common_skypix_join_relation(self.universe[element2], context)
-                overlaps = overlap1.join(overlap2)
-                if not have_overlap1_already and not have_overlap2_already:
-                    # Drop the common skypix ID column from the overlap
-                    # relation we return, since we don't want that column
-                    # to be mistakenly equated with any other appearance of
-                    # that column, since this would mangle queries like
-                    # "join visit to tract and tract to healpix10", by
-                    # incorrectly requiring all visits and healpix10 pixels
-                    # share common skypix pixels, not just tracts.
-                    columns = set(overlaps.columns)
-                    columns.remove(DimensionKeyColumnTag(self.universe.commonSkyPix.name))
-                    overlaps = overlaps.with_only_columns(columns)
-                needs_refinement = True
-            elif element2 == self.universe.commonSkyPix.name:
-                overlaps = self._make_common_skypix_join_relation(self.universe[element1], context)
-        if overlaps is None:
-            # In the future, there's a lot more we could try here:
-            #
-            # - for skypix dimensions, looking for materialized overlaps at
-            #   smaller spatial scales (higher-levels) and using bit-shifting;
-            #
-            # - for non-skypix dimensions, looking for materialized overlaps
-            #   for more finer-grained members of the same family, and then
-            #   doing SELECT DISTINCT (or even tolerating duplicates) on the
-            #   columns we care about (e.g. use patch overlaps to satisfy a
-            #   request for tract overlaps).
-            #
-            # It's not obvious that's better than just telling the user to
-            # materialize more overlaps, though.
-            raise MissingSpatialOverlapError(
-                f"No materialized overlaps for spatial join between {element1!r} and {element2!r}."
-            )
-        return overlaps, needs_refinement
-
     def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
         if element.implied_union_target is not None:
             assert not fields, "Dimensions with implied-union storage never have fields."
@@ -522,48 +444,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             name=element.name,
             payload=payload,
         )
-
-    def _make_common_skypix_join_relation(
-        self,
-        element: DimensionElement,
-        context: queries.SqlQueryContext,
-    ) -> Relation:
-        """Construct a subquery expression containing overlaps between the
-        common skypix dimension and the given dimension element.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            Spatial dimension element whose overlaps with the common skypix
-            system are represented by the returned relation.
-        context : `.queries.SqlQueryContext`
-            Object that manages relation engines and database-side state
-            (e.g. temporary tables) for the query.
-
-        Returns
-        -------
-        relation : `sql.Relation`
-            Join relation.
-        """
-        assert element.spatial is not None, "Only called for spatial dimension elements."
-        assert element.has_own_table, "Only called for dimension elements with their own tables."
-        _, table = self._overlap_tables[element.name]
-        payload = sql.Payload[LogicalColumn](table)
-        payload.columns_available[DimensionKeyColumnTag(self.universe.commonSkyPix.name)] = (
-            payload.from_clause.columns.skypix_index
-        )
-        for dimension_name in element.minimal_group.required:
-            payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
-                dimension_name
-            ]
-        payload.where.append(table.columns.skypix_system == self.universe.commonSkyPix.system.name)
-        payload.where.append(table.columns.skypix_level == self.universe.commonSkyPix.level)
-        leaf = context.sql_engine.make_leaf(
-            payload.columns_available.keys(),
-            name=f"{element.name}_{self.universe.commonSkyPix.name}_overlap",
-            payload=payload,
-        )
-        return leaf
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

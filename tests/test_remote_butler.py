@@ -156,21 +156,6 @@ class RemoteButlerMiscTests(unittest.TestCase):
 class RemoteButlerRegistryTests(RegistryTests):
     """Tests for RemoteButler's `Registry` shim."""
 
-    supportsCollectionRegex = False
-
-    # RemoteButler implements registry.query methods by forwarding to the new
-    # query system, which doesn't have the same diagnostics as the old one
-    # and also does not support query offset.
-    supportsDetailedQueryExplain = False
-    supportsQueryOffset = False
-    supportsQueryGovernorValidation = False
-    supportsNonCommonSkypixQueries = False
-
-    # Jim decided to drop these expressions from the new query system -- they
-    # can be written less ambiguously by writing e.g. ``time <
-    # timespan.begin`` instead of ``time < timespan``.
-    supportsExtendedTimeQueryOperators = False
-
     postgres: TemporaryPostgresInstance | None
 
     def setUp(self):
@@ -213,17 +198,6 @@ class RemoteButlerRegistryTests(RegistryTests):
 
     def testAttributeManager(self):
         # Tests a non-public API that isn't relevant on the client side.
-        pass
-
-    def testQueryDataIdsGovernorExceptions(self):
-        # The new query system doesn't throw exceptions for invalid governor
-        # data IDs in queries -- instead it returns zero rows.  So this set of
-        # tests is not applicable to RemoteButler.
-        pass
-
-    def test_query_projection_drop_postprocessing(self):
-        # Tests a query system implementation detail that isn't relevant to
-        # RemoteButler.
         pass
 
 

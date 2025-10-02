@@ -1449,6 +1449,9 @@ class Registry(ABC):
         """
         return None
 
-    storageClasses: StorageClassFactory
-    """All storage classes known to the registry (`StorageClassFactory`).
-    """
+    @property
+    def storageClasses(self) -> StorageClassFactory:
+        """All storage classes known to the registry
+        (`StorageClassFactory`).
+        """
+        raise NotImplementedError()
