@@ -29,3 +29,6 @@
 by other LSST packages.  The interfaces and behavior of these functions are
 subject to change at any time.
 """
+
+# UUIDv7 generation is used by pipe_base.
+from .._uuid import generate_uuidv7
