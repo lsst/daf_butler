@@ -43,8 +43,8 @@ __all__ = (
 
 import numbers
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, overload
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeAlias, cast, overload
 
 import pydantic
 
@@ -753,7 +753,7 @@ class DataCoordinate:
         return dataId
 
     to_json = to_json_pydantic
-    from_json: ClassVar = classmethod(from_json_pydantic)
+    from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_pydantic))
 
 
 DataId = DataCoordinate | Mapping[str, Any]

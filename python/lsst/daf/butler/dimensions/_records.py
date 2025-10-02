@@ -30,8 +30,8 @@ from __future__ import annotations
 __all__ = ("DimensionRecord", "SerializedDimensionRecord", "SerializedKeyValueDimensionRecord")
 
 import itertools
-from collections.abc import Hashable
-from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
+from collections.abc import Callable, Hashable
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeAlias, cast
 
 import pydantic
 from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
@@ -505,7 +505,7 @@ class DimensionRecord:
         return dimRec
 
     to_json = to_json_pydantic
-    from_json: ClassVar = classmethod(from_json_pydantic)
+    from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_pydantic))
 
     def toDict(self, splitTimespan: bool = False) -> dict[str, Any]:
         """Return a vanilla `dict` representation of this record.

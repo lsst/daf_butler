@@ -33,7 +33,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 from pydantic import BaseModel, StrictBool, StrictStr
 
@@ -756,7 +756,7 @@ class DatasetType:
         return newType
 
     to_json = to_json_pydantic
-    from_json: ClassVar = classmethod(from_json_pydantic)
+    from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_pydantic))
 
     def __reduce__(
         self,
