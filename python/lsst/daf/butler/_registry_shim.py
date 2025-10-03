@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 from ._collection_type import CollectionType
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
+from ._exceptions import CalibrationLookupError
 from ._storage_class import StorageClassFactory
 from ._timespan import Timespan
 from .dimensions import (
@@ -48,7 +49,9 @@ from .dimensions import (
 )
 from .registry._collection_summary import CollectionSummary
 from .registry._defaults import RegistryDefaults
+from .registry._exceptions import NoDefaultCollectionError
 from .registry._registry_base import RegistryBase
+from .registry.queries._query_common import resolve_collections
 
 if TYPE_CHECKING:
     from .direct_butler import DirectButler
@@ -182,12 +185,78 @@ class RegistryShim(RegistryBase):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         # Docstring inherited from a base class.
-        return self._registry.findDataset(
-            datasetType, dataId, collections=collections, timespan=timespan, **kwargs
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
+
+        dataId = DataCoordinate.standardize(
+            dataId,
+            dimensions=datasetType.dimensions,
+            universe=self.dimensions,
+            defaults=self.defaults.dataId,
+            **kwargs,
         )
+
+        with self._butler.query() as query:
+            resolved_collections = resolve_collections(self._butler, collections)
+            if not resolved_collections:
+                if collections is None:
+                    raise NoDefaultCollectionError("No collections provided, and no default collections set")
+                else:
+                    return None
+
+            if datasetType.isCalibration() and timespan is None:
+                # Filter out calibration collections, because with no timespan
+                # we have no way of selecting a dataset from them.
+                collection_info = self._butler.collections.query_info(
+                    resolved_collections, flatten_chains=True
+                )
+                resolved_collections = [
+                    info.name for info in collection_info if info.type != CollectionType.CALIBRATION
+                ]
+                if not resolved_collections:
+                    return None
+
+            result = query.datasets(datasetType, resolved_collections, find_first=True).limit(2)
+            dataset_type_name = result.dataset_type.name
+            # Search only on the 'required' dimensions for the dataset type.
+            # Any extra values provided by the user are ignored.
+            minimal_data_id = DataCoordinate.standardize(
+                dataId.subset(datasetType.dimensions.required).required, universe=self.dimensions
+            )
+            result = result.where(minimal_data_id)
+            if (
+                datasetType.isCalibration()
+                and timespan is not None
+                and (timespan.begin is not None or timespan.end is not None)
+            ):
+                timespan_column = query.expression_factory[dataset_type_name].timespan
+                # The 'logical_or(timespan.is_null)' allows non-calibration
+                # collections to participate in the search, with the assumption
+                # that they are valid for any time range.
+                result = result.where(timespan_column.overlaps(timespan).logical_or(timespan_column.is_null))
+
+            datasets = list(result)
+            if len(datasets) == 1:
+                ref = datasets[0]
+                if dataId.hasRecords():
+                    ref = ref.expanded(dataId)
+                # Propagate storage class from user-provided DatasetType, which
+                # may not match the definition in the database.
+                ref = ref.overrideStorageClass(datasetType.storageClass_name)
+                if datastore_records:
+                    ref = self._registry.get_datastore_records(ref)
+                return ref
+            elif len(datasets) == 0:
+                return None
+            else:
+                raise CalibrationLookupError(
+                    f"Ambiguous calibration lookup for {datasetType} with timespan {timespan}"
+                    f" in collections {resolved_collections}."
+                )
 
     def insertDatasets(
         self,

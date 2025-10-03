@@ -550,6 +550,11 @@ class RegistryTests(ABC):
                 "bias", instrument="Cam1", detector=2, collections=["empty", "imported_r", "imported_g"]
             ),
         )
+        # If the input data ID was an expanded DataCoordinate with records,
+        # then the output ref has records, too.
+        expanded_id = registry.expandDataId({"instrument": "Cam1", "detector": 2})
+        expanded_ref = registry.findDataset("bias", expanded_id, collections=["imported_r"])
+        self.assertTrue(expanded_ref.dataId.hasRecords())
         # Search more than one collection, with one of them a CALIBRATION
         # collection.
         registry.registerCollection("Cam1/calib", CollectionType.CALIBRATION)
@@ -565,6 +570,18 @@ class RegistryTests(ABC):
                 instrument="Cam1",
                 detector=2,
                 collections=["empty", "imported_g", "Cam1/calib"],
+                timespan=timespan,
+            ),
+        )
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias",
+                instrument="Cam1",
+                detector=2,
+                # Calibration dataset type, with no calibration collection, but
+                # a timespan was provided.
+                collections=["imported_g"],
                 timespan=timespan,
             ),
         )
@@ -590,6 +607,82 @@ class RegistryTests(ABC):
             bias1,
             registry.findDataset(
                 "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
+            ),
+        )
+        self.assertIsNone(
+            registry.findDataset("bias", instrument="Cam1", detector=2, collections=["Cam1/calib"])
+        )
+        # Test non-calibration dataset type.
+        registry.registerDatasetType(
+            DatasetType("noncalibration", ["instrument", "detector"], "int", universe=butler.dimensions)
+        )
+        (non_calibration_ref,) = registry.insertDatasets("noncalibration", dataIds=[dataId2], run=run)
+        self.assertIsNone(
+            registry.findDataset("noncalibration", instrument="Cam1", detector=2, collections=["imported_g"])
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset("noncalibration", instrument="Cam1", detector=2, collections=[run]),
+        )
+        # Timespan parameter is ignored for non-calibration dataset types.
+        self.assertIsNone(
+            registry.findDataset(
+                "noncalibration", instrument="Cam1", detector=2, collections=["imported_g"], timespan=timespan
+            )
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset(
+                "noncalibration", instrument="Cam1", detector=2, collections=[run], timespan=timespan
+            ),
+        )
+        self.assertEqual(
+            non_calibration_ref,
+            registry.findDataset(
+                "noncalibration",
+                instrument="Cam1",
+                detector=2,
+                collections=["Cam1/calib", run],
+                timespan=timespan,
+            ),
+        )
+        # Add a dataset type whose dimension group involves an "implied"
+        # dimension.  ("physical_filter" implies "band".)
+        registry.registerDatasetType(
+            DatasetType(
+                "dt_with_implied",
+                [
+                    "instrument",
+                    "physical_filter",
+                ],
+                "int",
+                universe=butler.dimensions,
+            )
+        )
+        data_id = {"instrument": "Cam1", "physical_filter": "Cam1-G"}
+        (implied_ref,) = registry.insertDatasets("dt_with_implied", dataIds=[data_id], run=run)
+        found_ref = registry.findDataset("dt_with_implied", data_id, collections=[run])
+        self.assertEqual(implied_ref, found_ref)
+        # The "full" data ID with implied values is looked up, even though we
+        # provided only the "required" values.
+        self.assertTrue(found_ref.dataId.hasFull())
+        # The search ignores excess data ID values beyond the 'required' set.
+        # This is not the correct band value for this physical_filter, but
+        # the mismatch is ignored.
+        self.assertEqual(
+            implied_ref,
+            registry.findDataset(
+                "dt_with_implied",
+                {"instrument": "Cam1", "physical_filter": "Cam1-G", "band": "r"},
+                collections=[run],
+            ),
+        )
+        # Correct band value, wrong physical_filter.
+        self.assertIsNone(
+            registry.findDataset(
+                "dt_with_implied",
+                {"instrument": "Cam1", "physical_filter": "Cam1-R1", "band": "g"},
+                collections=[run],
             ),
         )
 
