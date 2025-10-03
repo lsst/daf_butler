@@ -634,6 +634,41 @@ class RegistryTests(ABC):
                 timespan=timespan,
             ),
         )
+        # Add a dataset type whose dimension group involves an "implied"
+        # dimension.  ("physical_filter" implies "band".)
+        registry.registerDatasetType(
+            DatasetType(
+                "dt_with_implied",
+                [
+                    "instrument",
+                    "physical_filter",
+                ],
+                "int",
+                universe=butler.dimensions,
+            )
+        )
+        data_id = {"instrument": "Cam1", "physical_filter": "Cam1-G"}
+        (implied_ref,) = registry.insertDatasets("dt_with_implied", dataIds=[data_id], run=run)
+        self.assertEqual(implied_ref, registry.findDataset("dt_with_implied", data_id, collections=[run]))
+        # The search ignores excess data ID values beyond the 'required' set.
+        # This is not the correct band value for this physical_filter, but
+        # the mismatch is ignored.
+        self.assertEqual(
+            implied_ref,
+            registry.findDataset(
+                "dt_with_implied",
+                {"instrument": "Cam1", "physical_filter": "Cam1-G", "band": "r"},
+                collections=[run],
+            ),
+        )
+        # Correct band value, wrong physical_filter.
+        self.assertIsNone(
+            registry.findDataset(
+                "dt_with_implied",
+                {"instrument": "Cam1", "physical_filter": "Cam1-R1", "band": "g"},
+                collections=[run],
+            ),
+        )
 
     def testRemoveDatasetTypeSuccess(self):
         """Test that SqlRegistry.removeDatasetType works when there are no
