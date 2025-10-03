@@ -25,10 +25,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Modules in the ``_rubin`` package contain functions that are used internally
-by other LSST packages.  The interfaces and behavior of these functions are
-subject to change at any time.
-"""
+import unittest
+import unittest.mock
+from uuid import RFC_4122
 
-# UUIDv7 generation is used by pipe_base.
-from .._uuid import generate_uuidv7
+from lsst.daf.butler._uuid import generate_uuidv7
+
+
+class UUIDv7TestCase(unittest.TestCase):
+    """Test generation of v7 UUIDs."""
+
+    def test_generate_uuidv7(self) -> None:
+        mock_timestamp_milliseconds = 1759355298139
+        mock_timestamp_nanoseconds = (mock_timestamp_milliseconds * 1_000_000) + 123456
+        with unittest.mock.patch("time.time_ns") as mock:
+            mock.return_value = mock_timestamp_nanoseconds
+            id = generate_uuidv7()
+            self.assertEqual(id.version, 7)
+            self.assertEqual(id.variant, RFC_4122)
+            self.assertEqual(int.from_bytes(id.bytes[0:6], byteorder="big"), mock_timestamp_milliseconds)
+            # The rest of the bytes in the ID are random, so just make sure
+            # that two consecutive IDs are generating different bytes.
+            second_id = generate_uuidv7()
+            self.assertNotEqual(second_id.bytes[6:], id.bytes[6:])
+            # But the top six bytes should be the same, because we mocked
+            # the same timestamp tick for both ID generations.
+            self.assertEqual(second_id.bytes[0:6], id.bytes[0:6])
