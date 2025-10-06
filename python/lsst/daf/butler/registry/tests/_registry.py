@@ -914,6 +914,42 @@ class RegistryTests(ABC):
         with self.assertRaises(MissingCollectionError):
             registry.getCollectionType(tag1)
 
+    def test_collection_clearing(self) -> None:
+        """Test that we can delete TAGGED and CALIBRATION collections without
+        manually removing all associated datasets first.
+        """
+        butler = self.make_butler()
+        self.load_data(butler, "base.yaml", "datasets.yaml")
+
+        # This brings in datasets of two different types, with the same
+        # dimension group.
+        original_datasets = tuple(butler.query_all_datasets("imported_r", instrument="Cam1", detector=2))
+        self.assertEqual(len(original_datasets), 2)
+
+        # Test tagged collections.
+        butler.collections.register("tag1", CollectionType.TAGGED)
+        butler.collections.register("tag2", CollectionType.TAGGED)
+        butler.registry.associate("tag1", original_datasets)
+        butler.registry.associate("tag2", original_datasets)
+        butler.collections.x_remove("tag1")
+        with self.assertRaises(MissingCollectionError):
+            butler.collections.get_info("tag1")
+        # Make sure there was no collateral damage -- tag2 should still be
+        # intact.
+        self.assertEqual(set(butler.query_all_datasets("tag2")), set(original_datasets))
+
+        # Test calibration collections.
+        butler.collections.register("calib1", CollectionType.CALIBRATION)
+        butler.collections.register("calib2", CollectionType.CALIBRATION)
+        butler.registry.certify("calib1", original_datasets, Timespan(None, None))
+        butler.registry.certify("calib2", original_datasets, Timespan(None, None))
+        butler.collections.x_remove("calib1")
+        with self.assertRaises(MissingCollectionError):
+            butler.collections.get_info("calib1")
+        # Make sure there was no collateral damage -- calib2 should still be
+        # intact.
+        self.assertEqual(set(butler.query_all_datasets("calib2")), set(original_datasets))
+
     def testCollectionChainCaching(self):
         butler = self.make_butler()
         registry = butler.registry
