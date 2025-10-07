@@ -575,6 +575,9 @@ class SqlRegistry:
         `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
         be deleted or redefined first.
         """
+        collection = self._managers.collections.find(name)
+        # if collection.type in (CollectionType.CALIBRATION, CollectionType.TAGGED):
+        #    self._managers.datasets.clear_collection(collection)
         self._managers.collections.remove(name)
 
     def getCollectionChain(self, parent: str) -> tuple[str, ...]:

@@ -583,6 +583,17 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
+    def clear_collection(self, collection: CollectionRecord) -> None:
+        """Disassociate/decertify all datasets from the given collection.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            The record object describing the collection.  ``collection.type``
+            must be `CollectionType.CALIBRATION` or `CollectionType.TAGGED`.
+        """
+
+    @abstractmethod
     def make_relation(
         self,
         dataset_type: DatasetType,

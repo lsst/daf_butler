@@ -1116,6 +1116,28 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             self._db.delete(calibs_table, ["id"], *rows_to_delete)
             self._db.insert(calibs_table, *rows_to_insert)
 
+    def clear_collection(self, collection: CollectionRecord) -> None:
+        # Find all of the dataset tables that might contain datasets associated
+        # with the given collection.
+        summary = self.getCollectionSummary(collection)
+        tables: set[sqlalchemy.Table] = set()
+        for dataset_type in summary.dataset_types:
+            storage = self._find_storage(dataset_type.name)
+            if collection.type == CollectionType.TAGGED:
+                tables.add(self._get_tags_table(storage.dynamic_tables))
+            elif collection.type == CollectionType.CALIBRATION:
+                tables.add(self._get_calibs_table(storage.dynamic_tables))
+            else:
+                raise ValueError(
+                    "Collection must be TAGGED or CALIBRATION."
+                    f" Got {collection.type} for collection {collection.name}."
+                )
+
+        for table in tables:
+            self._db.deleteWhere(
+                table, table.columns[self._collections.getCollectionForeignKeyName()] == collection.key
+            )
+
     def _build_calib_overlap_query(
         self,
         dataset_type: DatasetType,
