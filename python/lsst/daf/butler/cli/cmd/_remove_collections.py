@@ -41,6 +41,8 @@ from ..utils import ButlerCommand
 noNonRunCollectionsMsg = "No non-RUN collections were found."
 willRemoveCollectionMsg = "The following collections will be removed:"
 removedCollectionsMsg = "Removed collections"
+willRemoveCollectionChainsMsg = "Collections to be removed from their parent collection chains:"
+removedCollectionChainsMsg = "Removed collections from their parent collection chains:"
 canNotRemoveFoundRuns = "The following RUN collections were found but can NOT be removed by this command:"
 didNotRemoveFoundRuns = "Found RUN collections but they can NOT be removed by this command:"
 abortedMsg = "Aborted."
@@ -53,6 +55,11 @@ abortedMsg = "Aborted."
 )
 @confirm_option()
 @options_file_option()
+@click.option(
+    "--remove-from-parents",
+    is_flag=True,
+    help="Forcibly remove the collection even if it is still referenced from collection chains.",
+)
 def remove_collections(**kwargs: Any) -> None:  # numpydoc ignore=PR01
     """Remove one or more non-RUN collections.
 
@@ -73,6 +80,10 @@ def remove_collections(**kwargs: Any) -> None:  # numpydoc ignore=PR01
             result.removeCollectionsTable.pprint_all(align="<")
         else:
             print("\n" + noNonRunCollectionsMsg)
+        if len(result.removeChainsTable):
+            print("\n" + willRemoveCollectionChainsMsg)
+            result.removeChainsTable.pprint_all(align="<")
+            print()
         if len(result.runsTable):
             print("\n" + canNotRemoveFoundRuns)
             result.runsTable.pprint_all(align="<")
@@ -86,6 +97,10 @@ def remove_collections(**kwargs: Any) -> None:  # numpydoc ignore=PR01
         else:
             print("\n" + removedCollectionsMsg + ":\n")
             result.removeCollectionsTable.pprint_all(align="<")
+            if len(result.removeChainsTable):
+                print("\n" + removedCollectionChainsMsg)
+                result.removeChainsTable.pprint_all(align="<")
+                print()
             if len(result.runsTable):
                 print("\n" + didNotRemoveFoundRuns)
                 result.runsTable.pprint_all(align="<")
