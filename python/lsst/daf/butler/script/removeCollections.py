@@ -34,7 +34,7 @@ from astropy.table import Table
 
 from .._butler import Butler
 from .._collection_type import CollectionType
-from ..registry import MissingCollectionError
+from ..registry import MissingCollectionError, OrphanedRecordError
 
 
 @dataclass
@@ -49,6 +49,9 @@ class RemoveCollectionResult:
     onConfirmation: Callable[[], None]
     # astropy table describing data that will be removed.
     removeCollectionsTable: Table
+    # astropy table describing collection chain references that will be
+    # removed.
+    removeChainsTable: Table
     # astropy table describing any run collections that will NOT be removed.
     runsTable: Table
 
@@ -61,12 +64,13 @@ class CollectionInfo:
 
     nonRunCollections: Table
     runCollections: Table
+    parentCollections: dict[str, tuple[str, ...]]
+    """Mapping from child collection name to the list of chained collections
+    names that contain it.
+    """
 
 
-def _getCollectionInfo(
-    repo: str,
-    collection: str,
-) -> CollectionInfo:
+def _getCollectionInfo(repo: str, collection: str, include_parents: bool) -> CollectionInfo:
     """Get the names and types of collections that match the collection
     string.
 
@@ -77,6 +81,9 @@ def _getCollectionInfo(
     collection : `str`
         The collection string to search for. Same as the `expression`
         argument to `registry.queryCollections`.
+    include_parents : `bool`
+        If `True`, will fetch the list of parent chained collections containing
+        the given collections.
 
     Returns
     -------
@@ -85,25 +92,27 @@ def _getCollectionInfo(
     """
     butler = Butler.from_config(repo, without_datastore=True)
     try:
-        collections_info = sorted(butler.collections.query_info(collection, include_chains=True))
+        collections_info = sorted(
+            butler.collections.query_info(collection, include_chains=True, include_parents=include_parents)
+        )
     except MissingCollectionError:
         # Hide the error and act like no collections should be removed.
         collections_info = []
     collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
     runCollections = Table(names=("Collection",), dtype=(str,))
+    parents: dict[str, tuple[str, ...]] = {}
     for collection_info in collections_info:
         if collection_info.type == CollectionType.RUN:
             runCollections.add_row((collection_info.name,))
         else:
             collections.add_row((collection_info.name, collection_info.type.name))
+            if include_parents and collection_info.parents is not None and len(collection_info.parents) > 0:
+                parents[collection_info.name] = tuple(collection_info.parents)
 
-    return CollectionInfo(collections, runCollections)
+    return CollectionInfo(collections, runCollections, parents)
 
 
-def removeCollections(
-    repo: str,
-    collection: str,
-) -> Table:
+def removeCollections(repo: str, collection: str, remove_from_parents: bool) -> RemoveCollectionResult:
     """Remove collections.
 
     Parameters
@@ -112,6 +121,10 @@ def removeCollections(
         Same as the ``config`` argument to ``Butler.__init__``.
     collection : `str`
         Same as the ``name`` argument to ``Registry.removeCollection``.
+    remove_from_parents : `bool`
+        If `True`, will remove the given collections from any chained
+        collections they belong to before removing the collection
+        itself.
 
     Returns
     -------
@@ -119,17 +132,37 @@ def removeCollections(
         Contains tables describing what will be removed, and
         run collections that *will not* be removed.
     """
-    collectionInfo = _getCollectionInfo(repo, collection)
+    collectionInfo = _getCollectionInfo(repo, collection, remove_from_parents)
 
     def _doRemove(collections: Table) -> None:
         """Perform the prune collection step."""
         butler = Butler.from_config(repo, writeable=True, without_datastore=True)
+
         for name in collections["Collection"]:
-            butler.collections.x_remove(name)
+            with butler.transaction():
+                for parent in collectionInfo.parentCollections.get(name, []):
+                    butler.collections.remove_from_chain(parent, name)
+                try:
+                    butler.collections.x_remove(name)
+                except OrphanedRecordError as e:
+                    e.add_note(
+                        "Add the --remove-from-parents flag to this command"
+                        " if you are sure this collection is no longer needed."
+                    )
+                    raise
+
+    remove_chains_table = Table(names=("Child Collection", "Parent Collection"), dtype=(str, str))
+    for child in sorted(collectionInfo.parentCollections.keys()):
+        parents = collectionInfo.parentCollections[child]
+        key = child
+        for parent in sorted(parents):
+            remove_chains_table.add_row((key, parent))
+            key = ""
 
     result = RemoveCollectionResult(
         onConfirmation=partial(_doRemove, collectionInfo.nonRunCollections),
         removeCollectionsTable=collectionInfo.nonRunCollections,
         runsTable=collectionInfo.runCollections,
+        removeChainsTable=remove_chains_table,
     )
     return result

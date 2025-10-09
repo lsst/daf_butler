@@ -42,6 +42,7 @@ from lsst.daf.butler.cli.cmd._remove_collections import (
     didNotRemoveFoundRuns,
     noNonRunCollectionsMsg,
     removedCollectionsMsg,
+    willRemoveCollectionChainsMsg,
     willRemoveCollectionMsg,
 )
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
@@ -117,10 +118,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         expected = Table(array(before_rows), names=_query_collection_column_names(before_rows))
         self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
-        removal = removeCollections(
-            repo=self.root,
-            collection=collection,
-        )
+        removal = removeCollections(repo=self.root, collection=collection, remove_from_parents=False)
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array(remove_rows), names=("Collection", "Collection Type"))
         self.assertAstropyTablesEqual(removal.removeCollectionsTable, expected)
@@ -274,6 +272,33 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(didNotRemoveFoundRuns, result.stdout)
         self.assertIn("ingest/run", result.stdout)
+
+    def testRemoveFromParents(self) -> None:
+        butler = Butler(self.root, writeable=True)
+        butler.collections.register("tag1", CollectionType.TAGGED)
+        butler.collections.register("tag2", CollectionType.TAGGED)
+        butler.collections.register("chain1", CollectionType.CHAINED)
+        butler.collections.register("chain2", CollectionType.CHAINED)
+        butler.collections.register("chain3", CollectionType.CHAINED)
+        butler.collections.redefine_chain("chain1", ["tag1", "tag2", "chain3"])
+        butler.collections.redefine_chain("chain2", ["tag1"])
+
+        # Make sure the printed output is correct.
+        removal = removeCollections(repo=self.root, collection="tag*", remove_from_parents=True)
+        table = [tuple(row) for row in removal.removeChainsTable]
+        self.assertEqual(table, [("tag1", "chain1"), ("", "chain2"), ("tag2", "chain1")])
+        result = self.runner.invoke(
+            butlerCli,
+            ["remove-collections", "--remove-from-parents", self.root, "tag*"],
+            input="yes",
+        )
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertIn(willRemoveCollectionChainsMsg, result.stdout)
+        # Make sure the collections are deleted as expected.
+        self.assertEqual(
+            sorted(butler.collections.query("*")), ["chain1", "chain2", "chain3", "ingest", "ingest/run"]
+        )
+        self.assertEqual(butler.collections.get_info("chain1").children, ("chain3",))
 
 
 if __name__ == "__main__":
