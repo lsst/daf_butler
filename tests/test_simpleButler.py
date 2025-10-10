@@ -57,12 +57,11 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
+from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, mock_env, removeTestTempDir
 
-try:
+if butler_server_is_available:
     from lsst.daf.butler.tests.server import create_test_server
-except ImportError:
-    create_test_server = None
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -982,7 +981,7 @@ class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestC
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class RemoteSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
     """Run tests against Butler client/server."""
 
