@@ -74,7 +74,7 @@ class CadcAuthenticationProvider(RemoteButlerAuthenticationProvider):
         return self._headers
 
 
-_SERVER_WHITELIST = ["*.canfar.net", "host.docker.internal"]
+_SERVER_WHITELIST = ["*.cadc-ccda.hia-hia.nrc-cnrc.gc.ca", "*.canfar.net", "host.docker.internal"]
 _CADC_TOKEN_ENVIRONMENT_KEY = "CADC_TOKEN"
 
 
