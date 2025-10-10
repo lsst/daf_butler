@@ -1874,7 +1874,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Have to handle trustGetRequest mode by checking for the existence
         # of the missing refs on disk.
-        if missing_refs:
+        if missing_refs and not predict:
             dataset_existence = self._mexists_check_expected(missing_refs, None)
             really_missing = set()
             not_missing = set()
@@ -3218,7 +3218,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             return ref
         dataset_type = self._retrieve_dataset_method(ref.datasetType.name)
         if dataset_type is not None:
-            ref = ref.overrideStorageClass(dataset_type.storageClass)
+            ref = ref.overrideStorageClass(dataset_type.storageClass_name)
         return ref
 
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
