@@ -29,21 +29,19 @@ from __future__ import annotations
 
 import unittest
 
-try:
+from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
+
+if butler_server_is_available:
     import fastapi
     import httpx
 
     from lsst.daf.butler.remote_butler.server._dependencies import repository_authorization_dependency
     from lsst.daf.butler.remote_butler.server._gafaelfawr import GafaelfawrClient, GafaelfawrGroupAuthorizer
 
-    _IMPORT_FAILURE = None
-except ImportError as e:
-    _IMPORT_FAILURE = e
-
 
 # FastAPI is not installed during LSST Pipelines stack builds, so skip these
 # tests if it is not available.
-@unittest.skipIf(_IMPORT_FAILURE, str(_IMPORT_FAILURE))
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class GafaelfawrAuthorizationTestCase(unittest.IsolatedAsyncioTestCase):
     """Test authorization checks using Gafaelfawr group membership."""
 

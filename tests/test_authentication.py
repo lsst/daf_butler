@@ -1,9 +1,9 @@
 import unittest
 
+from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import mock_env
 
-try:
-    from lsst.daf.butler.remote_butler import RemoteButler
+if butler_server_is_available:
     from lsst.daf.butler.remote_butler.authentication import cadc
     from lsst.daf.butler.remote_butler.authentication.rubin import (
         _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY,
@@ -11,13 +11,9 @@ try:
         RubinAuthenticationProvider,
         _get_authentication_token_from_environment,
     )
-except ImportError:
-    RemoteButler = None
 
 
-@unittest.skipIf(
-    RemoteButler is None, "RemoteButler could not be imported, optional dependencies may not be installed"
-)
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class TestButlerClientAuthentication(unittest.TestCase):
     """Test access-token logic"""
 

@@ -2,7 +2,7 @@
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -23,40 +23,31 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-"""Tests for DirectButler._query with SQLite."""
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-import os
-import unittest
+__all__ = (
+    "butler_server_import_error",
+    "butler_server_is_available",
+)
 
-from lsst.daf.butler import Butler
-from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
-from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
+butler_server_is_available = True
+"""`True` if all dependencies required to use Butler server and RemoteButler
+are installed.
+"""
 
-if butler_server_is_available:
-    from lsst.daf.butler.tests.server import create_test_server
+butler_server_import_error = ""
+"""String containing a human-readable error message explaining why the server
+is not available, if ``butler_server_is_available`` is `False`.
+"""
 
-TESTDIR = os.path.abspath(os.path.dirname(__file__))
-
-
-@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
-class RemoteButlerQueryTests(ButlerQueryTests, unittest.TestCase):
-    """Test query system using client/server butler."""
-
-    data_dir = os.path.join(TESTDIR, "data/registry")
-
-    def make_butler(self, *args: str) -> Butler:
-        server_instance = self.enterContext(create_test_server(TESTDIR))
-        butler = server_instance.hybrid_butler
-
-        for arg in args:
-            self.load_data(butler, arg)
-
-        return butler
-
-
-if __name__ == "__main__":
-    unittest.main()
+try:
+    # Dependencies required by Butler server and RemoteButler, but not
+    # available in LSST Pipelines Stack.
+    import fastapi  # noqa: F401
+    import httpx  # noqa: F401
+    import safir  # noqa: F401
+except ImportError as e:
+    butler_server_is_available = False
+    butler_server_import_error = f"Server libraries could not be loaded: {str(e)}"
