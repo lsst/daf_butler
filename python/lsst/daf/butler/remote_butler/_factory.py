@@ -136,7 +136,7 @@ class RemoteButlerFactory:
         if self._config.authentication == "rubin_science_platform":
             auth = RubinAuthenticationProvider(access_token)
         elif self._config.authentication == "cadc":
-            auth = CadcAuthenticationProvider()
+            auth = CadcAuthenticationProvider(access_token)
         return self._create_butler(
             auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
         )
@@ -151,7 +151,7 @@ class RemoteButlerFactory:
         if self._config.authentication == "rubin_science_platform":
             auth = RubinAuthenticationProvider.create_from_environment(self.server_url)
         elif self._config.authentication == "cadc":
-            auth = CadcAuthenticationProvider()
+            auth = CadcAuthenticationProvider.create_from_environment(self.server_url)
 
         return self._create_butler(
             auth=auth, butler_options=butler_options, enable_datastore_cache=enable_datastore_cache
