@@ -63,6 +63,12 @@ class RemoteButlerCollections(ButlerCollections):
     def defaults(self) -> Sequence[str]:
         return self._defaults.get().collections
 
+    @defaults.setter
+    def defaults(self, value: Sequence[str]) -> None:
+        from ..registry._defaults import RegistryDefaults
+
+        self._defaults.set(RegistryDefaults(value, self._defaults.get().run))
+
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         raise NotImplementedError("Not yet available")
 

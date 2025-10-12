@@ -38,6 +38,7 @@ from lsst.utils.iteration import ensure_iterable
 
 from .._butler_collections import ButlerCollections, CollectionInfo
 from .._collection_type import CollectionType
+from ..registry._defaults import RegistryDefaults
 from ..registry._exceptions import OrphanedRecordError
 from ..registry.interfaces import ChainedCollectionRecord
 from ..registry.sql_registry import SqlRegistry
@@ -63,6 +64,10 @@ class DirectButlerCollections(ButlerCollections):
     @property
     def defaults(self) -> Sequence[str]:
         return self._registry.defaults.collections
+
+    @defaults.setter
+    def defaults(self, value: Sequence[str]) -> None:
+        self._registry.defaults = RegistryDefaults(value, self._registry.defaults.run)
 
     def extend_chain(self, parent_collection_name: str, child_collection_names: str | Iterable[str]) -> None:
         return self._registry._managers.collections.extend_collection_chain(
