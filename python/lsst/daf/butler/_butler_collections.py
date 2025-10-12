@@ -108,6 +108,11 @@ class ButlerCollections(ABC, Sequence):
         """Collection defaults associated with this butler."""
         raise NotImplementedError("Defaults must be implemented by a subclass")
 
+    @defaults.setter
+    @abstractmethod
+    def defaults(self, value: Sequence[str]) -> None:
+        raise NotImplementedError("Defaults must be implemented by a subclass")
+
     def __str__(self) -> str:
         """Return string representation."""
         return f"{self.__class__.__name__}(defaults={self.defaults})"
