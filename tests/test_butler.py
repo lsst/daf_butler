@@ -64,11 +64,6 @@ except ImportError:
         return None
 
 
-try:
-    from lsst.daf.butler.tests.server import create_test_server
-except ImportError:
-    create_test_server = None
-
 import astropy.time
 from sqlalchemy.exc import IntegrityError
 
@@ -111,6 +106,7 @@ from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
+from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import (
     MetricTestRepo,
     TestCaseMixin,
@@ -122,6 +118,10 @@ from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
+
+if butler_server_is_available:
+    from lsst.daf.butler.tests.server import create_test_server
+
 
 if TYPE_CHECKING:
     import types
@@ -3144,7 +3144,7 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerServerDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     """Test ``transfer_from`` involving Butler server."""
 
@@ -3227,7 +3227,7 @@ class NullDatastoreTestCase(unittest.TestCase):
             butler.getURI(ref)
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerServerTests(FileDatastoreButlerTests):
     """Test RemoteButler and Butler server."""
 
@@ -3300,7 +3300,7 @@ class ButlerServerTests(FileDatastoreButlerTests):
         pass
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
     """Tests for RemoteButler's registry shim, with a SQLite DB backing the
     server.
@@ -3309,7 +3309,7 @@ class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
     postgres = None
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
     """Tests for RemoteButler's registry shim, with a Postgres DB backing the
     server.
