@@ -231,20 +231,28 @@ class RegistryBase(Registry):
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
     ) -> Iterator[DatasetAssociation]:
-        # queryCollections only accepts DatasetType.
         if isinstance(datasetType, str):
             datasetType = self.getDatasetType(datasetType)
-        resolved_collections = self.queryCollections(
-            collections, datasetType=datasetType, collectionTypes=collectionTypes, flattenChains=flattenChains
-        )
         with self._butler.query() as query:
+            resolved_collections = self.queryCollections(
+                collections,
+                datasetType=datasetType,
+                collectionTypes=collectionTypes,
+                flattenChains=flattenChains,
+            )
+            # It's annoyingly difficult to just do the collection query once,
+            # since query_info doesn't accept all the expression types that
+            # queryCollections does.  But it's all cached anyway.
+            collection_info = {
+                info.name: info for info in self._butler.collections.query_info(resolved_collections)
+            }
             query = query.join_dataset_search(datasetType, resolved_collections)
             result = query.general(
                 datasetType.dimensions,
                 dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
                 find_first=False,
             )
-            yield from DatasetAssociation.from_query_result(result, datasetType)
+            yield from DatasetAssociation.from_query_result(result, datasetType, collection_info)
 
     def _resolve_dataset_types(self, dataset_types: object | None) -> list[str]:
         if dataset_types is None:

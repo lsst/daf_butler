@@ -234,10 +234,7 @@ class RegistryShim(RegistryBase):
                 and (timespan.begin is not None or timespan.end is not None)
             ):
                 timespan_column = query.expression_factory[dataset_type_name].timespan
-                # The 'logical_or(timespan.is_null)' allows non-calibration
-                # collections to participate in the search, with the assumption
-                # that they are valid for any time range.
-                result = result.where(timespan_column.overlaps(timespan).logical_or(timespan_column.is_null))
+                result = result.where(timespan_column.overlaps(timespan))
 
             datasets = list(result)
             if len(datasets) == 1:

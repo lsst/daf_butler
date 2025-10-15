@@ -354,20 +354,9 @@ class RepoExportContext:
             collectionTypes = {CollectionType.TAGGED}
             if datasetType.isCalibration():
                 collectionTypes.add(CollectionType.CALIBRATION)
-            resolved_collections = self._butler.collections.query(
-                self._collections.keys(),
-                collection_types=collectionTypes,
-                flatten_chains=False,
-            )
-            with self._butler.query() as query:
-                query = query.join_dataset_search(datasetType, resolved_collections)
-                result = query.general(
-                    datasetType.dimensions,
-                    dataset_fields={datasetType.name: {"dataset_id", "run", "collection", "timespan"}},
-                    find_first=False,
-                )
-                for association in DatasetAssociation.from_query_result(result, datasetType):
-                    if association.ref.id in self._dataset_ids:
-                        results[association.collection].append(association)
-
+            for association in self._butler.registry.queryDatasetAssociations(
+                datasetType, self._collections.keys(), collectionTypes=collectionTypes, flattenChains=False
+            ):
+                if association.ref.id in self._dataset_ids:
+                    results[association.collection].append(association)
         return results
