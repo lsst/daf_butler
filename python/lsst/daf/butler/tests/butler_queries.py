@@ -517,7 +517,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             )
             self.assertEqual(
                 {row_tuple.raw_row["flat.timespan"] for row_tuple in row_tuples},
-                {Timespan(t1, t2), Timespan(t2, t3), Timespan(t3, None), Timespan.makeEmpty(), None},
+                {
+                    Timespan(t1, t2),
+                    Timespan(t2, t3),
+                    Timespan(t3, None),
+                    Timespan.makeEmpty(),
+                    Timespan(None, None),
+                },
             )
 
         dimensions = butler.dimensions["detector"].minimal_group
@@ -2102,10 +2108,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ],
             )
         # Query with an explicit timespan, but no calibration collections.
-        # This is a regression test for a bug where building the SQL would fail
-        # because the timespan columns are literal NULL values for the tags
-        # table, and SQLAlchemy does not permit comparison operators against
-        # NULL.
+        # This should succeed because the timespan for the dataset_tags tables
+        # are logically unbounded, not Null.
         with butler.query() as query:
             timespan_column = query.expression_factory["bias"].timespan
             result = (
@@ -2114,7 +2118,24 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 .where(
                     timespan_column.overlaps(
                         Timespan(begin=t1, end=t2),
-                    ).logical_or(timespan_column.is_null)
+                    )
+                )
+            )
+            refs = list(result)
+            self.assertEqual([ref.id for ref in refs], [bias2a.id])
+
+        # Query with an explicit timespan and a RUN collection ahead of
+        # a CALIBRATION collection that would also match; the RUN collection
+        # should win.
+        with butler.query() as query:
+            timespan_column = query.expression_factory["bias"].timespan
+            result = (
+                query.datasets("bias", collections=["imported_g", collection])
+                .where(instrument="Cam1", detector=2)
+                .where(
+                    timespan_column.overlaps(
+                        Timespan(begin=t1, end=t2),
+                    )
                 )
             )
             refs = list(result)

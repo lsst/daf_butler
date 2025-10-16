@@ -29,15 +29,17 @@ from __future__ import annotations
 
 __all__ = ("DatasetAssociation",)
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ._collection_type import CollectionType
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from ._timespan import Timespan
 
 if TYPE_CHECKING:
+    from ._butler_collections import CollectionInfo
     from .queries._general_query_results import GeneralQueryResults
 
 
@@ -66,7 +68,10 @@ class DatasetAssociation:
 
     @classmethod
     def from_query_result(
-        cls, result: GeneralQueryResults, dataset_type: DatasetType
+        cls,
+        result: GeneralQueryResults,
+        dataset_type: DatasetType,
+        collection_info: Mapping[str, CollectionInfo],
     ) -> Iterator[DatasetAssociation]:
         """Construct dataset associations from the result of general query.
 
@@ -79,11 +84,22 @@ class DatasetAssociation:
             "timespan" dataset fields for ``dataset_type``.
         dataset_type : `DatasetType`
             Dataset type, query has to include this dataset type.
+        collection_info : `~collections.abc.Mapping` [`str`, `CollectionInfo`]
+            Mapping from collection name to information about it for all
+            collections that may appear in the query results.
         """
         timespan_key = f"{dataset_type.name}.timespan"
         collection_key = f"{dataset_type.name}.collection"
         for _, refs, row_dict in result.iter_tuples(dataset_type):
-            yield DatasetAssociation(refs[0], row_dict[collection_key], row_dict[timespan_key])
+            collection = row_dict[collection_key]
+            timespan = row_dict[timespan_key]
+            if collection_info[collection].type is not CollectionType.CALIBRATION:
+                # This behavior is for backwards compatibility only; in most
+                # contexts it makes sense to consider the timespan of a RUN
+                # or TAGGED collection to be unbounded, not None, and that's
+                # what the query results we're iterating over do.
+                timespan = None
+            yield DatasetAssociation(refs[0], collection, timespan)
 
     def __lt__(self, other: Any) -> bool:
         # Allow sorting of associations
