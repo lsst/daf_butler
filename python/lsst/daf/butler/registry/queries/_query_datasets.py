@@ -119,7 +119,13 @@ class QueryDriverDatasetRefQueryResults(
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
-        raise NotImplementedError()
+        from ._query_data_coordinates import QueryDriverDataCoordinateQueryResults
+
+        args = self._args.replaceDatasetTypes([self._dataset_type.name])
+
+        return QueryDriverDataCoordinateQueryResults(
+            self._butler, dimensions=self._dataset_type.dimensions, expanded=self._expanded, args=args
+        )
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         yield self

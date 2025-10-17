@@ -86,6 +86,7 @@ from .._exceptions import (
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError, ReadOnlyDatabaseError
+from ..queries import ParentDatasetQueryResults
 from ..sql_registry import SqlRegistry
 
 _T = TypeVar("_T")
@@ -3925,11 +3926,10 @@ class RegistryTests(ABC):
         )
         self.assertIsNone(detectors[0].records["detector"].purpose)
 
-        datasets = list(
-            registry.queryDatasets(
-                "flat", collections="imported_g", where="instrument = 'Cam1' and detector <= 3"
-            ).expanded()
-        )
+        datasets_query = registry.queryDatasets(
+            "flat", collections="imported_g", where="instrument = 'Cam1' and detector <= 3"
+        ).expanded()
+        datasets = list(datasets_query)
         datasets.sort(key=lambda ref: ref.dataId["detector"])
         self.assertEqual(len(datasets), 2)
         self.assertEqual(datasets[0].id, uuid.UUID("60c8a65c-7290-4c38-b1de-e3b1cdcf872d"))
@@ -3938,6 +3938,13 @@ class RegistryTests(ABC):
         self.assertEqual(datasets[0].dataId.records["detector"].full_name, "Ab")
         self.assertEqual(datasets[1].dataId.records["detector"].full_name, "Ba")
         self.assertEqual(datasets[0].dataId.records["instrument"].visit_system, 1)
+        assert isinstance(datasets_query, ParentDatasetQueryResults)
+        data_ids = list(datasets_query.dataIds)
+        data_ids.sort(key=lambda data_id: data_id["detector"])
+        self.assertEqual(len(data_ids), 2)
+        self.assertEqual(data_ids[0].records["detector"].full_name, "Ab")
+        self.assertEqual(data_ids[1].records["detector"].full_name, "Ba")
+        self.assertEqual(data_ids[0].records["instrument"].visit_system, 1)
 
         # None of the datasets in the test data include any uncached
         # dimensions, so we have to set one up.
