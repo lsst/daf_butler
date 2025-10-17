@@ -58,6 +58,9 @@ class CommonQueryArguments:
     def replaceCollections(self, collections: list[str]) -> CommonQueryArguments:
         return dataclasses.replace(self, collections=collections)
 
+    def replaceDatasetTypes(self, dataset_types: list[str]) -> CommonQueryArguments:
+        return dataclasses.replace(self, dataset_types=dataset_types)
+
 
 _T = TypeVar("_T", bound=QueryResultsBase)
 _U = TypeVar("_U", bound=QueryResultsBase)
