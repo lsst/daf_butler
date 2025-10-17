@@ -617,6 +617,14 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dataset_type_names = set(get_dataset_type_name(dt) for dt in dataset_types)
         return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
 
+    def fetch_run_dataset_ids(self, run: RunRecord) -> list[DatasetId]:
+        # Docstring inherited.
+        sql = sqlalchemy.select(self._static.dataset.c.id).where(
+            self._static.dataset.c[self._run_key_column] == run.key
+        )
+        with self._db.query(sql) as result:
+            return list(result.scalars())
+
     def ingest_date_dtype(self) -> type:
         """Return type of the ``ingest_date`` column."""
         schema_version = self.newSchemaVersion()
@@ -698,7 +706,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             for dataId, row in zip(data_id_list, rows, strict=True)
         ]
 
-    def import_(self, run: RunRecord, refs: list[DatasetRef]) -> None:
+    def import_(self, run: RunRecord, refs: list[DatasetRef], assume_new: bool = False) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if not refs:
             # Just in case an empty mapping is provided we want to avoid
@@ -721,7 +729,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             "Table cache should have been populated when looking up dataset types"
         )
         tags_table = self._get_tags_table(dynamic_tables)
-
         # Current timestamp, type depends on schema version.
         if self._use_astropy_ingest_date:
             # Astropy `now()` precision should be the same as `now()` which
@@ -729,11 +736,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             timestamp = sqlalchemy.sql.literal(astropy.time.Time.now(), type_=ddl.AstropyTimeNsecTai)
         else:
             timestamp = sqlalchemy.sql.literal(datetime.datetime.now(datetime.UTC))
-
-        # We'll insert all new rows into a temporary table
-        table_spec = makeTagTableSpec(dimensions, type(self._collections), constraints=False)
         collection_fkey_name = self._collections.getCollectionForeignKeyName()
-        tmpRows = [
+        tags_rows = [
             {
                 "dataset_type_id": dataset_type_storage[ref.datasetType.name].dataset_type_id,
                 collection_fkey_name: run.key,
@@ -742,9 +746,29 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             }
             for ref in refs
         ]
+        if assume_new:
+            self._import_new(run, refs, dataset_type_storage, tags_table, tags_rows, timestamp)
+        else:
+            self._import_guarded(
+                run, refs, dimensions, dataset_type_storage, tags_table, tags_rows, timestamp
+            )
+
+    def _import_guarded(
+        self,
+        run: RunRecord,
+        refs: list[DatasetRef],
+        dimensions: DimensionGroup,
+        dataset_type_storage: dict[str, _DatasetRecordStorage],
+        tags_table: sqlalchemy.Table,
+        tags_rows: list[dict[str, object]],
+        timestamp: sqlalchemy.BindParameter[astropy.time.Time | datetime.datetime],
+    ) -> None:
+        # We'll insert all new rows into a temporary table
+        table_spec = makeTagTableSpec(dimensions, type(self._collections), constraints=False)
+        collection_fkey_name = self._collections.getCollectionForeignKeyName()
         with self._db.transaction(for_temp_tables=True), self._db.temporary_table(table_spec) as tmp_tags:
             # store all incoming data in a temporary table
-            self._db.insert(tmp_tags, *tmpRows)
+            self._db.insert(tmp_tags, *tags_rows)
             # There are some checks that we want to make for consistency
             # of the new datasets with existing ones.
             self._validate_import(dimensions, tags_table, tmp_tags, run)
@@ -764,16 +788,18 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     timestamp.label("ingest_date"),
                 ),
             )
-            # Update the summary tables for this collection in case this
-            # is the first time this dataset type or these governor values
-            # will be inserted there.
-            summary = CollectionSummary()
-            summary.add_datasets(refs)
-            self._summaries.update(
-                run, [storage.dataset_type_id for storage in dataset_type_storage.values()], summary
-            )
+            self._update_summaries(run, refs, dataset_type_storage)
             # Copy from temp table into tags table.
             self._db.insert(tags_table, select=tmp_tags.select())
+
+    def _update_summaries(
+        self, run: RunRecord, refs: list[DatasetRef], dataset_type_storage: dict[str, _DatasetRecordStorage]
+    ) -> None:
+        summary = CollectionSummary()
+        summary.add_datasets(refs)
+        self._summaries.update(
+            run, [storage.dataset_type_id for storage in dataset_type_storage.values()], summary
+        )
 
     def _validate_import(
         self,
@@ -898,6 +924,29 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                     f"has ID {row.dataset_id} in existing collection {existing_collection!r} "
                     f"but ID {row.new_dataset_id} in new collection {new_collection!r}."
                 )
+
+    def _import_new(
+        self,
+        run: RunRecord,
+        refs: list[DatasetRef],
+        dataset_type_storage: dict[str, _DatasetRecordStorage],
+        tags_table: sqlalchemy.Table,
+        tags_rows: list[dict[str, object]],
+        timestamp: sqlalchemy.BindParameter[astropy.time.Time | datetime.datetime],
+    ) -> None:
+        static_rows = [
+            {
+                "id": ref.id,
+                "dataset_type_id": dataset_type_storage[ref.datasetType.name].dataset_type_id,
+                self._run_key_column: run.key,
+                "ingest_date": timestamp.value,
+            }
+            for ref in refs
+        ]
+        with self._db.transaction():
+            self._db.insert(self._static.dataset, *static_rows)
+            self._update_summaries(run, refs, dataset_type_storage)
+            self._db.insert(tags_table, *tags_rows)
 
     def delete(self, datasets: Iterable[DatasetId | DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
