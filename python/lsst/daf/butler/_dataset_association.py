@@ -71,7 +71,7 @@ class DatasetAssociation:
         cls,
         result: GeneralQueryResults,
         dataset_type: DatasetType,
-        collection_info: Mapping[str, CollectionInfo],
+        collection_info: Mapping[str, CollectionInfo] | None = None,
     ) -> Iterator[DatasetAssociation]:
         """Construct dataset associations from the result of general query.
 
@@ -84,16 +84,25 @@ class DatasetAssociation:
             "timespan" dataset fields for ``dataset_type``.
         dataset_type : `DatasetType`
             Dataset type, query has to include this dataset type.
-        collection_info : `~collections.abc.Mapping` [`str`, `CollectionInfo`]
+        collection_info : `~collections.abc.Mapping` \
+                [`str`, `CollectionInfo`], optional
             Mapping from collection name to information about it for all
-            collections that may appear in the query results.
+            collections that may appear in the query results.  If not provided,
+            timespans for `~CollectionType.RUN` and `~CollectionType.TAGGED`
+            collections will be bounded, instead of `None`; this is actually
+            more consistent with how those timespans are used elsewhere in the
+            query system, but is a change from how `DatasetAssocation` has
+            historically worked.
         """
         timespan_key = f"{dataset_type.name}.timespan"
         collection_key = f"{dataset_type.name}.collection"
         for _, refs, row_dict in result.iter_tuples(dataset_type):
             collection = row_dict[collection_key]
             timespan = row_dict[timespan_key]
-            if collection_info[collection].type is not CollectionType.CALIBRATION:
+            if (
+                collection_info is not None
+                and collection_info[collection].type is not CollectionType.CALIBRATION
+            ):
                 # This behavior is for backwards compatibility only; in most
                 # contexts it makes sense to consider the timespan of a RUN
                 # or TAGGED collection to be unbounded, not None, and that's
