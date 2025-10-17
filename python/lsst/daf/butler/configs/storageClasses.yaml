@@ -412,6 +412,11 @@ storageClasses:
     parameters:
       - blend_id
     delegate: lsst.meas.extensions.scarlet.io.ScarletModelDelegate
+  LsstScarletModelData:
+    pytype: lsst.meas.extensions.scarlet.io.LsstScarletModelData
+    parameters:
+      - blend_id
+    delegate: lsst.meas.extensions.scarlet.io.ScarletModelDelegate
   MetricMeasurementBundle:
     pytype: lsst.analysis.tools.interfaces.MetricMeasurementBundle
   MultipleCellCoadd:

@@ -87,6 +87,7 @@ SpectractorSpectrum: lsst.atmospec.formatters.SpectractorSpectrumFormatter
 SpectractorImage: lsst.atmospec.formatters.SpectractorImageFormatter
 SpectractorFitParameters: lsst.atmospec.formatters.SpectractorFitParametersFormatter
 ScarletModelData: lsst.meas.extensions.scarlet.io.ScarletModelFormatter
+LsstScarletModelData: lsst.meas.extensions.scarlet.io.ScarletModelFormatter
 MetricMeasurementBundle: lsst.daf.butler.formatters.json.JsonFormatter
 MultipleCellCoadd: lsst.cell_coadds.CellCoaddFitsFormatter
 NNModelPackagePayload: lsst.meas.transiNet.modelPackages.NNModelPackageFormatter
