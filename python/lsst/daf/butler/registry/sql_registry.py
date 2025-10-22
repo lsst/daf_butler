@@ -919,14 +919,12 @@ class SqlRegistry:
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
+        assume_new: bool = False,
     ) -> list[DatasetRef]:
         """Import one or more datasets into the `Registry`.
 
-        Difference from `insertDatasets` method is that this method accepts
-        `DatasetRef` instances which should already be resolved and have a
-        dataset ID. If registry supports globally-unique dataset IDs (e.g.
-        `uuid.UUID`) then datasets which already exist in the registry will be
-        ignored if imported again.
+        This differs from `insertDatasets` method in that this method accepts
+        `DatasetRef` instances, which already have a dataset ID.
 
         Parameters
         ----------
@@ -942,14 +940,17 @@ class SqlRegistry:
             If `True` (default), expand data IDs as they are inserted.  This is
             necessary in general, but it may be disabled if the caller can
             guarantee this is unnecessary.
+        assume_new : `bool`, optional
+            If `True`, assume datasets are new.  If `False`, datasets that are
+            identical to an existing one are ignored.
 
         Returns
         -------
         refs : `list` of `DatasetRef`
-            Resolved `DatasetRef` instances for all given data IDs (in the same
-            order). If any of ``datasets`` has an ID which already exists in
-            the database then it will not be inserted or updated, but a
-            resolved `DatasetRef` will be returned for it in any case.
+            `DatasetRef` instances for all given data IDs (in the same order).
+            If any of ``datasets`` has an ID which already exists in the
+            database then it will not be inserted or updated, but a
+            `DatasetRef` will be returned for it in any case.
 
         Raises
         ------
@@ -959,15 +960,14 @@ class SqlRegistry:
             Raised if a dataset type is not known to registry.
         lsst.daf.butler.registry.ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
-            given already exists in ``run``.
+            given already exists in ``run``, or if ``assume_new=True`` and at
+            least one dataset is not new.
         lsst.daf.butler.registry.MissingCollectionError
             Raised if ``run`` does not exist in the registry.
 
         Notes
         -----
-        This method is considered package-private and internal to Butler
-        implementation. Clients outside daf_butler package should not use this
-        method.
+        This method is considered middleware-internal.
         """
         datasets = list(datasets)
         if not datasets:
@@ -994,7 +994,7 @@ class SqlRegistry:
             _LOG.debug("Finished expanding data IDs")
 
         try:
-            self._managers.datasets.import_(runRecord, datasets)
+            self._managers.datasets.import_(runRecord, datasets, assume_new=assume_new)
             if self._managers.obscore:
                 self._managers.obscore.add_datasets(datasets)
         except sqlalchemy.exc.IntegrityError as err:
@@ -1003,7 +1003,8 @@ class SqlRegistry:
                 f"one or more datasets into collection '{run}'. "
                 "This probably means a dataset with the same data ID "
                 "and dataset type already exists, but it may also mean a "
-                "dimension row is missing."
+                "dimension row is missing, or the dataset was assumed to be "
+                "new when it was not."
             ) from err
         return datasets
 
@@ -1022,6 +1023,29 @@ class SqlRegistry:
             was found.
         """
         return self._managers.datasets.getDatasetRef(id)
+
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        """Return the IDs of all datasets in the given ``RUN``
+        collection.
+
+        Parameters
+        ----------
+        run : `str`
+            Name of the collection.
+
+        Returns
+        -------
+        dataset_ids : `list` [`uuid.UUID`]
+            List of dataset IDs.
+
+        Notes
+        -----
+        This is a middleware-internal interface.
+        """
+        run_record = self._managers.collections.find(run)
+        if not isinstance(run_record, RunRecord):
+            raise CollectionTypeError(f"{run!r} is not a RUN collection.")
+        return self._managers.datasets.fetch_run_dataset_ids(run_record)
 
     @transactional
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:

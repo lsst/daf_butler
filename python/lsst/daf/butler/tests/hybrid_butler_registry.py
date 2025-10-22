@@ -197,14 +197,15 @@ class HybridButlerRegistry(Registry):
         return self._direct.insertDatasets(datasetType, dataIds, run, expand, idGenerationMode)
 
     def _importDatasets(
-        self,
-        datasets: Iterable[DatasetRef],
-        expand: bool = True,
+        self, datasets: Iterable[DatasetRef], expand: bool = True, assume_new: bool = False
     ) -> list[DatasetRef]:
-        return self._direct._importDatasets(datasets, expand)
+        return self._direct._importDatasets(datasets, expand, assume_new)
 
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         return self._remote.getDataset(id)
+
+    def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
+        return self._direct._fetch_run_dataset_ids(run)
 
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         return self._direct.removeDatasets(refs)
