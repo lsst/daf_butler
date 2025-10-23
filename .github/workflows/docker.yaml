@@ -33,32 +33,45 @@ on:
       - "*"
 
 jobs:
-  docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  build-and-push:
+    uses: lsst-sqre/multiplatform-build-and-push/.github/workflows/build.yaml@v1
+    with:
+      images: ghcr.io/${{ github.repository }}
+      fetch-depth: 0
+    secrets: inherit
     permissions:
       contents: read
       packages: write
+      actions: write
+      statuses: read
+
+  docker:
+    strategy:
+      matrix:
+        platform:
+          - arch: "amd64"
+            runs_on: "ubuntu-latest"
+          - arch: "arm64"
+            runs_on: "ubuntu-24.04-arm"
+    runs-on: ${{ matrix.platform.runs_on }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Needed to fetch tags, used by Python install process to
           # figure out version number
           fetch-depth: 0
 
-      - uses: lsst-sqre/build-and-push-to-ghcr@v1
-        id: build
-        with:
-          image: ${{ github.repository }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Run unit tests inside Docker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           # In addition to the main output image, the Dockerfile contains a second
           # "unit-test" image that runs the test suite.
+          # It is not pushed.
           target: unit-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
