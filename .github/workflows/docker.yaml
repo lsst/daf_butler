@@ -52,10 +52,12 @@ jobs:
         with:
           image: ${{ github.repository }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          platforms: linux/amd64,linux/arm64
 
       - name: Run unit tests inside Docker
         uses: docker/build-push-action@v5
         with:
+          platforms: linux/amd64,linux/arm64
           context: .
           # In addition to the main output image, the Dockerfile contains a second
           # "unit-test" image that runs the test suite.
