@@ -27,21 +27,26 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerLogRecord", "ButlerLogRecordHandler", "ButlerLogRecords", "ButlerMDC", "JsonLogFormatter")
+__all__ = (
+    "ButlerLogRecord",
+    "ButlerLogRecordHandler",
+    "ButlerLogRecords",
+    "ButlerMDC",
+    "JsonLogFormatter",
+)
 
 import datetime
+import io
 import logging
 import traceback
-from collections.abc import Callable, Generator, Iterable, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator, MutableSequence
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
 from types import TracebackType
-from typing import IO, Any, ClassVar, Literal, overload
+from typing import IO, Any, ClassVar, Literal, Self, TypeVar, cast, overload
 
-from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
-
-from lsst.utils.introspection import get_full_type_name
-from lsst.utils.iteration import isplit
+import pydantic_core
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -314,30 +319,147 @@ class ButlerLogRecord(BaseModel):
 Record = LogRecord | ButlerLogRecord
 
 
-class _ButlerLogRecords(RootModel):
+_T = TypeVar("_T", bound="ButlerLogRecords")
+
+
+class _ButlerLogRecordsModelV1(RootModel):
+    """Pydantic model used for version 1 JSON log files: a simple list of
+    `ButlerLogRecord` instances.
+    """
+
     root: list[ButlerLogRecord]
 
+    def wrap(self, container_type: type[_T]) -> _T:
+        """Convert this model into a `ButlerLogRecords` instance.
 
-# Do not inherit from MutableSequence since mypy insists on the values
-# being Any even though we wish to constrain them to Record.
-class ButlerLogRecords(_ButlerLogRecords):
-    """Class representing a collection of `ButlerLogRecord`."""
+        Parameters
+        ----------
+        container_type : `type`
+            `ButlerLogRecords` subclass to use.
 
-    _log_format: str | None = PrivateAttr(None)
+        Returns
+        -------
+        container : `ButlerLogRecords`
+            Container for log records.
+        """
+        return container_type.from_records(self.root)
+
+
+class _ButlerLogRecordsModel(BaseModel):
+    """Pydantic model used for version 2(+) JSON log files: a struct with a
+    `records` attribute.
+    """
+
+    CURRENT_VERSION: ClassVar[int] = 2
+    """File format version written by this module."""
+
+    extended: Literal[True]
+    """Constant field that appears at the beginning of every version 2+ JSON
+    log file.
+
+    This field must be initialized directly when the model is constructed,
+    because using a default causes it to be omitted by Pydantic when
+    serializing with ``exclude_unset`` or ``exclude_default`` (both of which
+    are used in serializing logs).
+    """
+
+    version: int
+    """File format version for this file.
+
+    This field must be initialized directly when the model is constructed,
+    because using a default causes it to be omitted by Pydantic when
+    serializing with ``exclude_unset`` or ``exclude_default`` (both of which
+    are used in serializing logs).
+    """
+
+    records: list[ButlerLogRecord] = Field(default_factory=list)
+    """The actual log records."""
+
+    model_config = ConfigDict(extra="allow")
+
+    def wrap(self, container_type: type[_T]) -> _T:
+        """Convert this model into a `ButlerLogRecords` instance.
+
+        Parameters
+        ----------
+        container_type : `type`
+            `ButlerLogRecords` subclass to use.
+
+        Returns
+        -------
+        container : `ButlerLogRecords`
+            Container for log records.
+        """
+        return container_type.from_records(self.records, extra=self.__pydantic_extra__)
+
+
+class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
+    """A container class for `ButlerLogRecord` objects.
+
+    Parameters
+    ----------
+    records : `list` [`ButlerLogRecord`]
+        List of records to use directly as the backing store for the container.
+    extra : `dict`, optional
+        Additional JSON data included with the log records.  Subclasses may
+        interpret structured information, but the base class just sets this as
+        the `extra` attribute.
+
+    Notes
+    -----
+    ButlerLogRecords supports two different file formats:
+
+    - Full-container serialization to JSON, in which records are stored in a
+      ``records`` array and extra fields may be present (for backwards
+      compatibility, *reading* records directly from a JSON list is also
+      supported).
+
+    - Streaming serialization, in which each each line is a one-line JSON
+      representation of a single `ButlerLogRecord`.  Extra fields may be added
+      included to this format by appending a single line with the value given
+      by `STREAMING_EXTRA_DELIMITER`, which indicates that the remainder of the
+      file is a single JSON block.
+
+    Subclasses of `ButlerLogRecords` are expected to support these formats by
+    using the "extra" JSON fields to hold any additional state.   If subclasses
+    intercept `extra` at construction in a way that prevents that information
+    from being held in the base class `extra` field, they must override
+    `_from_record_subset` and `to_json_data` to pass that state to slices and
+    save it, respectively.
+    """
+
+    def __init__(self, records: list[ButlerLogRecord], extra: dict[str, object] | None = None):
+        self._records = records
+        self._log_format: str | None = None
+        self.extra = extra if extra is not None else {}
+
+    STREAMING_EXTRA_DELIMITER: ClassVar[str] = "###EXTRA###"
+    """Special string written (on its own line) after streamed log records to
+    indicate that the rest of the file is a JSON blob of "extra" data.
+    """
 
     @classmethod
-    def from_records(cls, records: Iterable[ButlerLogRecord]) -> ButlerLogRecords:
+    def from_records(cls, records: Iterable[ButlerLogRecord], extra: dict[str, object] | None = None) -> Self:
         """Create collection from iterable.
 
         Parameters
         ----------
-        records : iterable of `ButlerLogRecord`
+        records : iterable of `ButlerLogRecord` or `LogRecord`
             The records to seed this class with.
+        extra : `dict`, optional
+            Additional JSON data included with the log records.  Subclasses may
+            interpret structured information, but the base class just sets this
+            as the `extra` attribute.
+
+        Returns
+        -------
+        container : `ButlerLogRecords`
+            New log record container.
         """
-        return cls.model_construct(root=list(records))
+        return cls(list(records), extra=extra)
 
     @classmethod
-    def from_file(cls, filename: str) -> ButlerLogRecords:
+    def from_file(cls, filename: str) -> Self:
         """Read records from file.
 
         Parameters
@@ -353,8 +475,40 @@ class ButlerLogRecords(_ButlerLogRecords):
         with open(filename) as fd:
             return cls.from_stream(fd)
 
+    def _from_record_subset(self, records: list[ButlerLogRecord]) -> Self:
+        """Return a new instance with a subset of the original's records.
+
+        Parameters
+        ----------
+        records : `list` [`ButlerLogRecord`]
+            New list of records.
+
+        Returns
+        -------
+        copy : `ButlerLogRecords`
+            New instance of this type.
+
+        Notes
+        -----
+        This is a hook provided to allow subclasses to transfer extra state
+        when the container is sliced.
+        """
+        return self.from_records(records, extra=self.extra)
+
     @staticmethod
-    def _detect_model(startdata: str | bytes) -> bool:
+    def _generic_startswith(startdata: str | bytes, prefix: str) -> bool:
+        # A type-safe wrapper for `str.startswith` and `bytes.startswith` that
+        # avoids converting 'startdata', as it might be big.
+        if isinstance(startdata, str):
+            return startdata.startswith(prefix)
+        else:
+            return startdata.startswith(prefix.encode())
+
+    @classmethod
+    def _detect_model(
+        cls,
+        startdata: str | bytes,
+    ) -> type[_ButlerLogRecordsModelV1] | type[_ButlerLogRecordsModel] | None:
         """Given some representative data, determine if this is a serialized
         model or a streaming format.
 
@@ -366,11 +520,10 @@ class ButlerLogRecords(_ButlerLogRecords):
 
         Returns
         -------
-        is_model : `bool`
-            Returns `True` if the data look like a serialized pydantic model.
-            Returns `False` if it looks like a streaming format. Returns
-            `False` also if an empty string is encountered since this
-            is not understood by `ButlerLogRecords.model_validate_json()`.
+        model_type : `type` or `None`
+            If the data looks like either the `_ButlerLogRecords` or
+            `_ExtendedButlerLogRecords` models, that model type.
+            Otherwise (streaming records, or an empty string `None`).
 
         Raises
         ------
@@ -379,36 +532,30 @@ class ButlerLogRecords(_ButlerLogRecords):
             log record formats.
         """
         if not startdata:
-            return False
+            return None
 
-        # Allow byte or str streams since pydantic supports either.
-        # We don't want to convert the entire input to unicode unnecessarily.
-        error_type = "str"
-        if isinstance(startdata, bytes):
-            first_char = chr(startdata[0])
-            error_type = "byte"
-        else:
-            first_char = startdata[0]
-
-        if first_char == "[":
-            # This is an array of records.
-            return True
-        if first_char != "{":
+        if cls._generic_startswith(startdata, "["):
+            # This is a JSON array of records.
+            return _ButlerLogRecordsModelV1
+        elif not cls._generic_startswith(startdata, "{"):
             # Limit the length of string reported in error message in case
             # this is an enormous file.
             max = 32
             if len(startdata) > max:
-                startdata = f"{startdata[:max]!r}..."
+                msg = f"{startdata[:max]!r}..."
+            else:
+                msg = repr(startdata)
             raise ValueError(
-                "Unrecognized JSON log format. Expected '{' or '[' but got"
-                f" {first_char!r} from {error_type} content starting with {startdata!r}"
+                f"Unrecognized JSON log format. Expected '{{' or '[' but got {startdata[0]!r} from {msg}."
             )
-
+        elif cls._generic_startswith(startdata, '{"extended":true'):
+            # This is a JSON model with a field for records.
+            return _ButlerLogRecordsModel
         # Assume a record per line.
-        return False
+        return None
 
     @classmethod
-    def from_stream(cls, stream: IO) -> ButlerLogRecords:
+    def from_stream(cls, stream: IO) -> Self:
         """Read records from I/O stream.
 
         Parameters
@@ -416,10 +563,10 @@ class ButlerLogRecords(_ButlerLogRecords):
         stream : `typing.IO`
             Stream from which to read JSON records.
 
-        Notes
-        -----
-        Works with one-record-per-line format JSON files and a direct
-        serialization of the Pydantic model.
+        Returns
+        -------
+        container : `ButlerLogRecords`
+            New log record container.
         """
         first_line = stream.readline()
 
@@ -427,22 +574,28 @@ class ButlerLogRecords(_ButlerLogRecords):
             # Empty file, return zero records.
             return cls.from_records([])
 
-        is_model = cls._detect_model(first_line)
+        model_type = cls._detect_model(first_line)
 
-        if is_model:
+        if model_type:
             # This is a ButlerLogRecords model serialization so all the
             # content must be read first.
             all = first_line + stream.read()
-            return cls.model_validate_json(all)
+            return model_type.model_validate_json(all).wrap(cls)
 
         # A stream of records with one record per line.
         records = [ButlerLogRecord.model_validate_json(first_line)]
         for line in stream:
             line = line.rstrip()
-            if line:  # Filter out blank lines.
+            if cls._generic_startswith(line, "###EXTRA###"):
+                break
+            elif line:  # skip blank lines
                 records.append(ButlerLogRecord.model_validate_json(line))
-
-        return cls.from_records(records)
+        extra_data = stream.read()
+        if extra_data:
+            extra = pydantic_core.from_json(extra_data)
+        else:
+            extra = {}
+        return cls.from_records(records, extra=extra)
 
     @classmethod
     def from_raw(cls, serialized: str | bytes) -> ButlerLogRecords:
@@ -452,44 +605,57 @@ class ButlerLogRecords(_ButlerLogRecords):
         ----------
         serialized : `bytes` or `str`
             Either the serialized JSON of the model created using
-            ``.model_dump_json()`` or a streaming format of one JSON
-            `ButlerLogRecord` per line. This can also support a zero-length
-            string.
+            `write` or a streaming format of one JSON `ButlerLogRecord` per
+            line. This can also support a zero-length string.
+
+        Returns
+        -------
+        container : `ButlerLogRecords`
+            New log record container.
         """
-        if not serialized:
-            # No records to return
-            return cls.from_records([])
-
-        # Only send the first character for analysis.
-        is_model = cls._detect_model(serialized)
-
-        if is_model:
-            return cls.model_validate_json(serialized)
-
-        # Filter out blank lines -- mypy is confused by the newline
-        # argument to isplit() [which can't have two different types
-        # simultaneously] so we have to duplicate some logic.
-        substrings: Iterator[str | bytes]
         if isinstance(serialized, str):
-            substrings = isplit(serialized, "\n")
-        elif isinstance(serialized, bytes):
-            substrings = isplit(serialized, b"\n")
+            return cls.from_stream(io.StringIO(serialized))
         else:
-            raise TypeError(f"Serialized form must be str or bytes not {get_full_type_name(serialized)}")
-        records = [ButlerLogRecord.model_validate_json(line) for line in substrings if line]
+            return cls.from_stream(io.BytesIO(serialized))
 
-        return cls.from_records(records)
+    def to_json_data(self) -> str:
+        """Serialize to a JSON string.
+
+        Returns
+        -------
+        data : `str`
+            String containing JSON data.
+        """
+        if self.extra:
+            # There's no way to tell Pydantic to add extra fields back in
+            # when serializing directly to JSON; we have to convert to a dict
+            # first and then to JSON.
+            py_data = _ButlerLogRecordsModel(
+                extended=True, version=_ButlerLogRecordsModel.CURRENT_VERSION, records=self._records
+            ).model_dump(exclude_unset=True, exclude_defaults=True)
+            py_data.update(self.extra)
+            return pydantic_core.to_json(py_data).decode()
+        else:
+            return _ButlerLogRecordsModel(
+                extended=True, version=_ButlerLogRecordsModel.CURRENT_VERSION, records=self._records
+            ).model_dump_json(exclude_unset=True, exclude_defaults=True)
 
     @property
     def log_format(self) -> str:
+        """The log format string for these records."""
         if self._log_format is None:
             return _LONG_LOG_FORMAT
         return self._log_format
 
-    # Pydantic does not allow a property setter to be given for
-    # public properties of a model that is not based on a dict.
+    @log_format.setter
+    def log_format(self, format: str | None) -> None:
+        self.set_log_format(format)
+
     def set_log_format(self, format: str | None) -> str | None:
         """Set the log format string for these records.
+
+        This may also be set via the property; method is provided for
+        backwards compatibility.
 
         Parameters
         ----------
@@ -508,41 +674,49 @@ class ButlerLogRecords(_ButlerLogRecords):
         return previous
 
     def __len__(self) -> int:
-        return len(self.root)
+        return len(self._records)
 
-    # The signature does not match the one in BaseModel but that is okay
-    # if __root__ is being used.
-    # See https://pydantic-docs.helpmanual.io/usage/models/#custom-root-types
-    def __iter__(self) -> Iterator[ButlerLogRecord]:  # type: ignore
-        return iter(self.root)
+    def __iter__(self) -> Iterator[ButlerLogRecord]:
+        return iter(self._records)
 
-    def __setitem__(self, index: int, value: Record) -> None:
-        self.root[index] = self._validate_record(value)
+    @overload
+    def __setitem__(self, index: int, value: Record) -> None: ...
+
+    @overload
+    def __setitem__(self, index: slice, value: Iterable[Record]) -> None: ...
+
+    def __setitem__(self, index: slice | int, value: Record | Iterable[Record]) -> None:
+        if isinstance(index, slice):
+            self._records[index] = [self._validate_record(v) for v in cast(Iterable[Record], value)]
+        else:
+            self._records[index] = self._validate_record(cast(Record, value))
 
     @overload
     def __getitem__(self, index: int) -> ButlerLogRecord: ...
 
     @overload
-    def __getitem__(self, index: slice) -> ButlerLogRecords: ...
+    def __getitem__(self, index: slice) -> Self: ...
 
-    def __getitem__(self, index: slice | int) -> ButlerLogRecords | ButlerLogRecord:
+    def __getitem__(self, index: slice | int) -> Self | ButlerLogRecord:
         # Handles slices and returns a new collection in that
         # case.
-        item = self.root[index]
+        item = self._records[index]
         if isinstance(item, list):
-            return type(self)(item)
+            return self._from_record_subset(item)
         else:
             return item
 
-    def __reversed__(self) -> Iterator[ButlerLogRecord]:
-        return self.root.__reversed__()
-
     def __delitem__(self, index: slice | int) -> None:
-        del self.root[index]
+        del self._records[index]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, ButlerLogRecords):
+            return self._records == other._records and self.extra == other.extra
+        return NotImplemented
 
     def __str__(self) -> str:
         # Ensure that every record uses the same format string.
-        return "\n".join(record.format(self.log_format) for record in self.root)
+        return "\n".join(record.format(self.log_format) for record in self)
 
     def _validate_record(self, record: Record) -> ButlerLogRecord:
         if isinstance(record, ButlerLogRecord):
@@ -554,23 +728,29 @@ class ButlerLogRecords(_ButlerLogRecords):
         return record
 
     def insert(self, index: int, value: Record) -> None:
-        self.root.insert(index, self._validate_record(value))
+        # Docstring provided by ABC.
+        self._records.insert(index, self._validate_record(value))
 
     def append(self, value: Record) -> None:
-        value = self._validate_record(value)
-        self.root.append(value)
+        # Docstring provided by ABC.
+        # Only overridden to accept `LogRecord`, not just `ButlerLogRecord`.
+        self._records.append(self._validate_record(value))
 
-    def clear(self) -> None:
-        self.root.clear()
+    @classmethod
+    def write_streaming_extra(cls, file: IO[str], extra_data: str) -> None:
+        """Append the special delimiter and extra JSON data to a file written
+        in streaming mode.
 
-    def extend(self, records: Iterable[Record]) -> None:
-        self.root.extend(self._validate_record(record) for record in records)
-
-    def pop(self, index: int = -1) -> ButlerLogRecord:
-        return self.root.pop(index)
-
-    def reverse(self) -> None:
-        self.root.reverse()
+        Parameters
+        ----------
+        file : `typing.IO`
+            File object to write to, pointing to the end of the streamed log
+            records.
+        extra_data : `str`
+            Extra JSON data as a string.
+        """
+        print(cls.STREAMING_EXTRA_DELIMITER, file=file)
+        file.write(extra_data)
 
 
 class ButlerLogRecordHandler(StreamHandler):
@@ -578,7 +758,7 @@ class ButlerLogRecordHandler(StreamHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.records = ButlerLogRecords.model_construct(root=[])
+        self.records = ButlerLogRecords([])
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)
