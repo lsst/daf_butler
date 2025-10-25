@@ -66,5 +66,5 @@ class ButlerLogRecordsFormatter(FormatterV2):
         # over pre-downloading the whole file (which can be very large).
         return self._get_read_pytype().from_file(path)
 
-    def to_bytes(self, in_memory_dataset: Any) -> bytes:
-        return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()
+    def to_bytes(self, in_memory_dataset: ButlerLogRecords) -> bytes:
+        return in_memory_dataset.to_json_data().encode()
