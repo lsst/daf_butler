@@ -78,25 +78,24 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)
 
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-", delete=False)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-") as tmp:
+            handler = FileHandler(tmp.name)
+            handler.setFormatter(JsonLogFormatter())
+            log.addHandler(handler)
 
-        handler = FileHandler(tmp.name)
-        handler.setFormatter(JsonLogFormatter())
-        log.addHandler(handler)
+            log.info("An INFO message")
+            log.debug("A DEBUG message")
+            log.warning("A WARNING message")
 
-        log.info("An INFO message")
-        log.debug("A DEBUG message")
-        log.warning("A WARNING message")
+            handler.close()
 
-        handler.close()
+            # Now ingest the file.
+            ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
+            dataset = FileDataset(path=tmp.name, refs=ref)
+            self.butler.ingest(dataset, transfer="move")
 
-        # Now ingest the file.
-        ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
-        dataset = FileDataset(path=tmp.name, refs=ref)
-        self.butler.ingest(dataset, transfer="move")
-
-        records = self.butler.get(ref)
-        self.assertEqual(len(records), 2)
+            records = self.butler.get(ref)
+            self.assertEqual(len(records), 2)
 
 
 if __name__ == "__main__":
