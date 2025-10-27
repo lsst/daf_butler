@@ -437,3 +437,5 @@ storageClasses:
     pytype: lsst.drp.tasks.fit_visit_background.VisitBackgroundModel
   VignettingCorrection:
     pytype: lsst.ts.observatory.control.utils.extras.vignetting_correction.VignettingCorrection
+  SSPAuxiliaryFile:
+    pytype: lsst.pipe.tasks.sspAuxiliaryFile.SSPAuxiliaryFile
