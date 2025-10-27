@@ -97,3 +97,4 @@ QPEnsemble: lsst.meas.pz.qp_formatter.QPFormatter
 PZModel: lsst.meas.pz.model_formatter.ModelFormatter
 VisitBackgroundModel: lsst.daf.butler.formatters.json.JsonFormatter
 VignettingCorrection: lsst.ts.observatory.control.utils.extras.vignetting_storage.VignettingCorrectionFormatter
+SSPAuxiliaryFile: lsst.pipe.tasks.sspAuxiliaryFile.SSPAuxiliaryFileFormatter
