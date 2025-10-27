@@ -31,7 +31,6 @@ on:
   push:
     tags:
       - "*"
-
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -39,6 +38,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.build.outputs.fully_qualified_image_digest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,9 +53,38 @@ jobs:
         with:
           image: ${{ github.repository }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          platforms: linux/amd64,linux/arm64
+
+  test:
+    needs: [docker]
+    strategy:
+      matrix:
+        platform:
+          - arch: "amd64"
+            runs_on: "ubuntu-latest"
+          - arch: "arm64"
+            runs_on: "ubuntu-24.04-arm"
+    runs-on: ${{ matrix.platform.runs_on }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Install system dependency to build psycopg on ARM
+        if: ${{ matrix.platform.arch }} == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev
+
+      - uses: actions/checkout@v5
+        with:
+          # Needed to fetch tags, used by Python install process to
+          # figure out version number
+          fetch-depth: 0
+
+      - name: Docker buildx setup
+        uses: docker/setup-buildx-action@v3
 
       - name: Run unit tests inside Docker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           # In addition to the main output image, the Dockerfile contains a second
@@ -62,7 +92,6 @@ jobs:
           target: unit-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -86,5 +115,5 @@ jobs:
 
       - name: Run smoke test
         run: |
-          export BUTLER_SERVER_DOCKER_IMAGE=${{ steps.build.outputs.fully_qualified_image_digest }}
+          export BUTLER_SERVER_DOCKER_IMAGE=${{ needs.docker.outputs.image }}
           python tests_integration/test_docker_container.py
