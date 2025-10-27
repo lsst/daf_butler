@@ -31,26 +31,18 @@ on:
   push:
     tags:
       - "*"
-
 jobs:
   docker:
-    strategy:
-      matrix:
-        platform:
-          - arch: "amd64"
-            runs_on: "ubuntu-latest"
-          - arch: "arm64"
-            runs_on: "ubuntu-24.04-arm"
-    runs-on: ${{ matrix.platform.runs_on }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     outputs:
-      tag: ${{ steps.build.outputs.tag}}
+      image: ${{ steps.build.outputs.fully_qualified_image_digest }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           # Needed to fetch tags, used by Python install process to
           # figure out version number
@@ -59,36 +51,12 @@ jobs:
       - uses: lsst-sqre/build-and-push-to-ghcr@v1
         id: build
         with:
-          image: ${{ github.repository }}-${{ matrix.platform.arch }}
+          image: ${{ github.repository }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  unify:
-    needs: [docker]
-    runs-on: ubuntu-latest
-    env:
-      tag:
-        ${{ needs.docker.outputs.tag }}
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: login
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build multi-platform manifest
-        uses: Noelware/docker-manifest-action@v1
-        with:
-          inputs: ghcr.io/${{ github.repository }}-amd64:${{ env.tag }},ghcr.io/${{ github.repository }}-arm64:${{ env.tag }}
-          tags: ghcr.io/${{ github.repository }}:${{ env.tag }}
-          push: true
+          platforms: linux/amd64,linux/arm64
 
   test:
-    needs: [docker, unify]
+    needs: [docker]
     strategy:
       matrix:
         platform:
@@ -97,12 +65,7 @@ jobs:
           - arch: "arm64"
             runs_on: "ubuntu-24.04-arm"
     runs-on: ${{ matrix.platform.runs_on }}
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-    env:
-      tag: ${{ needs.docker.outputs.tag }}
+    timeout-minutes: 45
 
     steps:
       - name: Install system dependency to build psycopg on ARM
@@ -117,18 +80,8 @@ jobs:
           # figure out version number
           fetch-depth: 0
 
-      - name: Docker login
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Docker buildx setup
         uses: docker/setup-buildx-action@v3
-        with:
-          name: builder-${{ matrix.platform.arch }}
-          platforms: linux/${{ matrix.platform.arch }}
 
       - name: Run unit tests inside Docker
         uses: docker/build-push-action@v6
@@ -137,7 +90,6 @@ jobs:
           # In addition to the main output image, the Dockerfile contains a second
           # "unit-test" image that runs the test suite.
           target: unit-test
-          builder: builder-${{ matrix.platform.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -163,5 +115,5 @@ jobs:
 
       - name: Run smoke test
         run: |
-          export BUTLER_SERVER_DOCKER_IMAGE=ghcr.io/${{ github.repository }}:${{ env.tag }}
+          export BUTLER_SERVER_DOCKER_IMAGE=${{ needs.docker.outputs.image }}
           python tests_integration/test_docker_container.py
