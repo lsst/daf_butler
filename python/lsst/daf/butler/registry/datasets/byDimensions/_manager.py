@@ -1414,7 +1414,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1519,7 +1519,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         storage: _DatasetRecordStorage,
         sql_projection: SqlSelectBuilder,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         fields_key: str | qt.AnyDatasetType,
     ) -> SqlSelectBuilder:
         # This method plays the same role as _finish_single_relation in the new

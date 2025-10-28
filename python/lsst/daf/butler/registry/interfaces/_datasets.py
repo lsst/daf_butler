@@ -44,6 +44,7 @@ from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
 from ...queries import Query
+from ...queries.tree._base import AnyDatasetFieldName
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
@@ -649,7 +650,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
         """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
