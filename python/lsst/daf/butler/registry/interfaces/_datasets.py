@@ -36,8 +36,6 @@ from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.relation import Relation
-
 from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
@@ -51,7 +49,6 @@ if TYPE_CHECKING:
     from ...direct_query_driver import SqlJoinsBuilder  # new query system, server+direct only
     from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
-    from ..queries import SqlQueryContext  # old registry query system
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -604,45 +601,6 @@ class DatasetRecordStorageManager(VersionedExtension):
         CollectionTypeError
             Raised if
             ``collection.type is not CollectionType.CALIBRATION``.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def make_relation(
-        self,
-        dataset_type: DatasetType,
-        *collections: CollectionRecord,
-        columns: Set[str],
-        context: SqlQueryContext,
-    ) -> Relation:
-        """Return a `sql.Relation` that represents a query for this
-        `DatasetType` in one or more collections.
-
-        Parameters
-        ----------
-        dataset_type : `DatasetType`
-            Type of dataset to query for.
-        *collections : `CollectionRecord`
-            The record object(s) describing the collection(s) to query.  May
-            not be of type `CollectionType.CHAINED`.  If multiple collections
-            are passed, the query will search all of them in an unspecified
-            order, and all collections must have the same type.  Must include
-            at least one collection.
-        columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the relation.  See `Query.find_datasets` for
-            most options, but this method supports one more:
-
-            - ``rank``: a calculated integer column holding the index of the
-                collection the dataset was found in, within the ``collections``
-                sequence given.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
-
-        Returns
-        -------
-        relation : `~lsst.daf.relation.Relation`
-            Representation of the query.
         """
         raise NotImplementedError()
 
