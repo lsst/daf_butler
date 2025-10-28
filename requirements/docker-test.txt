@@ -8,13 +8,13 @@ boto3==1.40.4 \
     --hash=sha256:6eceffe4ae67c2cb077574289c0efe3ba60e8446646893a974fc3c2fa1130e7c \
     --hash=sha256:95cdc86454e9ff43e0693c5d807a54ce6813b6711d3543a0052ead5216b93367
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   moto
 botocore==1.40.4 \
     --hash=sha256:4e131c52731e10a6af998c2ac3bfbda12e6ecef0e3633268c7752d0502c74197 \
     --hash=sha256:f1dacde69ec8b08f39bcdb62247bab4554938b5d7f8805ade78447da55c9df36
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   boto3
     #   moto
     #   s3fs
@@ -23,7 +23,7 @@ certifi==2025.8.3 \
     --hash=sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407 \
     --hash=sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   requests
 cffi==1.17.1 \
     --hash=sha256:045d61c734659cc045141be4bae381a41d89b741f795af1dd018bfb532fd0df8 \
@@ -94,7 +94,7 @@ cffi==1.17.1 \
     --hash=sha256:f7f5baafcc48261359e14bcd6d9bff6d4b28d9103847c9e136694cb0501aef87 \
     --hash=sha256:fc48c783f9c87e60831201f2cce7f3b2e4846bf4d8728eabe54d60700b318a0b
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   cryptography
 charset-normalizer==3.4.2 \
     --hash=sha256:005fa3432484527f9732ebd315da8da8001593e2cf46a3d817669f062c3d9ed4 \
@@ -190,7 +190,7 @@ charset-normalizer==3.4.2 \
     --hash=sha256:fcbe676a55d7445b22c10967bceaaf0ee69407fbe0ece4d032b6eb8d4565982a \
     --hash=sha256:fdb20a30fe1175ecabed17cbf7812f7b804b8a315a25f24678bcdf120a90077f
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   requests
 contourpy==1.3.3 \
     --hash=sha256:023b44101dfe49d7d53932be418477dba359649246075c996866106da069af69 \
@@ -305,7 +305,7 @@ cryptography==45.0.6 \
     --hash=sha256:f68f833a9d445cc49f01097d95c83a850795921b3f7cc6488731e69bde3288da \
     --hash=sha256:fc022c1fa5acff6def2fc6d7819bbbd31ccddfe67d075331a65d9cfb28a20983
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   moto
 cycler==0.12.1 \
     --hash=sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30 \
@@ -359,13 +359,13 @@ fsspec==2025.7.0 \
     --hash=sha256:786120687ffa54b8283d942929540d8bc5ccfa820deb555a2b5d0ed2b737bf58 \
     --hash=sha256:8b012e39f63c7d5f10474de957f3ab793b47b45ae7d39f2fb735f8bbe25c0e21
     # via
-    #   -r ./requirements/test.in
+    #   -r test.in
     #   s3fs
 idna==3.10 \
     --hash=sha256:12f65c9b470abda6dc35cf8e63cc574b1c52b11df2c86030af0ac09b01b13ea9 \
     --hash=sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   requests
 iniconfig==2.1.0 \
     --hash=sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7 \
@@ -379,7 +379,7 @@ jmespath==1.0.1 \
     --hash=sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980 \
     --hash=sha256:90261b206d6defd58fdd5e85f478bf633a2901798906be2ad389150c5c60edbe
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   boto3
     #   botocore
 kiwisolver==1.4.8 \
@@ -585,11 +585,11 @@ matplotlib==3.10.5 \
     --hash=sha256:ee7a09ae2f4676276f5a65bd9f2bd91b4f9fbaedf49f40267ce3f9b448de501f \
     --hash=sha256:ee98a5c5344dc7f48dc261b6ba5d9900c008fc12beb3fa6ebda81273602cc389 \
     --hash=sha256:f6adb644c9d040ffb0d3434e440490a66cf73dbfa118a6f79cd7568431f7a012
-    # via -r ./requirements/test.in
+    # via -r test.in
 moto==5.1.9 \
     --hash=sha256:0c4f0387b06b5d24c0ce90f8f89f31a565cc05789189c5d59b5df02594f2e371 \
     --hash=sha256:e9ba7e4764a6088ccc34e3cc846ae719861ca202409fa865573de40a3e805b9b
-    # via -r ./requirements/test.in
+    # via -r test.in
 numpy==2.3.2 \
     --hash=sha256:07b62978075b67eee4065b166d000d457c82a1efe726cce608b9db9dd66a73a5 \
     --hash=sha256:087ffc25890d89a43536f75c5fe8770922008758e8eeeef61733957041ed2f9b \
@@ -666,8 +666,8 @@ numpy==2.3.2 \
     --hash=sha256:fc927d7f289d14f5e037be917539620603294454130b6de200091e23d27dc9be \
     --hash=sha256:fed5527c4cf10f16c6d0b6bee1f89958bccb0ad2522c8cadc2efd318bcd545f5
     # via
-    #   -c ./requirements/docker.txt
-    #   -r ./requirements/test.in
+    #   -c docker.txt
+    #   -r test.in
     #   contourpy
     #   matplotlib
     #   pandas
@@ -675,7 +675,7 @@ packaging==25.0 \
     --hash=sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484 \
     --hash=sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   matplotlib
     #   pytest
 pandas==2.3.1 \
@@ -721,10 +721,10 @@ pandas==2.3.1 \
     --hash=sha256:fe37e757f462d31a9cd7580236a82f353f5713a80e059a29753cf938c6775d96 \
     --hash=sha256:fe67dc676818c186d5a3d5425250e40f179c2a89145df477dd82945eaea89e97 \
     --hash=sha256:fe7317f578c6a153912bd2292f02e40c1d8f253e93c599e82620c7f69755c74f
-    # via -r ./requirements/test.in
-pg8000==1.31.4 \
-    --hash=sha256:d14fb2054642ee80f9a216721892e99e19db60a005358460ffa48872351423d4 \
-    --hash=sha256:e7ecce4339891f27b0b22e2f79eb9efe44118bd384207359fc18350f788ace00
+    # via -r test.in
+pg8000==1.31.5 \
+    --hash=sha256:0af2c1926b153307639868d2ee5cef6cd3a7d07448e12736989b10e1d491e201 \
+    --hash=sha256:46ebb03be52b7a77c03c725c79da2ca281d6e8f59577ca66b17c9009618cae78
     # via testing-postgresql
 pillow==11.3.0 \
     --hash=sha256:023f6d2d11784a465f09fd09a34b150ea4672e85fb3d05931d89f373ab14abb2 \
@@ -842,7 +842,7 @@ pycparser==2.22 \
     --hash=sha256:491c8be9c040f5390f5bf44a5b07752bd07f56edf992381b05c701439eec10f6 \
     --hash=sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   cffi
 pygments==2.19.2 \
     --hash=sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887 \
@@ -855,12 +855,12 @@ pyparsing==3.2.3 \
 pytest==8.4.1 \
     --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7 \
     --hash=sha256:7c67fd69174877359ed9371ec3af8a3d2b04741818c51e5e99cc1742251fa93c
-    # via -r ./requirements/docker-test.in
+    # via -r docker-test.in
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   botocore
     #   matplotlib
     #   moto
@@ -925,13 +925,13 @@ pyyaml==6.0.2 \
     --hash=sha256:f753120cb8181e736c57ef7636e83f31b9c0d1722c516f7e86cf15b7aa57ff12 \
     --hash=sha256:ff3824dc5261f50c9b0dfb3be22b4567a6f938ccce4587b38952d85fd9e9afe4
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   responses
 requests==2.32.4 \
     --hash=sha256:27babd3cda2a6d50b30443204ee89830707d396671944c998b5975b031ac2b2c \
     --hash=sha256:27d0316682c8a29834d3264820024b62a36942083d52caf2f14c0591336d3422
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   moto
     #   responses
 responses==0.25.7 \
@@ -941,12 +941,12 @@ responses==0.25.7 \
 s3fs==0.4.2 \
     --hash=sha256:2ca5de8dc18ad7ad350c0bd01aef0406aa5d0fff78a561f0f710f9d9858abdd0 \
     --hash=sha256:91c1dfb45e5217bd441a7a560946fe865ced6225ff7eb0fb459fe6e601a95ed3
-    # via -r ./requirements/test.in
+    # via -r test.in
 s3transfer==0.13.1 \
     --hash=sha256:a981aa7429be23fe6dfc13e80e4020057cbab622b08c0315288758d67cabc724 \
     --hash=sha256:c3fdba22ba1bd367922f27ec8032d6a1cf5f10c934fb5d68cf60fd5a23d936cf
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   boto3
 scramp==1.4.6 \
     --hash=sha256:a0cf9d2b4624b69bac5432dd69fecfc55a542384fe73c3a23ed9b138cda484e1 \
@@ -956,7 +956,7 @@ six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   python-dateutil
 testing-common-database==2.0.3 \
     --hash=sha256:965d80b2985315325dc358c3061b174a712f4d4d5bf6a80b58b11f9a1dd86d73 \
@@ -965,7 +965,7 @@ testing-common-database==2.0.3 \
 testing-postgresql==1.3.0 \
     --hash=sha256:1b41daeb98dfc8cd4a584bb91e8f5f4ab182993870f95257afe5f1ba6151a598 \
     --hash=sha256:8e1a69760369a7a8ffe63a66b6d95a5cd82db2fb976e4a8f85ffd24fbfc447d8
-    # via -r ./requirements/test.in
+    # via -r test.in
 tzdata==2025.2 \
     --hash=sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8 \
     --hash=sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9
@@ -974,7 +974,7 @@ urllib3==2.5.0 \
     --hash=sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760 \
     --hash=sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc
     # via
-    #   -c ./requirements/docker.txt
+    #   -c docker.txt
     #   botocore
     #   requests
     #   responses
