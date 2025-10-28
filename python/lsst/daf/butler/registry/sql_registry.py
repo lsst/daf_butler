@@ -73,7 +73,6 @@ from ..registry import (
     OrphanedRecordError,
     RegistryConfig,
     RegistryDefaults,
-    queries,
 )
 from ..registry.interfaces import ChainedCollectionRecord, ReadOnlyDatabaseError, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
@@ -1240,11 +1239,7 @@ class SqlRegistry:
                 DataCoordinate.standardize(d, dimensions=datasetType.dimensions) for d in dataIds
             ]
         self._managers.datasets.decertify(
-            datasetType,
-            collectionRecord,
-            timespan,
-            data_ids=standardizedDataIds,
-            context=queries.SqlQueryContext(self._db, self._managers.column_types),
+            datasetType, collectionRecord, timespan, data_ids=standardizedDataIds, query_func=self._query
         )
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:

@@ -39,7 +39,7 @@ from ..dimensions import DataCoordinate, DimensionElement, DimensionGroup, Dimen
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import GeneralResultSpec
-from .tree import QueryTree, ResultColumn
+from .tree import AnyDatasetFieldName, QueryTree, ResultColumn
 
 
 class GeneralResultTuple(NamedTuple):
@@ -172,6 +172,14 @@ class GeneralQueryResults(QueryResultsBase):
     def _copy(self, tree: QueryTree, **kwargs: Any) -> GeneralQueryResults:
         # Docstring inherited.
         return GeneralQueryResults(self._driver, tree, self._spec.model_copy(update=kwargs))
+
+    def _with_added_dataset_field(self, dataset_type: str, field: AnyDatasetFieldName) -> GeneralQueryResults:
+        dataset_fields = dict(self._spec.dataset_fields)
+        field_set = set(dataset_fields.get(dataset_type, set()))
+        field_set.add(field)
+        dataset_fields[dataset_type] = field_set
+
+        return self._copy(self._tree, dataset_fields=dataset_fields)
 
     def _get_datasets(self) -> frozenset[str]:
         # Docstring inherited.
