@@ -31,16 +31,13 @@ import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import sqlalchemy
 
-from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation, sql
 from lsst.sphgeom import Region
 
 from ... import ddl
-from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
-from ..._column_type_info import LogicalColumn
 from ..._exceptions import UnimplementedQueryError
 from ..._named import NamedKeyDict
 from ...dimensions import (
@@ -67,10 +64,6 @@ from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
 from ...queries.visitors import PredicateVisitFlags
 from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
-
-if TYPE_CHECKING:
-    from .. import queries  # Current Registry.query* system.
-
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(6, 0, 2)
@@ -337,50 +330,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         return self._dimension_group_storage.load(key)
 
-    def join(
-        self,
-        element_name: str,
-        target: Relation,
-        join: Join,
-        context: queries.SqlQueryContext,
-    ) -> Relation:
-        # Docstring inherited.
-        element = self.universe[element_name]
-        # We use Join.partial(...).apply(...) instead of Join.apply(..., ...)
-        # for the "backtracking" insertion capabilities of the former; more
-        # specifically, if `target` is a tree that starts with SQL relations
-        # and ends with iteration-engine operations (e.g. region-overlap
-        # postprocessing), this will try to perform the join upstream in the
-        # SQL engine before the transfer to iteration.
-        if element.has_own_table:
-            return join.partial(self._make_relation(element, context)).apply(target)
-        elif element.implied_union_target is not None:
-            columns = DimensionKeyColumnTag(element.name)
-            return join.partial(
-                self._make_relation(element.implied_union_target, context)
-                .with_only_columns(
-                    {columns},
-                    preferred_engine=context.preferred_engine,
-                    require_preferred_engine=True,
-                )
-                .without_duplicates()
-            ).apply(target)
-        elif isinstance(element, SkyPixDimension):
-            assert join.predicate.as_trivial(), "Expected trivial join predicate for skypix relation."
-            id_column = DimensionKeyColumnTag(element.name)
-            assert id_column in target.columns, "Guaranteed by QueryBuilder.make_dimension_target."
-            function_name = f"{element.name}_region"
-            context.iteration_engine.functions[function_name] = element.pixelization.pixel
-            calculation = Calculation(
-                tag=DimensionRecordColumnTag(element.name, "region"),
-                expression=ColumnExpression.function(function_name, ColumnExpression.reference(id_column)),
-            )
-            return calculation.apply(
-                target, preferred_engine=context.iteration_engine, transfer=True, backtrack=True
-            )
-        else:
-            raise AssertionError(f"Unexpected definition of {element_name!r}.")
-
     def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
         if element.implied_union_target is not None:
             assert not fields, "Dimensions with implied-union storage never have fields."
@@ -424,26 +373,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         )
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.builder, overlaps_visitor.postprocessing
-
-    def _make_relation(
-        self,
-        element: DimensionElement,
-        context: queries.SqlQueryContext,
-    ) -> Relation:
-        table = self._tables[element.name]
-        payload = sql.Payload[LogicalColumn](table)
-        for tag, field_name in element.RecordClass.fields.columns.items():
-            if field_name == "timespan":
-                payload.columns_available[tag] = self._db.getTimespanRepresentation().from_columns(
-                    table.columns, name=field_name
-                )
-            else:
-                payload.columns_available[tag] = table.columns[field_name]
-        return context.sql_engine.make_leaf(
-            payload.columns_available.keys(),
-            name=element.name,
-            payload=payload,
-        )
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

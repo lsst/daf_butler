@@ -33,20 +33,19 @@ import re
 import warnings
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
-from lsst.daf.relation import Join
+from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionUniverse
 from lsst.sphgeom import Region
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import chunk_iterable
 
 from ..._column_type_info import ColumnTypeInfo
+from ...queries import Query, QueryFactoryFunction
 from ..interfaces import ObsCoreTableManager, VersionTuple
-from ..queries import SqlQueryContext
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
 from ._records import DerivedRegionFactory, Record, RecordFactory
 from ._schema import ObsCoreSchema
@@ -71,49 +70,57 @@ class _ExposureRegionFactory(DerivedRegionFactory):
     ----------
     dimensions : `DimensionRecordStorageManager`
         The dimension records storage manager.
+    query_func : `QueryFactoryFunction`
+        Function returning a context manager that sets up a `Query` object
+        for querying the registry. (That is, a function equivalent to
+        ``Butler.query()``).
     """
 
-    def __init__(self, dimensions: DimensionRecordStorageManager, context: SqlQueryContext):
+    def __init__(
+        self,
+        dimensions: DimensionRecordStorageManager,
+        query_func: QueryFactoryFunction,
+    ):
         self.dimensions = dimensions
         self.universe = dimensions.universe
         self.exposure_dimensions = self.universe["exposure"].minimal_group
         self.exposure_detector_dimensions = self.universe.conform(["exposure", "detector"])
-        self._context = context
+        self._query_func = query_func
 
     def derived_region(self, dataId: DataCoordinate) -> Region | None:
         # Docstring is inherited from a base class.
-        context = self._context
-        # Make a relation that starts with visit_definition (mapping between
-        # exposure and visit).
-        relation = context.make_initial_relation()
+
+        # Make sure the dimension universe contains a table that can be used
+        # to find visits from exposures.
         if "visit_definition" not in self.universe.elements.names:
             return None
-        relation = self.dimensions.join("visit_definition", relation, Join(), context)
-        # Join in a table with either visit+detector regions or visit regions.
+        # Choose the table we will use to look up the visit region:
+        # either visit+detector regions or visit regions.
         if "detector" in dataId.dimensions:
             if "visit_detector_region" not in self.universe:
                 return None
-            relation = self.dimensions.join("visit_detector_region", relation, Join(), context)
             constraint_data_id = dataId.subset(self.exposure_detector_dimensions)
-            region_tag = DimensionRecordColumnTag("visit_detector_region", "region")
+            region_dimension = "visit_detector_region"
         else:
             if "visit" not in self.universe:
                 return None
-            relation = self.dimensions.join("visit", relation, Join(), context)
             constraint_data_id = dataId.subset(self.exposure_dimensions)
-            region_tag = DimensionRecordColumnTag("visit", "region")
-        # Constrain the relation to match the given exposure and (if present)
-        # detector IDs.
-        relation = relation.with_rows_satisfying(
-            context.make_data_coordinate_predicate(constraint_data_id, full=False)
-        )
-        # If we get more than one result (because the exposure belongs to
-        # multiple visits), just pick an arbitrary one.
-        relation = relation[:1]
-        # Run the query and extract the region, if the query has any results.
-        for row in context.fetch_iterable(relation):
-            return row[region_tag]
-        return None
+            region_dimension = "visit"
+
+        with self._query_func() as query:
+            result = list(
+                query.dimension_records(region_dimension)
+                # Constrain the relation to match the given exposure and (if
+                # present) detector IDs.
+                .where(constraint_data_id)
+                # If we get more than one result (because the exposure belongs
+                # to multiple visits), just pick an arbitrary one.
+                .limit(1)
+            )
+            if len(result) > 0:
+                return result[0].region
+            else:
+                return None
 
 
 class ObsCoreLiveTableManager(ObsCoreTableManager):
@@ -164,10 +171,8 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.config = config
         self.spatial_plugins = spatial_plugins
         self._column_type_info = column_type_info
-        exposure_region_factory = _ExposureRegionFactory(
-            dimensions,
-            SqlQueryContext(self.db, column_type_info),
-        )
+        self._query_func: QueryFactoryFunction | None = None
+        exposure_region_factory = _ExposureRegionFactory(dimensions, self._get_query_object)
         self.record_factory = RecordFactory.get_record_type_from_universe(universe)(
             config, schema, universe, spatial_plugins, exposure_region_factory
         )
@@ -189,7 +194,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             raise ValueError(f"Unexpected value of collection_type: {config.collection_type}")
 
     def clone(self, *, db: Database, dimensions: DimensionRecordStorageManager) -> ObsCoreLiveTableManager:
-        return ObsCoreLiveTableManager(
+        manager = ObsCoreLiveTableManager(
             db=db,
             table=self.table,
             schema=self.schema,
@@ -203,6 +208,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             registry_schema_version=self._registry_schema_version,
             column_type_info=self._column_type_info,
         )
+        if self._query_func is not None:
+            manager.set_query_function(self._query_func)
+        return manager
 
     @classmethod
     def initialize(
@@ -243,6 +251,15 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             registry_schema_version=registry_schema_version,
             column_type_info=column_type_info,
         )
+
+    def _get_query_object(self) -> AbstractContextManager[Query]:
+        if self._query_func is None:
+            raise AssertionError("set_query_function should have been called prior to this.")
+
+        return self._query_func()
+
+    def set_query_function(self, query_func: QueryFactoryFunction) -> None:
+        self._query_func = query_func
 
     def config_json(self) -> str:
         """Dump configuration in JSON format.

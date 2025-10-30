@@ -230,6 +230,7 @@ class SqlRegistry:
             managers = managerTypes.loadRepo(database)
         if defaults is None:
             defaults = RegistryDefaults()
+
         return cls(database, defaults, managers)
 
     def __init__(
@@ -240,6 +241,8 @@ class SqlRegistry:
     ):
         self._db = database
         self._managers = managers
+        if managers.obscore is not None:
+            managers.obscore.set_query_function(self._query)
         self.storageClasses = StorageClassFactory()
         # This is public to SqlRegistry's internal-to-daf_butler callers, but
         # it is intentionally not part of RegistryShim.

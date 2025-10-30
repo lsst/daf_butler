@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from ..._column_type_info import ColumnTypeInfo
     from ..._dataset_ref import DatasetRef
     from ...dimensions import DimensionUniverse
+    from ...queries import QueryFactoryFunction
     from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
@@ -134,6 +135,20 @@ class ObsCoreTableManager(VersionedExtension):
             An instance of a concrete `ObsCoreTableManager` subclass.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def set_query_function(self, query_func: QueryFactoryFunction) -> None:
+        """Set up a function to be used for querying the database.  This must
+        be called before attempting to insert datasets.
+
+        Parameters
+        ----------
+        query_func : `QueryFactoryFunction`
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
+        """
+        pass
 
     @abstractmethod
     def config_json(self) -> str:
