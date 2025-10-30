@@ -43,7 +43,7 @@ import pydantic
 from .._exceptions import InvalidQueryError
 from ..dimensions import DimensionElement, DimensionGroup, DimensionUniverse
 from ..pydantic_utils import DeferredValidation
-from .tree import AnyDatasetType, ColumnSet, DatasetFieldName, OrderExpression, QueryTree
+from .tree import AnyDatasetFieldName, AnyDatasetType, ColumnSet, OrderExpression, QueryTree
 
 
 class ResultSpecBase(pydantic.BaseModel, ABC):
@@ -215,7 +215,7 @@ class GeneralResultSpec(ResultSpecBase):
     dimension_fields: Mapping[str, set[str]]
     """Dimension record fields included in this query."""
 
-    dataset_fields: Mapping[str, set[DatasetFieldName]]
+    dataset_fields: Mapping[str, set[AnyDatasetFieldName]]
     """Dataset fields included in this query."""
 
     include_dimension_records: bool = False

@@ -284,7 +284,7 @@ class QueryBuilder(ABC):
         raise NotImplementedError()
 
     def _needs_collection_key_field(
-        self, dataset_search: ResolvedDatasetSearch, fields_for_dataset: set[str]
+        self, dataset_search: ResolvedDatasetSearch, fields_for_dataset: set[qt.AnyDatasetFieldName]
     ) -> bool:
         """Return `True` if the ``collection_key`` dataset field is needed to
         provide uniqueness for rows.

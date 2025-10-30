@@ -35,7 +35,7 @@ from typing import NamedTuple, cast
 from ... import column_spec
 from ...dimensions import DataIdValue, DimensionGroup
 from ...nonempty_mapping import NonemptyMapping
-from ._base import ANY_DATASET, AnyDatasetType
+from ._base import ANY_DATASET, AnyDatasetFieldName, AnyDatasetType
 
 
 class ColumnSet:
@@ -65,7 +65,7 @@ class ColumnSet:
         self._dimensions = dimensions
         self._removed_dimension_keys: set[str] = set()
         self._dimension_fields: dict[str, set[str]] = {name: set() for name in dimensions.elements}
-        self._dataset_fields = NonemptyMapping[str | AnyDatasetType, set[str]](set)
+        self._dataset_fields = NonemptyMapping[str | AnyDatasetType, set[AnyDatasetFieldName]](set)
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -83,7 +83,7 @@ class ColumnSet:
         return self._dimension_fields
 
     @property
-    def dataset_fields(self) -> NonemptyMapping[str | AnyDatasetType, set[str]]:
+    def dataset_fields(self) -> NonemptyMapping[str | AnyDatasetType, set[AnyDatasetFieldName]]:
         """Dataset fields included in the set, grouped by dataset type name.
 
         The keys of this mapping are just those that actually have nonempty

@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = (
     "ANY_DATASET",
     "DATASET_FIELD_NAMES",
+    "AnyDatasetFieldName",
     "AnyDatasetType",
     "ColumnExpressionBase",
     "DatasetFieldName",
@@ -57,6 +58,8 @@ if TYPE_CHECKING:
 # collection primary key values) and hence should use `str` rather than this
 # type.
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "timespan"]
+InternalDatasetFieldName: TypeAlias = Literal["calib_pkey", "collection_key"]
+AnyDatasetFieldName: TypeAlias = DatasetFieldName | InternalDatasetFieldName
 
 # Tuple of the strings that can be use as dataset fields in public APIs.
 DATASET_FIELD_NAMES: tuple[DatasetFieldName, ...] = tuple(get_args(DatasetFieldName))

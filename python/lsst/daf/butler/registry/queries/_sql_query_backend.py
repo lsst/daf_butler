@@ -33,12 +33,11 @@ from collections.abc import Iterable, Mapping, Sequence, Set
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
 
-from lsst.daf.relation import Relation
 from lsst.utils.introspection import find_outside_stacklevel
 
 from ..._collection_type import CollectionType
 from ..._dataset_type import DatasetType
-from ..._exceptions import DataIdValueError, MissingDatasetTypeError
+from ..._exceptions import DataIdValueError
 from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
 from ...dimensions.record_cache import DimensionRecordCache
 from ..interfaces import CollectionRecord, Database
@@ -149,38 +148,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                     ):
                         filtered_collections.append(collection_record)
         return result
-
-    def _make_dataset_query_relation_impl(
-        self,
-        dataset_type: DatasetType,
-        collections: Sequence[CollectionRecord],
-        columns: Set[str],
-        context: SqlQueryContext,
-    ) -> Relation:
-        # Docstring inherited.
-        assert len(collections) > 0, (
-            "Caller is responsible for handling the case of all collections being rejected (we can't "
-            "write a good error message without knowing why collections were rejected)."
-        )
-        try:
-            return self._managers.datasets.make_relation(
-                dataset_type,
-                *collections,
-                columns=columns,
-                context=context,
-            )
-        except MissingDatasetTypeError:
-            pass
-        # Unrecognized dataset type means no results.
-        return self.make_doomed_dataset_relation(
-            dataset_type,
-            columns,
-            messages=[
-                f"Dataset type {dataset_type.name!r} is not registered, "
-                "so no instances of it can exist in any collection."
-            ],
-            context=context,
-        )
 
     def resolve_governor_constraints(
         self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]]

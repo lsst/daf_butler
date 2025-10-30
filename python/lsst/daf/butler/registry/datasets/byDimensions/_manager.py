@@ -5,18 +5,15 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 import dataclasses
 import datetime
 import logging
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
 import sqlalchemy
 
-from lsst.daf.relation import Relation, sql
-
 from .... import ddl
 from ...._collection_type import CollectionType
-from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
-from ...._column_type_info import LogicalColumn
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ...._dataset_type import DatasetType, get_dataset_type_name
 from ...._exceptions import CollectionTypeError, MissingDatasetTypeError
@@ -24,12 +21,12 @@ from ...._exceptions_legacy import DatasetTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
 from ....direct_query_driver import SqlJoinsBuilder, SqlSelectBuilder  # new query system, server+direct only
+from ....queries import Query
 from ....queries import tree as qt  # new query system, both clients + server
 from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
-from ...queries import SqlQueryContext  # old registry query system
 from ...wildcards import DatasetTypeWildcard
 from ._dataset_type_cache import DatasetTypeCache
 from .summaries import CollectionSummaryManager
@@ -1015,7 +1012,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collection: CollectionRecord,
         datasets: Iterable[DatasetRef],
         timespan: Timespan,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1068,23 +1065,25 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 ) from err
         else:
             # Have to implement exclusion constraint ourselves.
-            # Start by building a SELECT query for any rows that would overlap
-            # this one.
-            relation = self._build_calib_overlap_query(dataset_type, collection, data_ids, timespan, context)
             # Acquire a table lock to ensure there are no concurrent writes
             # could invalidate our checking before we finish the inserts.  We
             # use a SAVEPOINT in case there is an outer transaction that a
             # failure here should not roll back.
-            with self._db.transaction(lock=[calibs_table], savepoint=True):
-                # Enter SqlQueryContext in case we need to use a temporary
-                # table to include the give data IDs in the query.  Note that
-                # by doing this inside the transaction, we make sure it doesn't
-                # attempt to close the session when its done, since it just
-                # sees an already-open session that it knows it shouldn't
-                # manage.
-                with context:
-                    # Run the check SELECT query.
-                    conflicting = context.count(context.process(relation))
+            with self._db.transaction(
+                lock=[calibs_table],
+                savepoint=True,
+                # join_data_coordinates sometimes requires a temp table
+                for_temp_tables=True,
+            ):
+                # Query for any rows that would overlap this one.
+                with query_func() as query:
+                    if data_ids is not None:
+                        query = query.join_data_coordinates(data_ids)
+                    timespan_column = query.expression_factory[dataset_type.name].timespan
+                    result = query.datasets(dataset_type, collection.name, find_first=False).where(
+                        timespan_column.overlaps(timespan)
+                    )
+                    conflicting = result.count()
                     if conflicting > 0:
                         raise ConflictingDefinitionError(
                             f"{conflicting} validity range conflicts certifying datasets of type "
@@ -1101,7 +1100,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1117,17 +1116,12 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 f"of type {collection.type.name}; must be CALIBRATION."
             )
         TimespanReprClass = self._db.getTimespanRepresentation()
-        # Construct a SELECT query to find all rows that overlap our inputs.
         data_id_set: set[DataCoordinate] | None
         if data_ids is not None:
             data_id_set = set(data_ids)
         else:
             data_id_set = None
-        relation = self._build_calib_overlap_query(dataset_type, collection, data_id_set, timespan, context)
-        calib_pkey_tag = DatasetColumnTag(dataset_type.name, "calib_pkey")
-        dataset_id_tag = DatasetColumnTag(dataset_type.name, "dataset_id")
-        timespan_tag = DatasetColumnTag(dataset_type.name, "timespan")
-        data_id_tags = [(name, DimensionKeyColumnTag(name)) for name in dataset_type.dimensions.required]
+
         # Set up collections to populate with the rows we'll want to modify.
         # The insert rows will have the same values for collection and
         # dataset type.
@@ -1141,21 +1135,33 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         # between the SELECT and the DELETE and INSERT queries based on it.
         calibs_table = self._get_calibs_table(storage.dynamic_tables)
         with self._db.transaction(lock=[calibs_table], savepoint=True):
-            # Enter SqlQueryContext in case we need to use a temporary table to
-            # include the give data IDs in the query (see similar block in
-            # certify for details).
-            with context:
-                for row in context.fetch_iterable(relation):
-                    rows_to_delete.append({"id": row[calib_pkey_tag]})
+            # Find rows overlapping our inputs.
+            with query_func() as query:
+                query = query.join_dataset_search(dataset_type, [collection.name])
+                if data_id_set is not None:
+                    query = query.join_data_coordinates(data_id_set)
+                timespan_column = query.expression_factory[dataset_type.name].timespan
+                query = query.where(timespan_column.overlaps(timespan))
+                result = query.general(
+                    dataset_type.dimensions,
+                    dataset_fields={dataset_type.name: {"dataset_id", "timespan"}},
+                    find_first=False,
+                )._with_added_dataset_field(dataset_type.name, "calib_pkey")
+
+                calib_pkey_key = f"{dataset_type.name}.calib_pkey"
+                dataset_id_key = f"{dataset_type.name}.dataset_id"
+                timespan_key = f"{dataset_type.name}.timespan"
+                for row in result.iter_tuples():
+                    rows_to_delete.append({"id": row.raw_row[calib_pkey_key]})
                     # Construct the insert row(s) by copying the prototype row,
                     # then adding the dimension column values, then adding
                     # what's left of the timespan from that row after we
                     # subtract the given timespan.
                     new_insert_row = proto_insert_row.copy()
-                    new_insert_row["dataset_id"] = row[dataset_id_tag]
-                    for name, tag in data_id_tags:
-                        new_insert_row[name] = row[tag]
-                    row_timespan = row[timespan_tag]
+                    new_insert_row["dataset_id"] = row.raw_row[dataset_id_key]
+                    for name, value in row.data_id.required.items():
+                        new_insert_row[name] = value
+                    row_timespan = row.raw_row[timespan_key]
                     assert row_timespan is not None, "Field should have a NOT NULL constraint."
                     for diff_timespan in row_timespan.difference(timespan):
                         rows_to_insert.append(
@@ -1165,252 +1171,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             self._db.delete(calibs_table, ["id"], *rows_to_delete)
             self._db.insert(calibs_table, *rows_to_insert)
 
-    def _build_calib_overlap_query(
-        self,
-        dataset_type: DatasetType,
-        collection: CollectionRecord,
-        data_ids: set[DataCoordinate] | None,
-        timespan: Timespan,
-        context: SqlQueryContext,
-    ) -> Relation:
-        relation = self.make_relation(
-            dataset_type, collection, columns={"timespan", "dataset_id", "calib_pkey"}, context=context
-        ).with_rows_satisfying(
-            context.make_timespan_overlap_predicate(
-                DatasetColumnTag(dataset_type.name, "timespan"), timespan
-            ),
-        )
-        if data_ids is not None:
-            relation = relation.join(
-                context.make_data_id_relation(data_ids, dataset_type.dimensions.required).transferred_to(
-                    context.sql_engine
-                ),
-            )
-        return relation
-
-    def make_relation(
-        self,
-        dataset_type: DatasetType,
-        *collections: CollectionRecord,
-        columns: Set[str],
-        context: SqlQueryContext,
-    ) -> Relation:
-        # Docstring inherited from DatasetRecordStorageManager.
-        if (storage := self._find_storage(dataset_type.name)) is None:
-            raise MissingDatasetTypeError(f"Dataset type {dataset_type.name!r} has not been registered.")
-        collection_types = {collection.type for collection in collections}
-        assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
-        TimespanReprClass = self._db.getTimespanRepresentation()
-        #
-        # There are two kinds of table in play here:
-        #
-        #  - the static dataset table (with the dataset ID, dataset type ID,
-        #    run ID/name, and ingest date);
-        #
-        #  - the dynamic tags/calibs table (with the dataset ID, dataset type
-        #    type ID, collection ID/name, data ID, and possibly validity
-        #    range).
-        #
-        # That means that we might want to return a query against either table
-        # or a JOIN of both, depending on which quantities the caller wants.
-        # But the data ID is always included, which means we'll always include
-        # the tags/calibs table and join in the static dataset table only if we
-        # need things from it that we can't get from the tags/calibs table.
-        #
-        # Note that it's important that we include a WHERE constraint on both
-        # tables for any column (e.g. dataset_type_id) that is in both when
-        # it's given explicitly; not doing can prevent the query planner from
-        # using very important indexes.  At present, we don't include those
-        # redundant columns in the JOIN ON expression, however, because the
-        # FOREIGN KEY (and its index) are defined only on dataset_id.
-        tag_relation: Relation | None = None
-        calib_relation: Relation | None = None
-        if collection_types != {CollectionType.CALIBRATION}:
-            tags_table = self._get_tags_table(storage.dynamic_tables)
-            # We'll need a subquery for the tags table if any of the given
-            # collections are not a CALIBRATION collection.  This intentionally
-            # also fires when the list of collections is empty as a way to
-            # create a dummy subquery that we know will fail.
-            # We give the table an alias because it might appear multiple times
-            # in the same query, for different dataset types.
-            tags_parts = sql.Payload[LogicalColumn](tags_table.alias(f"{dataset_type.name}_tags"))
-            if "timespan" in columns:
-                tags_parts.columns_available[DatasetColumnTag(dataset_type.name, "timespan")] = (
-                    TimespanReprClass.fromLiteral(Timespan(None, None))
-                )
-            tag_relation = self._finish_single_relation(
-                storage,
-                tags_parts,
-                columns,
-                [
-                    (record, rank)
-                    for rank, record in enumerate(collections)
-                    if record.type is not CollectionType.CALIBRATION
-                ],
-                context,
-            )
-            assert "calib_pkey" not in columns, "For internal use only, and only for pure-calib queries."
-        if CollectionType.CALIBRATION in collection_types:
-            # If at least one collection is a CALIBRATION collection, we'll
-            # need a subquery for the calibs table, and could include the
-            # timespan as a result or constraint.
-            calibs_table = self._get_calibs_table(storage.dynamic_tables)
-            calibs_parts = sql.Payload[LogicalColumn](calibs_table.alias(f"{dataset_type.name}_calibs"))
-            if "timespan" in columns:
-                calibs_parts.columns_available[DatasetColumnTag(dataset_type.name, "timespan")] = (
-                    TimespanReprClass.from_columns(calibs_parts.from_clause.columns)
-                )
-            if "calib_pkey" in columns:
-                # This is a private extension not included in the base class
-                # interface, for internal use only in _buildCalibOverlapQuery,
-                # which needs access to the autoincrement primary key for the
-                # calib association table.
-                calibs_parts.columns_available[DatasetColumnTag(dataset_type.name, "calib_pkey")] = (
-                    calibs_parts.from_clause.columns.id
-                )
-            calib_relation = self._finish_single_relation(
-                storage,
-                calibs_parts,
-                columns,
-                [
-                    (record, rank)
-                    for rank, record in enumerate(collections)
-                    if record.type is CollectionType.CALIBRATION
-                ],
-                context,
-            )
-        if tag_relation is not None:
-            if calib_relation is not None:
-                # daf_relation's chain operation does not automatically
-                # deduplicate; it's more like SQL's UNION ALL.  To get UNION
-                # in SQL here, we add an explicit deduplication.
-                return tag_relation.chain(calib_relation).without_duplicates()
-            else:
-                return tag_relation
-        elif calib_relation is not None:
-            return calib_relation
-        else:
-            raise AssertionError("Branch should be unreachable.")
-
-    def _finish_single_relation(
-        self,
-        storage: _DatasetRecordStorage,
-        payload: sql.Payload[LogicalColumn],
-        requested_columns: Set[str],
-        collections: Sequence[tuple[CollectionRecord, int]],
-        context: SqlQueryContext,
-    ) -> Relation:
-        """Handle adding columns and WHERE terms that are not specific to
-        either the tags or calibs tables.
-
-        Helper method for `make_relation`.
-
-        Parameters
-        ----------
-        storage : `ByDimensionsDatasetRecordStorageUUID`
-            Struct that holds the tables and ID for the dataset type.
-        payload : `lsst.daf.relation.sql.Payload`
-            SQL query parts under construction, to be modified in-place and
-            used to construct the new relation.
-        requested_columns : `~collections.abc.Set` [ `str` ]
-            Columns the relation should include.
-        collections : `~collections.abc.Sequence` [ `tuple` \
-                [ `CollectionRecord`, `int` ] ]
-            Collections to search for the dataset and their ranks.
-        context : `SqlQueryContext`
-            Context that manages engines and state for the query.
-
-        Returns
-        -------
-        relation : `lsst.daf.relation.Relation`
-            New dataset query relation.
-        """
-        payload.where.append(payload.from_clause.columns.dataset_type_id == storage.dataset_type_id)
-        dataset_id_col = payload.from_clause.columns.dataset_id
-        collection_col = payload.from_clause.columns[self._collections.getCollectionForeignKeyName()]
-        # We always constrain and optionally retrieve the collection(s) via the
-        # tags/calibs table.
-        if len(collections) == 1:
-            payload.where.append(collection_col == collections[0][0].key)
-            if "collection" in requested_columns:
-                payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "collection")] = (
-                    sqlalchemy.sql.literal(collections[0][0].key)
-                )
-        else:
-            assert collections, "The no-collections case should be in calling code for better diagnostics."
-            payload.where.append(collection_col.in_([collection.key for collection, _ in collections]))
-            if "collection" in requested_columns:
-                payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "collection")] = (
-                    collection_col
-                )
-        # Add rank if requested as a CASE-based calculation the collection
-        # column.
-        if "rank" in requested_columns:
-            payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "rank")] = (
-                sqlalchemy.sql.case(
-                    {record.key: rank for record, rank in collections},
-                    value=collection_col,
-                )
-            )
-        # Add more column definitions, starting with the data ID.
-        for dimension_name in storage.dataset_type.dimensions.required:
-            payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
-                dimension_name
-            ]
-        # We can always get the dataset_id from the tags/calibs table.
-        if "dataset_id" in requested_columns:
-            payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "dataset_id")] = (
-                dataset_id_col
-            )
-        # It's possible we now have everything we need, from just the
-        # tags/calibs table.  The things we might need to get from the static
-        # dataset table are the run key and the ingest date.
-        need_static_table = False
-        if "run" in requested_columns:
-            if len(collections) == 1 and collections[0][0].type is CollectionType.RUN:
-                # If we are searching exactly one RUN collection, we
-                # know that if we find the dataset in that collection,
-                # then that's the datasets's run; we don't need to
-                # query for it.
-                payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "run")] = (
-                    sqlalchemy.sql.literal(collections[0][0].key)
-                )
-            else:
-                payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "run")] = (
-                    self._static.dataset.columns[self._run_key_column]
-                )
-                need_static_table = True
-        # Ingest date can only come from the static table.
-        if "ingest_date" in requested_columns:
-            need_static_table = True
-            payload.columns_available[DatasetColumnTag(storage.dataset_type.name, "ingest_date")] = (
-                self._static.dataset.columns.ingest_date
-            )
-        # If we need the static table, join it in via dataset_id and
-        # dataset_type_id
-        if need_static_table:
-            payload.from_clause = payload.from_clause.join(
-                self._static.dataset, onclause=(dataset_id_col == self._static.dataset.columns.id)
-            )
-            # Also constrain dataset_type_id in static table in case that helps
-            # generate a better plan.
-            # We could also include this in the JOIN ON clause, but my guess is
-            # that that's a good idea IFF it's in the foreign key, and right
-            # now it isn't.
-            payload.where.append(self._static.dataset.columns.dataset_type_id == storage.dataset_type_id)
-        leaf = context.sql_engine.make_leaf(
-            payload.columns_available.keys(),
-            payload=payload,
-            name=storage.dataset_type.name,
-            parameters={record.name: rank for record, rank in collections},
-        )
-        return leaf
-
     def make_joins_builder(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1476,6 +1241,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 tags_builder.joins.timespans[fields_key] = self._db.getTimespanRepresentation().fromLiteral(
                     Timespan(None, None)
                 )
+            assert "calib_pkey" not in fields, (
+                "Calibration primary key for internal use only on calibration collections."
+            )
         calibs_builder: SqlSelectBuilder | None = None
         if CollectionType.CALIBRATION in collection_types:
             # If at least one collection is a CALIBRATION collection, we'll
@@ -1495,6 +1263,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 calibs_builder.joins.timespans[fields_key] = (
                     self._db.getTimespanRepresentation().from_columns(calibs_table.columns)
                 )
+            if "calib_pkey" in fields:
+                calibs_builder.joins.fields[fields_key]["calib_pkey"] = calibs_table.columns["id"]
 
             # In calibration collections, we need timespan as well as data ID
             # to ensure unique rows.
@@ -1515,7 +1285,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         storage: _DatasetRecordStorage,
         sql_projection: SqlSelectBuilder,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         fields_key: str | qt.AnyDatasetType,
     ) -> SqlSelectBuilder:
         # This method plays the same role as _finish_single_relation in the new

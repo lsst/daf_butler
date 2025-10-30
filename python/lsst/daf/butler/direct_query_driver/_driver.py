@@ -1437,7 +1437,7 @@ class DirectQueryDriver(QueryDriver):
         self,
         joins_builder: SqlJoinsBuilder,
         resolved_search: ResolvedDatasetSearch[list[str]],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         union_dataset_type_name: str,
     ) -> None: ...
 
@@ -1446,14 +1446,14 @@ class DirectQueryDriver(QueryDriver):
         self,
         joins_builder: SqlJoinsBuilder,
         resolved_search: ResolvedDatasetSearch[str],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
     ) -> None: ...
 
     def join_dataset_search(
         self,
         joins_builder: SqlJoinsBuilder,
         resolved_search: ResolvedDatasetSearch[Any],
-        fields: Set[str],
+        fields: Set[qt.AnyDatasetFieldName],
         union_dataset_type_name: str | None = None,
     ) -> None:
         """Join a dataset search into an under-construction query.

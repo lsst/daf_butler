@@ -32,23 +32,23 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
-
-from lsst.daf.relation import Relation
 
 from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
+from ...queries import Query
+from ...queries.tree import AnyDatasetFieldName
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from ...direct_query_driver import SqlJoinsBuilder  # new query system, server+direct only
     from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
-    from ..queries import SqlQueryContext  # old registry query system
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -524,7 +524,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         collection: CollectionRecord,
         datasets: Iterable[DatasetRef],
         timespan: Timespan,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -541,9 +541,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             `DatasetType` as ``dataset_type``, but this is not checked.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
+        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
 
         Raises
         ------
@@ -567,7 +568,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        context: SqlQueryContext,
+        query_func: Callable[[], AbstractContextManager[Query]],
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -588,9 +589,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``dataset_type`` in ``collection`` will
             be decertified.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
+        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
 
         Raises
         ------
@@ -603,50 +605,11 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_relation(
-        self,
-        dataset_type: DatasetType,
-        *collections: CollectionRecord,
-        columns: Set[str],
-        context: SqlQueryContext,
-    ) -> Relation:
-        """Return a `sql.Relation` that represents a query for this
-        `DatasetType` in one or more collections.
-
-        Parameters
-        ----------
-        dataset_type : `DatasetType`
-            Type of dataset to query for.
-        *collections : `CollectionRecord`
-            The record object(s) describing the collection(s) to query.  May
-            not be of type `CollectionType.CHAINED`.  If multiple collections
-            are passed, the query will search all of them in an unspecified
-            order, and all collections must have the same type.  Must include
-            at least one collection.
-        columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the relation.  See `Query.find_datasets` for
-            most options, but this method supports one more:
-
-            - ``rank``: a calculated integer column holding the index of the
-                collection the dataset was found in, within the ``collections``
-                sequence given.
-        context : `SqlQueryContext`
-            The object that manages database connections, temporary tables and
-            relation engines for this query.
-
-        Returns
-        -------
-        relation : `~lsst.daf.relation.Relation`
-            Representation of the query.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def make_joins_builder(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
-        fields: Set[str],
+        fields: Set[AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
         """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
