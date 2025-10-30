@@ -29,20 +29,17 @@ from __future__ import annotations
 __all__ = ("DimensionRecordSchema", "addDimensionForeignKey")
 
 import copy
-from collections.abc import Mapping, Set
+from collections.abc import Set
 from typing import TYPE_CHECKING
 
-from lsst.utils.classes import cached_getter, immutable
+from lsst.utils.classes import immutable
 
 from .. import arrow_utils, ddl
-from .._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from .._named import NamedValueAbstractSet, NamedValueSet
 from ..column_spec import RegionColumnSpec, TimespanColumnSpec
 from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from lsst.daf.relation import ColumnTag
-
     from ._elements import Dimension, DimensionElement, KeyColumnSpec, MetadataColumnSpec
     from ._group import DimensionGroup
 
@@ -386,25 +383,6 @@ class DimensionElementFields:
         if self.element.temporal is not None:
             lines.append("  timespan: lsst.daf.butler.Timespan")
         return "\n".join(lines)
-
-    @property
-    @cached_getter
-    def columns(self) -> Mapping[ColumnTag, str]:
-        """A mapping from `ColumnTag` to field name for all fields in this
-        element's records (`~collections.abc.Mapping`).
-        """
-        result: dict[ColumnTag, str] = {}
-        for dimension_name, field_name in zip(
-            self.element.dimensions.names, self.dimensions.names, strict=True
-        ):
-            result[DimensionKeyColumnTag(dimension_name)] = field_name
-        for field_name in self.facts.names:
-            result[DimensionRecordColumnTag(self.element.name, field_name)] = field_name
-        if self.element.spatial:
-            result[DimensionRecordColumnTag(self.element.name, "region")] = "region"
-        if self.element.temporal:
-            result[DimensionRecordColumnTag(self.element.name, "timespan")] = "timespan"
-        return result
 
     element: DimensionElement
     """The dimension element these fields correspond to.

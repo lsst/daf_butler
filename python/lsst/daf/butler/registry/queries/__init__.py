@@ -25,12 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._query_backend import *
-from ._query_context import *
-from ._readers import *
 from ._results import *
-from ._sql_query_backend import *
-from ._sql_query_context import *
 
 # Symbols from other modules intentionally not lifted to package scope,
 # as they're all internal.
