@@ -24,8 +24,36 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-from ._results import *
+__all__ = ()  # all symbols intentionally private; for internal package use.
 
-# Symbols from other modules intentionally not lifted to package scope,
-# as they're all internal.
+import enum
+
+
+class ExpressionConstant(enum.Enum):
+    """Enumeration for constants recognized in all expressions."""
+
+    NULL = "null"
+    INGEST_DATE = "ingest_date"
+
+
+def categorizeConstant(name: str) -> ExpressionConstant | None:
+    """Categorize an identifier in a parsed expression as one of a few global
+    constants.
+
+    Parameters
+    ----------
+    name : `str`
+        Identifier to categorize.  Case-insensitive.
+
+    Returns
+    -------
+    categorized : `ExpressionConstant` or `None`
+        Enumeration value if the string represents a constant, `None`
+        otherwise.
+    """
+    try:
+        return ExpressionConstant(name.lower())
+    except ValueError:
+        return None

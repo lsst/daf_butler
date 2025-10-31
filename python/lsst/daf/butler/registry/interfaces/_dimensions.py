@@ -32,8 +32,6 @@ from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.relation import Join, Relation
-
 from ...dimensions import (
     DataCoordinate,
     DataIdValue,
@@ -53,7 +51,6 @@ if TYPE_CHECKING:
         SqlSelectBuilder,
     )
     from ...queries.tree import AnyDatasetType, Predicate  # Future query system (direct,client,server).
-    from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
 
 
@@ -285,45 +282,6 @@ class DimensionRecordStorageManager(VersionedExtension):
         ------
         KeyError
             Raised if the given key cannot be found in the database.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def join(
-        self,
-        element_name: str,
-        target: Relation,
-        join: Join,
-        context: queries.SqlQueryContext,
-    ) -> Relation:
-        """Join this dimension element's records to a relation.
-
-        Parameters
-        ----------
-        element_name : `str`
-            Name of the dimension element whose relation should be joined in.
-        target : `~lsst.daf.relation.Relation`
-            Existing relation to join to.  Implementations may require that
-            this relation already include dimension key columns for this
-            dimension element and assume that dataset or spatial join relations
-            that might provide these will be included in the relation tree
-            first.
-        join : `~lsst.daf.relation.Join`
-            Join operation to use when the implementation is an actual join.
-            When a true join is being simulated by other relation operations,
-            this objects `~lsst.daf.relation.Join.min_columns` and
-            `~lsst.daf.relation.Join.max_columns` should still be respected.
-        context : `.queries.SqlQueryContext`
-            Object that manages relation engines and database-side state (e.g.
-            temporary tables) for the query.
-
-        Returns
-        -------
-        joined : `~lsst.daf.relation.Relation`
-            New relation that includes this relation's dimension key and record
-            columns, as well as all columns in ``target``,  with rows
-            constrained to those for which this element's dimension key values
-            exist in the registry and rows already exist in ``target``.
         """
         raise NotImplementedError()
 

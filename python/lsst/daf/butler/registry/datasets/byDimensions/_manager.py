@@ -5,8 +5,7 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 import dataclasses
 import datetime
 import logging
-from collections.abc import Callable, Iterable, Mapping, Sequence, Set
-from contextlib import AbstractContextManager
+from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
@@ -21,7 +20,7 @@ from ...._exceptions_legacy import DatasetTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
 from ....direct_query_driver import SqlJoinsBuilder, SqlSelectBuilder  # new query system, server+direct only
-from ....queries import Query
+from ....queries import QueryFactoryFunction
 from ....queries import tree as qt  # new query system, both clients + server
 from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
@@ -1012,7 +1011,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collection: CollectionRecord,
         datasets: Iterable[DatasetRef],
         timespan: Timespan,
-        query_func: Callable[[], AbstractContextManager[Query]],
+        query_func: QueryFactoryFunction,
     ) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if (storage := self._find_storage(dataset_type.name)) is None:
@@ -1100,7 +1099,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        query_func: Callable[[], AbstractContextManager[Query]],
+        query_func: QueryFactoryFunction,
     ) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if (storage := self._find_storage(dataset_type.name)) is None:

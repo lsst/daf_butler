@@ -32,8 +32,7 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Sequence, Set
-from contextlib import AbstractContextManager
+from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
@@ -41,7 +40,7 @@ from ..._dataset_type import DatasetType
 from ..._exceptions import DatasetTypeError, DatasetTypeNotSupportedError
 from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
-from ...queries import Query
+from ...queries import QueryFactoryFunction
 from ...queries.tree import AnyDatasetFieldName
 from ._versioning import VersionedExtension, VersionTuple
 
@@ -524,7 +523,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         collection: CollectionRecord,
         datasets: Iterable[DatasetRef],
         timespan: Timespan,
-        query_func: Callable[[], AbstractContextManager[Query]],
+        query_func: QueryFactoryFunction,
     ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -541,7 +540,7 @@ class DatasetRecordStorageManager(VersionedExtension):
             `DatasetType` as ``dataset_type``, but this is not checked.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
-        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+        query_func : `QueryFactoryFunction`
             Function returning a context manager that sets up a `Query` object
             for querying the registry. (That is, a function equivalent to
             ``Butler.query()``).
@@ -568,7 +567,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         timespan: Timespan,
         *,
         data_ids: Iterable[DataCoordinate] | None = None,
-        query_func: Callable[[], AbstractContextManager[Query]],
+        query_func: QueryFactoryFunction,
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -589,7 +588,7 @@ class DatasetRecordStorageManager(VersionedExtension):
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``dataset_type`` in ``collection`` will
             be decertified.
-        query_func : `Callable` [[], `AbstractContextManager` [ `Query` ]],
+        query_func : `QueryFactoryFunction`
             Function returning a context manager that sets up a `Query` object
             for querying the registry. (That is, a function equivalent to
             ``Butler.query()``).

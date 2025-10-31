@@ -27,11 +27,12 @@
 
 from __future__ import annotations
 
-__all__ = ("Query",)
+__all__ = ("Query", "QueryFactoryFunction")
 
-from collections.abc import Iterable, Mapping, Set
+from collections.abc import Callable, Iterable, Mapping, Set
+from contextlib import AbstractContextManager
 from types import EllipsisType
-from typing import Any, final
+from typing import Any, TypeAlias, final
 
 import astropy.table
 
@@ -831,3 +832,10 @@ class Query(QueryBase):
             storage_class_name,
             Query(self._driver, self._tree.join_dataset(dataset_type_name, dataset_search)),
         )
+
+
+QueryFactoryFunction: TypeAlias = Callable[[], AbstractContextManager[Query]]
+"""
+Type signature for a function returning a context manager that sets up a
+`Query` object. (That is, a function equivalent to ``Butler.query()``).
+"""

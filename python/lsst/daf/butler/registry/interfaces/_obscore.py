@@ -43,9 +43,9 @@ from ._versioning import VersionedExtension, VersionTuple
 if TYPE_CHECKING:
     from lsst.sphgeom import Region
 
-    from ..._column_type_info import ColumnTypeInfo
     from ..._dataset_ref import DatasetRef
     from ...dimensions import DimensionUniverse
+    from ...queries import QueryFactoryFunction
     from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
@@ -102,7 +102,6 @@ class ObsCoreTableManager(VersionedExtension):
         datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
-        column_type_info: ColumnTypeInfo,
     ) -> ObsCoreTableManager:
         """Construct an instance of the manager.
 
@@ -124,9 +123,6 @@ class ObsCoreTableManager(VersionedExtension):
             Manager for Registry dimensions.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.
-        column_type_info : `ColumnTypeInfo`
-            Information about column types that can differ between data
-            repositories and registry instances.
 
         Returns
         -------
@@ -134,6 +130,20 @@ class ObsCoreTableManager(VersionedExtension):
             An instance of a concrete `ObsCoreTableManager` subclass.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def set_query_function(self, query_func: QueryFactoryFunction) -> None:
+        """Set up a function to be used for querying the database.  This must
+        be called before attempting to insert datasets.
+
+        Parameters
+        ----------
+        query_func : `QueryFactoryFunction`
+            Function returning a context manager that sets up a `Query` object
+            for querying the registry. (That is, a function equivalent to
+            ``Butler.query()``).
+        """
+        pass
 
     @abstractmethod
     def config_json(self) -> str:
