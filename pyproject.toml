@@ -30,7 +30,6 @@ dependencies = [
     "lsst-sphgeom",
     "lsst-utils",
     "lsst-resources",
-    "lsst-daf-relation",
     "deprecated >= 1.2",
     "pydantic >=2,<3.0",
     "pyarrow >= 0.16",
