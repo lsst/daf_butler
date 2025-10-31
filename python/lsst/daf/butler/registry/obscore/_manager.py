@@ -43,7 +43,6 @@ from lsst.sphgeom import Region
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import chunk_iterable
 
-from ..._column_type_info import ColumnTypeInfo
 from ...queries import Query, QueryFactoryFunction
 from ..interfaces import ObsCoreTableManager, VersionTuple
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
@@ -145,9 +144,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         Spatial plugins.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
-    column_type_info : `ColumnTypeInfo`
-        Information about column types that can differ between data
-        repositories and registry instances.
     """
 
     def __init__(
@@ -161,7 +157,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         dimensions: DimensionRecordStorageManager,
         spatial_plugins: Collection[SpatialObsCorePlugin],
         registry_schema_version: VersionTuple | None = None,
-        column_type_info: ColumnTypeInfo,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self.db = db
@@ -170,7 +165,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.universe = universe
         self.config = config
         self.spatial_plugins = spatial_plugins
-        self._column_type_info = column_type_info
         self._query_func: QueryFactoryFunction | None = None
         exposure_region_factory = _ExposureRegionFactory(dimensions, self._get_query_object)
         self.record_factory = RecordFactory.get_record_type_from_universe(universe)(
@@ -206,7 +200,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # 'initialize'.
             spatial_plugins=self.spatial_plugins,
             registry_schema_version=self._registry_schema_version,
-            column_type_info=self._column_type_info,
         )
         if self._query_func is not None:
             manager.set_query_function(self._query_func)
@@ -223,7 +216,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
-        column_type_info: ColumnTypeInfo,
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
@@ -249,7 +241,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             dimensions=dimensions,
             spatial_plugins=spatial_plugins,
             registry_schema_version=registry_schema_version,
-            column_type_info=column_type_info,
         )
 
     def _get_query_object(self) -> AbstractContextManager[Query]:
