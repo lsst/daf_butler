@@ -2540,6 +2540,26 @@ class RegistryTests(ABC):
             ],
         )
 
+        # Test dataset association query against a chained collection.
+        # This is a regression test for DM-53179, as well as verification
+        # that the flattenChains parameter has never had any effect.
+        butler.collections.register("chain", CollectionType.CHAINED)
+        butler.collections.redefine_chain("chain", [collection])
+        expected_datasets = (
+            DatasetAssociation(ref=bias2a, collection=collection, timespan=Timespan(begin=t2, end=t4)),
+            DatasetAssociation(ref=bias3a, collection=collection, timespan=Timespan(begin=t1, end=t3)),
+            DatasetAssociation(ref=bias2b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+            DatasetAssociation(ref=bias3b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasetAssociations("bias", collections=["chain"], flattenChains=False)),
+            expected_datasets,
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasetAssociations("bias", collections=["chain"], flattenChains=True)),
+            expected_datasets,
+        )
+
         class Ambiguous:
             """Tag class to denote lookups that should be ambiguous."""
 

@@ -238,7 +238,7 @@ class RegistryBase(Registry):
                 collections,
                 datasetType=datasetType,
                 collectionTypes=collectionTypes,
-                flattenChains=flattenChains,
+                flattenChains=True,
             )
             # It's annoyingly difficult to just do the collection query once,
             # since query_info doesn't accept all the expression types that
