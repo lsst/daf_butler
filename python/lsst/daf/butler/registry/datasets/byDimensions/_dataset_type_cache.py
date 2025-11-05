@@ -56,6 +56,7 @@ class DatasetTypeCache:
     def __init__(self) -> None:
         self.tables = TableCache()
         self._by_name_cache: dict[str, tuple[DatasetType, int]] = {}
+        self._by_id_cache: dict[int, DatasetType] = {}
         self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
         self._full = False
         self._dimensions_full = False
@@ -112,6 +113,7 @@ class DatasetTypeCache:
             Additional opaque object stored with this dataset type.
         """
         self._by_name_cache[dataset_type.name] = (dataset_type, id)
+        self._by_id_cache[id] = dataset_type
 
     def set(
         self,
@@ -136,7 +138,7 @@ class DatasetTypeCache:
         """
         self.clear()
         for item in data:
-            self._by_name_cache[item[0].name] = item
+            self.add(item[0], item[1])
         self._full = full
         if dimensions_data is not None:
             self._by_dimensions_cache.update(dimensions_data)
@@ -146,6 +148,7 @@ class DatasetTypeCache:
         """Remove everything from the cache."""
         self._by_name_cache = {}
         self._by_dimensions_cache = {}
+        self._by_id_cache = {}
         self._full = False
         self._dimensions_full = False
 
@@ -157,7 +160,9 @@ class DatasetTypeCache:
         name : `str`
             Name of the dataset type to remove.
         """
-        self._by_name_cache.pop(name, None)
+        _, id = self._by_name_cache.pop(name, (None, None))
+        if id is not None:
+            self._by_id_cache.pop(id, None)
 
     def get(self, name: str) -> tuple[DatasetType | None, int | None]:
         """Return cached info given dataset type name.
@@ -180,6 +185,21 @@ class DatasetTypeCache:
         if item is None:
             return (None, None)
         return item
+
+    def get_by_id(self, id: int) -> DatasetType | None:
+        """Return cached dataset type given the dataset type ID.
+
+        Parameters
+        ----------
+        id : `int`
+            Dataset type ID (database key).
+
+        Returns
+        -------
+        dataset_type : `DatasetType`
+            The `DatasetType` information associated with the given ID.
+        """
+        return self._by_id_cache.get(id, None)
 
     def get_dataset_type(self, name: str) -> DatasetType | None:
         """Return dataset type given its name.
