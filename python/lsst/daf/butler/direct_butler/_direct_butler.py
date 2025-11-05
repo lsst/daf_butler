@@ -1256,12 +1256,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
         datastore_records: bool = False,
     ) -> DatasetRef | None:
+        if not isinstance(id, uuid.UUID):
+            id = uuid.UUID(id)
         ref = self._registry.getDataset(id)
         if ref is not None:
             if dimension_records:

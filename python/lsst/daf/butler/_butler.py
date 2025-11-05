@@ -1012,7 +1012,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @abstractmethod
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
@@ -1023,7 +1023,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         Parameters
         ----------
         id : `DatasetId`
-            The unique identifier for the dataset.
+            The unique identifier for the dataset, as an instance of
+            `uuid.UUID` or a string containing a hexadecimal number.
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.

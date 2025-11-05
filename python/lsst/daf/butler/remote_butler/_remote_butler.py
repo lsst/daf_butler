@@ -386,7 +386,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
