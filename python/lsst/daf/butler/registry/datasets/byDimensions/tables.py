@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 __all__ = (
+    "StaticDatasetTableSpecTuple",
     "StaticDatasetTablesTuple",
     "addDatasetForeignKey",
     "makeCalibTableName",
@@ -37,8 +38,7 @@ __all__ = (
     "makeTagTableSpec",
 )
 
-from collections import namedtuple
-from typing import Any, TypeAlias
+from typing import Any, NamedTuple, TypeAlias
 
 import sqlalchemy
 
@@ -57,13 +57,18 @@ class MissingDatabaseTableError(RuntimeError):
     """Exception raised when a table is not found in a database."""
 
 
-StaticDatasetTablesTuple = namedtuple(
-    "StaticDatasetTablesTuple",
-    [
-        "dataset_type",
-        "dataset",
-    ],
-)
+class StaticDatasetTableSpecTuple(NamedTuple):
+    """Table specifications for static dataset tables."""
+
+    dataset_type: ddl.TableSpec
+    dataset: ddl.TableSpec
+
+
+class StaticDatasetTablesTuple(NamedTuple):
+    """SQLAlchemy table objects for static dataset tables."""
+
+    dataset_type: sqlalchemy.Table
+    dataset: sqlalchemy.Table
 
 
 def addDatasetForeignKey(
@@ -118,7 +123,7 @@ def makeStaticTableSpecs(
     collections: type[CollectionManager],
     universe: DimensionUniverse,
     schema_version: VersionTuple,
-) -> StaticDatasetTablesTuple:
+) -> StaticDatasetTableSpecTuple:
     """Construct all static tables used by the classes in this package.
 
     Static tables are those that are present in all Registries and do not
@@ -135,7 +140,7 @@ def makeStaticTableSpecs(
 
     Returns
     -------
-    specs : `StaticDatasetTablesTuple`
+    specs : `StaticDatasetTableSpecTuple`
         A named tuple containing `ddl.TableSpec` instances.
     """
     ingest_date_type: type
@@ -148,7 +153,7 @@ def makeStaticTableSpecs(
         # default just to be consistent with the existing schema.
         ingest_date_default = sqlalchemy.sql.func.now()
 
-    specs = StaticDatasetTablesTuple(
+    specs = StaticDatasetTableSpecTuple(
         dataset_type=ddl.TableSpec(
             fields=[
                 ddl.FieldSpec(

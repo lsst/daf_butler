@@ -29,7 +29,14 @@ from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._dataset_type_cache import DatasetTypeCache
 from .summaries import CollectionSummaryManager
-from .tables import DynamicTables, addDatasetForeignKey, makeStaticTableSpecs, makeTagTableSpec
+from .tables import (
+    DynamicTables,
+    StaticDatasetTableSpecTuple,
+    StaticDatasetTablesTuple,
+    addDatasetForeignKey,
+    makeStaticTableSpecs,
+    makeTagTableSpec,
+)
 
 if TYPE_CHECKING:
     from ...interfaces import (
@@ -39,7 +46,6 @@ if TYPE_CHECKING:
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
-    from .tables import StaticDatasetTablesTuple
 
 
 # This has to be updated on every schema change
@@ -208,7 +214,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collections: type[CollectionManager],
         universe: DimensionUniverse,
         schema_version: VersionTuple | None,
-    ) -> StaticDatasetTablesTuple:
+    ) -> StaticDatasetTableSpecTuple:
         """Construct all static tables used by the classes in this package.
 
         Static tables are those that are present in all Registries and do not
