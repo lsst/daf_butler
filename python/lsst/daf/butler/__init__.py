@@ -41,9 +41,6 @@ from ._butler_config import *
 from ._butler_metrics import *
 from ._butler_repo_index import *
 from ._collection_type import CollectionType
-from ._column_categorization import *
-from ._column_tags import *
-from ._column_type_info import *
 from ._config import *
 from ._config_support import LookupKey
 from ._dataset_association import *

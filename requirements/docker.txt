@@ -332,7 +332,6 @@ deprecated==1.2.18 \
     --hash=sha256:bd5011788200372a32418f888e326a09ff80d0214bd961147cfed01b5c018eec
     # via
     #   -r ./main.in
-    #   lsst-daf-relation
     #   lsst-utils
 fastapi==0.120.1 \
     --hash=sha256:0e8a2c328e96c117272d8c794d3a97d205f753cc2e69dd7ee387b7488a75601f \
@@ -449,10 +448,6 @@ jmespath==1.0.1 \
     # via
     #   boto3
     #   botocore
-lsst-daf-relation==29.2025.4300 \
-    --hash=sha256:46c470c3e1a2d60b1c4530859a298b1977d899173ab3015f28ae00fd0e5fe514 \
-    --hash=sha256:7bc5e8b7b167be58d67140cec55ac1e291f6380baa28c2c4c03e37babded69b4
-    # via -r ./docker.in
 lsst-resources==29.2025.4300 \
     --hash=sha256:9fc1e039db81b8d15dc073338078fb552613373f1ae255af96dc44f36246b01e \
     --hash=sha256:fbf7b3704842c205bf7e14378bf9b88e7da7c9f5feaede6808185692bb773582
@@ -485,7 +480,6 @@ lsst-utils==29.2025.4300 \
     --hash=sha256:ef1295213828a99c88099ccf7aa0aeeefcea63d1fa1191771ac0434eff8daf2d
     # via
     #   -r ./docker.in
-    #   lsst-daf-relation
     #   lsst-resources
 numpy==2.3.4 \
     --hash=sha256:035796aaaddfe2f9664b9a9372f089cfc88bd795a67bd1bfe15e6e770934cf64 \
@@ -665,7 +659,6 @@ pydantic==2.12.3 \
     # via
     #   -r ./main.in
     #   fastapi
-    #   lsst-daf-relation
     #   pydantic-settings
     #   safir
 pydantic-core==2.41.4 \
@@ -986,7 +979,6 @@ sqlalchemy==2.0.44 \
     --hash=sha256:ff486e183d151e51b1d694c7aa1695747599bb00b9f5f604092b54b74c64a8e1
     # via
     #   -r ./main.in
-    #   lsst-daf-relation
     #   sentry-sdk
 starlette==0.49.1 \
     --hash=sha256:481a43b71e24ed8c43b11ea02f5353d77840e01480881b8cb5a26b8cae64a8cb \

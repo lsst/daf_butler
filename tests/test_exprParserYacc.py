@@ -32,14 +32,14 @@ from itertools import chain
 
 import astropy.time
 
-from lsst.daf.butler.registry.queries.expressions.parser import (
+from lsst.daf.butler.queries.expressions.parser import (
     ParseError,
     ParserYacc,
     ParserYaccError,
     TreeVisitor,
     exprTree,
 )
-from lsst.daf.butler.registry.queries.expressions.parser.parserYacc import _parseTimeString
+from lsst.daf.butler.queries.expressions.parser.parserYacc import _parseTimeString
 
 
 class _Visitor(TreeVisitor):

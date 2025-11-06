@@ -6,7 +6,6 @@
 lsst-sphgeom
 lsst-utils
 lsst-resources[https,s3]
-lsst-daf-relation
 
 # Server-only dependencies
 uvicorn

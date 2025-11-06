@@ -39,8 +39,9 @@ from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..column_spec import ColumnType
 from ..dimensions import DimensionUniverse
-from ..registry.queries.expressions.categorize import ExpressionConstant, categorizeConstant
-from ..registry.queries.expressions.parser import (
+from ._identifiers import IdentifierContext, interpret_identifier
+from .expressions.categorize import ExpressionConstant, categorizeConstant
+from .expressions.parser import (
     BoxNode,
     CircleNode,
     Node,
@@ -51,7 +52,6 @@ from ..registry.queries.expressions.parser import (
     TreeVisitor,
     parse_expression,
 )
-from ._identifiers import IdentifierContext, interpret_identifier
 from .tree import (
     BinaryExpression,
     ColumnExpression,
