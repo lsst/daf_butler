@@ -39,7 +39,7 @@ import sqlalchemy
 from ..._collection_type import CollectionType
 from ...column_spec import COLLECTION_NAME_MAX_LENGTH
 from ...timespan_database_representation import TimespanDatabaseRepresentation
-from ..interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
+from ..interfaces import ChainedCollectionRecord, CollectionRecord, Joinable, RunRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
@@ -186,8 +186,8 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         return parent_names
 
     def lookup_name_sql(
-        self, sql_key: sqlalchemy.ColumnElement[int], sql_from_clause: sqlalchemy.FromClause
-    ) -> tuple[sqlalchemy.ColumnElement[str], sqlalchemy.FromClause]:
+        self, sql_key: sqlalchemy.ColumnElement[int], sql_from_clause: Joinable
+    ) -> tuple[sqlalchemy.ColumnElement[str], Joinable]:
         # Docstring inherited.
         return (
             self._tables.collection.c.name,

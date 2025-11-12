@@ -1024,7 +1024,11 @@ class SqlRegistry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        return self._managers.datasets.getDatasetRef(id)
+        refs = self._managers.datasets.get_dataset_refs([id])
+        if len(refs) == 0:
+            return None
+        else:
+            return refs[0]
 
     def _fetch_run_dataset_ids(self, run: str) -> list[DatasetId]:
         """Return the IDs of all datasets in the given ``RUN``

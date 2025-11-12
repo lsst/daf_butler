@@ -32,6 +32,7 @@ __all__ = [
     "ChainedCollectionRecord",
     "CollectionManager",
     "CollectionRecord",
+    "Joinable",
     "RunRecord",
 ]
 
@@ -52,6 +53,8 @@ if TYPE_CHECKING:
 
 
 _Key = TypeVar("_Key")
+
+Joinable = TypeVar("Joinable", sqlalchemy.Select, sqlalchemy.FromClause)
 
 
 class CollectionRecord(Generic[_Key]):
@@ -756,8 +759,8 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         raise NotImplementedError()
 
     def lookup_name_sql(
-        self, sql_key: sqlalchemy.ColumnElement[_Key], sql_from_clause: sqlalchemy.FromClause
-    ) -> tuple[sqlalchemy.ColumnElement[str], sqlalchemy.FromClause]:
+        self, sql_key: sqlalchemy.ColumnElement[_Key], sql_from_clause: Joinable
+    ) -> tuple[sqlalchemy.ColumnElement[str], Joinable]:
         """Return a SQLAlchemy column and FROM clause that enable a query
         to look up a collection name from the key.
 
