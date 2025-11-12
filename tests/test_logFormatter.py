@@ -27,14 +27,21 @@
 
 """Tests for ButlerLogRecordsFormatter."""
 
+import json
 import logging
 import os
+import sys
 import tempfile
 import unittest
 from logging import FileHandler
 
 from lsst.daf.butler import Butler, DatasetRef, DatasetType, FileDataset
-from lsst.daf.butler.logging import ButlerLogRecordHandler, JsonLogFormatter
+from lsst.daf.butler.logging import (
+    ButlerLogRecordHandler,
+    ButlerLogRecords,
+    JsonLogFormatter,
+    _ButlerLogRecordsModelV1,
+)
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -57,6 +64,9 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testButlerLogRecordsFormatter(self):
+        """Test that we can get and put records handled by
+        ButlerLogRecordHandler.
+        """
         handler = ButlerLogRecordHandler()
 
         log = logging.getLogger(self.id())
@@ -73,30 +83,126 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         self.assertEqual(records, handler.records)
         self.assertEqual(len(records), 2)
 
-    def testJsonLogRecordsFormatter(self):
-        """Test that externally created JSON format stream files work."""
+    def testButlerLogRecordsFormatterExtra(self):
+        """Test that we can get and put records handled by
+        ButlerLogRecordHandler with extra JSON data attached.
+        """
+        handler = ButlerLogRecordHandler()
+
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)
-
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-", delete=False)
-
-        handler = FileHandler(tmp.name)
-        handler.setFormatter(JsonLogFormatter())
         log.addHandler(handler)
 
         log.info("An INFO message")
         log.debug("A DEBUG message")
         log.warning("A WARNING message")
 
-        handler.close()
+        extra_data = {"extra1": 1, "extra2": 2}
+        handler.records.extra = extra_data
+        ref = self.butler.put(handler.records, self.datasetType)
+        records = self.butler.get(ref)
 
-        # Now ingest the file.
-        ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
-        dataset = FileDataset(path=tmp.name, refs=ref)
-        self.butler.ingest(dataset, transfer="move")
+        self.assertEqual(records, handler.records)
+        self.assertEqual(len(records), 2)
+
+    @unittest.skipIf(
+        sys.version_info < (3, 12, 0),
+        "This test requires NamedTemporaryFile behavior not available in older Python versions.",
+    )
+    def testButlerLogRecordsFormatterV1(self):
+        """Test that we can read log records stored via the old V1 format
+        (just a JSON list).
+        """
+        handler = ButlerLogRecordHandler()
+
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+        log.addHandler(handler)
+
+        log.info("An INFO message")
+        log.debug("A DEBUG message")
+        log.warning("A WARNING message")
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", prefix="butler-log-", delete_on_close=False
+        ) as tmp:
+            # We can't use butler.put since that always writes the new format,
+            # so we write manually and ingest.
+            tmp.write(
+                _ButlerLogRecordsModelV1(root=handler.records._records).model_dump_json(
+                    exclude_unset=True, exclude_defaults=True
+                )
+            )
+            tmp.close()
+            ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
+            dataset = FileDataset(path=os.path.abspath(tmp.name), refs=ref)
+            self.butler.ingest(dataset, transfer="move")
 
         records = self.butler.get(ref)
+        self.assertEqual(records, handler.records)
         self.assertEqual(len(records), 2)
+
+    @unittest.skipIf(
+        sys.version_info < (3, 12, 0),
+        "This test requires NamedTemporaryFile behavior not available in older Python versions.",
+    )
+    def testJsonLogRecordsFormatter(self):
+        """Test that externally created JSON format stream files work."""
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-") as tmp:
+            handler = FileHandler(tmp.name)
+            handler.setFormatter(JsonLogFormatter())
+            log.addHandler(handler)
+
+            log.info("An INFO message")
+            log.debug("A DEBUG message")
+            log.warning("A WARNING message")
+
+            handler.close()
+
+            # Now ingest the file.
+            ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
+            dataset = FileDataset(path=tmp.name, refs=ref)
+            self.butler.ingest(dataset, transfer="move")
+
+            records = self.butler.get(ref)
+            self.assertEqual(len(records), 2)
+
+    @unittest.skipIf(
+        sys.version_info < (3, 12, 0),
+        "This test requires NamedTemporaryFile behavior not available in older Python versions.",
+    )
+    def testJsonLogRecordsFormatterExtra(self):
+        """Test that externally created JSON format stream files work with
+        extra JSON data appended.
+        """
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-") as tmp:
+            handler = FileHandler(tmp.name)
+            handler.setFormatter(JsonLogFormatter())
+            log.addHandler(handler)
+
+            log.info("An INFO message")
+            log.debug("A DEBUG message")
+            log.warning("A WARNING message")
+
+            handler.close()
+            extra_data = {"extra1": 1, "extra2": 2}
+            with open(tmp.name, "a") as stream:
+                ButlerLogRecords.write_streaming_extra(stream, json.dumps(extra_data))
+
+            # Now ingest the file.
+            ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
+            dataset = FileDataset(path=tmp.name, refs=ref)
+            self.butler.ingest(dataset, transfer="move")
+
+            records: ButlerLogRecords = self.butler.get(ref)
+            self.assertEqual(len(records), 2)
+            self.assertEqual(records.extra, extra_data)
 
 
 if __name__ == "__main__":
