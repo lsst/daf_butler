@@ -2574,14 +2574,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     accessible only via `SqlRegistry` methods.
     """
 
-    datastore: Datastore
-    """The object that manages actual dataset storage (`Datastore`).
-
-    Direct user access to the datastore should rarely be necessary; the primary
-    exception is the case where a `Datastore` implementation provides extra
-    functionality beyond what the base class defines.
-    """
-
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
