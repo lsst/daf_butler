@@ -43,6 +43,7 @@ import tempfile
 import unittest
 import unittest.mock
 import uuid
+import weakref
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -749,6 +750,38 @@ class ButlerTests(ButlerPutGetTests):
             # No aliases registered.
             Butler.from_config("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
+
+    def testClose(self):
+        butler = self.create_empty_butler()
+        is_direct_butler = isinstance(butler, DirectButler)
+        if is_direct_butler:
+            self.assertFalse(butler._closed)
+            registry_ref = weakref.ref(butler._registry)
+            managers_ref = weakref.ref(butler._registry._managers)
+            datastore_ref = weakref.ref(butler._datastore)
+
+        with butler as butler_from_context_manager:
+            self.assertIs(butler, butler_from_context_manager)
+        if is_direct_butler:
+            self.assertTrue(butler._closed)
+            with self.assertRaisesRegex(RuntimeError, "has been closed"):
+                butler.get_dataset_type("raw")
+
+        # Close may be called multiple times.
+        butler.close()
+        if is_direct_butler:
+            self.assertTrue(butler._closed)
+
+        # Make sure that a closed Butler does not have any circular references
+        # that stop it from being garbage collected.
+        butler_ref = weakref.ref(butler)
+        del butler
+        del butler_from_context_manager
+        self.assertIsNone(butler_ref(), "Butler should have been garbage collected")
+        if is_direct_butler:
+            self.assertIsNone(registry_ref(), "SqlRegistry should have been garbage collected")
+            self.assertIsNone(managers_ref(), "Registry managers should have been garbage collected")
+            self.assertIsNone(datastore_ref(), "Datastore should have been garbage collected")
 
     def testDafButlerRepositories(self):
         with unittest.mock.patch.dict(

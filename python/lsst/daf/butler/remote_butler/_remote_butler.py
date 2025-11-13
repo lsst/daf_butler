@@ -735,6 +735,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             connection=self._connection, cache=self._cache, defaults=defaults, metrics=metrics
         )
 
+    def close(self) -> None:
+        pass
+
     @property
     def _file_transfer_source(self) -> RemoteFileTransferSource:
         return RemoteFileTransferSource(self._connection)

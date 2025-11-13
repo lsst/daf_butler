@@ -163,6 +163,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
         self._registry_shim = RegistryShim(self)
+        self._closed = False
 
         return self
 
@@ -249,6 +250,18 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             storageClasses=self.storageClasses,
             metrics=metrics,
         )
+
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._registry.close()
+            # Break circular references to allow clean-up to happen without
+            # waiting for global garbage collection.  This will also cause an
+            # exception to be raised if a user attempts to use the instance
+            # after closing it.
+            self._registry = _BUTLER_CLOSED_INSTANCE
+            self._registry_shim = _BUTLER_CLOSED_INSTANCE
+            self._datastore = _BUTLER_CLOSED_INSTANCE
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -2584,6 +2597,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     the ``registry`` property.
     """
 
+    _closed: bool
+    """`True` if close() has already been called on this instance; `False`
+    otherwise.
+    """
+
 
 class _RefGroup(NamedTuple):
     """Key identifying a batch of DatasetRefs to be inserted in
@@ -2606,3 +2624,11 @@ def _to_uuid(id: DatasetId | str) -> uuid.UUID:
         return id
     else:
         return uuid.UUID(id)
+
+
+class _ButlerClosed:
+    def __getattr__(self, name: str) -> Any:
+        raise RuntimeError("Attempted to use a Butler instance which has been closed.")
+
+
+_BUTLER_CLOSED_INSTANCE: Any = _ButlerClosed()
