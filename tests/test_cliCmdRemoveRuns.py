@@ -59,6 +59,7 @@ class RemoveCollectionTest(unittest.TestCase):
         with self.runner.isolated_filesystem():
             root = "repo"
             repo = MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+            self.enterContext(repo.butler)
             # Add a dataset type that will have no datasets to make sure it
             # isn't printed.
             repo.butler.registry.registerDatasetType(
@@ -120,7 +121,8 @@ class RemoveCollectionTest(unittest.TestCase):
 
             # Remake the repo and check --no-confirm option.
             root = "repo1"
-            MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+            repo1 = MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+            repo1.butler.close()
 
             # Add the run to a CHAINED collection.
             parentCollection = "parent"

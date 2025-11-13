@@ -48,6 +48,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
         self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
+        self.enterContext(self.testRepo.butler)
 
     def tearDown(self):
         removeTestTempDir(self.root)

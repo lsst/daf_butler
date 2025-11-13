@@ -71,6 +71,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         self.testRepo = MetricTestRepo(
             self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
         )
+        self.enterContext(self.testRepo.butler)
 
     def tearDown(self):
         removeTestTempDir(self.root)

@@ -52,6 +52,7 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
         self.addCleanup(removeTestTempDir, self.root)
 
         self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
+        self.enterContext(self.testRepo.butler)
 
         self.root2 = makeTestTempDir(TESTDIR)
         self.addCleanup(removeTestTempDir, self.root2)
