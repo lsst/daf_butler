@@ -902,7 +902,8 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
-        _RegistryFactory(registryConfig).create_from_config()
+        registry = _RegistryFactory(registryConfig).create_from_config()
+        registry.close()
 
         # Write the YAML file so that some tests can recreate butler from it.
         config.dumpToUri(os.path.join(self.root, "butler.yaml"))

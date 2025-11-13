@@ -25,6 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import contextlib
 import os
 import tempfile
 import unittest
@@ -70,6 +71,7 @@ class ObsCoreTests(TestCaseMixin):
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
         registry = _RegistryFactory(config).create_from_config(butlerRoot=self.root)
+        self.enterContext(contextlib.closing(registry))
         self.initialize_registry(registry)
         return registry
 

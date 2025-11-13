@@ -67,7 +67,8 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
         # Make a butler and import dimension definitions.
         registryConfig = RegistryConfig(self.config.get("registry"))
-        _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
+        registry = _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
+        registry.close()
         butler = Butler.from_config(self.config, writeable=True, run="RUN", metrics=self.metrics)
         self.enterContext(butler)
         assert isinstance(butler, DirectButler)
