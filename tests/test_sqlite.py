@@ -31,6 +31,7 @@ import stat
 import tempfile
 import unittest
 from contextlib import contextmanager
+from typing import cast
 
 import sqlalchemy
 
@@ -209,7 +210,9 @@ class SqliteFileRegistryTests(RegistryTests):
         if registry_config is None:
             registry_config = self.makeRegistryConfig()
         config["registry"] = registry_config
-        return makeTestRepo(self.root, config=config)
+        butler = makeTestRepo(self.root, config=config)
+        cast(unittest.TestCase, self).enterContext(butler)
+        return butler
 
 
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -260,7 +263,9 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # with default managers.
         if registry_config is None:
             registry_config = self.makeRegistryConfig()
-        return create_populated_sqlite_registry(registry_config=registry_config)
+        butler = create_populated_sqlite_registry(registry_config=registry_config)
+        cast(unittest.TestCase, self).enterContext(butler)
+        return butler
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which

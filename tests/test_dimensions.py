@@ -73,9 +73,9 @@ def loadDimensionData() -> DataCoordinateSequence:
     """
     # Create an in-memory SQLite database and Registry just to import the YAML
     # data and retrieve it as a set of DataCoordinate objects.
-    butler = create_populated_sqlite_registry(DIMENSION_DATA_FILE)
-    dimensions = butler.registry.dimensions.conform(["visit", "detector", "tract", "patch"])
-    return butler.registry.queryDataIds(dimensions).expanded().toSequence()
+    with create_populated_sqlite_registry(DIMENSION_DATA_FILE) as butler:
+        dimensions = butler.registry.dimensions.conform(["visit", "detector", "tract", "patch"])
+        return butler.registry.queryDataIds(dimensions).expanded().toSequence()
 
 
 class ConcreteTestDimensionPacker(DimensionPacker):

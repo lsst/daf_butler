@@ -32,6 +32,7 @@ import os
 import unittest
 import warnings
 from contextlib import contextmanager
+from typing import cast
 
 import astropy.time
 import sqlalchemy
@@ -218,12 +219,15 @@ class PostgresqlRegistryTests(RegistryTests):
         self.postgres.patch_registry_config(config)
         registry = _RegistryFactory(config).create_from_config()
 
-        return DirectButler(
+        butler = DirectButler(
             config=ButlerConfig(),
             registry=registry,
             datastore=NullDatastore(None, None),
             storageClasses=StorageClassFactory(),
         )
+        cast(unittest.TestCase, self).enterContext(butler)
+
+        return butler
 
     def testSkipCalibs(self):
         if self.postgres.server_major_version() < 16:

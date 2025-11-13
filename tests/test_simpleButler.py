@@ -599,12 +599,14 @@ class SimpleButlerTests(TestCaseMixin):
         # This should not have a default instrument, because there are two.
         # Pass run instead of collections; this should set both.
         butler2 = Butler.from_config(butler=butler, run="imported_g")
+        self.enterContext(butler2)
         self.assertEqual(list(butler2.registry.defaults.collections), ["imported_g"])
         self.assertEqual(butler2.registry.defaults.run, "imported_g")
         self.assertFalse(butler2.registry.defaults.dataId)
         # Initialize a new butler with an instrument default explicitly given.
         # Set collections instead of run, which should then be None.
         butler3 = Butler.from_config(butler=butler, collections=["imported_g"], instrument="Cam2")
+        self.enterContext(butler3)
         self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
         self.assertIsNone(butler3.registry.defaults.run, None)
         self.assertEqual(butler3.registry.defaults.dataId.required, {"instrument": "Cam2"})
@@ -905,6 +907,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         # Write the YAML file so that some tests can recreate butler from it.
         config.dumpToUri(os.path.join(self.root, "butler.yaml"))
         butler = Butler.from_config(config, writeable=writeable)
+        self.enterContext(butler)
         DatastoreMock.apply(butler)
         return butler
 

@@ -69,6 +69,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         registryConfig = RegistryConfig(self.config.get("registry"))
         _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
         butler = Butler.from_config(self.config, writeable=True, run="RUN", metrics=self.metrics)
+        self.enterContext(butler)
         assert isinstance(butler, DirectButler)
         self.butler = butler
         self.butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")

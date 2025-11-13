@@ -162,6 +162,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
 
     def testCollection(self):
         butler = Butler.from_config(self.root, run="foo")
+        self.enterContext(butler)
 
         # try replacing the testRepo's butler with the one with the "foo" run.
         self.testRepo.butler = butler
@@ -270,6 +271,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
 
     def testSkymap(self):
         butler = Butler.from_config(self.root, run="foo")
+        self.enterContext(butler)
         # try replacing the testRepo's butler with the one with the "foo" run.
         self.testRepo.butler = butler
 

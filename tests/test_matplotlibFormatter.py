@@ -65,6 +65,7 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
 
     def testMatplotlibFormatter(self):
         butler = Butler.from_config(self.root, run="testrun")
+        self.enterContext(butler)
         datasetType = DatasetType("test_plot", [], "Plot", universe=butler.dimensions)
         butler.registry.registerDatasetType(datasetType)
         # Does not have to be a random image

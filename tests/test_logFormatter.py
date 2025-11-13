@@ -56,6 +56,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
 
         self.run = "testrun"
         self.butler = Butler.from_config(self.root, run=self.run)
+        self.enterContext(self.butler)
         self.datasetType = DatasetType("test_logs", [], "ButlerLogRecords", universe=self.butler.dimensions)
 
         self.butler.registry.registerDatasetType(self.datasetType)

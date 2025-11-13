@@ -61,6 +61,7 @@ class DirectButlerPostgreSQLTests(ButlerQueryTests, unittest.TestCase):
             datastore=NullDatastore(None, None),
             storageClasses=StorageClassFactory(),
         )
+        self.enterContext(butler)
         for arg in args:
             self.load_data(butler, arg)
         return butler

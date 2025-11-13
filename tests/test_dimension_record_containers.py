@@ -60,6 +60,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         # Create an in-memory SQLite database and Registry just to import the
         # YAML data.
         cls.butler = create_populated_sqlite_registry(*DIMENSION_DATA_FILES)
+        cls.enterClassContext(cls.butler)
         cls.records = {
             element: tuple(list(cls.butler.registry.queryDimensionRecords(element)))
             for element in ("visit", "skymap", "patch")
