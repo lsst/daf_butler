@@ -516,9 +516,10 @@ class Butler(LimitedButler, AbstractContextManager):  # numpydoc ignore=PR02
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        _RegistryFactory(registryConfig).create_from_config(
+        registry = _RegistryFactory(registryConfig).create_from_config(
             dimensionConfig=dimensionConfig, butlerRoot=root_uri
         )
+        registry.close()
 
         _LOG.verbose("Wrote new Butler configuration file to %s", configURI)
 
