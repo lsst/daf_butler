@@ -1386,7 +1386,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
         # Try formatter that fails and formatter that fails and leaves
         # a file behind
         for formatter in (BadWriteFormatter, BadNoWriteFormatter):
-            with self.subTest(formatter=formatter):
+            with self.subTest(formatter=str(formatter)):
                 # Monkey patch the formatter
                 datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 

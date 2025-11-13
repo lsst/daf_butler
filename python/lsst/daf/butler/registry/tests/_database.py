@@ -1130,7 +1130,7 @@ class DatabaseTests(ABC):
         for rhsRow in aRows:
             if rhsRow[TimespanReprClass.NAME] is None:
                 continue
-            with self.subTest(rhsRow=rhsRow):
+            with self.subTest(rhsRow=repr(rhsRow)):
                 expected = {}
                 for lhsRow in aRows:
                     if lhsRow[TimespanReprClass.NAME] is None:
@@ -1191,7 +1191,7 @@ class DatabaseTests(ABC):
         # Test relationship expressions between in-database timespans and
         # Python-literal instantaneous times.
         for t in timestamps:
-            with self.subTest(t=t):
+            with self.subTest(t=repr(t)):
                 expected = {}
                 for lhsRow in aRows:
                     if lhsRow[TimespanReprClass.NAME] is None:

@@ -227,7 +227,7 @@ class SchemaVersioningTestCase(unittest.TestCase):
         )
 
         for Manager, version, update, compatible in compat_matrix:
-            with self.subTest(test=(Manager, version, update, compatible)):
+            with self.subTest(test=repr((Manager, version, update, compatible))):
                 if compatible:
                     Manager.checkCompatibility(version, update)
                 else:
