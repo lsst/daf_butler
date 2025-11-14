@@ -1068,9 +1068,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # Work out the name we want this ingested file to have
             # inside the datastore
             tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
-            if not tgtLocation.uri.dirname().exists():
-                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
-                tgtLocation.uri.dirname().mkdir()
 
             # if we are transferring from a local file to a remote location
             # it may be more efficient to get the size and checksum of the
@@ -1312,10 +1309,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 )
 
         uri = location.uri
-
-        if not uri.dirname().exists():
-            log.debug("Folder %s does not exist yet so creating it.", uri.dirname())
-            uri.dirname().mkdir()
 
         if self._transaction is None:
             raise RuntimeError("Attempting to write artifact without transaction enabled")
@@ -2220,9 +2213,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             # Name the zip file based on index contents.
             tgtLocation = self.locationFactory.fromPath(index.calculate_zip_file_path_in_store())
-            if not tgtLocation.uri.dirname().exists():
-                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
-                tgtLocation.uri.dirname().mkdir()
 
             # Transfer the Zip file into the datastore.
             if not dry_run:
