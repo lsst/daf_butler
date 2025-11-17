@@ -87,11 +87,15 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         engine = SqliteDatabase.makeEngine(filename=filename)
-        return SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        db = SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        self.addCleanup(db.dispose)
+        return db
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
         engine = SqliteDatabase.makeEngine(filename=database.filename, writeable=writeable)
-        return SqliteDatabase.fromEngine(origin=database.origin, engine=engine, writeable=writeable)
+        db = SqliteDatabase.fromEngine(origin=database.origin, engine=engine, writeable=writeable)
+        self.addCleanup(db.dispose)
+        return db
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -105,12 +109,14 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         # Create a read-write database by passing in the filename.
         rwFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=filename), origin=0)
+        self.addCleanup(rwFromFilename.dispose)
         self.assertEqual(os.path.realpath(rwFromFilename.filename), os.path.realpath(filename))
         self.assertEqual(rwFromFilename.origin, 0)
         self.assertTrue(rwFromFilename.isWriteable())
         self.assertTrue(isEmptyDatabaseActuallyWriteable(rwFromFilename))
         # Create a read-write database via a URI.
         rwFromUri = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0)
+        self.addCleanup(rwFromUri.dispose)
         self.assertEqual(os.path.realpath(rwFromUri.filename), os.path.realpath(filename))
         self.assertEqual(rwFromUri.origin, 0)
         self.assertTrue(rwFromUri.isWriteable())
@@ -125,12 +131,14 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
             roFromFilename = SqliteDatabase.fromEngine(
                 SqliteDatabase.makeEngine(filename=filename), origin=0, writeable=False
             )
+            self.addCleanup(roFromFilename.dispose)
             self.assertEqual(os.path.realpath(roFromFilename.filename), os.path.realpath(filename))
             self.assertEqual(roFromFilename.origin, 0)
             self.assertFalse(roFromFilename.isWriteable())
             self.assertFalse(isEmptyDatabaseActuallyWriteable(roFromFilename))
             # Create a read-write database via a URI.
             roFromUri = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0, writeable=False)
+            self.addCleanup(roFromUri.dispose)
             self.assertEqual(os.path.realpath(roFromUri.filename), os.path.realpath(filename))
             self.assertEqual(roFromUri.origin, 0)
             self.assertFalse(roFromUri.isWriteable())
@@ -147,10 +155,14 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         engine = SqliteDatabase.makeEngine(filename=None)
-        return SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        db = SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        self.addCleanup(db.dispose)
+        return db
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
-        return SqliteDatabase.fromEngine(origin=database.origin, engine=database._engine, writeable=writeable)
+        db = SqliteDatabase.fromEngine(origin=database.origin, engine=database._engine, writeable=writeable)
+        self.addCleanup(db.dispose)
+        return db
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -162,12 +174,14 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
         """
         # Create an in-memory database by passing filename=None.
         memFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=None), origin=0)
+        self.addCleanup(memFromFilename.dispose)
         self.assertIsNone(memFromFilename.filename)
         self.assertEqual(memFromFilename.origin, 0)
         self.assertTrue(memFromFilename.isWriteable())
         self.assertTrue(isEmptyDatabaseActuallyWriteable(memFromFilename))
         # Create an in-memory database via a URI.
         memFromUri = SqliteDatabase.fromUri("sqlite://", origin=0)
+        self.addCleanup(memFromUri.dispose)
         self.assertIsNone(memFromUri.filename)
         self.assertEqual(memFromUri.origin, 0)
         self.assertTrue(memFromUri.isWriteable())
