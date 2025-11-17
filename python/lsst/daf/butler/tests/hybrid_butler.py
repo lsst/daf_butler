@@ -201,6 +201,9 @@ class HybridButler(Butler):
             datastore_records=datastore_records,
         )
 
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        return self._remote_butler.get_many_datasets(ids)
+
     def find_dataset(
         self,
         dataset_type: DatasetType | str,

@@ -467,3 +467,11 @@ class FileInfoPayload(pydantic.BaseModel):
     """List of retrieval information for each file associated with this
     artifact.
     """
+
+
+class GetManyDatasetsRequestModel(pydantic.BaseModel):
+    MAX_ITEMS_PER_REQUEST: ClassVar[int] = 10_000
+    dataset_ids: Annotated[list[UUID], pydantic.Field(max_length=MAX_ITEMS_PER_REQUEST)]
+
+
+GetManyDatasetsResponseModel: TypeAlias = DatasetRefResultModel

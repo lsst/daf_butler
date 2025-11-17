@@ -1042,6 +1042,26 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        """Retrieve a list of dataset entries.
+
+        Parameters
+        ----------
+        ids : `~collections.abc.Iterable` [ `DatasetId` or `str` ]
+            The unique identifiers for the datasets, as instances of
+            `uuid.UUID` or strings containing a hexadecimal number.
+
+        Returns
+        -------
+        refs : `list` [ `DatasetRef` ]
+            A list containing a `DatasetRef` for each of the given dataset IDs.
+            If a dataset was not found, no error is thrown -- it is just not
+            included in the list.  The returned datasets are in no particular
+            order.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def find_dataset(
         self,
         dataset_type: DatasetType | str,

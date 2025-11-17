@@ -1262,8 +1262,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         dimension_records: bool = False,
         datastore_records: bool = False,
     ) -> DatasetRef | None:
-        if not isinstance(id, uuid.UUID):
-            id = uuid.UUID(id)
+        id = _to_uuid(id)
         ref = self._registry.getDataset(id)
         if ref is not None:
             if dimension_records:
@@ -1275,6 +1274,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             if datastore_records:
                 ref = self._registry.get_datastore_records(ref)
         return ref
+
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        uuids = [_to_uuid(id) for id in ids]
+        return self._registry._managers.datasets.get_dataset_refs(uuids)
 
     def find_dataset(
         self,
@@ -2612,3 +2615,10 @@ class _ImportDatasetsInfo(NamedTuple):
 
     grouped_refs: defaultdict[_RefGroup, list[DatasetRef]]
     dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]
+
+
+def _to_uuid(id: DatasetId | str) -> uuid.UUID:
+    if isinstance(id, uuid.UUID):
+        return id
+    else:
+        return uuid.UUID(id)
