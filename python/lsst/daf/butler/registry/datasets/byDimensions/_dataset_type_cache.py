@@ -48,9 +48,7 @@ class DatasetTypeCache:
 
     In some contexts (e.g. ``resolve_wildcard``) a full list of dataset types
     is needed. To signify that cache content can be used in such contexts,
-    cache defines a special ``full`` flag that needs to be set by client.  The
-    ``dimensions_full`` flag similarly reports whether all per-dimension-group
-    state is present in the cache.
+    cache defines a special ``full`` flag that needs to be set by client.
     """
 
     def __init__(self) -> None:
@@ -59,7 +57,6 @@ class DatasetTypeCache:
         self._by_id_cache: dict[int, DatasetType] = {}
         self._by_dimensions_cache: dict[DimensionGroup, DynamicTables] = {}
         self._full = False
-        self._dimensions_full = False
 
     def clone(self) -> DatasetTypeCache:
         """Make a copy of the caches that are safe to use in another thread.
@@ -94,11 +91,6 @@ class DatasetTypeCache:
     def full(self) -> bool:
         """`True` if cache holds all known dataset types (`bool`)."""
         return self._full
-
-    @property
-    def dimensions_full(self) -> bool:
-        """`True` if cache holds all known dataset type dimensions (`bool`)."""
-        return self._dimensions_full
 
     def add(self, dataset_type: DatasetType, id: int) -> None:
         """Add one record to the cache.
@@ -142,7 +134,6 @@ class DatasetTypeCache:
         self._full = full
         if dimensions_data is not None:
             self._by_dimensions_cache.update(dimensions_data)
-            self._dimensions_full = dimensions_full
 
     def clear(self) -> None:
         """Remove everything from the cache."""
@@ -150,19 +141,6 @@ class DatasetTypeCache:
         self._by_dimensions_cache = {}
         self._by_id_cache = {}
         self._full = False
-        self._dimensions_full = False
-
-    def discard(self, name: str) -> None:
-        """Remove named dataset type from the cache.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the dataset type to remove.
-        """
-        _, id = self._by_name_cache.pop(name, (None, None))
-        if id is not None:
-            self._by_id_cache.pop(id, None)
 
     def get(self, name: str) -> tuple[DatasetType | None, int | None]:
         """Return cached info given dataset type name.
@@ -200,25 +178,6 @@ class DatasetTypeCache:
             The `DatasetType` information associated with the given ID.
         """
         return self._by_id_cache.get(id, None)
-
-    def get_dataset_type(self, name: str) -> DatasetType | None:
-        """Return dataset type given its name.
-
-        Parameters
-        ----------
-        name : `str`
-            Dataset type name.
-
-        Returns
-        -------
-        dataset_type : `DatasetType` or `None`
-            Cached dataset type, `None` is returned if the name is not in the
-            cache.
-        """
-        item = self._by_name_cache.get(name)
-        if item is None:
-            return None
-        return item[0]
 
     def items(self) -> Iterator[tuple[DatasetType, int]]:
         """Return iterator for the set of items in the cache, can only be
@@ -265,22 +224,3 @@ class DatasetTypeCache:
             these dimensions are not present in the cache.
         """
         return self._by_dimensions_cache.get(dimensions)
-
-    def by_dimensions_items(self) -> Iterator[tuple[DimensionGroup, DynamicTables]]:
-        """Return iterator for all dimensions-keyed data in the cache.
-
-        This can only be called if `dimensions_full` is `True`.
-
-        Returns
-        -------
-        iter : `~collections.abc.Iterator`
-            Iterator over tuples of `DimensionGroup` and opaque data.
-
-        Raises
-        ------
-        RuntimeError
-            Raised if ``self.dimensions_full`` is `False`.
-        """
-        if not self._dimensions_full:
-            raise RuntimeError("cannot call by_dimensions_items() if cache does not have full dimensions.")
-        return iter(self._by_dimensions_cache.items())
