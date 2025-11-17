@@ -1416,20 +1416,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         existence = {ref: DatasetExistence.UNRECOGNIZED for ref in refs}
 
-        # Registry does not have a bulk API to check for a ref.
-        for ref in refs:
-            registry_ref = self._registry.getDataset(ref.id)
-            if registry_ref is not None:
-                # It is possible, albeit unlikely, that the given ref does
-                # not match the one in registry even though the UUID matches.
-                # When checking a single ref we raise, but it's impolite to
-                # do that when potentially hundreds of refs are being checked.
-                # We could change the API to only accept UUIDs and that would
-                # remove the ability to even check and remove the worry
-                # about differing storage classes. Given the ongoing discussion
-                # on refs vs UUIDs and whether to raise or have a new
-                # private flag, treat this as a private API for now.
-                existence[ref] |= DatasetExistence.RECORDED
+        # Check which refs exist in the registry.
+        id_map = {ref.id: ref for ref in existence.keys()}
+        for registry_ref in self.get_many_datasets(id_map.keys()):
+            # Consistency between the given DatasetRef and the information
+            # recorded in the registry is not verified.
+            existence[id_map[registry_ref.id]] |= DatasetExistence.RECORDED
 
         # Ask datastore if it knows about these refs.
         knows = self._datastore.knows_these(refs)
