@@ -64,16 +64,15 @@ def butlerImport(
         be tracked by the datastore. Whether this parameter is honored
         depends on the specific datastore implementation.
     """
-    butler = Butler.from_config(repo, writeable=True)
+    with Butler.from_config(repo, writeable=True) as butler:
+        if skip_dimensions is not None:
+            skip_dimensions = set(skip_dimensions)
 
-    if skip_dimensions is not None:
-        skip_dimensions = set(skip_dimensions)
-
-    butler.import_(
-        directory=directory,
-        filename=export_file,
-        transfer=transfer,
-        format="yaml",
-        skip_dimensions=skip_dimensions,
-        record_validation_info=track_file_attrs,
-    )
+        butler.import_(
+            directory=directory,
+            filename=export_file,
+            transfer=transfer,
+            format="yaml",
+            skip_dimensions=skip_dimensions,
+            record_validation_info=track_file_attrs,
+        )

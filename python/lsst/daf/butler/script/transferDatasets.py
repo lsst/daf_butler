@@ -89,33 +89,34 @@ def transferDatasets(
         If `True` no transfers are done but the number of transfers that
         would be done is reported.
     """
-    source_butler = Butler.from_config(source, writeable=False)
-    dest_butler = Butler.from_config(dest, writeable=True)
+    with (
+        Butler.from_config(source, writeable=False) as source_butler,
+        Butler.from_config(dest, writeable=True) as dest_butler,
+    ):
+        dataset_type_expr = dataset_type or "*"
+        collections_expr: tuple[str, ...] = collections or ("*",)
 
-    dataset_type_expr = dataset_type or "*"
-    collections_expr: tuple[str, ...] = collections or ("*",)
+        query = QueryDatasets(
+            butler=source_butler,
+            glob=dataset_type_expr,
+            collections=collections_expr,
+            where=where,
+            find_first=find_first,
+            limit=limit,
+            order_by=order_by,
+            show_uri=False,
+            with_dimension_records=True,
+        )
+        # Place results in a set to remove duplicates (which should not exist
+        # in new query system)
+        source_refs_set = set(itertools.chain(*query.getDatasets()))
 
-    query = QueryDatasets(
-        butler=source_butler,
-        glob=dataset_type_expr,
-        collections=collections_expr,
-        where=where,
-        find_first=find_first,
-        limit=limit,
-        order_by=order_by,
-        show_uri=False,
-        with_dimension_records=True,
-    )
-    # Place results in a set to remove duplicates (which should not exist
-    # in new query system)
-    source_refs_set = set(itertools.chain(*query.getDatasets()))
-
-    transferred = dest_butler.transfer_from(
-        source_butler,
-        source_refs_set,
-        transfer=transfer,
-        register_dataset_types=register_dataset_types,
-        transfer_dimensions=transfer_dimensions,
-        dry_run=dry_run,
-    )
-    return len(transferred)
+        transferred = dest_butler.transfer_from(
+            source_butler,
+            source_refs_set,
+            transfer=transfer,
+            register_dataset_types=register_dataset_types,
+            transfer_dimensions=transfer_dimensions,
+            dry_run=dry_run,
+        )
+        return len(transferred)

@@ -59,6 +59,5 @@ def ingest_zip(
         If `True` no transfers are done but the number of transfers that
         would be done is reported.
     """
-    butler = Butler.from_config(repo, writeable=True)
-
-    butler.ingest_zip(zip, transfer=transfer, transfer_dimensions=transfer_dimensions, dry_run=dry_run)
+    with Butler.from_config(repo, writeable=True) as butler:
+        butler.ingest_zip(zip, transfer=transfer, transfer_dimensions=transfer_dimensions, dry_run=dry_run)

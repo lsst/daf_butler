@@ -222,28 +222,29 @@ def pruneDatasets(
         return PruneDatasetsResult(state=PruneDatasetsResult.State.ERR_NO_COLLECTION_RESTRICTION)
 
     # If purging, verify that the collection to purge is RUN type collection.
-    if purge_run:
-        butler = Butler.from_config(repo, without_datastore=True)
-        collection_info = butler.collections.get_info(purge_run)
-        if collection_info.type is not CollectionType.RUN:
-            return PruneDatasetsResult(
-                state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN, errDict=dict(collection=purge_run)
-            )
+    with Butler.from_config(repo, without_datastore=True) as butler:
+        if purge_run:
+            collection_info = butler.collections.get_info(purge_run)
+            if collection_info.type is not CollectionType.RUN:
+                return PruneDatasetsResult(
+                    state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN, errDict=dict(collection=purge_run)
+                )
 
-    datasets_found = QueryDatasets(
-        repo=repo,
-        glob=datasets,
-        collections=collections,
-        where=where,
-        # By default we want find_first to be True if collections are provided
-        # (else False) (find_first requires collections to be provided).
-        # But the user may specify that they want to find all (thus forcing
-        # find_first to be False)
-        find_first=not find_all,
-        show_uri=False,
-    )
+        datasets_found = QueryDatasets(
+            butler=butler,
+            glob=datasets,
+            collections=collections,
+            where=where,
+            # By default we want find_first to be True if collections are
+            # provided
+            # (else False) (find_first requires collections to be provided).
+            # But the user may specify that they want to find all (thus forcing
+            # find_first to be False)
+            find_first=not find_all,
+            show_uri=False,
+        )
 
-    result = PruneDatasetsResult(list(datasets_found.getTables()))
+        result = PruneDatasetsResult(list(datasets_found.getTables()))
 
     disassociate = bool(disassociate_tags) or bool(purge_run)
     purge = bool(purge_run)
@@ -255,16 +256,16 @@ def pruneDatasets(
         return result
 
     def doPruneDatasets() -> PruneDatasetsResult:
-        butler = Butler.from_config(repo, writeable=True)
-        butler.pruneDatasets(
-            refs=list(itertools.chain(*datasets_found.getDatasets())),
-            disassociate=disassociate,
-            tags=disassociate_tags or (),
-            purge=purge,
-            unstore=unstore,
-        )
-        result.state = PruneDatasetsResult.State.FINISHED
-        return result
+        with Butler.from_config(repo, writeable=True) as butler:
+            butler.pruneDatasets(
+                refs=list(itertools.chain(*datasets_found.getDatasets())),
+                disassociate=disassociate,
+                tags=disassociate_tags or (),
+                purge=purge,
+                unstore=unstore,
+            )
+            result.state = PruneDatasetsResult.State.FINISHED
+            return result
 
     if confirm:
         result.state = PruneDatasetsResult.State.AWAITING_CONFIRMATION

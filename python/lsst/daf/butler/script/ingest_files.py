@@ -111,24 +111,23 @@ def ingest_files(
     id_gen_mode = DatasetIdGenEnum.__members__[id_generation_mode]
 
     # Create the butler with the relevant run attached.
-    butler = Butler.from_config(repo, run=run)
+    with Butler.from_config(repo, run=run) as butler:
+        datasetType = butler.get_dataset_type(dataset_type)
 
-    datasetType = butler.get_dataset_type(dataset_type)
+        # Convert the k=v strings into a dataId dict.
+        universe = butler.dimensions
+        common_data_id = parse_data_id_tuple(data_id, universe)
 
-    # Convert the k=v strings into a dataId dict.
-    universe = butler.dimensions
-    common_data_id = parse_data_id_tuple(data_id, universe)
+        # Read the table assuming that Astropy can work out the format.
+        uri = ResourcePath(table_file, forceAbsolute=False)
+        with uri.as_local() as local_file:
+            table = Table.read(local_file.ospath)
 
-    # Read the table assuming that Astropy can work out the format.
-    uri = ResourcePath(table_file, forceAbsolute=False)
-    with uri.as_local() as local_file:
-        table = Table.read(local_file.ospath)
+        datasets = extract_datasets_from_table(
+            table, common_data_id, datasetType, run, formatter, prefix, id_gen_mode
+        )
 
-    datasets = extract_datasets_from_table(
-        table, common_data_id, datasetType, run, formatter, prefix, id_gen_mode
-    )
-
-    butler.ingest(*datasets, transfer=transfer, record_validation_info=track_file_attrs)
+        butler.ingest(*datasets, transfer=transfer, record_validation_info=track_file_attrs)
 
 
 def extract_datasets_from_table(

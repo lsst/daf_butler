@@ -102,32 +102,35 @@ def retrieveArtifacts(
     query_types = dataset_type or "*"
     query_collections: tuple[str, ...] = collections or ("*",)
 
-    butler = Butler.from_config(repo, writeable=False)
-
-    # Need to store in set so we can count the number to give some feedback
-    # to caller.
-    query = QueryDatasets(
-        butler=butler,
-        glob=query_types,
-        collections=query_collections,
-        where=where,
-        find_first=find_first,
-        limit=limit,
-        order_by=order_by,
-        show_uri=False,
-        with_dimension_records=True,
-    )
-    refs = set(itertools.chain(*query.getDatasets()))
-    log.info("Number of datasets matching query: %d", len(refs))
-    if not refs:
-        return []
-
-    if not zip:
-        transferred = butler.retrieveArtifacts(
-            refs, destination=destination, transfer=transfer, preserve_path=preserve_path, overwrite=clobber
+    with Butler.from_config(repo, writeable=False) as butler:
+        # Need to store in set so we can count the number to give some feedback
+        # to caller.
+        query = QueryDatasets(
+            butler=butler,
+            glob=query_types,
+            collections=query_collections,
+            where=where,
+            find_first=find_first,
+            limit=limit,
+            order_by=order_by,
+            show_uri=False,
+            with_dimension_records=True,
         )
-    else:
-        zip_file = butler.retrieve_artifacts_zip(refs, destination=destination, overwrite=clobber)
-        transferred = [zip_file]
+        refs = set(itertools.chain(*query.getDatasets()))
+        log.info("Number of datasets matching query: %d", len(refs))
+        if not refs:
+            return []
 
-    return transferred
+        if not zip:
+            transferred = butler.retrieveArtifacts(
+                refs,
+                destination=destination,
+                transfer=transfer,
+                preserve_path=preserve_path,
+                overwrite=clobber,
+            )
+        else:
+            zip_file = butler.retrieve_artifacts_zip(refs, destination=destination, overwrite=clobber)
+            transferred = [zip_file]
+
+        return transferred

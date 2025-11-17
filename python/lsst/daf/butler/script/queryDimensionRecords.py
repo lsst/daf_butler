@@ -81,65 +81,66 @@ def queryDimensionRecords(
     if offset:
         raise NotImplementedError("--offset is no longer supported.  It will be removed after v28.")
 
-    butler = Butler.from_config(repo, without_datastore=True)
+    with Butler.from_config(repo, without_datastore=True) as butler:
+        with butler.query() as query:
+            if datasets:
+                query_collections = collections or "*"
+                dataset_types = butler.registry.queryDatasetTypes(datasets)
+                collections_info = butler.collections.query_info(
+                    query_collections, include_summary=True, summary_datasets=dataset_types
+                )
+                dataset_type_collections = butler.collections._group_by_dataset_type(
+                    {dt.name for dt in dataset_types}, collections_info
+                )
 
-    with butler.query() as query:
-        if datasets:
-            query_collections = collections or "*"
-            dataset_types = butler.registry.queryDatasetTypes(datasets)
-            collections_info = butler.collections.query_info(
-                query_collections, include_summary=True, summary_datasets=dataset_types
-            )
-            dataset_type_collections = butler.collections._group_by_dataset_type(
-                {dt.name for dt in dataset_types}, collections_info
-            )
+                if not dataset_type_collections:
+                    return None
 
-            if not dataset_type_collections:
+                for dt, dt_collections in dataset_type_collections.items():
+                    query = query.join_dataset_search(dt, collections=dt_collections)
+
+            query_results = query.dimension_records(element)
+
+            if where:
+                query_results = query_results.where(where)
+            if order_by:
+                query_results = query_results.order_by(*order_by)
+            query_limit = abs(limit)
+            warn_limit = False
+            if limit != 0:
+                if limit < 0:
+                    query_limit += 1
+                    warn_limit = True
+
+                query_results = query_results.limit(query_limit)
+
+            records = list(query_results)
+            if warn_limit and len(records) == query_limit:
+                records.pop(-1)
+                _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
+
+            if not records:
                 return None
 
-            for dt, dt_collections in dataset_type_collections.items():
-                query = query.join_dataset_search(dt, collections=dt_collections)
+        if not order_by:
+            # use the dataId to sort the rows if not ordered already
+            records.sort(key=attrgetter("dataId"))
 
-        query_results = query.dimension_records(element)
+        # order the columns the same as the record's `field.names`, and add
+        # units to timespans
+        keys = records[0].fields.names
+        headers = ["timespan (TAI)" if name == "timespan" else name for name in records[0].fields.names]
 
-        if where:
-            query_results = query_results.where(where)
-        if order_by:
-            query_results = query_results.order_by(*order_by)
-        query_limit = abs(limit)
-        warn_limit = False
-        if limit != 0:
-            if limit < 0:
-                query_limit += 1
-                warn_limit = True
+        def conform(v: Any) -> Any:
+            match v:
+                case Timespan():
+                    v = str(v)
+                case bytes():
+                    v = "0x" + v.hex()
+                case Region():
+                    v = "(elided)"
+            return v
 
-            query_results = query_results.limit(query_limit)
-
-        records = list(query_results)
-        if warn_limit and len(records) == query_limit:
-            records.pop(-1)
-            _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
-
-        if not records:
-            return None
-
-    if not order_by:
-        # use the dataId to sort the rows if not ordered already
-        records.sort(key=attrgetter("dataId"))
-
-    # order the columns the same as the record's `field.names`, and add units
-    # to timespans
-    keys = records[0].fields.names
-    headers = ["timespan (TAI)" if name == "timespan" else name for name in records[0].fields.names]
-
-    def conform(v: Any) -> Any:
-        match v:
-            case Timespan():
-                v = str(v)
-            case bytes():
-                v = "0x" + v.hex()
-            case Region():
-                v = "(elided)"
-        return v
-
-    return Table([[conform(getattr(record, key, None)) for record in records] for key in keys], names=headers)
+        return Table(
+            [[conform(getattr(record, key, None)) for record in records] for key in keys], names=headers
+        )

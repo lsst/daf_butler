@@ -99,79 +99,80 @@ def _getTable(
     )
     if show_dataset_types:
         table.add_column(Column(name="Dataset Types", dtype=str))
-    butler = Butler.from_config(repo)
 
-    def addDatasetTypes(collection_table: Table, collection: str, dataset_types: list[str]) -> Table:
-        if dataset_types[0] == "":
-            cinfo = butler.collections.get_info(collection, include_summary=True)
-            dataset_types = _parseDatasetTypes(cinfo.dataset_types)
-        if exclude_dataset_types:
-            dataset_types = [
-                dt
-                for dt in dataset_types
-                if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
-            ]
-            dataset_types = _parseDatasetTypes(dataset_types)
-        types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
-        collection_table = hstack([collection_table, types_table]).filled("")
-        return collection_table
+    with Butler.from_config(repo) as butler:
 
-    def addCollection(info: CollectionInfo, relation: str) -> None:
-        try:
-            info_relatives = getattr(info, relation)
-        except AttributeError:
-            info_relatives = []
-        # Parent results can be returned in a non-deterministic order, so sort
-        # them to make the output deterministic.
-        if relation == "parents":
-            info_relatives = sorted(info_relatives)
-        if info_relatives:
-            collection_table = Table([[info.name], [info.type.name]], names=("Name", typeCol))
-            description_table = Table(names=(descriptionCol,), dtype=(str,))
-            for info_relative in info_relatives:
-                relative_table = Table([[info_relative]], names=(descriptionCol,))
-                if show_dataset_types:
-                    relative_table = addDatasetTypes(relative_table, info_relative, [""])
-                description_table = vstack([description_table, relative_table])
-            collection_table = hstack([collection_table, description_table]).filled("")
-            for row in collection_table:
-                table.add_row(row)
-        else:
-            collection_table = Table(
-                [[info.name], [info.type.name], [""]], names=("Name", typeCol, descriptionCol)
-            )
-            if show_dataset_types:
-                collection_table = addDatasetTypes(collection_table, info.name, [""])
-            for row in collection_table:
-                table.add_row(row)
+        def addDatasetTypes(collection_table: Table, collection: str, dataset_types: list[str]) -> Table:
+            if dataset_types[0] == "":
+                cinfo = butler.collections.get_info(collection, include_summary=True)
+                dataset_types = _parseDatasetTypes(cinfo.dataset_types)
+            if exclude_dataset_types:
+                dataset_types = [
+                    dt
+                    for dt in dataset_types
+                    if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                ]
+                dataset_types = _parseDatasetTypes(dataset_types)
+            types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+            collection_table = hstack([collection_table, types_table]).filled("")
+            return collection_table
 
-    collections = sorted(
-        butler.collections.query_info(
-            glob or "*",
-            collection_types=frozenset(collection_type),
-            include_parents=inverse,
-            include_summary=show_dataset_types,
-        )
-    )
-    if inverse:
-        for info in collections:
-            addCollection(info, "parents")
-        # If none of the datasets has a parent dataset then remove the
-        # description column.
-        if not any(c for c in table[descriptionCol]):
-            del table[descriptionCol]
-    else:
-        for info in collections:
-            if info.type == CollectionType.CHAINED:
-                addCollection(info, "children")
+        def addCollection(info: CollectionInfo, relation: str) -> None:
+            try:
+                info_relatives = getattr(info, relation)
+            except AttributeError:
+                info_relatives = []
+            # Parent results can be returned in a non-deterministic order, so
+            # sort them to make the output deterministic.
+            if relation == "parents":
+                info_relatives = sorted(info_relatives)
+            if info_relatives:
+                collection_table = Table([[info.name], [info.type.name]], names=("Name", typeCol))
+                description_table = Table(names=(descriptionCol,), dtype=(str,))
+                for info_relative in info_relatives:
+                    relative_table = Table([[info_relative]], names=(descriptionCol,))
+                    if show_dataset_types:
+                        relative_table = addDatasetTypes(relative_table, info_relative, [""])
+                    description_table = vstack([description_table, relative_table])
+                collection_table = hstack([collection_table, description_table]).filled("")
+                for row in collection_table:
+                    table.add_row(row)
             else:
-                addCollection(info, "self")
-        # If there aren't any CHAINED datasets in the results then remove the
-        # description column.
-        if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
-            del table[descriptionCol]
+                collection_table = Table(
+                    [[info.name], [info.type.name], [""]], names=("Name", typeCol, descriptionCol)
+                )
+                if show_dataset_types:
+                    collection_table = addDatasetTypes(collection_table, info.name, [""])
+                for row in collection_table:
+                    table.add_row(row)
 
-    return table
+        collections = sorted(
+            butler.collections.query_info(
+                glob or "*",
+                collection_types=frozenset(collection_type),
+                include_parents=inverse,
+                include_summary=show_dataset_types,
+            )
+        )
+        if inverse:
+            for info in collections:
+                addCollection(info, "parents")
+            # If none of the datasets has a parent dataset then remove the
+            # description column.
+            if not any(c for c in table[descriptionCol]):
+                del table[descriptionCol]
+        else:
+            for info in collections:
+                if info.type == CollectionType.CHAINED:
+                    addCollection(info, "children")
+                else:
+                    addCollection(info, "self")
+            # If there aren't any CHAINED datasets in the results then remove
+            # the description column.
+            if not any(columnVal == CollectionType.CHAINED.name for columnVal in table[typeCol]):
+                del table[descriptionCol]
+
+        return table
 
 
 def _getTree(
@@ -216,51 +217,52 @@ def _getTree(
     )
     if show_dataset_types:
         table.add_column(Column(name="Dataset Types", dtype=str))
-    butler = Butler.from_config(repo, without_datastore=True)
 
-    def addCollection(info: CollectionInfo, level: int = 0) -> None:
-        collection_table = Table([["  " * level + info.name], [info.type.name]], names=["Name", "Type"])
-        if show_dataset_types:
-            if info.type == CollectionType.CHAINED:
-                collection_table = hstack(
-                    [collection_table, Table([[""] * len(collection_table)], names=["Dataset Types"])]
-                )
+    with Butler.from_config(repo, without_datastore=True) as butler:
+
+        def addCollection(info: CollectionInfo, level: int = 0) -> None:
+            collection_table = Table([["  " * level + info.name], [info.type.name]], names=["Name", "Type"])
+            if show_dataset_types:
+                if info.type == CollectionType.CHAINED:
+                    collection_table = hstack(
+                        [collection_table, Table([[""] * len(collection_table)], names=["Dataset Types"])]
+                    )
+                else:
+                    dataset_types = _parseDatasetTypes(info.dataset_types)
+                    if exclude_dataset_types:
+                        dataset_types = [
+                            dt
+                            for dt in dataset_types
+                            if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                        ]
+                        dataset_types = _parseDatasetTypes(dataset_types)
+                    dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+                    collection_table = hstack([collection_table, dataset_types_table]).filled("")
+            for row in collection_table:
+                table.add_row(row)
+
+            if inverse:
+                assert info.parents is not None  # For mypy.
+                for pname in sorted(info.parents):
+                    pinfo = butler.collections.get_info(
+                        pname, include_parents=inverse, include_summary=show_dataset_types
+                    )
+                    addCollection(pinfo, level + 1)
             else:
-                dataset_types = _parseDatasetTypes(info.dataset_types)
-                if exclude_dataset_types:
-                    dataset_types = [
-                        dt
-                        for dt in dataset_types
-                        if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
-                    ]
-                    dataset_types = _parseDatasetTypes(dataset_types)
-                dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
-                collection_table = hstack([collection_table, dataset_types_table]).filled("")
-        for row in collection_table:
-            table.add_row(row)
+                if info.type == CollectionType.CHAINED:
+                    for name in info.children:
+                        cinfo = butler.collections.get_info(name, include_summary=show_dataset_types)
+                        addCollection(cinfo, level + 1)
 
-        if inverse:
-            assert info.parents is not None  # For mypy.
-            for pname in sorted(info.parents):
-                pinfo = butler.collections.get_info(
-                    pname, include_parents=inverse, include_summary=show_dataset_types
-                )
-                addCollection(pinfo, level + 1)
-        else:
-            if info.type == CollectionType.CHAINED:
-                for name in info.children:
-                    cinfo = butler.collections.get_info(name, include_summary=show_dataset_types)
-                    addCollection(cinfo, level + 1)
-
-    collections = butler.collections.query_info(
-        glob or "*",
-        collection_types=frozenset(collection_type),
-        include_parents=inverse,
-        include_summary=show_dataset_types,
-    )
-    for collection in sorted(collections):
-        addCollection(collection)
-    return table
+        collections = butler.collections.query_info(
+            glob or "*",
+            collection_types=frozenset(collection_type),
+            include_parents=inverse,
+            include_summary=show_dataset_types,
+        )
+        for collection in sorted(collections):
+            addCollection(collection)
+        return table
 
 
 def _getList(
@@ -301,36 +303,37 @@ def _getList(
     )
     if show_dataset_types:
         table.add_column(Column(name="Dataset Types", dtype=str))
-    butler = Butler.from_config(repo)
 
-    def addCollection(info: CollectionInfo) -> None:
-        collection_table = Table([[info.name], [info.type.name]], names=["Name", "Type"])
-        if show_dataset_types:
-            dataset_types = _parseDatasetTypes(info.dataset_types)
-            if exclude_dataset_types:
-                dataset_types = [
-                    dt
-                    for dt in dataset_types
-                    if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
-                ]
-                dataset_types = _parseDatasetTypes(dataset_types)
-            dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
-            collection_table = hstack([collection_table, dataset_types_table]).filled("")
-        for row in collection_table:
-            table.add_row(row)
+    with Butler.from_config(repo) as butler:
 
-    collections = list(
-        butler.collections.query_info(
-            glob or "*",
-            collection_types=frozenset(collection_type),
-            flatten_chains=flatten_chains,
-            include_summary=show_dataset_types,
+        def addCollection(info: CollectionInfo) -> None:
+            collection_table = Table([[info.name], [info.type.name]], names=["Name", "Type"])
+            if show_dataset_types:
+                dataset_types = _parseDatasetTypes(info.dataset_types)
+                if exclude_dataset_types:
+                    dataset_types = [
+                        dt
+                        for dt in dataset_types
+                        if not any(fnmatch(dt, pattern) for pattern in exclude_dataset_types)
+                    ]
+                    dataset_types = _parseDatasetTypes(dataset_types)
+                dataset_types_table = Table({"Dataset Types": sorted(dataset_types)}, dtype=(str,))
+                collection_table = hstack([collection_table, dataset_types_table]).filled("")
+            for row in collection_table:
+                table.add_row(row)
+
+        collections = list(
+            butler.collections.query_info(
+                glob or "*",
+                collection_types=frozenset(collection_type),
+                flatten_chains=flatten_chains,
+                include_summary=show_dataset_types,
+            )
         )
-    )
-    for collection in collections:
-        addCollection(collection)
+        for collection in collections:
+            addCollection(collection)
 
-    return table
+        return table
 
 
 def queryCollections(

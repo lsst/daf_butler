@@ -141,84 +141,87 @@ def queryDataIds(
     if offset:
         raise NotImplementedError("--offset is no longer supported.  It will be removed after v28.")
 
-    butler = Butler.from_config(repo, without_datastore=True)
-
-    dataset_types = []
-    if datasets:
-        dataset_types = list(butler.registry.queryDatasetTypes(datasets))
-
-    if datasets and collections and not dimensions:
-        # Determine the dimensions relevant to all given dataset types.
-        # Since we are going to AND together all dimensions, we can not
-        # seed the result with an empty set.
-        dataset_type_dimensions: DimensionGroup | None = None
-        for dataset_type in dataset_types:
-            if dataset_type_dimensions is None:
-                # Seed with dimensions of first dataset type.
-                dataset_type_dimensions = dataset_type.dimensions
-            else:
-                # Only retain dimensions that are in the current
-                # set AND the set from this dataset type.
-                dataset_type_dimensions = dataset_type_dimensions.intersection(dataset_type.dimensions)
-            _LOG.debug("Dimensions now %s from %s", set(dataset_type_dimensions.names), dataset_type.name)
-
-            # Break out of the loop early. No additional dimensions
-            # can be added to an empty set when using AND.
-            if not dataset_type_dimensions:
-                break
-
-        if not dataset_type_dimensions:
-            names = [d.name for d in dataset_types]
-            return None, f"No dimensions in common for specified dataset types ({names})"
-        dimensions = set(dataset_type_dimensions.names)
-        _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
-
-    with butler.query() as query:
+    with Butler.from_config(repo, without_datastore=True) as butler:
+        dataset_types = []
         if datasets:
-            # Need to constrain results based on dataset type and collection.
-            query_collections = collections or "*"
-            collections_info = butler.collections.query_info(
-                query_collections, include_summary=True, summary_datasets=dataset_types
-            )
-            expanded_collections = [info.name for info in collections_info]
-            dataset_type_collections = butler.collections._group_by_dataset_type(
-                {dt.name for dt in dataset_types}, collections_info
-            )
-            if not dataset_type_collections:
-                return (
-                    None,
-                    f"No datasets of type {datasets!r} existed in the specified "
-                    f"collections {','.join(expanded_collections)}.",
+            dataset_types = list(butler.registry.queryDatasetTypes(datasets))
+
+        if datasets and collections and not dimensions:
+            # Determine the dimensions relevant to all given dataset types.
+            # Since we are going to AND together all dimensions, we can not
+            # seed the result with an empty set.
+            dataset_type_dimensions: DimensionGroup | None = None
+            for dataset_type in dataset_types:
+                if dataset_type_dimensions is None:
+                    # Seed with dimensions of first dataset type.
+                    dataset_type_dimensions = dataset_type.dimensions
+                else:
+                    # Only retain dimensions that are in the current
+                    # set AND the set from this dataset type.
+                    dataset_type_dimensions = dataset_type_dimensions.intersection(dataset_type.dimensions)
+                _LOG.debug("Dimensions now %s from %s", set(dataset_type_dimensions.names), dataset_type.name)
+
+                # Break out of the loop early. No additional dimensions
+                # can be added to an empty set when using AND.
+                if not dataset_type_dimensions:
+                    break
+
+            if not dataset_type_dimensions:
+                names = [d.name for d in dataset_types]
+                return None, f"No dimensions in common for specified dataset types ({names})"
+            dimensions = set(dataset_type_dimensions.names)
+            _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
+
+        with butler.query() as query:
+            if datasets:
+                # Need to constrain results based on dataset type and
+                # collection.
+                query_collections = collections or "*"
+                collections_info = butler.collections.query_info(
+                    query_collections, include_summary=True, summary_datasets=dataset_types
                 )
+                expanded_collections = [info.name for info in collections_info]
+                dataset_type_collections = butler.collections._group_by_dataset_type(
+                    {dt.name for dt in dataset_types}, collections_info
+                )
+                if not dataset_type_collections:
+                    return (
+                        None,
+                        f"No datasets of type {datasets!r} existed in the specified "
+                        f"collections {','.join(expanded_collections)}.",
+                    )
 
-            for dt, dt_collections in dataset_type_collections.items():
-                query = query.join_dataset_search(dt, collections=dt_collections)
+                for dt, dt_collections in dataset_type_collections.items():
+                    query = query.join_dataset_search(dt, collections=dt_collections)
 
-        results = query.data_ids(dimensions)
+            results = query.data_ids(dimensions)
 
-        if where:
-            results = results.where(where)
-        if order_by:
-            results = results.order_by(*order_by)
-        query_limit = abs(limit)
-        warn_limit = False
-        if limit != 0:
-            if limit < 0:
-                query_limit += 1
-                warn_limit = True
+            if where:
+                results = results.where(where)
+            if order_by:
+                results = results.order_by(*order_by)
+            query_limit = abs(limit)
+            warn_limit = False
+            if limit != 0:
+                if limit < 0:
+                    query_limit += 1
+                    warn_limit = True
 
-            results = results.limit(query_limit)
+                results = results.limit(query_limit)
 
-        if results.any(exact=False):
-            if results.dimensions:
-                table = _Table(results)
-                if warn_limit and len(table) == query_limit:
-                    table.pop_last()
-                    _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
-                if not table.dataIds:
-                    return None, "Post-query region filtering removed all rows, since nothing overlapped."
-                return table.getAstropyTable(not order_by), None
+            if results.any(exact=False):
+                if results.dimensions:
+                    table = _Table(results)
+                    if warn_limit and len(table) == query_limit:
+                        table.pop_last()
+                        _LOG.warning("More data IDs are available than the request limit of %d", abs(limit))
+                    if not table.dataIds:
+                        return None, "Post-query region filtering removed all rows, since nothing overlapped."
+                    return table.getAstropyTable(not order_by), None
+                else:
+                    return (
+                        None,
+                        "Result has one logical row but no columns because no dimensions were requested.",
+                    )
             else:
-                return None, "Result has one logical row but no columns because no dimensions were requested."
-        else:
-            return None, "\n".join(results.explain_no_results())
+                return None, "\n".join(results.explain_no_results())
