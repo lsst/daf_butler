@@ -217,6 +217,8 @@ class SqlRegistry:
         """
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
+        if defaults is None:
+            defaults = RegistryDefaults()
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
             config.connectionString,
@@ -225,13 +227,15 @@ class SqlRegistry:
             writeable=writeable,
             allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        with database.session():
-            managers = managerTypes.loadRepo(database)
-        if defaults is None:
-            defaults = RegistryDefaults()
+        try:
+            managerTypes = RegistryManagerTypes.fromConfig(config)
+            with database.session():
+                managers = managerTypes.loadRepo(database)
 
-        return cls(database, defaults, managers)
+            return cls(database, defaults, managers)
+        except Exception:
+            database.dispose()
+            raise
 
     def __init__(
         self,
