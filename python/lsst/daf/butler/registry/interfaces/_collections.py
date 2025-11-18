@@ -33,12 +33,13 @@ __all__ = [
     "CollectionManager",
     "CollectionRecord",
     "Joinable",
+    "JoinedCollectionsTable",
     "RunRecord",
 ]
 
 from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Set
-from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, Self, TypeVar
 
 import sqlalchemy
 
@@ -768,16 +769,38 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         ----------
         sql_key : `sqlalchemy.ColumnElement`
             SQL column expression that evaluates to the collection key.
-        sql_from_clause : `sqlalchemy.FromClause`
-            SQL FROM clause from which ``sql_key`` was obtained.
+        sql_from_clause : `sqlalchemy.FromClause` or `sqlalchemy.Select`
+            SQL FROM clause or select statement from which ``sql_key`` was
+            obtained.
 
         Returns
         -------
         sql_name : `sqlalchemy.ColumnElement` [ `str` ]
             SQL column expression that evalutes to the collection name.
-        sql_from_clause : `sqlalchemy.FromClause`
-            SQL FROM clause that includes the given ``sql_from_clause`` and
-            any table needed to provided ``sql_name``.
+        joined_sql : depends on input type
+            The result of calling join() on the given ``sql_from_clause``,
+            to join in the table needed to provide ``sql_name``.
+        """
+        raise NotImplementedError()
+
+    def join_collections_sql(
+        self, sql_key: sqlalchemy.ColumnElement[_Key], sql_from_clause: Joinable
+    ) -> JoinedCollectionsTable[Joinable]:
+        """Return a SQLAlchemy column and FROM clause that enable a query
+        to look up collection name and collection type from the collection key.
+
+        Parameters
+        ----------
+        sql_key : `sqlalchemy.ColumnElement`
+            SQL column expression that evaluates to the collection key.
+        sql_from_clause : `sqlalchemy.FromClause` or `sqlalchemy.Select`
+            SQL FROM clause or select statement from which ``sql_key`` was
+            obtained.
+
+        Returns
+        -------
+        sql : `JoinedCollectionsTable`
+            Object giving access to the collection table columns.
         """
         raise NotImplementedError()
 
@@ -785,3 +808,14 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         """No-op normally. Provide a place for unit tests to hook in and
         verify locking behavior.
         """
+
+
+class JoinedCollectionsTable(NamedTuple, Generic[Joinable]):
+    """Container for information needed to access collection table columns."""
+
+    joined_sql: Joinable
+    """Input SQL statement modified by joining the collections table."""
+    name_column: sqlalchemy.ColumnElement[str]
+    """Column from the joined collection table holding the collection name."""
+    type_column: sqlalchemy.ColumnElement[int]
+    """Column from the joined collection table holding the collection type."""

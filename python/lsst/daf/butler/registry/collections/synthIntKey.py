@@ -39,7 +39,14 @@ import sqlalchemy
 from ..._collection_type import CollectionType
 from ...column_spec import COLLECTION_NAME_MAX_LENGTH
 from ...timespan_database_representation import TimespanDatabaseRepresentation
-from ..interfaces import ChainedCollectionRecord, CollectionRecord, Joinable, RunRecord, VersionTuple
+from ..interfaces import (
+    ChainedCollectionRecord,
+    CollectionRecord,
+    Joinable,
+    JoinedCollectionsTable,
+    RunRecord,
+    VersionTuple,
+)
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
@@ -189,11 +196,18 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         self, sql_key: sqlalchemy.ColumnElement[int], sql_from_clause: Joinable
     ) -> tuple[sqlalchemy.ColumnElement[str], Joinable]:
         # Docstring inherited.
-        return (
-            self._tables.collection.c.name,
-            sql_from_clause.join(
+        joined = self.join_collections_sql(sql_key, sql_from_clause)
+        return (joined.name_column, joined.joined_sql)
+
+    def join_collections_sql(
+        self, sql_key: sqlalchemy.ColumnElement[int], joinable: Joinable
+    ) -> JoinedCollectionsTable:
+        return JoinedCollectionsTable(
+            joined_sql=joinable.join(
                 self._tables.collection, onclause=self._tables.collection.c[_KEY_FIELD_SPEC.name] == sql_key
             ),
+            name_column=self._tables.collection.columns["name"],
+            type_column=self._tables.collection.columns["type"],
         )
 
     def _fetch_by_name(self, names: Iterable[str], flatten_chains: bool) -> list[CollectionRecord[int]]:
