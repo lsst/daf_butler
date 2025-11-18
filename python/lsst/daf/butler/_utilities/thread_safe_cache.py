@@ -76,3 +76,16 @@ class ThreadSafeCache(Generic[TKey, TValue]):
         """
         with self._mutex:
             return self._cache.setdefault(key, value)
+
+    def clear(self) -> dict[TKey, TValue]:
+        """Clear the cache.
+
+        Returns
+        -------
+        old_cache : `dict`
+            The values that were contained in the cache prior to clearing it.
+        """
+        with self._mutex:
+            old = self._cache
+            self._cache = {}
+            return old

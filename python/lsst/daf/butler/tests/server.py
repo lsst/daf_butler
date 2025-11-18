@@ -1,7 +1,7 @@
 import json
 import os
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
@@ -151,14 +151,13 @@ def create_test_server(
                 app.dependency_overrides[user_name_dependency] = lambda: "mock-username"
                 app.dependency_overrides[auth_delegated_token_dependency] = lambda: "mock-delegated-token"
 
+                direct_butler = Butler.from_config(config_file_path, writeable=True)
+                assert isinstance(direct_butler, DirectButler)
                 # Using TestClient in a context manager ensures that it uses
                 # the same async event loop for all requests -- otherwise it
                 # starts a new one on each request.
-                with TestClient(app) as client:
+                with TestClient(app) as client, direct_butler, closing(server_butler_factory):
                     remote_butler = _make_remote_butler(client)
-
-                    direct_butler = Butler.from_config(config_file_path, writeable=True)
-                    assert isinstance(direct_butler, DirectButler)
                     hybrid_butler = HybridButler(remote_butler, direct_butler)
 
                     client_without_error_propagation = TestClient(app, raise_server_exceptions=False)
