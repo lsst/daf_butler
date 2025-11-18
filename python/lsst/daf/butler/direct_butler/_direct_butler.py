@@ -45,6 +45,7 @@ import uuid
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Collection, Iterable, Iterator, MutableMapping, Sequence
+from functools import partial
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
 
@@ -160,9 +161,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # dependency-inversion trick. This is not used by regular butler,
         # but we do not have a way to distinguish regular butler from execution
         # butler.
-        self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
+        self._datastore.set_retrieve_dataset_type_method(partial(_retrieve_dataset_type, registry))
 
-        self._registry_shim = RegistryShim(self)
         self._closed = False
 
         return self
@@ -255,12 +255,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if not self._closed:
             self._closed = True
             self._registry.close()
-            # Break circular references to allow clean-up to happen without
-            # waiting for global garbage collection.  This will also cause an
-            # exception to be raised if a user attempts to use the instance
-            # after closing it.
+            # Cause exceptions to be raised if a user attempts to use the
+            # instance after closing it.  Without this, Butler would still
+            # work after being closed because of implementation details
+            # of SqlAlchemy, but this may not continue to be the case in the
+            # future and we don't want users to get in the habit of doing this.
             self._registry = _BUTLER_CLOSED_INSTANCE
-            self._registry_shim = _BUTLER_CLOSED_INSTANCE
             self._datastore = _BUTLER_CLOSED_INSTANCE
 
     GENERATION: ClassVar[int] = 3
@@ -270,13 +270,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     interface has been fully retired; it should only be used in transitional
     code.
     """
-
-    def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
-        """Return DatasetType defined in registry given dataset type name."""
-        try:
-            return self.get_dataset_type(name)
-        except MissingDatasetTypeError:
-            return None
 
     @classmethod
     def _unpickle(
@@ -2543,7 +2536,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         are accessible only via `Registry` methods. Eventually these methods
         will be replaced by equivalent `Butler` methods.
         """
-        return self._registry_shim
+        return RegistryShim(self)
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -2592,11 +2585,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     describe them (`StorageClassFactory`).
     """
 
-    _registry_shim: RegistryShim
-    """Shim object to provide a legacy public interface for querying via the
-    the ``registry`` property.
-    """
-
     _closed: bool
     """`True` if close() has already been called on this instance; `False`
     otherwise.
@@ -2632,3 +2620,11 @@ class _ButlerClosed:
 
 
 _BUTLER_CLOSED_INSTANCE: Any = _ButlerClosed()
+
+
+def _retrieve_dataset_type(registry: SqlRegistry, name: str) -> DatasetType | None:
+    """Return DatasetType defined in registry given dataset type name."""
+    try:
+        return registry.getDatasetType(name)
+    except MissingDatasetTypeError:
+        return None

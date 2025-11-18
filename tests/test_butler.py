@@ -43,6 +43,7 @@ import tempfile
 import unittest
 import unittest.mock
 import uuid
+import warnings
 import weakref
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
@@ -768,9 +769,6 @@ class ButlerTests(ButlerPutGetTests):
         is_direct_butler = isinstance(butler, DirectButler)
         if is_direct_butler:
             self.assertFalse(butler._closed)
-            registry_ref = weakref.ref(butler._registry)
-            managers_ref = weakref.ref(butler._registry._managers)
-            datastore_ref = weakref.ref(butler._datastore)
 
         with butler as butler_from_context_manager:
             self.assertIs(butler, butler_from_context_manager)
@@ -784,16 +782,37 @@ class ButlerTests(ButlerPutGetTests):
         if is_direct_butler:
             self.assertTrue(butler._closed)
 
-        # Make sure that a closed Butler does not have any circular references
-        # that stop it from being garbage collected.
+    def testGarbageCollection(self):
+        """Test that Butler does not have any circular references that prevent
+        it from being garbage collected immediately when it goes out of scope.
+        """
+        butler = self.create_empty_butler(cleanup=False)
+        is_direct_butler = isinstance(butler, DirectButler)
         butler_ref = weakref.ref(butler)
-        del butler
-        del butler_from_context_manager
-        self.assertIsNone(butler_ref(), "Butler should have been garbage collected")
         if is_direct_butler:
-            self.assertIsNone(registry_ref(), "SqlRegistry should have been garbage collected")
-            self.assertIsNone(managers_ref(), "Registry managers should have been garbage collected")
-            self.assertIsNone(datastore_ref(), "Datastore should have been garbage collected")
+            registry_ref = weakref.ref(butler._registry)
+            managers_ref = weakref.ref(butler._registry._managers)
+            datastore_ref = weakref.ref(butler._datastore)
+            db_ref = weakref.ref(butler._registry._db)
+            engine_ref = weakref.ref(butler._registry._db._engine)
+
+        with warnings.catch_warnings():
+            # Hide warnings from unclosed database handles.
+            warnings.simplefilter("ignore", ResourceWarning)
+            del butler
+            self.assertIsNone(butler_ref(), "Butler should have been garbage collected")
+            if is_direct_butler:
+                self.assertIsNone(registry_ref(), "SqlRegistry should have been garbage collected")
+                self.assertIsNone(managers_ref(), "Registry managers should have been garbage collected")
+                self.assertIsNone(datastore_ref(), "Datastore should have been garbage collected")
+                self.assertIsNone(db_ref(), "Database should have been garbage collected")
+            # SQLAlchemy has internal reference cycles, so the Engine instance
+            # is not cleaned up promptly even if we release our reference to
+            # it.  Explicitly clean it up here to avoid file handles leaking.
+            if is_direct_butler:
+                engine = engine_ref()
+                if engine is not None:
+                    engine.dispose()
 
     def testDafButlerRepositories(self):
         with unittest.mock.patch.dict(
