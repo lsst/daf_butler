@@ -1,0 +1,2 @@
+Added new options to ``DatasetProvenance`` to prevent excessive numbers of input datasets being recorded in file metadata.
+The limit for parquet datasets was set to 2,000 inputs.
