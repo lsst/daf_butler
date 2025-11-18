@@ -229,7 +229,9 @@ def _add_arrow_provenance(
     type_string = _checkArrowCompatibleType(in_memory_dataset)
     if type_string == "astropy":
         provenance = provenance if provenance is not None else DatasetProvenance()
-        prov_dict = provenance.to_flat_dict(ref, prefix="LSST.BUTLER", sep=".", simple_types=True)
+        prov_dict = provenance.to_flat_dict(
+            ref, prefix="LSST.BUTLER", sep=".", simple_types=True, max_inputs=2000
+        )
 
         # Strip any previous provenance.
         DatasetProvenance.strip_provenance_from_flat_dict(in_memory_dataset.meta)
