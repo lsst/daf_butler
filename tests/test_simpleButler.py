@@ -933,6 +933,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
                 butler_factory = LabeledButlerFactory()
+                self.addCleanup(butler_factory.close)
                 factory = butler_factory.bind(access_token=None)
 
                 for dataset_uri in (
@@ -942,6 +943,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
                 ):
                     result = Butler.get_dataset_from_uri(dataset_uri)
+                    self.enterContext(result.butler)
                     self.assertEqual(result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
                     DatastoreMock.apply(result.butler)
@@ -949,6 +951,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     self.assertEqual(dataset_id, ref.id)
 
                     factory_result = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
+                    self.enterContext(factory_result.butler)
                     self.assertEqual(factory_result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
                     DatastoreMock.apply(factory_result.butler)
@@ -958,6 +961,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 # Non existent dataset.
                 missing_id = str(ref.id).replace("2", "3")
                 result = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                self.enterContext(result.butler)
                 self.assertIsNone(result.dataset)
 
         # Test some failure modes.
