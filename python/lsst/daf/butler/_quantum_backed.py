@@ -55,7 +55,7 @@ from .datastore import Datastore
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from .dimensions import DimensionUniverse
-from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStorageManager
+from .registry.interfaces import Database, DatastoreRegistryBridgeManager, OpaqueTableStorageManager
 
 if TYPE_CHECKING:
     from ._butler import Butler
@@ -83,6 +83,9 @@ class QuantumBackedButler(LimitedButler):
         The registry dataset type definitions, indexed by name.
     metrics : `lsst.daf.butler.ButlerMetrics` or `None`, optional
         Metrics object for tracking butler statistics.
+    database : `Database`, optional
+        Database instance used by datastore.  Not required -- only provided
+        to allow database connections to be closed during cleanup.
 
     Notes
     -----
@@ -130,6 +133,7 @@ class QuantumBackedButler(LimitedButler):
         storageClasses: StorageClassFactory,
         dataset_types: Mapping[str, DatasetType] | None = None,
         metrics: ButlerMetrics | None = None,
+        database: Database | None = None,
     ):
         self._dimensions = dimensions
         self._predicted_inputs = set(predicted_inputs)
@@ -142,6 +146,7 @@ class QuantumBackedButler(LimitedButler):
         self.storageClasses = storageClasses
         self._dataset_types: Mapping[str, DatasetType] = {}
         self._metrics = metrics if metrics is not None else ButlerMetrics()
+        self._database = database
         if dataset_types is not None:
             self._dataset_types = dataset_types
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
@@ -321,7 +326,7 @@ class QuantumBackedButler(LimitedButler):
             Metrics object for gathering butler statistics.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
-        datastore, _ = instantiate_standalone_datastore(
+        datastore, database = instantiate_standalone_datastore(
             butler_config, dimensions, filename, OpaqueManagerClass, BridgeManagerClass
         )
 
@@ -342,7 +347,12 @@ class QuantumBackedButler(LimitedButler):
             storageClasses=storageClasses,
             dataset_types=dataset_types,
             metrics=metrics,
+            database=database,
         )
+
+    def close(self) -> None:
+        if self._database is not None:
+            self._database.dispose()
 
     def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
         """Return DatasetType defined in registry given dataset type name."""
