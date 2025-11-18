@@ -1488,6 +1488,10 @@ class ButlerTests(ButlerPutGetTests):
         put_ref = writer_butler.put(123, datasetType, dataId)
         get_ref = reader_butler.get_dataset(put_ref.id)
         self.assertEqual(get_ref.id, put_ref.id)
+        # Also works when looking up via a hexadecimal string instead of a UUID
+        # instance.
+        hex_ref = reader_butler.get_dataset(put_ref.id.hex)
+        self.assertEqual(hex_ref.id, put_ref.id)
 
     def testCollectionChainRedefine(self):
         butler = self._setup_to_test_collection_chain()

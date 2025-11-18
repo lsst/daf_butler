@@ -46,6 +46,7 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     unpack_zips,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.utils.iteration import chunk_iterable
 
 from .._butler import Butler, _DeprecatedDefault
 from .._butler_collections import ButlerCollections
@@ -82,6 +83,8 @@ from .server_models import (
     GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetManyDatasetsRequestModel,
+    GetManyDatasetsResponseModel,
     GetUniverseResponseModel,
     QueryAllDatasetsRequestModel,
 )
@@ -386,7 +389,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
@@ -403,6 +406,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
+
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        result = []
+        for batch in chunk_iterable(ids, GetManyDatasetsRequestModel.MAX_ITEMS_PER_REQUEST):
+            request = GetManyDatasetsRequestModel(dataset_ids=batch)
+            response = self._connection.post("datasets", request)
+            model = parse_model(response, GetManyDatasetsResponseModel)
+            refs = convert_dataset_ref_results(model, self.dimensions)
+            result.extend(refs)
+        return result
 
     def find_dataset(
         self,

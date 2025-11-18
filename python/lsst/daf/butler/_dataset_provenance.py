@@ -445,7 +445,7 @@ class DatasetProvenance(pydantic.BaseModel):
 
         quantum_id = None
         ref_id = None
-        input_ids = {}
+        input_ids: dict[int, uuid.UUID] = {}
         extras: dict[int, dict[str, Any]] = {}
 
         for k, standard in prov_keys.items():
@@ -475,8 +475,9 @@ class DatasetProvenance(pydantic.BaseModel):
 
         provenance = cls(quantum_id=quantum_id)
 
+        input_refs = {ref.id: ref for ref in butler.get_many_datasets(input_ids.values())}
         for i in sorted(input_ids):
-            input_ref = butler.get_dataset(input_ids[i])
+            input_ref = input_refs.get(input_ids[i])
             if input_ref is None:
                 raise ValueError(f"Input dataset ({input_ids[i]}) is not known to this butler.")
             provenance.add_input(input_ref)

@@ -323,20 +323,22 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
-        """Return a `DatasetRef` for the given dataset primary key
-        value.
+    def get_dataset_refs(self, ids: list[DatasetId]) -> list[DatasetRef]:
+        """
+        Return a `DatasetRef` for each of the given dataset UUID values.
 
         Parameters
         ----------
-        id : `DatasetId`
-            Primary key value for the dataset.
+        ids : `list` [ `DatasetId` ]
+            List of UUID instances to look up.
 
         Returns
         -------
-        ref : `DatasetRef` or `None`
-            Object representing the dataset, or `None` if no dataset with the
-            given primary key values exists in this layer.
+        refs : `list` [ `DatasetRef` ]
+            A list containing a `DatasetRef` for each of the given UUIDs that
+            was found in the database.  If a dataset was not found, no error is
+            thrown -- it is just not included in the list.  The returned
+            datasets are in no particular order.
         """
         raise NotImplementedError()
 

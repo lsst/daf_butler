@@ -5,6 +5,7 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 import dataclasses
 import datetime
 import logging
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -29,7 +30,14 @@ from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._dataset_type_cache import DatasetTypeCache
 from .summaries import CollectionSummaryManager
-from .tables import DynamicTables, addDatasetForeignKey, makeStaticTableSpecs, makeTagTableSpec
+from .tables import (
+    DynamicTables,
+    StaticDatasetTableSpecTuple,
+    StaticDatasetTablesTuple,
+    addDatasetForeignKey,
+    makeStaticTableSpecs,
+    makeTagTableSpec,
+)
 
 if TYPE_CHECKING:
     from ...interfaces import (
@@ -39,7 +47,6 @@ if TYPE_CHECKING:
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
-    from .tables import StaticDatasetTablesTuple
 
 
 # This has to be updated on every schema change
@@ -208,7 +215,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collections: type[CollectionManager],
         universe: DimensionUniverse,
         schema_version: VersionTuple | None,
-    ) -> StaticDatasetTablesTuple:
+    ) -> StaticDatasetTableSpecTuple:
         """Construct all static tables used by the classes in this package.
 
         Static tables are those that are present in all Registries and do not
@@ -305,7 +312,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     def register_dataset_type(self, dataset_type: DatasetType) -> bool:
         # Docstring inherited from DatasetRecordStorageManager.
         #
-        # This is one of three places where we populate the dataset type cache.
+        # This is one of the places where we populate the dataset type cache.
         # See the comment in _fetch_dataset_types for how these are related and
         # invariants they must maintain.
         #
@@ -416,68 +423,67 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
         return result
 
-    def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
-        # Docstring inherited from DatasetRecordStorageManager.
-        #
-        # This is one of three places where we populate the dataset type cache.
-        # See the comment in _fetch_dataset_types for how these are related and
-        # invariants they must maintain.
-        #
-        sql = (
-            sqlalchemy.sql.select(
-                self._static.dataset.columns.dataset_type_id,
-                self._static.dataset.columns[self._collections.getRunForeignKeyName()],
-                *self._static.dataset_type.columns,
-            )
-            .select_from(self._static.dataset)
-            .join(self._static.dataset_type)
-            .where(self._static.dataset.columns.id == id)
-        )
+    def get_dataset_refs(self, ids: list[DatasetId]) -> list[DatasetRef]:
+        # Look up the dataset types corresponding to the given Dataset IDs.
+        id_col = self._static.dataset.columns["id"]
+        sql = sqlalchemy.sql.select(
+            id_col,
+            self._static.dataset.columns["dataset_type_id"],
+        ).where(id_col.in_(ids))
         with self._db.query(sql) as sql_result:
-            row = sql_result.mappings().fetchone()
-        if row is None:
-            return None
-        run = row[self._run_key_column]
-        record = self._record_from_row(row)
-        _, dataset_type_id = self._cache.get(record.dataset_type.name)
-        if dataset_type_id is None:
-            self._cache.add(record.dataset_type, record.dataset_type_id)
-        else:
-            assert record.dataset_type_id == dataset_type_id, "Two IDs for the same dataset type name!"
-        dynamic_tables = self._cache.get_by_dimensions(record.dataset_type.dimensions)
-        if dynamic_tables is None:
-            dynamic_tables = record.make_dynamic_tables()
-            self._cache.add_by_dimensions(record.dataset_type.dimensions, dynamic_tables)
-        if record.dataset_type.dimensions:
-            # This query could return multiple rows (one for each tagged
-            # collection the dataset is in, plus one for its run collection),
-            # and we don't care which of those we get.
+            dataset_rows = sql_result.mappings().all()
+        dataset_type_map: dict[DatasetId, DatasetType] = {
+            row["id"]: self._get_dataset_type_by_id(row["dataset_type_id"]) for row in dataset_rows
+        }
+
+        # Group the given dataset IDs by the DimensionGroup of their dataset
+        # types -- there is a separate tags table for each DimensionGroup.
+        dimension_groups = defaultdict[DimensionGroup, set[DatasetId]](set)
+        for id, dataset_type in dataset_type_map.items():
+            dimension_groups[dataset_type.dimensions].add(id)
+
+        output_refs: list[DatasetRef] = []
+        for dimension_group, datasets in dimension_groups.items():
+            # Query the tags table for each dimension group to look up the
+            # data IDs corresponding to the UUIDs found from the dataset table.
+            dynamic_tables = self._get_dynamic_tables(dimension_group)
             tags_table = self._get_tags_table(dynamic_tables)
-            data_id_sql = (
-                tags_table.select()
-                .where(
-                    sqlalchemy.sql.and_(
-                        tags_table.columns.dataset_id == id,
-                        tags_table.columns.dataset_type_id == record.dataset_type_id,
-                    )
+            tags_sql = tags_table.select().where(tags_table.columns["dataset_id"].in_(datasets))
+            # Join in the collection table to fetch the run name.
+            collection_column = tags_table.columns[self._collections.getCollectionForeignKeyName()]
+            joined_collections = self._collections.join_collections_sql(collection_column, tags_sql)
+            tags_sql = joined_collections.joined_sql
+            run_name_column = joined_collections.name_column
+            tags_sql = tags_sql.add_columns(run_name_column)
+            # Tags table includes run collections and tagged
+            # collections.
+            # In theory the data ID for a given dataset should be the
+            # same in both, but nothing actually guarantees this.
+            # So skip any tagged collections, using the run collection
+            # as the definitive definition.
+            tags_sql = tags_sql.where(joined_collections.type_column == int(CollectionType.RUN))
+
+            with self._db.query(tags_sql) as sql_result:
+                data_id_rows = sql_result.mappings().all()
+
+            assert run_name_column.key is not None
+            for data_id_row in data_id_rows:
+                id = data_id_row["dataset_id"]
+                dataset_type = dataset_type_map[id]
+                run_name = data_id_row[run_name_column.key]
+                data_id = DataCoordinate.from_required_values(
+                    dimension_group,
+                    tuple(data_id_row[dimension] for dimension in dimension_group.required),
                 )
-                .limit(1)
-            )
-            with self._db.query(data_id_sql) as sql_result:
-                data_id_row = sql_result.mappings().fetchone()
-            assert data_id_row is not None, "Data ID should be present if dataset is."
-            data_id = DataCoordinate.from_required_values(
-                record.dataset_type.dimensions,
-                tuple(data_id_row[dimension] for dimension in record.dataset_type.dimensions.required),
-            )
-        else:
-            data_id = DataCoordinate.make_empty(self._dimensions.universe)
-        return DatasetRef(
-            record.dataset_type,
-            dataId=data_id,
-            id=id,
-            run=self._collections[run].name,
-        )
+                ref = DatasetRef(
+                    datasetType=dataset_type,
+                    dataId=data_id,
+                    id=id,
+                    run=run_name,
+                )
+                output_refs.append(ref)
+
+        return output_refs
 
     def _fetch_dataset_type_record(self, name: str) -> _DatasetTypeRecord | None:
         """Retrieve all dataset types defined in database.
@@ -517,9 +523,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     def preload_cache(self) -> None:
         self._fetch_dataset_types()
 
-    def _fetch_dataset_types(self) -> list[DatasetType]:
+    def _fetch_dataset_types(self, force_refresh: bool = False) -> list[DatasetType]:
         """Fetch list of all defined dataset types."""
-        # This is one of three places we populate the dataset type cache:
+        # This is one of two places we populate the dataset type cache:
         #
         # - This method handles almost all requests for dataset types that
         #   should already exist.  It always marks the cache as "full" in both
@@ -529,19 +535,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         #   not existing yet.  Since it can only add a single dataset type, it
         #   never changes whether the cache is full.
         #
-        # - getDatasetRef is a special case for a dataset type that should
-        #   already exist, but is looked up via a dataset ID rather than its
-        #   name.  It also never changes whether the cache is full, and it's
-        #   handles separately essentially as an optimization: we can fetch a
-        #   single dataset type definition record in a join when we query for
-        #   the dataset type based on the dataset ID, and this is better than
-        #   blindly fetching all dataset types in a separate query.
-        #
-        # In all three cases, we require that the per-dimensions data be cached
+        # In both cases, we require that the per-dimensions data be cached
         # whenever a dataset type is added to the cache by name, to reduce the
         # number of possible states the cache can be in and minimize the number
         # of queries.
-        if self._cache.full:
+        if self._cache.full and not force_refresh:
             return [dataset_type for dataset_type, _ in self._cache.items()]
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
@@ -561,16 +559,26 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         )
         return [record.dataset_type for record in records]
 
+    def _get_dataset_type_by_id(self, id: int) -> DatasetType:
+        dt = self._cache.get_by_id(id)
+        if dt is None:
+            # Since the ID is not a concept exposed to the public API, it
+            # had to have come from a dataset table, and our cache must be
+            # empty or out of date.
+            self._fetch_dataset_types(force_refresh=True)
+            dt = self._cache.get_by_id(id)
+            if dt is None:
+                raise RuntimeError(f"Failed to look up dataset type with ID {id}")
+        return dt
+
     def _find_storage(self, name: str) -> _DatasetRecordStorage:
         """Find a dataset type and the extra information needed to work with
         it, utilizing and populating the cache as needed.
         """
         dataset_type, dataset_type_id = self._cache.get(name)
         if dataset_type is not None:
-            tables = self._cache.get_by_dimensions(dataset_type.dimensions)
-            assert dataset_type_id is not None and tables is not None, (
-                "Dataset type cache population is incomplete."
-            )
+            tables = self._get_dynamic_tables(dataset_type.dimensions)
+            assert dataset_type_id is not None, "Dataset type cache population is incomplete."
             return _DatasetRecordStorage(
                 dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
             )
@@ -582,10 +590,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 # Try again
                 dataset_type, dataset_type_id = self._cache.get(name)
             if dataset_type is not None:
-                tables = self._cache.get_by_dimensions(dataset_type.dimensions)
-                assert dataset_type_id is not None and tables is not None, (
-                    "Dataset type cache population is incomplete."
-                )
+                tables = self._get_dynamic_tables(dataset_type.dimensions)
+                assert dataset_type_id is not None, "Dataset type cache population is incomplete."
                 return _DatasetRecordStorage(
                     dataset_type=dataset_type, dataset_type_id=dataset_type_id, dynamic_tables=tables
                 )
@@ -596,6 +602,13 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             self._cache.add_by_dimensions(record.dataset_type.dimensions, tables)
             return _DatasetRecordStorage(record.dataset_type, record.dataset_type_id, tables)
         raise MissingDatasetTypeError(f"Dataset type {name!r} does not exist.")
+
+    def _get_dynamic_tables(self, dimensions: DimensionGroup) -> DynamicTables:
+        tables = self._cache.get_by_dimensions(dimensions)
+        assert tables is not None, (
+            "_fetch_dataset_types is supposed to guarantee that the tables cache is populated."
+        )
+        return tables
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -720,10 +733,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 raise MissingDatasetTypeError(f"Dataset type {dt.name!r} has not been registered.")
             dataset_type_storage[dt.name] = storage
 
-        dynamic_tables = self._cache.get_by_dimensions(dimensions)
-        assert dynamic_tables is not None, (
-            "Table cache should have been populated when looking up dataset types"
-        )
+        dynamic_tables = self._get_dynamic_tables(dimensions)
         tags_table = self._get_tags_table(dynamic_tables)
         # Current timestamp, type depends on schema version.
         if self._use_astropy_ingest_date:

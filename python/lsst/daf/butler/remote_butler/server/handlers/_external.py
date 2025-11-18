@@ -56,6 +56,8 @@ from ...server_models import (
     GetFileResponseModel,
     GetFileTransferInfoRequestModel,
     GetFileTransferInfoResponseModel,
+    GetManyDatasetsRequestModel,
+    GetManyDatasetsResponseModel,
     GetUniverseResponseModel,
     QueryCollectionInfoRequestModel,
     QueryCollectionInfoResponseModel,
@@ -145,6 +147,15 @@ def get_dataset(
     ref = butler.get_dataset(id, dimension_records=dimension_records)
     serialized_ref = ref.to_simple() if ref else None
     return FindDatasetResponseModel(dataset_ref=serialized_ref)
+
+
+@external_router.post("/v1/datasets")
+def get_many_datasets(
+    input: GetManyDatasetsRequestModel, factory: Factory = Depends(factory_dependency)
+) -> GetManyDatasetsResponseModel:
+    butler = factory.create_butler()
+    refs = butler.get_many_datasets(input.dataset_ids)
+    return GetManyDatasetsResponseModel.from_refs(refs)
 
 
 @external_router.post(

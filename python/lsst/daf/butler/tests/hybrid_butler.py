@@ -188,7 +188,7 @@ class HybridButler(Butler):
 
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
@@ -200,6 +200,9 @@ class HybridButler(Butler):
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
+
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        return self._remote_butler.get_many_datasets(ids)
 
     def find_dataset(
         self,

@@ -503,6 +503,93 @@ class RegistryTests(ABC):
         registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
+    def test_get_many_datasets(self):
+        butler = self.make_butler()
+        self.load_data(butler, "base.yaml", "datasets.yaml")
+        expected_refs = {
+            str(ref.id): ref
+            for ref in butler.query_all_datasets(["imported_g", "imported_r"], find_first=False)
+        }
+
+        # Set up a tagged collection containing a dataset used by the tests
+        # below.  get_many_datasets() queries on tables shared between run
+        # collections and tagged collections, so this makes sure the tags don't
+        # interfere.
+        butler.collections.register("tagged", CollectionType.TAGGED)
+        butler.registry.associate("tagged", [expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"]])
+
+        # Empty input returns empty output.
+        self.assertEqual(butler.get_many_datasets([]), [])
+        # Datasets all of one type, but in different collections.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                ["60c8a65c-7290-4c38-b1de-e3b1cdcf872d", "d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c"]
+            ),
+            [
+                expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"],
+                expected_refs["d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c"],
+            ],
+        )
+        # Datasets of multiple types with different dimension groups.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                [
+                    "60c8a65c-7290-4c38-b1de-e3b1cdcf872d",
+                    "d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c",
+                    "87f3e68d-258d-41b7-8ea5-edf3557ccb30",
+                ]
+            ),
+            [
+                expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"],
+                expected_refs["d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c"],
+                expected_refs["87f3e68d-258d-41b7-8ea5-edf3557ccb30"],
+            ],
+        )
+        # Missing datasets are omitted from the result.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                [
+                    "238c3b83-f6e5-4ccb-a7b0-5028dec1dcbb",
+                    "60c8a65c-7290-4c38-b1de-e3b1cdcf872d",
+                ]
+            ),
+            [expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"]],
+        )
+        # Duplicates are squashed in the result.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                [
+                    "60c8a65c-7290-4c38-b1de-e3b1cdcf872d",
+                    "60c8a65c-7290-4c38-b1de-e3b1cdcf872d",
+                ]
+            ),
+            [expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"]],
+        )
+        # Can use UUID instances as inputs instead of strings.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                [
+                    uuid.UUID("60c8a65c-7290-4c38-b1de-e3b1cdcf872d"),
+                ]
+            ),
+            [expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"]],
+        )
+        # Bad ID format raises ValueError.
+        with self.assertRaises(ValueError):
+            butler.get_many_datasets(["not-a-valid-uuid"])
+        # Works with arbitrary iterables as input.
+        self.assertCountEqual(
+            butler.get_many_datasets(
+                itertools.chain(
+                    ["60c8a65c-7290-4c38-b1de-e3b1cdcf872d", "d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c"]
+                )
+            ),
+            [
+                expected_refs["60c8a65c-7290-4c38-b1de-e3b1cdcf872d"],
+                expected_refs["d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c"],
+            ],
+        )
+
     def test_fetch_run_dataset_ids(self):
         butler = self.make_butler()
         registry = butler._registry

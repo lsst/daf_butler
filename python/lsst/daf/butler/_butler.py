@@ -1012,7 +1012,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @abstractmethod
     def get_dataset(
         self,
-        id: DatasetId,
+        id: DatasetId | str,
         *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
@@ -1023,7 +1023,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         Parameters
         ----------
         id : `DatasetId`
-            The unique identifier for the dataset.
+            The unique identifier for the dataset, as an instance of
+            `uuid.UUID` or a string containing a hexadecimal number.
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.
@@ -1037,6 +1038,26 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         ref : `DatasetRef` or `None`
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_many_datasets(self, ids: Iterable[DatasetId | str]) -> list[DatasetRef]:
+        """Retrieve a list of dataset entries.
+
+        Parameters
+        ----------
+        ids : `~collections.abc.Iterable` [ `DatasetId` or `str` ]
+            The unique identifiers for the datasets, as instances of
+            `uuid.UUID` or strings containing a hexadecimal number.
+
+        Returns
+        -------
+        refs : `list` [ `DatasetRef` ]
+            A list containing a `DatasetRef` for each of the given dataset IDs.
+            If a dataset was not found, no error is thrown -- it is just not
+            included in the list.  The returned datasets are in no particular
+            order.
         """
         raise NotImplementedError()
 
