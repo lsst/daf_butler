@@ -112,6 +112,8 @@ class DatasetProvenance(pydantic.BaseModel):
         sep: str = ".",
         simple_types: bool = False,
         use_upper: bool | None = None,
+        max_inputs: int | None = None,
+        store_minimalist_inputs: bool = False,
     ) -> dict[str, _PROV_TYPES]:
         """Return provenance as a flattened dictionary.
 
@@ -137,6 +139,13 @@ class DatasetProvenance(pydantic.BaseModel):
             character of the prefix (defined by whether `str.isupper()` returns
             true, else they will be lower case). If `False` the case will be
             lower case, and if `True` the case will be upper case.
+        max_inputs : `int` or `None`, optional
+            Maximum number of inputs to be recorded in provenance. `None`
+            results in all inputs being recorded. If the number of inputs
+            exceeds this value no input provenance will be recorded.
+        store_minimalist_inputs : `bool`, optional
+            If `True` only the ID of the input is stored along with explicit
+            extras. If `False` the run and dataset type are also recorded.
 
         Returns
         -------
@@ -155,7 +164,13 @@ class DatasetProvenance(pydantic.BaseModel):
 
         Each input dataset will have the ``id``, ``run``, and ``datasettype``
         keys as defined above (but no ``dataid`` key) with an ``input N``
-        prefix where ``N`` starts counting at 0.
+        prefix where ``N`` starts counting at 0. It is possible to drop
+        the ``datasettype`` and ``run`` to save space by using the
+        ``store_minimalist_inputs`` flag.
+
+        If there are too many inputs (see the ``max_inputs`` parameters)
+        no inputs will be recorded. The number of inputs is always recorded
+        to indicate that the inputs were dropped.
 
         The quantum ID, if present, will use key ``quantum``.
 
@@ -171,6 +186,7 @@ class DatasetProvenance(pydantic.BaseModel):
             "lsst.butler.dataid.detector": 10,
             "lsst.butler.dataid.instrument": "LSSTCam",
             "lsst.butler.quantum": "d93a735b-08f0-477d-bc95-2cc32d6d898b",
+            "lsst.butler.n_inputs": 2,
             "lsst.butler.input.0.id": "3dfd7ba5-5e35-4565-9d87-4b33880ed06c",
             "lsst.butler.input.0.run": "other_run",
             "lsst.butler.input.0.datasettype": "astropy_parquet",
@@ -206,12 +222,28 @@ class DatasetProvenance(pydantic.BaseModel):
         if self.quantum_id is not None:
             prov[_make_key("quantum")] = self.quantum_id if not simple_types else str(self.quantum_id)
 
-        for i, input in enumerate(self.inputs):
+        # Record the number of inputs so that people can determine how many
+        # there were even if they were dropped because they exceeded the
+        # allowed maximum. Do not record the count if we have a null provenance
+        # state with no ref and no inputs.
+        if ref is not None or len(self.inputs) > 0:
+            prov[_make_key("n_inputs")] = len(self.inputs)
+
+        # Remove all inputs if the maximum is found. Truncating to the
+        # maximum (or auto switching to minimalist mode and increasing the
+        # maximum by 3) is not preferred.
+        inputs = (
+            self.inputs
+            if max_inputs is None or (max_inputs is not None and len(self.inputs) <= max_inputs)
+            else []
+        )
+        for i, input in enumerate(inputs):
             prov[_make_key("input", i, "id")] = input.id if not simple_types else str(input.id)
-            if input.run is not None:  # for mypy
-                prov[_make_key("input", i, "run")] = input.run
-            if input.datasetType is not None:  # for mypy
-                prov[_make_key("input", i, "datasettype")] = input.datasetType.name
+            if not store_minimalist_inputs:
+                if input.run is not None:  # for mypy
+                    prov[_make_key("input", i, "run")] = input.run
+                if input.datasetType is not None:  # for mypy
+                    prov[_make_key("input", i, "datasettype")] = input.datasetType.name
 
             if input.id in self.extras:
                 for xk, xv in self.extras[input.id].items():
@@ -369,7 +401,9 @@ class DatasetProvenance(pydantic.BaseModel):
             # Prefix will always include the separator if it is defined.
             prefix += sep
 
-        core_provenance = tuple(f"{prefix}{k}".lower() for k in ("run", "id", "datasettype", "quantum"))
+        core_provenance = tuple(
+            f"{prefix}{k}".lower() for k in ("run", "id", "datasettype", "quantum", "n_inputs")
+        )
 
         # Need to escape the prefix and separator for regex usage.
         esc_sep = re.escape(sep)

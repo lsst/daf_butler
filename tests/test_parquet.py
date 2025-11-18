@@ -786,6 +786,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "LSST.BUTLER.ID": str(put_ref.id),
             "LSST.BUTLER.RUN": "test_run",
             "LSST.BUTLER.DATASETTYPE": "data",
+            "LSST.BUTLER.N_INPUTS": 0,
         }
 
         self.assertEqual(tab2.meta, expected)
@@ -818,6 +819,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "LSST.BUTLER.RUN": "test_run",
             "LSST.BUTLER.DATASETTYPE": "data",
             "LSST.BUTLER.QUANTUM": str(quantum_id),
+            "LSST.BUTLER.N_INPUTS": 1,
             "LSST.BUTLER.INPUT.0.ID": str(input_ref.id),
             "LSST.BUTLER.INPUT.0.RUN": "other_run",
             "LSST.BUTLER.INPUT.0.DATASETTYPE": "astropy_parquet",
@@ -834,6 +836,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "LSST.BUTLER.ID": str(put_ref3.id),
             "LSST.BUTLER.RUN": "new_run",
             "LSST.BUTLER.DATASETTYPE": "data",
+            "LSST.BUTLER.N_INPUTS": 0,
         }
         self.assertEqual(tab2.meta, expected)
         null_prov, prov_ref = DatasetProvenance.from_flat_dict(tab2.meta, self.butler)

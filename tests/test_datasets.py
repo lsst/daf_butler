@@ -822,6 +822,7 @@ class DatasetRefTestCase(unittest.TestCase):
             "dataid.visit": 42,
             "run": "somerun",
             "quantum": quantum_id,
+            "n_inputs": 2,
             "input.0.datasettype": "test",
             "input.0.run": "run",
             "input.0.id": ref2.id,
@@ -834,6 +835,41 @@ class DatasetRefTestCase(unittest.TestCase):
         }
 
         prov_dict = prov.to_flat_dict(ref1, sep=".")
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid.instrument": "DummyCam",
+            "dataid.visit": 42,
+            "run": "somerun",
+            "quantum": quantum_id,
+            "n_inputs": 2,
+        }
+
+        prov_dict = prov.to_flat_dict(ref1, sep=".", max_inputs=1)
+        self.assertEqual(prov_dict, expected)
+        DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+        self.assertEqual(prov_dict, {})
+
+        expected = {
+            "id": ref1.id,
+            "datasettype": "test",
+            "dataid.instrument": "DummyCam",
+            "dataid.visit": 42,
+            "run": "somerun",
+            "quantum": quantum_id,
+            "n_inputs": 2,
+            "input.0.id": ref2.id,
+            "input.0.extra_number": 42,
+            "input.0.extra_string": "value",
+            "input.0.extra_id": extra_id,
+            "input.1.id": ref3.id,
+        }
+
+        prov_dict = prov.to_flat_dict(ref1, sep=".", store_minimalist_inputs=True)
         self.assertEqual(prov_dict, expected)
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
         self.assertEqual(prov_dict, {})
@@ -901,6 +937,7 @@ class DatasetRefTestCase(unittest.TestCase):
             "dataid*instrument": "DummyCam",
             "dataid*visit": 42,
             "run": "somerun",
+            "n_inputs": 0,
         }
         self.assertEqual(prov_dict, expected)
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
@@ -915,6 +952,7 @@ class DatasetRefTestCase(unittest.TestCase):
             "id": empty_ref.id,
             "datasettype": "empty",
             "run": "empty_run",
+            "n_inputs": 0,
         }
         self.assertEqual(prov_dict, expected)
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
@@ -925,6 +963,7 @@ class DatasetRefTestCase(unittest.TestCase):
             "x-yz-id": empty_ref.id,
             "x-yz-datasettype": "empty",
             "x-yz-run": "empty_run",
+            "x-yz-n_inputs": 0,
         }
         self.assertEqual(prov_dict, expected)
         DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
