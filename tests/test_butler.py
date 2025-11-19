@@ -711,8 +711,10 @@ class ButlerTests(ButlerPutGetTests):
                     uri = Butler.get_repo_uri("label")
                     butler = Butler.from_config(uri, writeable=False)
                     self.assertIsInstance(butler, Butler)
+                    butler.close()
                     butler = Butler.from_config("label", writeable=False)
                     self.assertIsInstance(butler, Butler)
+                    butler.close()
                     with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
                         Butler.from_config("not_there", writeable=False)
                     with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
@@ -1250,6 +1252,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = self.create_empty_butler(run=self.default_run)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         butlerOut = pickle.loads(pickle.dumps(butler))
+        self.enterContext(butlerOut)
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
         self.assertEqual(list(butlerOut.collections.defaults), list(butler.collections.defaults))
