@@ -44,7 +44,8 @@ class ButlerFactoryTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         repo_dir = cls.enterClassContext(tempfile.TemporaryDirectory())
-        makeTestRepo(repo_dir)
+        butler = makeTestRepo(repo_dir)
+        butler.close()
         cls.config_file_uri = f"file://{repo_dir}"
 
     def test_factory_via_global_repository_index(self):
@@ -53,10 +54,12 @@ class ButlerFactoryTestCase(unittest.TestCase):
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
                 factory = LabeledButlerFactory()
+                self.addCleanup(factory.close)
                 self._test_factory(factory)
 
     def test_factory_via_custom_index(self):
         factory = LabeledButlerFactory({"test_repo": self.config_file_uri})
+        self.addCleanup(factory.close)
         self._test_factory(factory)
 
     def _test_factory(self, factory: LabeledButlerFactory) -> None:
