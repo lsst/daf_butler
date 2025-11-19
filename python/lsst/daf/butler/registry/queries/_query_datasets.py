@@ -106,9 +106,9 @@ class QueryDriverDatasetRefQueryResults(
 
     def _iterate_rows(self) -> Iterator[DatasetRef]:
         with self._build_query() as result:
-            target_storage_class = self._dataset_type.storageClass
+            target_storage_class = self._dataset_type.storageClass_name
             for ref in result:
-                if ref.datasetType.storageClass != target_storage_class:
+                if ref.datasetType.storageClass_name != target_storage_class:
                     yield ref.overrideStorageClass(target_storage_class)
                 else:
                     yield ref
