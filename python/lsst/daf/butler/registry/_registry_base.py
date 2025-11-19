@@ -236,7 +236,6 @@ class RegistryBase(Registry):
         with self._butler.query() as query:
             resolved_collections = self.queryCollections(
                 collections,
-                datasetType=datasetType,
                 collectionTypes=collectionTypes,
                 flattenChains=True,
             )
