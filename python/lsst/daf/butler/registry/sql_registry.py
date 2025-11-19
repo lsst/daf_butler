@@ -175,6 +175,7 @@ class SqlRegistry:
         elif not isinstance(dimensionConfig, DimensionConfig):
             raise TypeError(f"Incompatible Dimension configuration type: {type(dimensionConfig)}")
 
+        managerTypes = RegistryManagerTypes.fromConfig(config)
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
             config.connectionString,
@@ -182,9 +183,13 @@ class SqlRegistry:
             namespace=config.get("namespace"),
             allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.makeRepo(database, dimensionConfig)
-        return cls(database, RegistryDefaults(), managers)
+
+        try:
+            managers = managerTypes.makeRepo(database, dimensionConfig)
+            return cls(database, RegistryDefaults(), managers)
+        except Exception:
+            database.dispose()
+            raise
 
     @classmethod
     def fromConfig(
