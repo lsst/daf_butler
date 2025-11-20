@@ -363,6 +363,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -957,6 +958,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1352,6 +1354,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1651,6 +1654,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1964,6 +1968,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -2125,6 +2130,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         self.butler = Butler.from_config(
             Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
         )
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -2334,6 +2340,7 @@ class ParquetFormatterArrowTableS3TestCase(unittest.TestCase):
         self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
 
         self.butler = Butler(self.tmpConfigFile, writeable=True, run="test_run")
+        self.enterContext(self.butler)
 
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.

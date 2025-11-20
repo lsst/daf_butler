@@ -36,7 +36,7 @@ from abc import abstractmethod
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, Literal, Self, TextIO
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
@@ -94,7 +94,7 @@ class _DeprecatedDefault:
     """Default value for a deprecated parameter."""
 
 
-class Butler(LimitedButler):  # numpydoc ignore=PR02
+class Butler(LimitedButler, AbstractContextManager):  # numpydoc ignore=PR02
     """Interface for data butler and factory for Butler instances.
 
     Parameters
@@ -358,6 +358,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             case _:
                 raise TypeError(f"Unknown Butler type '{butler_type}'")
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+        try:
+            self.close()
+        except Exception:
+            _LOG.exception("An exception occured during Butler.close()")
+        return False
+
     @staticmethod
     def makeRepo(
         root: ResourcePathExpression,
@@ -506,9 +516,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        _RegistryFactory(registryConfig).create_from_config(
+        registry = _RegistryFactory(registryConfig).create_from_config(
             dimensionConfig=dimensionConfig, butlerRoot=root_uri
         )
+        registry.close()
 
         _LOG.verbose("Wrote new Butler configuration file to %s", configURI)
 
@@ -2220,5 +2231,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             values from original object.
         metrics : `ButlerMetrics` or `None`, optional
             Metrics object to record butler statistics.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def close(self) -> None:
+        """Release all resources associated with this Butler instance.  The
+        instance may no longer be used after this is called.
+
+        Notes
+        -----
+        Instead of calling ``close()``directly, you can use the Butler object
+        as a context manager.  For example::
+          with Butler(...) as butler:
+              butler.get(...)
+          # butler is closed after exiting the block.
         """
         raise NotImplementedError()

@@ -71,6 +71,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         which should be a YAML import/export file.
         """
         butler = Butler.from_config(self.repo, writeable=True)
+        self.enterContext(butler)
         assert isinstance(butler, DirectButler), "Test expects DirectButler"
         for filename in filenames:
             butler.import_(

@@ -69,19 +69,20 @@ def register_dataset_type(
         be created by this command. They are always derived from the composite
         dataset type.
     """
-    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
+    with Butler.from_config(repo, writeable=True, without_datastore=True) as butler:
+        _, component = DatasetType.splitDatasetTypeName(dataset_type)
+        if component:
+            raise ValueError(
+                "Component dataset types are created automatically when the composite is created."
+            )
 
-    _, component = DatasetType.splitDatasetTypeName(dataset_type)
-    if component:
-        raise ValueError("Component dataset types are created automatically when the composite is created.")
+        datasetType = DatasetType(
+            dataset_type,
+            butler.dimensions.conform(dimensions),
+            storage_class,
+            parentStorageClass=None,
+            isCalibration=is_calibration,
+            universe=butler.dimensions,
+        )
 
-    datasetType = DatasetType(
-        dataset_type,
-        butler.dimensions.conform(dimensions),
-        storage_class,
-        parentStorageClass=None,
-        isCalibration=is_calibration,
-        universe=butler.dimensions,
-    )
-
-    return butler.registry.registerDatasetType(datasetType)
+        return butler.registry.registerDatasetType(datasetType)

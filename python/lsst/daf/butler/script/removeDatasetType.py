@@ -43,5 +43,5 @@ def removeDatasetType(repo: str, dataset_type_name: tuple[str, ...]) -> None:
     dataset_type_name : `str`
         The name of the dataset type to be removed.
     """
-    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
-    butler.registry.removeDatasetType(dataset_type_name)
+    with Butler.from_config(repo, writeable=True, without_datastore=True) as butler:
+        butler.registry.removeDatasetType(dataset_type_name)

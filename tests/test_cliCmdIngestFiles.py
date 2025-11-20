@@ -52,6 +52,7 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
         self.addCleanup(removeTestTempDir, self.root)
 
         self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
+        self.enterContext(self.testRepo.butler)
 
         self.root2 = makeTestTempDir(TESTDIR)
         self.addCleanup(removeTestTempDir, self.root2)
@@ -105,6 +106,7 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
             butler = Butler.from_config(self.root)
+            self.enterContext(butler)
             refs = list(butler.registry.queryDatasets("test_metric_comp", collections=run))
             self.assertEqual(len(refs), 2)
 

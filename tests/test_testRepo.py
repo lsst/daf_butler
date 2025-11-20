@@ -66,6 +66,7 @@ class ButlerTestRepoTestCase(unittest.TestCase):
         }
 
         butler = makeTestRepo(self.root, dataIds)
+        self.enterContext(butler)
 
         records = list(butler.registry.queryDimensionRecords("visit"))
         self.assertEqual(len(records), 3)
@@ -81,6 +82,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         cls.root = makeTestTempDir(TESTDIR)
 
         cls.creatorButler = makeTestRepo(cls.root)
+        cls.enterClassContext(cls.creatorButler)
         addDataIdValue(cls.creatorButler, "instrument", "notACam")
         addDataIdValue(cls.creatorButler, "instrument", "dummyCam")
         addDataIdValue(cls.creatorButler, "physical_filter", "k2020", band="k", instrument="notACam")
@@ -112,7 +114,8 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # outfile has the most obvious effects of any Butler.makeRepo keyword
         with safeTestTempDir(TESTDIR) as temp:
             path = os.path.join(temp, "oddConfig.json")
-            makeTestRepo(temp, {}, outfile=path)
+            butler = makeTestRepo(temp, {}, outfile=path)
+            self.enterContext(butler)
             self.assertTrue(os.path.isfile(path))
 
     def _checkButlerDimension(self, dimensions, query, expected):
@@ -212,6 +215,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
 
             repo = lsst.daf.butler.Butler.makeRepo(temp, config=config)
             butler = lsst.daf.butler.Butler.from_config(repo, run="chainedExample")
+            self.enterContext(butler)
             registerMetricsExample(butler)
             addDatasetType(butler, "DummyType", {}, "StructuredDataNoComponents")
 

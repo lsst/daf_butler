@@ -49,6 +49,7 @@ class DirectButlerSQLiteTests(ButlerQueryTests, unittest.TestCase):
         # dir but create_populated_sqlite_registry does not and for consistency
         # call load_data to match the other usages.
         butler = create_populated_sqlite_registry()
+        self.enterContext(butler)
         for arg in args:
             self.load_data(butler, arg)
         return butler

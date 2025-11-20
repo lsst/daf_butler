@@ -56,6 +56,7 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
 
     def testAstropyTableFormatter(self):
         butler = Butler(self.root, run="testrun")
+        self.enterContext(butler)
         datasetType = DatasetType("table", [], "AstropyTable", universe=butler.dimensions)
         butler.registry.registerDatasetType(datasetType)
         ref = butler.put(self.table, datasetType)

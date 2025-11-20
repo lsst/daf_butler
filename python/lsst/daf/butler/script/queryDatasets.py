@@ -158,6 +158,8 @@ class QueryDatasets:
         wildcards.
     show_uri : `bool`
         If True, include the dataset URI in the output.
+    butler : `lsst.daf.butler.Butler`
+        The butler to use to query.
     limit : `int`, optional
         Limit the number of results to be returned. A value of 0 means
         unlimited. A negative value is used to specify a cap where a warning
@@ -167,13 +169,6 @@ class QueryDatasets:
         results of ``limit`` are undefined and default sorting of the resulting
         datasets will be applied. It is an error if the requested ordering
         is inconsistent with the dimensions of the dataset type being queried.
-    repo : `str` or `None`
-        URI to the location of the repo or URI to a config file describing the
-        repo and its location. One of `repo` and `butler` must be `None` and
-        the other must not be `None`.
-    butler : `lsst.daf.butler.Butler` or `None`
-        The butler to use to query. One of `repo` and `butler` must be `None`
-        and the other must not be `None`.
     with_dimension_records : `bool`, optional
         If `True` (default is `False`) then returned data IDs will have
         dimension records.
@@ -186,14 +181,11 @@ class QueryDatasets:
         where: str,
         find_first: bool,
         show_uri: bool,
+        butler: Butler,
         limit: int = 0,
         order_by: tuple[str, ...] = (),
-        repo: str | None = None,
-        butler: Butler | None = None,
         with_dimension_records: bool = False,
     ):
-        if (repo and butler) or (not repo and not butler):
-            raise RuntimeError("One of repo and butler must be provided and the other must be None.")
         collections = list(collections)
         if not collections:
             warnings.warn(
@@ -215,9 +207,7 @@ class QueryDatasets:
         if order_by and searches_multiple_dataset_types:
             raise NotImplementedError("--order-by is only supported for queries with a single dataset type.")
 
-        # show_uri requires a datastore.
-        without_datastore = not show_uri
-        self.butler = butler or Butler.from_config(repo, without_datastore=without_datastore)
+        self.butler = butler
         self.showUri = show_uri
         self._dataset_type_glob = glob
         self._collections_wildcard = collections

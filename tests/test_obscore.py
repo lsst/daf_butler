@@ -70,6 +70,7 @@ class ObsCoreTests(TestCaseMixin):
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
         registry = _RegistryFactory(config).create_from_config(butlerRoot=self.root)
+        self.addCleanup(registry.close)
         self.initialize_registry(registry)
         return registry
 
@@ -526,7 +527,9 @@ class ClonedSqliteObscoreTest(SQLiteObsCoreTest, unittest.TestCase):
     ) -> SqlRegistry:
         """Create new empty Registry."""
         original = super().make_registry(collections, collection_type)
-        return original.copy()
+        copy = original.copy()
+        self.addCleanup(copy.close)
+        return copy
 
 
 class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):

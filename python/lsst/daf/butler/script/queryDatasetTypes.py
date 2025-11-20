@@ -60,26 +60,29 @@ def queryDatasetTypes(
         A dict whose key is "datasetTypes" and whose value is a list of
         collection names.
     """
-    butler = Butler.from_config(repo, without_datastore=True)
-    expression = glob or ...
-    datasetTypes = butler.registry.queryDatasetTypes(expression=expression)
+    with Butler.from_config(repo, without_datastore=True) as butler:
+        expression = glob or ...
+        datasetTypes = butler.registry.queryDatasetTypes(expression=expression)
 
-    if collections:
-        collections_info = butler.collections.query_info(collections, include_summary=True)
-        filtered_dataset_types = set(
-            butler.collections._filter_dataset_types([d.name for d in datasetTypes], collections_info)
-        )
-        datasetTypes = [d for d in datasetTypes if d.name in filtered_dataset_types]
+        if collections:
+            collections_info = butler.collections.query_info(collections, include_summary=True)
+            filtered_dataset_types = set(
+                butler.collections._filter_dataset_types([d.name for d in datasetTypes], collections_info)
+            )
+            datasetTypes = [d for d in datasetTypes if d.name in filtered_dataset_types]
 
-    if verbose:
-        table = Table(
-            array(
-                [(d.name, str(list(d.dimensions.names)) or "None", d.storageClass_name) for d in datasetTypes]
-            ),
-            names=("name", "dimensions", "storage class"),
-        )
-    else:
-        rows = ([d.name for d in datasetTypes],)
-        table = Table(rows, names=("name",))
-    table.sort("name")
-    return table
+        if verbose:
+            table = Table(
+                array(
+                    [
+                        (d.name, str(list(d.dimensions.names)) or "None", d.storageClass_name)
+                        for d in datasetTypes
+                    ]
+                ),
+                names=("name", "dimensions", "storage class"),
+            )
+        else:
+            rows = ([d.name for d in datasetTypes],)
+            table = Table(rows, names=("name",))
+        table.sort("name")
+        return table

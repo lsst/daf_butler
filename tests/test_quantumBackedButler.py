@@ -67,8 +67,10 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
         # Make a butler and import dimension definitions.
         registryConfig = RegistryConfig(self.config.get("registry"))
-        _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
+        registry = _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
+        registry.close()
         butler = Butler.from_config(self.config, writeable=True, run="RUN", metrics=self.metrics)
+        self.enterContext(butler)
         assert isinstance(butler, DirectButler)
         self.butler = butler
         self.butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
@@ -149,6 +151,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             dataset_types=self.dataset_types,
             metrics=self.metrics,
         )
+        self.addCleanup(qbb.close)
         self._test_factory(qbb)
 
     def test_initialize_repo_index(self) -> None:
@@ -170,6 +173,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
                     dataset_types=self.dataset_types,
                     metrics=self.metrics,
                 )
+                self.addCleanup(qbb.close)
                 self._test_factory(qbb)
 
     def test_from_predicted(self) -> None:
@@ -183,6 +187,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             datastore_records=datastore_records,
             dataset_types=self.dataset_types,
         )
+        self.addCleanup(qbb.close)
         self._test_factory(qbb)
 
     def _test_factory(self, qbb: QuantumBackedButler) -> None:
@@ -205,6 +210,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             dataset_types=self.dataset_types,
             metrics=self.metrics,
         )
+        self.addCleanup(qbb.close)
 
         # Verify all input data are readable.
         for ref in self.input_refs:
@@ -261,6 +267,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         # get some input data
         input_refs = self.input_refs[:2]
@@ -286,6 +293,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         # get some input data
         input_refs = self.input_refs[:2]
@@ -320,6 +328,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         # get some input data
         for ref in self.input_refs:
@@ -341,6 +350,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         # Write all expected outputs.
         for ref in self.output_refs:
@@ -385,6 +395,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         # read/store everything
         for ref in self.input_refs:
@@ -422,6 +433,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb.close)
 
         records = qbb.export_predicted_datastore_records(self.output_refs)
         self.assertEqual(len(records["FileDatastore@<butlerRoot>/datastore"].records), len(self.output_refs))
@@ -435,11 +447,13 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         qbb1 = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum1, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb1.close)
 
         quantum2 = self.make_quantum(2)
         qbb2 = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum2, dimensions=self.universe, dataset_types=self.dataset_types
         )
+        self.addCleanup(qbb2.close)
 
         # read/store everything
         for ref in self.input_refs:

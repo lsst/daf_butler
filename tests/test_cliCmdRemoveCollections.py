@@ -71,6 +71,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         self.testRepo = MetricTestRepo(
             self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
         )
+        self.enterContext(self.testRepo.butler)
 
     def tearDown(self):
         removeTestTempDir(self.root)
@@ -219,6 +220,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         # verify chained-run-1 was removed:
 
         butler = Butler.from_config(self.root)
+        self.enterContext(butler)
         collections = butler.registry.queryCollections(
             collectionTypes=frozenset(
                 (
@@ -275,6 +277,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
 
     def testRemoveFromParents(self) -> None:
         butler = Butler(self.root, writeable=True)
+        self.enterContext(butler)
         butler.collections.register("tag1", CollectionType.TAGGED)
         butler.collections.register("tag2", CollectionType.TAGGED)
         butler.collections.register("chain1", CollectionType.CHAINED)

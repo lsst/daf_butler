@@ -175,6 +175,7 @@ class SqlRegistry:
         elif not isinstance(dimensionConfig, DimensionConfig):
             raise TypeError(f"Incompatible Dimension configuration type: {type(dimensionConfig)}")
 
+        managerTypes = RegistryManagerTypes.fromConfig(config)
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
             config.connectionString,
@@ -182,9 +183,13 @@ class SqlRegistry:
             namespace=config.get("namespace"),
             allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.makeRepo(database, dimensionConfig)
-        return cls(database, RegistryDefaults(), managers)
+
+        try:
+            managers = managerTypes.makeRepo(database, dimensionConfig)
+            return cls(database, RegistryDefaults(), managers)
+        except Exception:
+            database.dispose()
+            raise
 
     @classmethod
     def fromConfig(
@@ -217,6 +222,8 @@ class SqlRegistry:
         """
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
+        if defaults is None:
+            defaults = RegistryDefaults()
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
             config.connectionString,
@@ -225,13 +232,15 @@ class SqlRegistry:
             writeable=writeable,
             allow_temporary_tables=config.areTemporaryTablesAllowed,
         )
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        with database.session():
-            managers = managerTypes.loadRepo(database)
-        if defaults is None:
-            defaults = RegistryDefaults()
+        try:
+            managerTypes = RegistryManagerTypes.fromConfig(config)
+            with database.session():
+                managers = managerTypes.loadRepo(database)
 
-        return cls(database, defaults, managers)
+            return cls(database, defaults, managers)
+        except Exception:
+            database.dispose()
+            raise
 
     def __init__(
         self,
@@ -258,6 +267,17 @@ class SqlRegistry:
         # eventually we'll need to do it during construction.
         # The mapping is indexed by the opaque table name.
         self._datastore_record_classes: Mapping[str, type[StoredDatastoreItemInfo]] = {}
+        self._is_clone = False
+
+    def close(self) -> None:
+        # Connection pool is shared between cloned instances, so only the root
+        # instance should close it.
+        # Note: The underlying SQLAlchemy call will create a fresh connection
+        # pool, so nothing breaks if the root instance is accidentally closed
+        # before the clones are finished -- we just have a small performance
+        # hit from re-creating the connections.
+        if not self._is_clone:
+            self._db.dispose()
 
     def __str__(self) -> str:
         return str(self._db)
@@ -296,6 +316,7 @@ class SqlRegistry:
         result = SqlRegistry(db, defaults, self._managers.clone(db))
         result._datastore_record_classes = dict(self._datastore_record_classes)
         result.dimension_record_cache.load_from(self.dimension_record_cache)
+        result._is_clone = True
         return result
 
     @property

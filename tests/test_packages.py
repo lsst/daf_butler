@@ -45,6 +45,7 @@ class PackagesFormatterTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
         self.butler = Butler.from_config(self.root, run="test_run")
+        self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(

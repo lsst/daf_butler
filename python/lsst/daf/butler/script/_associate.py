@@ -64,20 +64,18 @@ def associate(
         unlimited. A negative value is used to specify a cap where a warning
         is issued if that cap is hit.
     """
-    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
+    with Butler.from_config(repo, writeable=True, without_datastore=True) as butler:
+        butler.collections.register(collection, CollectionType.TAGGED)
 
-    butler.collections.register(collection, CollectionType.TAGGED)
+        results = QueryDatasets(
+            butler=butler,
+            glob=dataset_type,
+            collections=collections,
+            where=where,
+            find_first=find_first,
+            limit=limit,
+            order_by=(),
+            show_uri=False,
+        )
 
-    results = QueryDatasets(
-        butler=butler,
-        glob=dataset_type,
-        collections=collections,
-        where=where,
-        find_first=find_first,
-        limit=limit,
-        order_by=(),
-        show_uri=False,
-        repo=None,
-    )
-
-    butler.registry.associate(collection, itertools.chain(*results.getDatasets()))
+        butler.registry.associate(collection, itertools.chain(*results.getDatasets()))

@@ -599,12 +599,14 @@ class SimpleButlerTests(TestCaseMixin):
         # This should not have a default instrument, because there are two.
         # Pass run instead of collections; this should set both.
         butler2 = Butler.from_config(butler=butler, run="imported_g")
+        self.enterContext(butler2)
         self.assertEqual(list(butler2.registry.defaults.collections), ["imported_g"])
         self.assertEqual(butler2.registry.defaults.run, "imported_g")
         self.assertFalse(butler2.registry.defaults.dataId)
         # Initialize a new butler with an instrument default explicitly given.
         # Set collections instead of run, which should then be None.
         butler3 = Butler.from_config(butler=butler, collections=["imported_g"], instrument="Cam2")
+        self.enterContext(butler3)
         self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
         self.assertIsNone(butler3.registry.defaults.run, None)
         self.assertEqual(butler3.registry.defaults.dataId.required, {"instrument": "Cam2"})
@@ -900,11 +902,13 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
-        _RegistryFactory(registryConfig).create_from_config()
+        registry = _RegistryFactory(registryConfig).create_from_config()
+        registry.close()
 
         # Write the YAML file so that some tests can recreate butler from it.
         config.dumpToUri(os.path.join(self.root, "butler.yaml"))
         butler = Butler.from_config(config, writeable=writeable)
+        self.enterContext(butler)
         DatastoreMock.apply(butler)
         return butler
 
@@ -929,6 +933,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
                 butler_factory = LabeledButlerFactory()
+                self.addCleanup(butler_factory.close)
                 factory = butler_factory.bind(access_token=None)
 
                 for dataset_uri in (
@@ -938,6 +943,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     f"ivo://org.rubinobs/usdac/lsst-dp1?repo={label}&id={ref.id}",
                 ):
                     result = Butler.get_dataset_from_uri(dataset_uri)
+                    self.enterContext(result.butler)
                     self.assertEqual(result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
                     DatastoreMock.apply(result.butler)
@@ -945,6 +951,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                     self.assertEqual(dataset_id, ref.id)
 
                     factory_result = Butler.get_dataset_from_uri(dataset_uri, factory=factory)
+                    self.enterContext(factory_result.butler)
                     self.assertEqual(factory_result.dataset, ref)
                     # The returned butler needs to have the datastore mocked.
                     DatastoreMock.apply(factory_result.butler)
@@ -954,6 +961,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
                 # Non existent dataset.
                 missing_id = str(ref.id).replace("2", "3")
                 result = Butler.get_dataset_from_uri(f"butler://{label}/{missing_id}")
+                self.enterContext(result.butler)
                 self.assertIsNone(result.dataset)
 
         # Test some failure modes.

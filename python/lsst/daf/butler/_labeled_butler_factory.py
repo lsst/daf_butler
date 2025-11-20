@@ -25,9 +25,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("LabeledButlerFactory", "LabeledButlerFactoryProtocol")
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Protocol
 
 from lsst.resources import ResourcePathExpression
@@ -37,10 +39,6 @@ from ._butler_config import ButlerConfig, ButlerType
 from ._butler_repo_index import ButlerRepoIndex
 from ._utilities.named_locks import NamedLocks
 from ._utilities.thread_safe_cache import ThreadSafeCache
-
-_FactoryFunction = Callable[[str | None], Butler]
-"""Function that takes an access token string or `None`, and returns a Butler
-instance."""
 
 
 class LabeledButlerFactoryProtocol(Protocol):
@@ -84,7 +82,7 @@ class LabeledButlerFactory:
         else:
             self._repositories = dict(repositories)
 
-        self._factories = ThreadSafeCache[str, _FactoryFunction]()
+        self._factories = ThreadSafeCache[str, _ButlerFactory]()
         self._initialization_locks = NamedLocks()
 
         # This may be overridden by unit tests.
@@ -138,10 +136,18 @@ class LabeledButlerFactory:
         based on the end user instead of the service. See
         https://gafaelfawr.lsst.io/user-guide/gafaelfawringress.html#requesting-delegated-tokens
         """
-        factory = self._get_or_create_butler_factory_function(label)
-        return factory(access_token)
+        factory = self._get_or_create_butler_factory(label)
+        return factory.create_butler(access_token)
 
-    def _get_or_create_butler_factory_function(self, label: str) -> _FactoryFunction:
+    def close(self) -> None:
+        """Reset the factory cache, and release any resources associated with
+        the cached instances.
+        """
+        factories = self._factories.clear()
+        for factory in factories.values():
+            factory.close()
+
+    def _get_or_create_butler_factory(self, label: str) -> _ButlerFactory:
         # We maintain a separate lock per label.  We only want to instantiate
         # one factory function per label, because creating the factory sets up
         # shared state that should only exist once per repository.  However, we
@@ -154,16 +160,16 @@ class LabeledButlerFactory:
             factory = self._create_butler_factory_function(label)
             return self._factories.set_or_get(label, factory)
 
-    def _create_butler_factory_function(self, label: str) -> _FactoryFunction:
+    def _create_butler_factory_function(self, label: str) -> _ButlerFactory:
         config_uri = self._get_config_uri(label)
         config = ButlerConfig(config_uri)
         butler_type = config.get_butler_type()
 
         match butler_type:
             case ButlerType.DIRECT:
-                return _create_direct_butler_factory(config, self._preload_unsafe_direct_butler_caches)
+                return _DirectButlerFactory(config, self._preload_unsafe_direct_butler_caches)
             case ButlerType.REMOTE:
-                return _create_remote_butler_factory(config)
+                return _RemoteButlerFactory(config)
             case _:
                 raise TypeError(f"Unknown butler type '{butler_type}' for label '{label}'")
 
@@ -177,34 +183,45 @@ class LabeledButlerFactory:
             return config_uri
 
 
-def _create_direct_butler_factory(config: ButlerConfig, preload_unsafe_caches: bool) -> _FactoryFunction:
-    import lsst.daf.butler.direct_butler
+class _ButlerFactory(Protocol):
+    def create_butler(self, access_token: str | None) -> Butler: ...
+    def close(self) -> None: ...
 
-    # Create a 'template' Butler that will be cloned when callers request an
-    # instance.
-    butler = Butler.from_config(config)
-    assert isinstance(butler, lsst.daf.butler.direct_butler.DirectButler)
 
-    # Load caches so that data is available in cloned instances without
-    # needing to refetch it from the database for every instance.
-    butler._preload_cache(load_dimension_record_cache=preload_unsafe_caches)
+class _DirectButlerFactory(_ButlerFactory):
+    def __init__(self, config: ButlerConfig, preload_unsafe_caches: bool) -> None:
+        import lsst.daf.butler.direct_butler
 
-    def create_butler(access_token: str | None) -> Butler:
+        # Create a 'template' Butler that will be cloned when callers request
+        # an instance.
+        self._butler = Butler.from_config(config)
+        assert isinstance(self._butler, lsst.daf.butler.direct_butler.DirectButler)
+
+        # Load caches so that data is available in cloned instances without
+        # needing to refetch it from the database for every instance.
+        self._butler._preload_cache(load_dimension_record_cache=preload_unsafe_caches)
+
+    def create_butler(self, access_token: str | None) -> Butler:
         # Access token is ignored because DirectButler does not use Gafaelfawr
         # authentication.
-        return butler.clone()
+        return self._butler.clone()
 
-    return create_butler
+    def close(self) -> None:
+        self._butler.close()
 
 
-def _create_remote_butler_factory(config: ButlerConfig) -> _FactoryFunction:
-    import lsst.daf.butler.remote_butler._factory
+class _RemoteButlerFactory(_ButlerFactory):
+    def __init__(self, config: ButlerConfig) -> None:
+        import lsst.daf.butler.remote_butler._factory
 
-    factory = lsst.daf.butler.remote_butler._factory.RemoteButlerFactory.create_factory_from_config(config)
+        self._factory = lsst.daf.butler.remote_butler._factory.RemoteButlerFactory.create_factory_from_config(
+            config
+        )
 
-    def create_butler(access_token: str | None) -> Butler:
+    def create_butler(self, access_token: str | None) -> Butler:
         if access_token is None:
             raise ValueError("Access token is required to connect to a Butler server")
-        return factory.create_butler_for_access_token(access_token)
+        return self._factory.create_butler_for_access_token(access_token)
 
-    return create_butler
+    def close(self) -> None:
+        pass

@@ -29,7 +29,7 @@
 
 import unittest
 from itertools import chain
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from astropy.table import Table
 
@@ -99,9 +99,9 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.repo = "here"
 
     @staticmethod
-    def makeQueryDatasetsArgs(*, repo, **kwargs):
+    def makeQueryDatasetsArgs(**kwargs):
         expectedArgs = dict(
-            repo=repo, collections=("*",), where="", find_first=True, show_uri=False, glob=tuple()
+            butler=ANY, collections=("*",), where="", find_first=True, show_uri=False, glob=tuple()
         )
         expectedArgs.update(kwargs)
         return expectedArgs
@@ -233,7 +233,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(
                 pruneDatasets_willRemoveMsg,
@@ -253,7 +253,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--unstore"],
             exPruneDatasetsCallArgs=None,
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(
                 pruneDatasets_willRemoveMsg,
@@ -272,7 +272,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--dry-run", "--unstore"],
             exPruneDatasetsCallArgs=None,
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_wouldRemoveMsg, astropyTablesToStr(getTables())),
         )
@@ -287,7 +287,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=[collection, "--dry-run", "--disassociate", "tag1"],
             exPruneDatasetsCallArgs=None,
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=(collection,)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=(collection,)),
             exGetTablesCalled=True,
             exMsgs=(
                 pruneDatasets_wouldDisassociateMsg.format(collections=(collection,)),
@@ -305,7 +305,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=[collection, "--dry-run", "--unstore", "--disassociate", "tag1"],
             exPruneDatasetsCallArgs=None,
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=(collection,)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=(collection,)),
             exGetTablesCalled=True,
             exMsgs=(
                 pruneDatasets_wouldDisassociateAndRemoveMsg.format(collections=(collection,)),
@@ -323,7 +323,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--no-confirm", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
         )
@@ -337,7 +337,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--quiet", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getRefs(), unstore=True),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
             exGetTablesCalled=True,
             exMsgs=None,
         )
@@ -373,9 +373,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             self.run_test(
                 cliArgs=["myCollection", "--unstore"],
                 exPruneDatasetsCallArgs=None,
-                exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
-                    repo=self.repo, collections=("myCollection",)
-                ),
+                exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("myCollection",)),
                 exGetTablesCalled=True,
                 exMsgs=(pruneDatasets_noDatasetsFound,),
             )
@@ -428,9 +426,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
                 purge=True, refs=getRefs(), disassociate=True, unstore=True
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
-                repo=self.repo, collections=("run",), find_first=True
-            ),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("run",), find_first=True),
             exGetTablesCalled=True,
             exMsgs=(
                 pruneDatasets_willRemoveMsg,
@@ -454,7 +450,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
                 purge=True, disassociate=True, unstore=True, refs=getRefs()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
-                repo=self.repo, collections=("myCollection",), find_first=True
+                collections=("myCollection",), find_first=True
             ),
             exGetTablesCalled=True,
             exMsgs=(
@@ -502,9 +498,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
                 tags=("tag1", "tag2"), disassociate=True, refs=getRefs()
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
-                repo=self.repo, collections=("tag1", "tag2"), find_first=True
-            ),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(collections=("tag1", "tag2"), find_first=True),
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
         )
@@ -519,7 +513,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
                 tags=("tag1", "tag2"), disassociate=True, refs=getRefs()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
-                repo=self.repo, collections=("myCollection",), find_first=True
+                collections=("myCollection",), find_first=True
             ),
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),

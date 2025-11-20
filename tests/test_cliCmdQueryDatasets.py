@@ -173,6 +173,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         testRepo = MetricTestRepo(
             self.repoDir, configFile=os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
         )
+        self.enterContext(testRepo.butler)
 
         tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
@@ -191,6 +192,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     def testShowURI(self):
         """Test for expected output with show_uri=True."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
@@ -208,6 +210,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             configFile=self.configFile,
             storageClassName="StructuredCompositeReadCompNoDisassembly",
         )
+        self.enterContext(testRepo.butler)
 
         tables = self._queryDatasets(repo=testRepo.butler, show_uri=True, collections="*", glob="*")
 
@@ -251,6 +254,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     def testNoShowURI(self):
         """Test for expected output without show_uri (default is False)."""
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         tables = self._queryDatasets(repo=testRepo.butler, collections="*", glob="*")
 
@@ -273,6 +277,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         queryDatasets.
         """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         for glob in (("*",), ("test_metric_comp",)):
             with self.subTest(glob=glob):
@@ -299,6 +304,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test specifying dataset type."""
         # Create and register an additional DatasetType
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         testRepo.butler.registry.insertDimensionData(
             "visit",
@@ -346,6 +352,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test limit and ordering."""
         # Create and register an additional DatasetType
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         with self.assertLogs("lsst.daf.butler.script.queryDatasets", level="WARNING") as cm:
             tables = self._queryDatasets(
@@ -417,6 +424,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         is required for find-first.
         """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
+        self.enterContext(testRepo.butler)
 
         # Add a new run, and add a dataset to shadow an existing dataset.
         testRepo.addDataset(run="foo", dataId={"instrument": "DummyCamComp", "visit": 424})

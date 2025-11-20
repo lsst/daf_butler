@@ -90,26 +90,32 @@ def _getCollectionInfo(repo: str, collection: str, include_parents: bool) -> Col
     collectionInfo : `CollectionInfo`
         Contains tables with run and non-run collection info.
     """
-    butler = Butler.from_config(repo, without_datastore=True)
-    try:
-        collections_info = sorted(
-            butler.collections.query_info(collection, include_chains=True, include_parents=include_parents)
-        )
-    except MissingCollectionError:
-        # Hide the error and act like no collections should be removed.
-        collections_info = []
-    collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
-    runCollections = Table(names=("Collection",), dtype=(str,))
-    parents: dict[str, tuple[str, ...]] = {}
-    for collection_info in collections_info:
-        if collection_info.type == CollectionType.RUN:
-            runCollections.add_row((collection_info.name,))
-        else:
-            collections.add_row((collection_info.name, collection_info.type.name))
-            if include_parents and collection_info.parents is not None and len(collection_info.parents) > 0:
-                parents[collection_info.name] = tuple(collection_info.parents)
+    with Butler.from_config(repo, without_datastore=True) as butler:
+        try:
+            collections_info = sorted(
+                butler.collections.query_info(
+                    collection, include_chains=True, include_parents=include_parents
+                )
+            )
+        except MissingCollectionError:
+            # Hide the error and act like no collections should be removed.
+            collections_info = []
+        collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
+        runCollections = Table(names=("Collection",), dtype=(str,))
+        parents: dict[str, tuple[str, ...]] = {}
+        for collection_info in collections_info:
+            if collection_info.type == CollectionType.RUN:
+                runCollections.add_row((collection_info.name,))
+            else:
+                collections.add_row((collection_info.name, collection_info.type.name))
+                if (
+                    include_parents
+                    and collection_info.parents is not None
+                    and len(collection_info.parents) > 0
+                ):
+                    parents[collection_info.name] = tuple(collection_info.parents)
 
-    return CollectionInfo(collections, runCollections, parents)
+        return CollectionInfo(collections, runCollections, parents)
 
 
 def removeCollections(repo: str, collection: str, remove_from_parents: bool) -> RemoveCollectionResult:
@@ -136,20 +142,19 @@ def removeCollections(repo: str, collection: str, remove_from_parents: bool) -> 
 
     def _doRemove(collections: Table) -> None:
         """Perform the prune collection step."""
-        butler = Butler.from_config(repo, writeable=True, without_datastore=True)
-
-        for name in collections["Collection"]:
-            with butler.transaction():
-                for parent in collectionInfo.parentCollections.get(name, []):
-                    butler.collections.remove_from_chain(parent, name)
-                try:
-                    butler.collections.x_remove(name)
-                except OrphanedRecordError as e:
-                    e.add_note(
-                        "Add the --remove-from-parents flag to this command"
-                        " if you are sure this collection is no longer needed."
-                    )
-                    raise
+        with Butler.from_config(repo, writeable=True, without_datastore=True) as butler:
+            for name in collections["Collection"]:
+                with butler.transaction():
+                    for parent in collectionInfo.parentCollections.get(name, []):
+                        butler.collections.remove_from_chain(parent, name)
+                    try:
+                        butler.collections.x_remove(name)
+                    except OrphanedRecordError as e:
+                        e.add_note(
+                            "Add the --remove-from-parents flag to this command"
+                            " if you are sure this collection is no longer needed."
+                        )
+                        raise
 
     remove_chains_table = Table(names=("Child Collection", "Parent Collection"), dtype=(str, str))
     for child in sorted(collectionInfo.parentCollections.keys()):

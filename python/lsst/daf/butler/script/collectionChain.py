@@ -72,34 +72,33 @@ def collectionChain(
     chain : `tuple` of `str`
         The collections in the chain following this command.
     """
-    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
+    with Butler.from_config(repo, writeable=True, without_datastore=True) as butler:
+        # Every mode needs children except pop.
+        if not children and mode != "pop":
+            raise RuntimeError(f"Must provide children when defining a collection chain in mode {mode}.")
 
-    # Every mode needs children except pop.
-    if not children and mode != "pop":
-        raise RuntimeError(f"Must provide children when defining a collection chain in mode {mode}.")
+        try:
+            butler.collections.get_info(parent)
+        except MissingCollectionError:
+            # Create it -- but only if mode can work with empty chain.
+            if mode in ("redefine", "extend", "prepend"):
+                if not doc:
+                    doc = None
+                butler.collections.register(parent, CollectionType.CHAINED, doc)
+            else:
+                raise RuntimeError(
+                    f"Mode '{mode}' requires that the collection exists "
+                    f"but collection '{parent}' is not known to this registry"
+                ) from None
 
-    try:
-        butler.collections.get_info(parent)
-    except MissingCollectionError:
-        # Create it -- but only if mode can work with empty chain.
-        if mode in ("redefine", "extend", "prepend"):
-            if not doc:
-                doc = None
-            butler.collections.register(parent, CollectionType.CHAINED, doc)
-        else:
-            raise RuntimeError(
-                f"Mode '{mode}' requires that the collection exists "
-                f"but collection '{parent}' is not known to this registry"
-            ) from None
+        if flatten:
+            if mode not in ("redefine", "prepend", "extend"):
+                raise RuntimeError(f"'flatten' flag is not allowed for {mode}")
+            children = butler.collections.query(children, flatten_chains=True)
 
-    if flatten:
-        if mode not in ("redefine", "prepend", "extend"):
-            raise RuntimeError(f"'flatten' flag is not allowed for {mode}")
-        children = butler.collections.query(children, flatten_chains=True)
+        _modify_collection_chain(butler, mode, parent, children)
 
-    _modify_collection_chain(butler, mode, parent, children)
-
-    return butler.collections.get_info(parent).children
+        return butler.collections.get_info(parent).children
 
 
 def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: Iterable[str]) -> None:

@@ -247,6 +247,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
                         collections=["collection1", "collection2"],
                         run="collection2",
                     )
+                    self.enterContext(butler)
                     self.assertIsInstance(butler, RemoteButler)
                     self.assertEqual(butler._connection.server_url, server_url)
                     self.assertEqual(butler.collections.defaults, ("collection1", "collection2"))

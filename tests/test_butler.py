@@ -43,6 +43,8 @@ import tempfile
 import unittest
 import unittest.mock
 import uuid
+import warnings
+import weakref
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -225,12 +227,18 @@ class ButlerPutGetTests(TestCaseMixin):
             removeTestTempDir(self.root)
 
     def create_empty_butler(
-        self, run: str | None = None, writeable: bool | None = None, metrics: ButlerMetrics | None = None
+        self,
+        run: str | None = None,
+        writeable: bool | None = None,
+        metrics: ButlerMetrics | None = None,
+        cleanup: bool = True,
     ):
         """Create a Butler for the test repository, without inserting test
         data.
         """
         butler = Butler.from_config(self.tmpConfigFile, run=run, writeable=writeable, metrics=metrics)
+        if cleanup:
+            self.enterContext(butler)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         return butler
 
@@ -653,16 +661,19 @@ class ButlerTests(ButlerPutGetTests):
     def testConstructor(self) -> None:
         """Independent test of constructor."""
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        self.enterContext(butler)
         self.assertIsInstance(butler, Butler)
 
         # Check that butler.yaml is added automatically.
         if self.tmpConfigFile.endswith(end := "/butler.yaml"):
             config_dir = self.tmpConfigFile[: -len(end)]
             butler = Butler.from_config(config_dir, run=self.default_run)
+            self.enterContext(butler)
             self.assertIsInstance(butler, Butler)
 
             # Even with a ResourcePath.
             butler = Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
+            self.enterContext(butler)
             self.assertIsInstance(butler, Butler)
 
         collections = set(butler.collections.query("*"))
@@ -671,10 +682,12 @@ class ButlerTests(ButlerPutGetTests):
         # Check that some special characters can be included in run name.
         special_run = "u@b.c-A"
         butler_special = Butler.from_config(butler=butler, run=special_run)
+        self.enterContext(butler_special)
         collections = set(butler_special.registry.queryCollections("*@*"))
         self.assertEqual(collections, {special_run})
 
         butler2 = Butler.from_config(butler=butler, collections=["other"])
+        self.enterContext(butler2)
         self.assertEqual(butler2.collections.defaults, ("other",))
         self.assertIsNone(butler2.run)
         self.assertEqual(type(butler._datastore), type(butler2._datastore))
@@ -698,8 +711,10 @@ class ButlerTests(ButlerPutGetTests):
                     uri = Butler.get_repo_uri("label")
                     butler = Butler.from_config(uri, writeable=False)
                     self.assertIsInstance(butler, Butler)
+                    butler.close()
                     butler = Butler.from_config("label", writeable=False)
                     self.assertIsInstance(butler, Butler)
+                    butler.close()
                     with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
                         Butler.from_config("not_there", writeable=False)
                     with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
@@ -739,6 +754,7 @@ class ButlerTests(ButlerPutGetTests):
 
             # Check that we can create Butler when the alias file is not found.
             butler = Butler.from_config(self.tmpConfigFile, writeable=False)
+            self.enterContext(butler)
             self.assertIsInstance(butler, Butler)
         with self.assertRaises(RuntimeError) as cm:
             # No environment variable set.
@@ -749,6 +765,56 @@ class ButlerTests(ButlerPutGetTests):
             # No aliases registered.
             Butler.from_config("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
+
+    def testClose(self):
+        butler = self.create_empty_butler(cleanup=False)
+        is_direct_butler = isinstance(butler, DirectButler)
+        if is_direct_butler:
+            self.assertFalse(butler._closed)
+
+        with butler as butler_from_context_manager:
+            self.assertIs(butler, butler_from_context_manager)
+        if is_direct_butler:
+            self.assertTrue(butler._closed)
+            with self.assertRaisesRegex(RuntimeError, "has been closed"):
+                butler.get_dataset_type("raw")
+
+        # Close may be called multiple times.
+        butler.close()
+        if is_direct_butler:
+            self.assertTrue(butler._closed)
+
+    def testGarbageCollection(self):
+        """Test that Butler does not have any circular references that prevent
+        it from being garbage collected immediately when it goes out of scope.
+        """
+        butler = self.create_empty_butler(cleanup=False)
+        is_direct_butler = isinstance(butler, DirectButler)
+        butler_ref = weakref.ref(butler)
+        if is_direct_butler:
+            registry_ref = weakref.ref(butler._registry)
+            managers_ref = weakref.ref(butler._registry._managers)
+            datastore_ref = weakref.ref(butler._datastore)
+            db_ref = weakref.ref(butler._registry._db)
+            engine_ref = weakref.ref(butler._registry._db._engine)
+
+        with warnings.catch_warnings():
+            # Hide warnings from unclosed database handles.
+            warnings.simplefilter("ignore", ResourceWarning)
+            del butler
+            self.assertIsNone(butler_ref(), "Butler should have been garbage collected")
+            if is_direct_butler:
+                self.assertIsNone(registry_ref(), "SqlRegistry should have been garbage collected")
+                self.assertIsNone(managers_ref(), "Registry managers should have been garbage collected")
+                self.assertIsNone(datastore_ref(), "Datastore should have been garbage collected")
+                self.assertIsNone(db_ref(), "Database should have been garbage collected")
+            # SQLAlchemy has internal reference cycles, so the Engine instance
+            # is not cleaned up promptly even if we release our reference to
+            # it.  Explicitly clean it up here to avoid file handles leaking.
+            if is_direct_butler:
+                engine = engine_ref()
+                if engine is not None:
+                    engine.dispose()
 
     def testDafButlerRepositories(self):
         with unittest.mock.patch.dict(
@@ -973,6 +1039,7 @@ class ButlerTests(ButlerPutGetTests):
             # Create an entirely new local file butler in this temp directory.
             new_butler_cfg = Butler.makeRepo(tmpdir)
             new_butler = Butler.from_config(new_butler_cfg, writeable=True)
+            self.enterContext(new_butler)
 
             # This will fail since dimensions records are missing.
             with self.assertRaises(ConflictingDefinitionError):
@@ -1185,6 +1252,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = self.create_empty_butler(run=self.default_run)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         butlerOut = pickle.loads(pickle.dumps(butler))
+        self.enterContext(butlerOut)
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
         self.assertEqual(list(butlerOut.collections.defaults), list(butler.collections.defaults))
@@ -1352,10 +1420,12 @@ class ButlerTests(ButlerPutGetTests):
         butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
         limited = Config(self.configFile)
         butler1 = Butler.from_config(butlerConfig)
+        self.enterContext(butler1)
         assert isinstance(butler1, DirectButler), "Expect DirectButler in configuration"
         butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
         butler2 = Butler.from_config(butlerConfig)
+        self.enterContext(butler2)
         assert isinstance(butler2, DirectButler), "Expect DirectButler in configuration"
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
@@ -1383,6 +1453,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testStringification(self) -> None:
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        self.enterContext(butler)
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -1794,6 +1865,7 @@ class FileDatastoreButlerTests(ButlerTests):
                         skip_dimensions=None,
                     )
                 importButler = Butler.from_config(importDir, run=self.default_run)
+                self.enterContext(importButler)
                 for ref in datasets:
                     with self.subTest(ref=repr(ref)):
                         # Test for existence by passing in the DatasetType and
@@ -2117,11 +2189,13 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     def testPathConstructor(self) -> None:
         """Independent test of constructor using PathLike."""
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        self.enterContext(butler)
         self.assertIsInstance(butler, Butler)
 
         # And again with a Path object with the butler yaml
         path = pathlib.Path(self.tmpConfigFile)
         butler = Butler.from_config(path, writeable=False)
+        self.enterContext(butler)
         self.assertIsInstance(butler, Butler)
 
         # And again with a Path object without the butler yaml
@@ -2130,6 +2204,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         if self.tmpConfigFile.endswith("butler.yaml"):
             path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
             butler = Butler.from_config(path, writeable=False)
+            self.enterContext(butler)
             self.assertIsInstance(butler, Butler)
 
     def testExportTransferCopy(self) -> None:
@@ -2301,6 +2376,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
             # Make sure the target Butler can ingest the datasets.
             target_butler = Butler(target_repo_config, writeable=True)
+            self.enterContext(target_butler)
             target_butler.transfer_dimension_records_from(source_butler, refs)
             target_butler.ingest(*datasets, transfer=None)
             self.assertIsNotNone(target_butler.get(repo.ref1))
@@ -2358,6 +2434,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
             # Make sure the target Butler can ingest the datasets.
             target_butler = Butler(target_repo_config, writeable=True)
+            self.enterContext(target_butler)
             target_butler.transfer_dimension_records_from(source_butler, refs)
             target_butler.ingest(*datasets, transfer=None)
             self.assertIsNotNone(target_butler.get(repo.ref1))
@@ -2693,9 +2770,11 @@ class DatastoreTransfers(TestCaseMixin):
             )
         config = Config(config_file if config_file is not None else self.configFile)
         config["registry", "managers", "datasets"] = manager
-        return Butler.from_config(
+        butler = Butler.from_config(
             Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True
         )
+        self.enterContext(butler)
+        return butler
 
     def assertButlerTransfers(
         self,
@@ -2768,6 +2847,7 @@ class DatastoreTransfers(TestCaseMixin):
         # Will not be relevant for UUID.
         run = "distraction"
         butler = Butler.from_config(butler=self.source_butler, run=run)
+        self.enterContext(butler)
         butler.put(
             makeExampleMetrics(),
             datasetTypeName,
@@ -2778,6 +2858,7 @@ class DatastoreTransfers(TestCaseMixin):
 
         # Write some example metrics to the source
         butler = Butler.from_config(butler=self.source_butler)
+        self.enterContext(butler)
 
         # Set of DatasetRefs that should be in the list of refs to transfer
         # but which will not be transferred.
@@ -3209,6 +3290,7 @@ class NullDatastoreTestCase(unittest.TestCase):
             Butler.from_config(self.root, without_datastore=False)
 
         butler = Butler.from_config(self.root, writeable=True, without_datastore=True)
+        self.enterContext(butler)
         self.assertIsInstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.
@@ -3253,7 +3335,11 @@ class ButlerServerTests(FileDatastoreButlerTests):
         return uri1.scheme == uri2.scheme and uri1.netloc == uri2.netloc and uri1.path == uri2.path
 
     def create_empty_butler(
-        self, run: str | None = None, writeable: bool | None = None, metrics: ButlerMetrics | None = None
+        self,
+        run: str | None = None,
+        writeable: bool | None = None,
+        metrics: ButlerMetrics | None = None,
+        cleanup: bool = True,
     ) -> Butler:
         return self.server_instance.hybrid_butler.clone(run=run, metrics=metrics)
 

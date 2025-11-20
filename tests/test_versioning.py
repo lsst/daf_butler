@@ -102,7 +102,9 @@ class SchemaVersioningTestCase(unittest.TestCase):
     def makeEmptyDatabase(self, origin: int = 0) -> Database:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         engine = SqliteDatabase.makeEngine(filename=filename)
-        return SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        db = SqliteDatabase.fromEngine(engine=engine, origin=origin)
+        self.addCleanup(db.dispose)
+        return db
 
     def test_new_schema(self) -> None:
         """Test for creating new database schema."""

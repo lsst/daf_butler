@@ -154,6 +154,7 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections
             butler = Butler.from_config(butlerCfg, run=run, collections=[tag], writeable=True)
+            self.enterContext(butler)
             butler.registry.registerCollection(tag, CollectionType.TAGGED)
 
             # Verify collections that were created are found by
@@ -196,6 +197,7 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             butlerCfg = Butler.makeRepo("here")
 
             butler1 = Butler.from_config(butlerCfg, writeable=True)
+            self.enterContext(butler1)
 
             # Replace datastore functions with mocks:
             DatastoreMock.apply(butler1)

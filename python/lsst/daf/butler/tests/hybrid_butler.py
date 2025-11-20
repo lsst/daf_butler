@@ -441,3 +441,7 @@ class HybridButler(Butler):
     @property
     def _file_transfer_source(self) -> FileTransferSource:
         return self._remote_butler._file_transfer_source
+
+    def close(self) -> None:
+        self._direct_butler.close()
+        self._remote_butler.close()

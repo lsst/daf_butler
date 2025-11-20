@@ -120,65 +120,64 @@ def exportCalibs(
     RuntimeError
         Raised if the output directory already exists.
     """
-    butler = Butler.from_config(repo, writeable=False)
+    with Butler.from_config(repo, writeable=False) as butler:
+        dataset_type_query = dataset_type or ...
+        collections_query = collections or "*"
 
-    dataset_type_query = dataset_type or ...
-    collections_query = collections or "*"
+        calibTypes = [
+            datasetType
+            for datasetType in butler.registry.queryDatasetTypes(dataset_type_query)
+            if datasetType.isCalibration()
+        ]
 
-    calibTypes = [
-        datasetType
-        for datasetType in butler.registry.queryDatasetTypes(dataset_type_query)
-        if datasetType.isCalibration()
-    ]
+        collectionsToExport = []
+        datasetsToExport = []
 
-    collectionsToExport = []
-    datasetsToExport = []
+        for collection in butler.collections.query_info(
+            collections_query,
+            flatten_chains=True,
+            include_chains=True,
+            include_doc=True,
+            collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
+        ):
+            log.info("Checking collection: %s", collection.name)
 
-    for collection in butler.collections.query_info(
-        collections_query,
-        flatten_chains=True,
-        include_chains=True,
-        include_doc=True,
-        collection_types={CollectionType.CALIBRATION, CollectionType.CHAINED},
-    ):
-        log.info("Checking collection: %s", collection.name)
+            # Get collection information.
+            collectionsToExport.append(collection.name)
+            if collection.type == CollectionType.CALIBRATION:
+                exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
+                datasetsToExport.extend(exportDatasets)
 
-        # Get collection information.
-        collectionsToExport.append(collection.name)
-        if collection.type == CollectionType.CALIBRATION:
-            exportDatasets = find_calibration_datasets(butler, collection, calibTypes)
-            datasetsToExport.extend(exportDatasets)
+        if os.path.exists(directory):
+            raise RuntimeError(f"Export directory exists: {directory}")
+        os.makedirs(directory)
+        with butler.export(directory=directory, format="yaml", transfer=transfer) as export:
+            collectionsToExport = list(set(collectionsToExport))
+            datasetsToExport = list(set(datasetsToExport))
 
-    if os.path.exists(directory):
-        raise RuntimeError(f"Export directory exists: {directory}")
-    os.makedirs(directory)
-    with butler.export(directory=directory, format="yaml", transfer=transfer) as export:
-        collectionsToExport = list(set(collectionsToExport))
-        datasetsToExport = list(set(datasetsToExport))
+            for exportable in collectionsToExport:
+                try:
+                    export.saveCollection(exportable)
+                except Exception as e:
+                    log.warning("Did not save collection %s due to %s.", exportable, e)
 
-        for exportable in collectionsToExport:
-            try:
-                export.saveCollection(exportable)
-            except Exception as e:
-                log.warning("Did not save collection %s due to %s.", exportable, e)
+            log.info("Saving %d dataset(s)", len(datasetsToExport))
+            export.saveDatasets(datasetsToExport)
 
-        log.info("Saving %d dataset(s)", len(datasetsToExport))
-        export.saveDatasets(datasetsToExport)
+        sortedDatasets = sorted(datasetsToExport, key=attrgetter("datasetType.name", "dataId"))
 
-    sortedDatasets = sorted(datasetsToExport, key=attrgetter("datasetType.name", "dataId"))
-
-    requiredDimensions: set[str] = set()
-    for ref in sortedDatasets:
-        requiredDimensions.update(ref.dimensions.names)
-    dimensionColumns = {
-        dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
-        for dimensionName in sorted(requiredDimensions)
-    }
-
-    return Table(
-        {
-            "calibrationType": [ref.datasetType.name for ref in sortedDatasets],
-            "run": [ref.run for ref in sortedDatasets],
-            **dimensionColumns,
+        requiredDimensions: set[str] = set()
+        for ref in sortedDatasets:
+            requiredDimensions.update(ref.dimensions.names)
+        dimensionColumns = {
+            dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
+            for dimensionName in sorted(requiredDimensions)
         }
-    )
+
+        return Table(
+            {
+                "calibrationType": [ref.datasetType.name for ref in sortedDatasets],
+                "run": [ref.run for ref in sortedDatasets],
+                **dimensionColumns,
+            }
+        )
