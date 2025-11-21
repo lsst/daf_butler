@@ -30,10 +30,10 @@ from __future__ import annotations
 __all__ = ("LimitedButler",)
 
 import logging
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
-from typing import Any, ClassVar
+from contextlib import AbstractContextManager, contextmanager
+from typing import Any, ClassVar, Literal, Self
 
 from lsst.resources import ResourcePath
 
@@ -48,7 +48,7 @@ from .dimensions import DimensionUniverse
 log = logging.getLogger(__name__)
 
 
-class LimitedButler(ABC):
+class LimitedButler(AbstractContextManager):
     """A minimal butler interface that is sufficient to back
     `~lsst.pipe.base.PipelineTask` execution.
     """
@@ -99,6 +99,31 @@ class LimitedButler(ABC):
         given ``ref.id`` and ``ref.run`` are always preserved.
         """
         raise NotImplementedError()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+        try:
+            self.close()
+        except Exception:
+            log.exception("An exception occurred during Butler.close()")
+        return False
+
+    def close(self) -> None:
+        """Release all resources associated with this Butler instance.  The
+        instance may no longer be used after this is called.
+
+        Notes
+        -----
+        Instead of calling ``close()`` directly, you can use the Butler object
+        as a context manager.  For example::
+
+          with Butler(...) as butler:
+              butler.get(...)
+          # butler is closed after exiting the block.
+        """
+        pass
 
     def get(
         self,
