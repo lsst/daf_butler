@@ -33,6 +33,7 @@ from typing import Any
 import click
 
 from ... import script
+from ..._butler import Butler
 from ..opt import (
     collection_argument,
     collection_type_option,
@@ -487,9 +488,11 @@ def remove_dataset_type(*args: Any, **kwargs: Any) -> None:
 @options_file_option()
 def query_datasets(**kwargs: Any) -> None:
     """List the datasets in a repository."""
-    for table in script.QueryDatasets(**kwargs).getTables():
-        print("")
-        table.pprint_all()
+    repo = kwargs.pop("repo")
+    with Butler.from_config(repo, writeable=False) as butler:
+        for table in script.QueryDatasets(butler=butler, **kwargs).getTables():
+            print("")
+            table.pprint_all()
     print("")
 
 
