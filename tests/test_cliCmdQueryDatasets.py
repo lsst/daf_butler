@@ -34,8 +34,16 @@ from astropy.table import Table as AstropyTable
 from numpy import array
 
 from lsst.daf.butler import CollectionType, InvalidQueryError, StorageClassFactory, script
+from lsst.daf.butler.cli.butler import cli as butlerCli
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests import addDatasetType
-from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import (
+    ButlerTestHelper,
+    MetricTestRepo,
+    makeTestTempDir,
+    readTable,
+    removeTestTempDir,
+)
 from lsst.resources import ResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -687,6 +695,30 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Collections argument will become mandatory soon
         with self.assertWarns(FutureWarning):
             self._queryDatasets(repo=testRepo.butler, glob="*")
+
+
+class QueryDatasetsCLITest(unittest.TestCase, ButlerTestHelper):
+    """Test that the command line has basic functionality."""
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+        self.testRepo = MetricTestRepo(
+            self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
+        )
+        self.enterContext(self.testRepo.butler)
+        self.runner = LogCliRunner()
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def test_simple(self):
+        """Simple test that query-datasets runs."""
+        result = self.runner.invoke(
+            butlerCli, ["query-datasets", "--collections", "ingest/run", self.root, "test_metric_comp"]
+        )
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        got = readTable(result.output)
+        self.assertEqual(len(got), 2)
 
 
 if __name__ == "__main__":
