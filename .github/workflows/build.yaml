@@ -88,7 +88,7 @@ jobs:
         env:
           SQLALCHEMY_WARN_20: 1
         run: |
-          pytest -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
+          pytest -Wd -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v4
