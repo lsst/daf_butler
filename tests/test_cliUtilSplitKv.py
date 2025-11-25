@@ -176,10 +176,12 @@ class SplitKvCmdTestCase(unittest.TestCase):
         # double separator "==" should fail:
         result = self.runner.invoke(cli, ["--value", "first==1"])
         self.assertEqual(result.exit_code, 1)
+        # Check first 137 characters because python 3.14 adds more information
+        # to the error message.
         self.assertEqual(
-            result.output,
+            result.output[:137],
             "Error: Could not parse key-value pair 'first==1' using separator '=', with "
-            "multiple values allowed: too many values to unpack (expected 2)\n",
+            "multiple values allowed: too many values to unpack (expected 2",
         )
 
     def test_choice(self):
