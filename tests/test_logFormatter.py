@@ -106,6 +106,24 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         self.assertEqual(records, handler.records)
         self.assertEqual(len(records), 2)
 
+    def testButlerLogRecordsFormatterEmptyExtra(self):
+        """Test that we can store extra information even with no log
+        records written.
+        """
+        handler = ButlerLogRecordHandler()
+
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+        log.addHandler(handler)
+
+        extra_data = {"extra1": 1, "extra2": 2}
+        handler.records.extra = extra_data
+        ref = self.butler.put(handler.records, self.datasetType)
+        records = self.butler.get(ref)
+
+        self.assertEqual(records, handler.records)
+        self.assertEqual(len(records), 0)
+
     @unittest.skipIf(
         sys.version_info < (3, 12, 0),
         "This test requires NamedTemporaryFile behavior not available in older Python versions.",
@@ -203,6 +221,36 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
 
             records: ButlerLogRecords = self.butler.get(ref)
             self.assertEqual(len(records), 2)
+            self.assertEqual(records.extra, extra_data)
+
+    @unittest.skipIf(
+        sys.version_info < (3, 12, 0),
+        "This test requires NamedTemporaryFile behavior not available in older Python versions.",
+    )
+    def testJsonLogRecordsFormatterExtraEmpty(self):
+        """Test that externally created JSON format stream files work with
+        extra JSON data appended even if no log messages written.
+        """
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-") as tmp:
+            handler = FileHandler(tmp.name)
+            handler.setFormatter(JsonLogFormatter())
+            log.addHandler(handler)
+
+            handler.close()
+            extra_data = {"extra1": 1, "extra2": 2}
+            with open(tmp.name, "a") as stream:
+                ButlerLogRecords.write_streaming_extra(stream, json.dumps(extra_data))
+
+            # Now ingest the file.
+            ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
+            dataset = FileDataset(path=tmp.name, refs=ref)
+            self.butler.ingest(dataset, transfer="move")
+
+            records: ButlerLogRecords = self.butler.get(ref)
+            self.assertEqual(len(records), 0)
             self.assertEqual(records.extra, extra_data)
 
 
