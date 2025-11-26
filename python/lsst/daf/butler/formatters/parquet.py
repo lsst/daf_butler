@@ -148,7 +148,7 @@ class ParquetFormatter(FormatterV2):
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
                 has_pandas_multi_index = False
-                if b"pandas" in schema.metadata:
+                if schema.metadata and b"pandas" in schema.metadata:
                     md = json.loads(schema.metadata[b"pandas"])
                     if len(md["column_indexes"]) > 1:
                         has_pandas_multi_index = True
