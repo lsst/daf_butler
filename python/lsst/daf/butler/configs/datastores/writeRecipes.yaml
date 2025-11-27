@@ -12,19 +12,19 @@ lsst.obs.base.formatters.fitsExposure.StandardFitsImageFormatterBase: &StandardF
     variance:
       <<: *losslessOptions
 
-  # Basic lossy (quantizing) compression
-  lossyBasic: &lossyBasic
-    image: &lossyBasicOptions
+  # Lossy (quantizing) compression with noise sigma subdivided into 16.
+  lossy16:
+    image: &lossy16Options
       algorithm: RICE_1
       quantization:
         dither: SUBTRACTIVE_DITHER_2
         scaling: STDEV_MASKED
-        mask_planes: ["NO_DATA"]
-        level: 10.0
+        mask_planes: ["NO_DATA", "INTRP"]
+        level: 16.0
     mask:
       <<: *losslessOptions
     variance:
-      <<: *lossyBasicOptions
+      <<: *lossy16Options
 
   # Set the default
   default:
