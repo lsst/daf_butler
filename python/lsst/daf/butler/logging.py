@@ -537,6 +537,9 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
         if cls._generic_startswith(startdata, "["):
             # This is a JSON array of records.
             return _ButlerLogRecordsModelV1
+        elif cls._generic_startswith(startdata, cls.STREAMING_EXTRA_DELIMITER):
+            # This is an empty log file with a log record per line format.
+            return None
         elif not cls._generic_startswith(startdata, "{"):
             # Limit the length of string reported in error message in case
             # this is an enormous file.
@@ -570,9 +573,12 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
         """
         first_line = stream.readline()
 
+        empty_stream = False
         if not first_line:
             # Empty file, return zero records.
             return cls.from_records([])
+        elif cls._generic_startswith(first_line, cls.STREAMING_EXTRA_DELIMITER):
+            empty_stream = True
 
         model_type = cls._detect_model(first_line)
 
@@ -583,13 +589,17 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
             return model_type.model_validate_json(all).wrap(cls)
 
         # A stream of records with one record per line.
-        records = [ButlerLogRecord.model_validate_json(first_line)]
-        for line in stream:
-            line = line.rstrip()
-            if cls._generic_startswith(line, "###EXTRA###"):
-                break
-            elif line:  # skip blank lines
-                records.append(ButlerLogRecord.model_validate_json(line))
+        if not empty_stream:
+            records = [ButlerLogRecord.model_validate_json(first_line)]
+            for line in stream:
+                line = line.rstrip()
+                if cls._generic_startswith(line, cls.STREAMING_EXTRA_DELIMITER):
+                    break
+                elif line:  # skip blank lines
+                    records.append(ButlerLogRecord.model_validate_json(line))
+        else:
+            # No records but might have extra metadata.
+            records = []
         extra_data = stream.read()
         if extra_data:
             extra = pydantic_core.from_json(extra_data)

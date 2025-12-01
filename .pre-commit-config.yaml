@@ -12,7 +12,7 @@ repos:
     # Ruff version.
     rev: v0.13.0
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/numpy/numpydoc
