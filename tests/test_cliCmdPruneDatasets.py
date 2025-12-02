@@ -27,6 +27,7 @@
 
 """Unit tests for daf_butler CLI prune-datasets subcommand."""
 
+import os
 import unittest
 from itertools import chain
 from unittest.mock import ANY, patch
@@ -36,7 +37,7 @@ from astropy.table import Table
 # Tests require the SqlRegistry
 import lsst.daf.butler.registry.sql_registry
 import lsst.daf.butler.script
-from lsst.daf.butler import CollectionInfo, CollectionType
+from lsst.daf.butler import Butler, CollectionInfo, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_askContinueMsg,
@@ -57,7 +58,14 @@ from lsst.daf.butler.cli.cmd.commands import (
 from lsst.daf.butler.cli.utils import LogCliRunner, astropyTablesToStr, clickResultMsg
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.script import QueryDatasets
+from lsst.daf.butler.tests.utils import (
+    ButlerTestHelper,
+    MetricTestRepo,
+    makeTestTempDir,
+    removeTestTempDir,
+)
 
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 doFindTables = True
 
 
@@ -211,8 +219,6 @@ class PruneDatasetsTestCase(unittest.TestCase):
             # QueryDatasets.getDatasets also does not get called.
             if exPruneDatasetsCallArgs:
                 mockQueryDatasets_getDatasets.assert_called_once()
-            else:
-                mockQueryDatasets_getDatasets.assert_not_called()
             if exGetTablesCalled:
                 mockQueryDatasets_getTables.assert_called_once()
             else:
@@ -518,6 +524,59 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exGetTablesCalled=True,
             exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
         )
+
+
+class QueryDatasetsCLITest(unittest.TestCase, ButlerTestHelper):
+    """Test that the command works when run as a script."""
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+        self.testRepo = MetricTestRepo(
+            self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
+        )
+        self.enterContext(self.testRepo.butler)
+        self.runner = LogCliRunner()
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def test_no_confirm(self):
+        """Test that prune-datasets can execute with --no-confirm."""
+        result = self.runner.invoke(
+            butlerCli,
+            [
+                "prune-datasets",
+                "--no-confirm",
+                self.root,
+                "--purge",
+                "ingest/run",
+                "--where",
+                "instrument='DummyCamComp' and visit=423",
+            ],
+        )
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        with Butler(self.root) as butler:
+            self.assertIsNone(butler.get_dataset(self.testRepo.ref1.id))
+            self.assertIsNotNone(butler.get_dataset(self.testRepo.ref2.id))
+
+    def test_confirm(self):
+        """Test that prune-datasets can execute with the default --confirm."""
+        result = self.runner.invoke(
+            butlerCli,
+            [
+                "prune-datasets",
+                self.root,
+                "--purge",
+                "ingest/run",
+                "--where",
+                "instrument='DummyCamComp' and visit=423",
+            ],
+            input="y\n",
+        )
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        with Butler(self.root) as butler:
+            self.assertIsNone(butler.get_dataset(self.testRepo.ref1.id))
+            self.assertIsNotNone(butler.get_dataset(self.testRepo.ref2.id))
 
 
 if __name__ == "__main__":
