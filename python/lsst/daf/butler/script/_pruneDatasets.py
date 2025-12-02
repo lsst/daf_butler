@@ -243,6 +243,7 @@ def pruneDatasets(
             find_first=not find_all,
             show_uri=False,
         )
+        dataset_refs = list(itertools.chain.from_iterable(datasets_found.getDatasets()))
 
         result = PruneDatasetsResult(list(datasets_found.getTables()))
 
@@ -258,7 +259,7 @@ def pruneDatasets(
     def doPruneDatasets() -> PruneDatasetsResult:
         with Butler.from_config(repo, writeable=True) as butler:
             butler.pruneDatasets(
-                refs=list(itertools.chain(*datasets_found.getDatasets())),
+                refs=dataset_refs,
                 disassociate=disassociate,
                 tags=disassociate_tags or (),
                 purge=purge,
