@@ -91,7 +91,7 @@ jobs:
           pytest -Wd -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
