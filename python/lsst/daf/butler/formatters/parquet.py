@@ -49,13 +49,14 @@ __all__ = (
 )
 
 import collections.abc
+import contextlib
 import itertools
 import json
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from fnmatch import fnmatchcase
-from typing import TYPE_CHECKING, Any, cast
+from typing import IO, TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -82,6 +83,16 @@ if TYPE_CHECKING:
 
 TARGET_ROW_GROUP_BYTES = 1_000_000_000
 ASTROPY_PANDAS_INDEX_KEY = "lsst::arrow::astropy_pandas_index"
+
+
+@contextlib.contextmanager
+def generic_open(path: str, fs: AbstractFileSystem | None) -> Generator[IO]:
+    if fs is None:
+        with open(path, "rb") as fh:
+            yield fh
+    else:
+        with fs.open(path) as fh:
+            yield fh
 
 
 class ParquetFormatter(FormatterV2):
@@ -120,7 +131,8 @@ class ParquetFormatter(FormatterV2):
         component: str | None = None,
         expected_size: int = -1,
     ) -> Any:
-        schema = pq.read_schema(path, filesystem=fs)
+        with generic_open(path, fs) as handle:
+            schema = pq.read_schema(handle)
 
         schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
@@ -133,13 +145,13 @@ class ParquetFormatter(FormatterV2):
             if b"lsst::arrow::rowcount" in schema.metadata:
                 return int(schema.metadata[b"lsst::arrow::rowcount"])
 
-            temp_table = pq.read_table(
-                path,
-                filesystem=fs,
-                columns=[schema.names[0]],
-                use_threads=False,
-                use_pandas_metadata=False,
-            )
+            with generic_open(path, fs) as handle:
+                temp_table = pq.read_table(
+                    handle,
+                    columns=[schema.names[0]],
+                    use_threads=False,
+                    use_pandas_metadata=False,
+                )
 
             return len(temp_table[schema.names[0]])
 
@@ -184,13 +196,13 @@ class ParquetFormatter(FormatterV2):
                 )
 
         metadata = schema.metadata if schema.metadata is not None else {}
-        arrow_table = pq.read_table(
-            path,
-            filesystem=fs,
-            columns=par_columns,
-            use_threads=False,
-            use_pandas_metadata=(b"pandas" in metadata),
-        )
+        with generic_open(path, fs) as handle:
+            arrow_table = pq.read_table(
+                handle,
+                columns=par_columns,
+                use_threads=False,
+                use_pandas_metadata=(b"pandas" in metadata),
+            )
 
         return arrow_table
 
