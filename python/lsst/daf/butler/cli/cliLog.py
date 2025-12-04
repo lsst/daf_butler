@@ -28,12 +28,14 @@ from __future__ import annotations
 
 __all__ = (
     "CliLog",
+    "LogState",
     "PrecisionLogFormatter",
 )
 
 import datetime
 import logging
 import os
+import warnings
 from typing import Any
 
 try:
@@ -61,8 +63,8 @@ class PrecisionLogFormatter(logging.Formatter):
         ----------
         record : `logging.LogRecord`
             The record to format.
-        datefmt : `str` or `None`, optional
-            Format to use when formatting the date.
+        datefmt : `str`, optional
+            An explicit date format, or `None` for ISO 8601.
 
         Returns
         -------
@@ -77,6 +79,94 @@ class PrecisionLogFormatter(logging.Formatter):
         else:
             s = ct.isoformat(sep="T", timespec="milliseconds")
         return s
+
+
+class LogState:
+    """Library-style helper to record and replay logging configuration.
+
+    This class stores a sequence of callable-and-arguments tuples that can be
+    serialized and replayed in a subprocess to reproduce the same logging
+    configuration that was applied in the parent process.
+
+    It is intentionally independent of CLI parsing logic; that is handled
+    by `CliLog`.
+    """
+
+    configState: list[tuple[Any, ...]] = []
+    _replayed: bool = False
+
+    @classmethod
+    def record_init(
+        cls,
+        longlog: bool,
+        log_tty: bool,
+        log_file: tuple[str, ...],
+        log_label: dict[str, str] | None,
+    ) -> None:
+        """Record a call to record initialization state."""
+        cls.configState.append((CliLog.initLog, longlog, log_tty, log_file, log_label))
+
+    @classmethod
+    def record_set_level(cls, component: str | None, level: str) -> None:
+        """Record level state"""
+        cls.configState.append((CliLog._setLogLevel, component, level))
+
+    @classmethod
+    def get_state(cls) -> list[tuple[Any, ...]]:
+        """Return a shallow copy of the current state."""
+        return list(cls.configState)
+
+    @classmethod
+    def clear_state(cls) -> None:
+        """Clear any recorded state."""
+        cls.configState.clear()
+        cls._replayed = False
+
+    @classmethod
+    def replayConfigState(cls, configState: list[tuple[Any, ...]]) -> None:
+        """Re-create configuration using configuration state recorded earlier.
+
+        Parameters
+        ----------
+        configState : `list` of `tuple`
+            Tuples contain a method as first item and arguments for the method.
+        """
+        if cls._replayed:
+            # Already initialized, do not touch anything.
+            log = logging.getLogger(__name__)
+            log.warning("Log is already initialized, will not replay configuration.")
+            return
+
+        # execute each one in order
+        for call in configState:
+            method, *args = call
+            method(*args)
+
+        cls._replayed = True
+
+
+class _ConfigStateDescriptor:
+    """Descriptor to intercept direct access to CliLog.configState."""
+
+    def __init__(self):
+        self._value = []
+
+    def __get__(self, instance, owner):
+        warnings.warn(
+            "CliLog.configState is deprecated; use LogState.get_state() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._value
+
+    def __set__(self, instance, value):
+        warnings.warn(
+            "Assigning to CliLog.configState is deprecated; "
+            "use LogState.clear_state() or LogState.record_* instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        LogState.configState = value
 
 
 class CliLog:
@@ -101,13 +191,16 @@ class CliLog:
     """The log format used when the lsst.log package is not importable and the
     log is initialized with longlog=False."""
 
-    configState: list[tuple[Any, ...]] = []
+    configState = _ConfigStateDescriptor()
     """Configuration state. Contains tuples where first item in a tuple is
     a method and remaining items are arguments for the method.
+
+    This attribute is retained for backwards compatibility only. New code
+    should use :class:`LogState` instead.
     """
 
     _initialized = False
-    _componentSettings: list[ComponentSettings] = []
+    _componentSettings: list[ComponentSettings] = []  # type: ignore[name-defined]
 
     _fileHandlers: list[logging.FileHandler] = []
     """Any FileHandler classes attached to the root logger by this class
@@ -244,8 +337,8 @@ class CliLog:
             for key, value in log_label.items():
                 ButlerMDC.MDC(key.upper(), value)
 
-        # remember this call
-        cls.configState.append((cls.initLog, longlog, log_tty, log_file, log_label))
+        # remember this call in the *library* recorder, not on CliLog itself
+        LogState.record_init(longlog, log_tty, log_file, log_label)
 
     @classmethod
     def resetLog(cls) -> None:
@@ -280,7 +373,7 @@ class CliLog:
 
         cls._fileHandlers.clear()
         cls._initialized = False
-        cls.configState = []
+        LogState.clear_state()
 
     @classmethod
     def setLogLevels(cls, logLevels: list[tuple[str | None, str]] | dict[str, str]) -> None:
@@ -296,8 +389,7 @@ class CliLog:
 
         Notes
         -----
-        The special name ``.`` can be used to set the Python root
-        logger.
+        The special name ``.`` can be used to set the Python root logger.
         """
         if isinstance(logLevels, dict):
             logLevels = list(logLevels.items())
@@ -305,8 +397,8 @@ class CliLog:
         # configure individual loggers
         for component, level in logLevels:
             cls._setLogLevel(component, level)
-            # remember this call
-            cls.configState.append((cls._setLogLevel, component, level))
+            # remember this call in the *library* recorder
+            LogState.record_set_level(component, level)
 
     @classmethod
     def _setLogLevel(cls, component: str | None, level: str) -> None:
@@ -316,13 +408,13 @@ class CliLog:
 
         Parameters
         ----------
-        component : `str` or None
-            The name of the log component or `None` for the default logger.
-            The root logger can be specified either by an empty string or
-            with the special name ``.``.
+        component : `str` or `None`
+            Component name or `None` for default root logger.
         level : `str`
-            A valid python logging level.
+            Log level name.
         """
+        level = level.upper()
+
         components: set[str | None]
         if component is None:
             components = set(cls.root_loggers())
@@ -427,21 +519,22 @@ class CliLog:
 
     @classmethod
     def replayConfigState(cls, configState: list[tuple[Any, ...]]) -> None:
-        """Re-create configuration using configuration state recorded earlier.
+        """Recreate configuration using recorded config state.
+
+        This method is preserved for backwards compatibility only and will be
+        removed in a future release. New code should use
+        `LogState.replayConfigState`.
 
         Parameters
         ----------
         configState : `list` of `tuple`
-            Tuples contain a method as first item and arguments for the method,
-            in the same format as ``cls.configState``.
+            Tuples contain a method as first item and arguments for the method.
         """
-        if cls._initialized or cls.configState:
-            # Already initialized, do not touch anything.
-            log = logging.getLogger(__name__)
-            log.warning("Log is already initialized, will not replay configuration.")
-            return
+        warnings.warn(
+            "CliLog.replayConfigState is deprecated; use LogState.replayConfigState instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        LogState.replayConfigState(configState)
 
-        # execute each one in order
-        for call in configState:
-            method, *args = call
-            method(*args)
+
