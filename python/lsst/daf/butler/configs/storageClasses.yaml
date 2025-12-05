@@ -441,3 +441,5 @@ storageClasses:
     pytype: lsst.ts.observatory.control.utils.extras.vignetting_correction.VignettingCorrection
   SSPAuxiliaryFile:
     pytype: lsst.pipe.tasks.sspAuxiliaryFile.SSPAuxiliaryFile
+  VisitGeometry:
+    pytype: lsst.obs.base.visit_geometry.VisitGeometry
