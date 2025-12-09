@@ -383,7 +383,16 @@ elements:
           Which row this patch occupies in the tract's grid of patches.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
-
+  
+  simulation_realization:
+    doc: >
+      A realization of simulation
+    keys:
+      - name: id
+        type: int
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+      
   visit_detector_region:
     doc: >
       A many-to-many join table that provides region information for
