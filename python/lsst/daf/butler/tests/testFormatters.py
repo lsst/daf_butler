@@ -272,8 +272,8 @@ class MetricsExampleDataFormatter(Formatter):
         # Update the location with the formatter-preferred file extension
         fileDescriptor.location.updateExtension(self.extension)
 
-        with open(fileDescriptor.location.path, "w") as fd:
-            yaml.dump(inMemoryDataset, fd)
+        data = yaml.dump(inMemoryDataset)
+        fileDescriptor.location.uri.write(data.encode("utf-8"))
 
 
 class MetricsExampleModelProvenanceFormatter(JsonFormatter):
