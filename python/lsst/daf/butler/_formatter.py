@@ -1037,6 +1037,8 @@ class FormatterV2:
         # want it to remain in the correct place but in corrupt state.
         # For local files write to the output directory not temporary dir.
         prefix = uri.dirname() if uri.isLocal else None
+        if prefix is not None:
+            prefix.mkdir()
         with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=prefix) as temporary_uri:
             # Need to configure the formatter to write to a different
             # location and that needs us to overwrite internals
