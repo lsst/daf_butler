@@ -1562,7 +1562,12 @@ class Database(ABC):
                 return None
             else:
                 sql = table.insert()
-                return [connection.execute(sql, row).inserted_primary_key[0] for row in rows]
+                ids = []
+                for row in rows:
+                    key = connection.execute(sql, row).inserted_primary_key
+                    assert key is not None
+                    ids.append(key[0])
+                return ids
 
     @abstractmethod
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
