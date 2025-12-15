@@ -3166,6 +3166,20 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
+
+        # This call to 'bridge.check' filters out "partially deleted" datasets.
+        # Specifically, ones in the unusual edge state that:
+        # 1. They have an entry in the registry dataset tables
+        # 2. They were "trashed" from the datastore, so they are not
+        # present in the "dataset_location" table.)
+        # 3. But the trash has not been "emptied", so there are still entries
+        #  in the "opaque" datastore records table.
+        #
+        # As far as I can tell, this can only occur in the case of a concurrent
+        # or aborted call to `Butler.pruneDatasets(unstore=True, purge=False)`.
+        # Datasets (with or without files existing on disk) can persist in
+        # this zombie state indefinitely, until someone manually empties
+        # the trash.
         exported_refs = list(self._bridge.check(refs))
         ids = {ref.id for ref in exported_refs}
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}

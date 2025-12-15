@@ -215,20 +215,24 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
         byId = {ref.id: ref for ref in refs}
-        sql = (
-            sqlalchemy.sql.select(self._tables.dataset_location.columns.dataset_id)
-            .select_from(self._tables.dataset_location)
-            .where(
-                sqlalchemy.sql.and_(
-                    self._tables.dataset_location.columns.datastore_name == self.datastoreName,
-                    self._tables.dataset_location.columns.dataset_id.in_(byId.keys()),
+        found: list[DatasetIdRef] = []
+        with self._db.session():
+            for batch in chunk_iterable(byId.keys(), 50000):
+                sql = (
+                    sqlalchemy.sql.select(self._tables.dataset_location.columns.dataset_id)
+                    .select_from(self._tables.dataset_location)
+                    .where(
+                        sqlalchemy.sql.and_(
+                            self._tables.dataset_location.columns.datastore_name == self.datastoreName,
+                            self._tables.dataset_location.columns.dataset_id.in_(batch),
+                        )
+                    )
                 )
-            )
-        )
-        with self._db.query(sql) as sql_result:
-            sql_rows = sql_result.fetchall()
-        for row in sql_rows:
-            yield byId[row.dataset_id]
+                with self._db.query(sql) as sql_result:
+                    sql_ids = sql_result.scalars().all()
+                found.extend(byId[id] for id in sql_ids)
+
+        return found
 
     @contextmanager
     def emptyTrash(

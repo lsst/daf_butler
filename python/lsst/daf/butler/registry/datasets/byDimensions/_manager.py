@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import astropy.time
 import sqlalchemy
 
+from lsst.utils.iteration import chunk_iterable
+
 from .... import ddl
 from ...._collection_type import CollectionType
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
@@ -424,17 +426,18 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         return result
 
     def get_dataset_refs(self, ids: list[DatasetId]) -> list[DatasetRef]:
-        # Look up the dataset types corresponding to the given Dataset IDs.
-        id_col = self._static.dataset.columns["id"]
-        sql = sqlalchemy.sql.select(
-            id_col,
-            self._static.dataset.columns["dataset_type_id"],
-        ).where(id_col.in_(ids))
-        with self._db.query(sql) as sql_result:
-            dataset_rows = sql_result.mappings().all()
-        dataset_type_map: dict[DatasetId, DatasetType] = {
-            row["id"]: self._get_dataset_type_by_id(row["dataset_type_id"]) for row in dataset_rows
-        }
+        dataset_type_map: dict[DatasetId, DatasetType] = {}
+        for batch in chunk_iterable(set(ids), 50000):
+            # Look up the dataset types corresponding to the given Dataset IDs.
+            id_col = self._static.dataset.columns["id"]
+            sql = sqlalchemy.sql.select(
+                id_col,
+                self._static.dataset.columns["dataset_type_id"],
+            ).where(id_col.in_(batch))
+            with self._db.query(sql) as sql_result:
+                dataset_rows = sql_result.mappings().all()
+            for row in dataset_rows:
+                dataset_type_map[row["id"]] = self._get_dataset_type_by_id(row["dataset_type_id"])
 
         # Group the given dataset IDs by the DimensionGroup of their dataset
         # types -- there is a separate tags table for each DimensionGroup.
@@ -448,40 +451,41 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             # data IDs corresponding to the UUIDs found from the dataset table.
             dynamic_tables = self._get_dynamic_tables(dimension_group)
             tags_table = self._get_tags_table(dynamic_tables)
-            tags_sql = tags_table.select().where(tags_table.columns["dataset_id"].in_(datasets))
-            # Join in the collection table to fetch the run name.
-            collection_column = tags_table.columns[self._collections.getCollectionForeignKeyName()]
-            joined_collections = self._collections.join_collections_sql(collection_column, tags_sql)
-            tags_sql = joined_collections.joined_sql
-            run_name_column = joined_collections.name_column
-            tags_sql = tags_sql.add_columns(run_name_column)
-            # Tags table includes run collections and tagged
-            # collections.
-            # In theory the data ID for a given dataset should be the
-            # same in both, but nothing actually guarantees this.
-            # So skip any tagged collections, using the run collection
-            # as the definitive definition.
-            tags_sql = tags_sql.where(joined_collections.type_column == int(CollectionType.RUN))
+            for batch in chunk_iterable(datasets, 50000):
+                tags_sql = tags_table.select().where(tags_table.columns["dataset_id"].in_(batch))
+                # Join in the collection table to fetch the run name.
+                collection_column = tags_table.columns[self._collections.getCollectionForeignKeyName()]
+                joined_collections = self._collections.join_collections_sql(collection_column, tags_sql)
+                tags_sql = joined_collections.joined_sql
+                run_name_column = joined_collections.name_column
+                tags_sql = tags_sql.add_columns(run_name_column)
+                # Tags table includes run collections and tagged
+                # collections.
+                # In theory the data ID for a given dataset should be the
+                # same in both, but nothing actually guarantees this.
+                # So skip any tagged collections, using the run collection
+                # as the definitive definition.
+                tags_sql = tags_sql.where(joined_collections.type_column == int(CollectionType.RUN))
 
-            with self._db.query(tags_sql) as sql_result:
-                data_id_rows = sql_result.mappings().all()
+                with self._db.query(tags_sql) as sql_result:
+                    data_id_rows = sql_result.mappings().all()
 
-            assert run_name_column.key is not None
-            for data_id_row in data_id_rows:
-                id = data_id_row["dataset_id"]
-                dataset_type = dataset_type_map[id]
-                run_name = data_id_row[run_name_column.key]
-                data_id = DataCoordinate.from_required_values(
-                    dimension_group,
-                    tuple(data_id_row[dimension] for dimension in dimension_group.required),
-                )
-                ref = DatasetRef(
-                    datasetType=dataset_type,
-                    dataId=data_id,
-                    id=id,
-                    run=run_name,
-                )
-                output_refs.append(ref)
+                assert run_name_column.key is not None
+                for data_id_row in data_id_rows:
+                    id = data_id_row["dataset_id"]
+                    dataset_type = dataset_type_map[id]
+                    run_name = data_id_row[run_name_column.key]
+                    data_id = DataCoordinate.from_required_values(
+                        dimension_group,
+                        tuple(data_id_row[dimension] for dimension in dimension_group.required),
+                    )
+                    ref = DatasetRef(
+                        datasetType=dataset_type,
+                        dataId=data_id,
+                        id=id,
+                        run=run_name,
+                    )
+                    output_refs.append(ref)
 
         return output_refs
 
