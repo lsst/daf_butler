@@ -61,6 +61,7 @@ from lsst.daf.butler.datastore.cache_manager import (
     DatastoreCacheManagerConfig,
     DatastoreDisabledCacheManager,
 )
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo, make_datastore_path_relative
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
@@ -77,6 +78,7 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.utils import TestCaseMixin
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
+from lsst.utils.introspection import get_full_type_name
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -2251,6 +2253,44 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
         self.assertEqual(make_datastore_path_relative("path/with#fragment"), "path/with#fragment")
         self.assertEqual(make_datastore_path_relative("http://server.com/some/path"), "some/path")
         self.assertEqual(make_datastore_path_relative("http://server.com/some/path#frag"), "some/path#frag")
+
+    def test_datastore_record_data_json_types(self):
+        """Test that we don't round-trip checksums to UUIDs when deserializing
+        datastore record data.
+        """
+        test_json = """
+            {
+                "dataset_ids": [
+                    "74478304-abf1-4a9c-9eb2-926090a84446"
+                ],
+                "records": {
+                    "lsst.daf.butler.datastore.stored_file_info.StoredFileInfo": {
+                    "74478304abf14a9c9eb2926090a84446": {
+                        "file_datastore_records": [
+                        {
+                            "formatter": "lsst.daf.butler.formatters.yaml.YamlFormatter",
+                            "path": "gain_factors/base-2025-158/gain_factors_spx_base-2025-158.yaml",
+                            "storage_class": "GainFactors",
+                            "component": "__NULL_STRING__",
+                            "checksum": "cab515f6-ab67-0484-393f-aaa525dd526f",
+                            "file_size": 5412
+                        }
+                        ]
+                    }
+                    }
+                }
+            }
+        """
+        id_str = "74478304abf14a9c9eb2926090a84446"
+        s = SerializedDatastoreRecordData.model_validate_json(test_json)
+        self.assertIsInstance(
+            s.records[get_full_type_name(StoredFileInfo)][id_str]["file_datastore_records"][0]["checksum"],
+            str,
+        )
+        id = uuid.UUID(id_str)
+        d = DatastoreRecordData.from_simple(s)
+        self.assertIsInstance(d.records[id]["file_datastore_records"][0], StoredFileInfo)
+        self.assertIsInstance(d.records[id]["file_datastore_records"][0].checksum, str)
 
 
 @contextlib.contextmanager

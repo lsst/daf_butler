@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 # Pydantic requires the possible value types to be explicitly enumerated in
 # order for `uuid.UUID` in particular to work.  `typing.Any` does not work
 # here.
-_Record: TypeAlias = dict[str, int | str | uuid.UUID | None]
+_Record: TypeAlias = dict[str, int | str | None]
 
 
 class SerializedDatastoreRecordData(pydantic.BaseModel):
