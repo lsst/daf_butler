@@ -54,6 +54,7 @@ from ._config import Config
 from ._config_support import LookupKey, processLookupConfigs
 from ._file_descriptor import FileDescriptor
 from ._location import Location
+from ._rubin.temporary_for_ingest import TemporaryForIngest
 from .dimensions import DataCoordinate, DimensionUniverse
 from .mapping_factory import MappingFactory
 
@@ -1031,15 +1032,7 @@ class FormatterV2:
         """
         cache_manager = self._ensure_cache(cache_manager)
 
-        # Always write to a temporary even if
-        # using a local file system -- that gives us atomic writes.
-        # If a process is killed as the file is being written we do not
-        # want it to remain in the correct place but in corrupt state.
-        # For local files write to the output directory not temporary dir.
-        prefix = uri.dirname() if uri.isLocal else None
-        if prefix is not None:
-            prefix.mkdir()
-        with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=prefix) as temporary_uri:
+        with TemporaryForIngest.make_path(uri) as temporary_uri:
             # Need to configure the formatter to write to a different
             # location and that needs us to overwrite internals
             log.debug("Writing dataset to temporary location at %s", temporary_uri)
