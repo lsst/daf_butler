@@ -2171,10 +2171,22 @@ class FileDatastoreButlerTests(ButlerTests):
         self.assertEqual(metrics.n_get, 3)
 
         with butler.record_metrics() as new:
-            butler.put(data, datasetType, visit=425, instrument="DummyCamComp")
+            data_ref_2 = butler.put(data, datasetType, visit=425, instrument="DummyCamComp")
             butler.get(data_ref)
+
+            butler.pruneDatasets([data_ref, data_ref_2], purge=True, unstore=True)
+            with ResourcePath.temporary_uri(suffix=".json") as tmpFile:
+                tmpFile.write(data.model_dump_json().encode())
+                refs = [
+                    DatasetRef(datasetType, data_ref_2.dataId, run),
+                    DatasetRef(datasetType, data_ref.dataId, run),
+                ]
+                datasets = [FileDataset(path=tmpFile, refs=refs)]
+                butler.ingest(*datasets, transfer="copy")
+
         self.assertEqual(new.n_get, 1)
         self.assertEqual(new.n_put, 1)
+        self.assertEqual(new.n_ingest, 2)
 
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
