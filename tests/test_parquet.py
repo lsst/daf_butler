@@ -408,6 +408,12 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+        # Filter predicates with unrecognized column should be a ValueError.
+        # FIXME: ValueErrorWeirdness1. This raises an AssertionError,
+        #        but Ctrl+f "ValueErrorWeirdness2" below.
+        # with self.assertRaises(ValueError):
+        #     self.butler.get(self.datasetType, dataId={},
+        #                     parameters={"filters": [("e", ">", 1)]})
 
     def testSingleIndexDataFrameWithLists(self):
         df1, allColumns = _makeSingleIndexDataFrame(include_lists=True)
@@ -455,6 +461,11 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
+        # Filter predicates with unrecognized column should be a ValueError.
+        # FIXME: ValueErrorWeirdness2. This raises a ValueError, but Ctrl+f
+        #        "ValueErrorWeirdness1" above.
+        # df7 = self.butler.get(self.datasetType, dataId={},
+        #                       parameters={"filters": [("d", ">", 1)]})
 
     def testSingleIndexDataFrameEmptyString(self):
         """Test persisting a single index dataframe with empty strings."""
