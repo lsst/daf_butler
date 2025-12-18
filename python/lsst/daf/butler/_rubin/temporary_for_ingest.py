@@ -50,6 +50,12 @@ if TYPE_CHECKING:
 class TemporaryForIngest:
     """A context manager for generating temporary paths that will be ingested
     as butler datasets.
+
+    Notes
+    -----
+    Neither this class nor its `make_path` method run ingest automatically when
+    their context manager is exited; the `ingest` method must always be called
+    explicitly.
     """
 
     butler: Butler
@@ -57,19 +63,6 @@ class TemporaryForIngest:
 
     ref: DatasetRef
     """Description of the dataset to ingest."""
-
-    ingest_on_success: bool = True
-    """Whether to actually ingest the file when the context manager exits
-    without an exception.
-    """
-
-    ingest_on_failure: bool = False
-    """Whether to actually ingest the file when the context manager exits due
-    to an exception being raised.
-    """
-
-    record_validation_info: bool = True
-    """Whether to record the file size and checksum upon ingest."""
 
     dataset: FileDataset = dataclasses.field(init=False)
     """The dataset that will be passed to `Butler.ingest`."""
@@ -104,12 +97,6 @@ class TemporaryForIngest:
             A context manager that yields the temporary
             `~lsst.resources.ResourcePath` when entered and deletes that file
             when exited.
-
-        Notes
-        -----
-        The context manager returned by this method never ingests the file
-        (note that this is a ``classmethod``; it does not have access to a
-        butler or the `..DatasetRef`).
         """
         # Always write to a temporary even if using a local file system -- that
         # gives us atomic writes. If a process is killed as the file is being
@@ -123,6 +110,16 @@ class TemporaryForIngest:
             suffix=cls._get_temporary_suffix(final_path), prefix=prefix
         ) as temporary_path:
             yield temporary_path
+
+    def ingest(self, record_validation_info: bool = True) -> None:
+        """Ingest the file into the butler.
+
+        Parameters
+        ----------
+        record_validation_info : `bool`, optional
+            Whether to- record the file size and checksum upon ingest.
+        """
+        self.butler.ingest(self.dataset, transfer="move", record_validation_info=record_validation_info)
 
     def __enter__(self) -> Self:
         from .._file_dataset import FileDataset
@@ -142,10 +139,6 @@ class TemporaryForIngest:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool | None:
-        if (exc_type is None and self.ingest_on_success) or (exc_type is not None and self.ingest_on_failure):
-            self.butler.ingest(
-                self.dataset, transfer="move", record_validation_info=self.record_validation_info
-            )
         return self._temporary_path_context.__exit__(exc_type, exc_value, traceback)
 
     @classmethod

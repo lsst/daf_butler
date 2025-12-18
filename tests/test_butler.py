@@ -2453,6 +2453,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
                 found = TemporaryForIngest.find_orphaned_temporaries_by_ref(ref, butler)
                 self.assertEqual(found, [temporary.path])
                 self.assertIn(".tmp", temporary.ospath)
+                temporary.ingest()
             loaded = butler.get(ref)
             self.assertEqual(loaded, {"three": 3})
 
