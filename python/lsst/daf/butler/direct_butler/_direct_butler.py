@@ -1822,12 +1822,25 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     f" Example: {existing_datasets[0]}"
                 )
 
+        # Calculate some statistics based on the given list of datasets.
+        n_files = len(datasets)
+        n_datasets = 0
+        for d in datasets:
+            n_datasets += len(d.refs)
+        sfiles = "s" if n_files != 1 else ""
+        srefs = "s" if n_datasets != 1 else ""
+
         # We use `datasets` rather `new_datasets` for the Registry
         # portion of this, to let it confirm that everything matches the
         # existing datasets.
         import_info = self._prepare_ingest_file_datasets(datasets, progress)
 
-        with self.transaction():
+        with (
+            self._metrics.instrument_ingest(
+                n_datasets, _LOG, msg=f"Ingesting {n_files} file{sfiles} with {n_datasets} dataset{srefs}"
+            ),
+            self.transaction(),
+        ):
             self._ingest_file_datasets(datasets, import_info, progress)
 
             # Bulk-insert everything into Datastore.
