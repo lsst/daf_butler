@@ -90,6 +90,7 @@ from lsst.daf.butler import (
     script,
 )
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
+from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
@@ -2440,6 +2441,21 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             self.assertIsNotNone(target_butler.get(repo.ref1))
             self.assertIsNotNone(target_butler.get(repo.ref2))
             self.assertIsNotNone(target_butler.get(other_ref))
+
+    def test_temporary_for_ingest(self) -> None:
+        """Test the `lsst.daf.butler._rubin.ingest_from_temporary` module."""
+        with self.create_empty_butler("example_run") as butler:
+            dataset_type = DatasetType("example", butler.dimensions.empty, "StructuredDataDict")
+            butler.registry.registerDatasetType(dataset_type)
+            ref = DatasetRef(dataset_type, DataCoordinate.make_empty(butler.dimensions), "example_run")
+            with TemporaryForIngest(butler, ref) as temporary:
+                temporary.path.write(b"three: 3")
+                found = TemporaryForIngest.find_orphaned_temporaries_by_ref(ref, butler)
+                self.assertEqual(found, [temporary.path])
+                self.assertIn(".tmp", temporary.ospath)
+                temporary.ingest()
+            loaded = butler.get(ref)
+            self.assertEqual(loaded, {"three": 3})
 
 
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
