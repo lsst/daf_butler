@@ -286,7 +286,7 @@ def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
     """
     from astropy.table import Table
 
-    astropy_table = Table(arrow_to_numpy_dict(arrow_table))
+    astropy_table = Table(arrow_to_numpy_dict(arrow_table), copy=False)
 
     _apply_astropy_metadata(astropy_table, arrow_table.schema)
 
