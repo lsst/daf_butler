@@ -276,7 +276,7 @@ class CliLog(metaclass=_ConfigStateDescriptor):
             for key, value in log_label.items():
                 ButlerMDC.MDC(key.upper(), value)
 
-        # remember this call in the *library* recorder, not on CliLog itself
+        # remember this call in the library recorder, not on CliLog itself
         LogState.record((CliLog.initLog, longlog, log_tty, log_file, log_label))
 
     @classmethod
