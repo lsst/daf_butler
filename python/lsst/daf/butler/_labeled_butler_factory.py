@@ -127,7 +127,7 @@ class LabeledButlerFactory(AbstractContextManager):
 
         return create
 
-    def create_butler(self, *, label: str, access_token: str | None) -> Butler:
+    def create_butler(self, label: str, *, access_token: str | None = None) -> Butler:
         """Create a Butler instance.
 
         Parameters
@@ -136,7 +136,7 @@ class LabeledButlerFactory(AbstractContextManager):
             Label of the repository to instantiate, from the ``repositories``
             parameter to the `LabeledButlerFactory` constructor or the global
             repository index file.
-        access_token : `str` | `None`
+        access_token : `str` | `None`, optional
             Gafaelfawr access token used to authenticate to a Butler server.
             This is required for any repositories configured to use
             `RemoteButler`.  If you only use `DirectButler`, this may be
