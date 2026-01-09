@@ -62,6 +62,13 @@ class ButlerFactoryTestCase(unittest.TestCase):
         self.addCleanup(factory.close)
         self._test_factory(factory)
 
+        writeable_factory = LabeledButlerFactory({"test_repo": self.config_file_uri}, writeable=True)
+        self.addCleanup(writeable_factory.close)
+        self._test_factory(factory)
+        with writeable_factory.create_butler(label="test_repo", access_token=None) as butler:
+            butler.collections.register("new_run")
+            self.assertIsNotNone(butler.collections.get_info("new_run"))
+
     def _test_factory(self, factory: LabeledButlerFactory) -> None:
         butler = factory.create_butler(label="test_repo", access_token=None)
         self.assertIsInstance(butler, DirectButler)
