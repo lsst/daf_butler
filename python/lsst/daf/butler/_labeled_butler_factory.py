@@ -60,6 +60,9 @@ class LabeledButlerFactory:
         files.  If not provided, defaults to the global repository index
         configured by the ``DAF_BUTLER_REPOSITORY_INDEX`` environment variable
         --  see `ButlerRepoIndex`.
+    writeable : `bool`, optional
+        If `True`, Butler instances created by this factory will be writeable.
+        If `False` (the default), instances will be read-only.
 
     Notes
     -----
@@ -76,11 +79,12 @@ class LabeledButlerFactory:
     safely be used by separate threads.
     """
 
-    def __init__(self, repositories: Mapping[str, str] | None = None) -> None:
+    def __init__(self, repositories: Mapping[str, str] | None = None, writeable: bool = False) -> None:
         if repositories is None:
             self._repositories = None
         else:
             self._repositories = dict(repositories)
+        self._writeable = writeable
 
         self._factories = ThreadSafeCache[str, _ButlerFactory]()
         self._initialization_locks = NamedLocks()
@@ -167,7 +171,9 @@ class LabeledButlerFactory:
 
         match butler_type:
             case ButlerType.DIRECT:
-                return _DirectButlerFactory(config, self._preload_unsafe_direct_butler_caches)
+                return _DirectButlerFactory(
+                    config, self._preload_unsafe_direct_butler_caches, self._writeable
+                )
             case ButlerType.REMOTE:
                 return _RemoteButlerFactory(config)
             case _:
@@ -189,12 +195,12 @@ class _ButlerFactory(Protocol):
 
 
 class _DirectButlerFactory(_ButlerFactory):
-    def __init__(self, config: ButlerConfig, preload_unsafe_caches: bool) -> None:
+    def __init__(self, config: ButlerConfig, preload_unsafe_caches: bool, writeable: bool) -> None:
         import lsst.daf.butler.direct_butler
 
         # Create a 'template' Butler that will be cloned when callers request
         # an instance.
-        self._butler = Butler.from_config(config)
+        self._butler = Butler.from_config(config, writeable=writeable)
         assert isinstance(self._butler, lsst.daf.butler.direct_butler.DirectButler)
 
         # Load caches so that data is available in cloned instances without
