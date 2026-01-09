@@ -131,6 +131,8 @@ class ParquetFormatter(FormatterV2):
         component: str | None = None,
         expected_size: int = -1,
     ) -> Any:
+        import pyarrow.dataset as ds
+
         with generic_open(path, fs) as handle:
             schema = pq.read_schema(handle)
 
@@ -156,6 +158,7 @@ class ParquetFormatter(FormatterV2):
             return len(temp_table[schema.names[0]])
 
         par_columns = None
+        par_filters = None
         if self.file_descriptor.parameters:
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
@@ -190,6 +193,27 @@ class ParquetFormatter(FormatterV2):
                         par_columns,
                     )
 
+            par_filters = self.file_descriptor.parameters.pop("filters", None)
+            if par_filters:
+                # Validate basic filter structure
+                if not isinstance(par_filters, ds.Expression):
+                    if not isinstance(par_filters, list):
+                        raise TypeError("Filters must be a list or a pyarrow.dataset.Expression.")
+
+                    # Lists must contain tuples or lists of tuples
+                    if all(isinstance(item, tuple) for item in par_filters):
+                        par_filters = [par_filters]  # convert to DNF for column checking
+                    elif not all(isinstance(item, list) for item in par_filters):
+                        raise TypeError("List filters must contain tuples or lists of tuples.")
+
+                    # Ensure requested columns are in schema
+                    for predicate in par_filters:
+                        for col, _, _ in predicate:
+                            if col not in schema.names:
+                                raise ValueError(
+                                    f"Column {col} specified in filters not available in parquet file."
+                                )
+
             if len(self.file_descriptor.parameters):
                 raise ValueError(
                     f"Unsupported parameters {self.file_descriptor.parameters} in ArrowTable read."
@@ -202,6 +226,7 @@ class ParquetFormatter(FormatterV2):
                 columns=par_columns,
                 use_threads=False,
                 use_pandas_metadata=(b"pandas" in metadata),
+                filters=par_filters,
             )
 
         return arrow_table
