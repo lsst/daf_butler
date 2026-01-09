@@ -2078,10 +2078,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         # know the exposure). Want to ensure we do not request records we
         # already have.
         missing_data_ids = set()
-        for name, record_mapping in additional_records.items():
+        for record_mapping in additional_records.values():
             for data_id in record_mapping.keys():
-                if data_id not in primary_records[name]:
-                    missing_data_ids.add(data_id)
+                for dimension in data_id.dimensions.required:
+                    element = source_butler.dimensions[dimension]
+                    dimension_key = data_id.subset(dimension)
+                    if dimension_key not in primary_records[element]:
+                        missing_data_ids.add(dimension_key)
 
         # Fill out the new records. Assume that these new records do not
         # also need to carry over additional populated_by records.
