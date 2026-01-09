@@ -1,0 +1,1 @@
+Added metrics recording for ``butler.ingest``.
