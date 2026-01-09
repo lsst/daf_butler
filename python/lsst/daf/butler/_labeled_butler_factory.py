@@ -30,7 +30,9 @@ from __future__ import annotations
 __all__ = ("LabeledButlerFactory", "LabeledButlerFactoryProtocol")
 
 from collections.abc import Mapping
-from typing import Protocol
+from contextlib import AbstractContextManager
+from logging import getLogger
+from typing import Any, Literal, Protocol, Self
 
 from lsst.resources import ResourcePathExpression
 
@@ -40,6 +42,8 @@ from ._butler_repo_index import ButlerRepoIndex
 from ._utilities.named_locks import NamedLocks
 from ._utilities.thread_safe_cache import ThreadSafeCache
 
+_LOG = getLogger(__name__)
+
 
 class LabeledButlerFactoryProtocol(Protocol):
     """Callable to retrieve a butler from a label."""
@@ -47,7 +51,7 @@ class LabeledButlerFactoryProtocol(Protocol):
     def __call__(self, label: str) -> Butler: ...
 
 
-class LabeledButlerFactory:
+class LabeledButlerFactory(AbstractContextManager):
     """Factory for efficiently instantiating Butler instances from the
     repository index file.  This is intended for use from long-lived services
     that want to instantiate a separate Butler instance for each end user
@@ -60,6 +64,9 @@ class LabeledButlerFactory:
         files.  If not provided, defaults to the global repository index
         configured by the ``DAF_BUTLER_REPOSITORY_INDEX`` environment variable
         --  see `ButlerRepoIndex`.
+    writeable : `bool`, optional
+        If `True`, Butler instances created by this factory will be writeable.
+        If `False` (the default), instances will be read-only.
 
     Notes
     -----
@@ -76,17 +83,28 @@ class LabeledButlerFactory:
     safely be used by separate threads.
     """
 
-    def __init__(self, repositories: Mapping[str, str] | None = None) -> None:
+    def __init__(self, repositories: Mapping[str, str] | None = None, writeable: bool = False) -> None:
         if repositories is None:
             self._repositories = None
         else:
             self._repositories = dict(repositories)
+        self._writeable = writeable
 
         self._factories = ThreadSafeCache[str, _ButlerFactory]()
         self._initialization_locks = NamedLocks()
 
         # This may be overridden by unit tests.
         self._preload_unsafe_direct_butler_caches = True
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+        try:
+            self.close()
+        except Exception:
+            _LOG.exception("An exception occurred during LabeledButlerFactory.close()")
+        return False
 
     def bind(self, access_token: str | None) -> LabeledButlerFactoryProtocol:
         """Create a callable factory function for generating Butler instances
@@ -109,7 +127,7 @@ class LabeledButlerFactory:
 
         return create
 
-    def create_butler(self, *, label: str, access_token: str | None) -> Butler:
+    def create_butler(self, label: str, *, access_token: str | None = None) -> Butler:
         """Create a Butler instance.
 
         Parameters
@@ -118,7 +136,7 @@ class LabeledButlerFactory:
             Label of the repository to instantiate, from the ``repositories``
             parameter to the `LabeledButlerFactory` constructor or the global
             repository index file.
-        access_token : `str` | `None`
+        access_token : `str` | `None`, optional
             Gafaelfawr access token used to authenticate to a Butler server.
             This is required for any repositories configured to use
             `RemoteButler`.  If you only use `DirectButler`, this may be
@@ -167,7 +185,9 @@ class LabeledButlerFactory:
 
         match butler_type:
             case ButlerType.DIRECT:
-                return _DirectButlerFactory(config, self._preload_unsafe_direct_butler_caches)
+                return _DirectButlerFactory(
+                    config, self._preload_unsafe_direct_butler_caches, self._writeable
+                )
             case ButlerType.REMOTE:
                 return _RemoteButlerFactory(config)
             case _:
@@ -189,12 +209,12 @@ class _ButlerFactory(Protocol):
 
 
 class _DirectButlerFactory(_ButlerFactory):
-    def __init__(self, config: ButlerConfig, preload_unsafe_caches: bool) -> None:
+    def __init__(self, config: ButlerConfig, preload_unsafe_caches: bool, writeable: bool) -> None:
         import lsst.daf.butler.direct_butler
 
         # Create a 'template' Butler that will be cloned when callers request
         # an instance.
-        self._butler = Butler.from_config(config)
+        self._butler = Butler.from_config(config, writeable=writeable)
         assert isinstance(self._butler, lsst.daf.butler.direct_butler.DirectButler)
 
         # Load caches so that data is available in cloned instances without
