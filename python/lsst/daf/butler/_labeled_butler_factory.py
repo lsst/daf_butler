@@ -30,7 +30,9 @@ from __future__ import annotations
 __all__ = ("LabeledButlerFactory", "LabeledButlerFactoryProtocol")
 
 from collections.abc import Mapping
-from typing import Protocol
+from contextlib import AbstractContextManager
+from logging import getLogger
+from typing import Any, Literal, Protocol, Self
 
 from lsst.resources import ResourcePathExpression
 
@@ -40,6 +42,8 @@ from ._butler_repo_index import ButlerRepoIndex
 from ._utilities.named_locks import NamedLocks
 from ._utilities.thread_safe_cache import ThreadSafeCache
 
+_LOG = getLogger(__name__)
+
 
 class LabeledButlerFactoryProtocol(Protocol):
     """Callable to retrieve a butler from a label."""
@@ -47,7 +51,7 @@ class LabeledButlerFactoryProtocol(Protocol):
     def __call__(self, label: str) -> Butler: ...
 
 
-class LabeledButlerFactory:
+class LabeledButlerFactory(AbstractContextManager):
     """Factory for efficiently instantiating Butler instances from the
     repository index file.  This is intended for use from long-lived services
     that want to instantiate a separate Butler instance for each end user
@@ -91,6 +95,16 @@ class LabeledButlerFactory:
 
         # This may be overridden by unit tests.
         self._preload_unsafe_direct_butler_caches = True
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+        try:
+            self.close()
+        except Exception:
+            _LOG.exception("An exception occurred during LabeledButlerFactory.close()")
+        return False
 
     def bind(self, access_token: str | None) -> LabeledButlerFactoryProtocol:
         """Create a callable factory function for generating Butler instances
