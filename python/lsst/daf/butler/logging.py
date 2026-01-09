@@ -764,11 +764,17 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
 
 
 class ButlerLogRecordHandler(StreamHandler):
-    """Python log handler that accumulates records."""
+    """Python log handler that accumulates records.
 
-    def __init__(self) -> None:
+    Parameters
+    ----------
+    records : `ButlerLogRecords`, optional
+        Container to store logs in.
+    """
+
+    def __init__(self, records: ButlerLogRecords | None = None) -> None:
         super().__init__()
-        self.records = ButlerLogRecords([])
+        self.records = ButlerLogRecords([]) if records is None else records
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)
