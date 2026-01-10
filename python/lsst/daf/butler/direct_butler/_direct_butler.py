@@ -2592,6 +2592,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         """Immediately load caches that are used for common operations."""
         self._registry.preload_cache(load_dimension_record_cache=load_dimension_record_cache)
 
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        return self._registry.expand_data_ids(data_ids)
+
     _config: ButlerConfig
     """Configuration for this Butler instance."""
 

@@ -2227,3 +2227,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError()
+
+    @abstractmethod
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        raise NotImplementedError()
