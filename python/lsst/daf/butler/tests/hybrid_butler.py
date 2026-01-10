@@ -425,6 +425,9 @@ class HybridButler(Butler):
             source_butler, data_ids, allowed_elements
         )
 
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        return self._remote_butler._expand_data_ids(data_ids)
+
     @property
     def collection_chains(self) -> ButlerCollections:
         return HybridButlerCollections(self)
