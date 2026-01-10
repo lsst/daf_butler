@@ -2101,19 +2101,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _extract_dimension_records_from_data_ids(
         self,
         source_butler: LimitedButler | Butler,
-        data_ids: set[DataCoordinate],
+        data_ids: Iterable[DataCoordinate],
         allowed_elements: frozenset[DimensionElement],
     ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
         dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
 
+        data_ids = set(data_ids)
+        if not all(data_id.hasRecords() for data_id in data_ids):
+            if isinstance(source_butler, Butler):
+                data_ids = source_butler._expand_data_ids(data_ids)
+            else:
+                raise TypeError("Input butler needs to be a full butler to expand DataId.")
+
         for data_id in data_ids:
-            # Need an expanded record, if not expanded that we need a full
-            # butler with registry (allow mocks with registry too).
-            if not data_id.hasRecords():
-                if registry := getattr(source_butler, "registry", None):
-                    data_id = registry.expandDataId(data_id)
-                else:
-                    raise TypeError("Input butler needs to be a full butler to expand DataId.")
             # If this butler doesn't know about a dimension in the source
             # butler things will break later.
             for element_name in data_id.dimensions.elements:
