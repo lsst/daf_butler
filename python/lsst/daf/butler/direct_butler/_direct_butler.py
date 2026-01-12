@@ -1995,7 +1995,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             doImport(filename)  # type: ignore
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         # Allowed dimensions in the target butler.
         elements = frozenset(element for element in self.dimensions.elements if element.has_own_table)

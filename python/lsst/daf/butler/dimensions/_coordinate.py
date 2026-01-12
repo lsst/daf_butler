@@ -755,6 +755,11 @@ class DataCoordinate:
     to_json = to_json_pydantic
     from_json: ClassVar[Callable[..., Self]] = cast(Callable[..., Self], classmethod(from_json_pydantic))
 
+    @property
+    def dataId(self) -> Self:
+        """Return this `DataCoordinate` instance, unmodified."""
+        return self
+
 
 DataId = DataCoordinate | Mapping[str, Any]
 """A type-annotation alias for signatures that accept both informal data ID

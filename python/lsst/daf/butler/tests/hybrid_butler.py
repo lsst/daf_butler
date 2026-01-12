@@ -338,7 +338,7 @@ class HybridButler(Butler):
         )
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         return self._direct_butler.transfer_dimension_records_from(source_butler, source_refs)
 

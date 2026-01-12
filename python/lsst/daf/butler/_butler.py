@@ -1566,7 +1566,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     @abstractmethod
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         """Transfer dimension records to this Butler from another Butler.
 
@@ -1578,10 +1578,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             `Butler` whose registry will be used to expand data IDs. If the
             source refs contain coordinates that are used to populate other
             records then this will also need to be a full `Butler`.
-        source_refs : iterable of `DatasetRef`
-            Datasets defined in the source butler whose dimension records
-            should be transferred to this butler. In most circumstances.
-            transfer is faster if the dataset refs are expanded.
+        source_refs : iterable of `DatasetRef` or `DataCoordinate`
+            Datasets or data IDs defined in the source butler whose dimension
+            records should be transferred to this butler.
         """
         raise NotImplementedError()
 
