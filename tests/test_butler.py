@@ -868,6 +868,15 @@ class ButlerTests(ButlerPutGetTests):
             self.assertIsInstance(uri, ResourcePath)
             self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
             self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
+            # Repeat with a DatasetRef to test that code path.
+            ref = DatasetRef(
+                datasets[0].datasetType,
+                dataId=DataCoordinate.standardize(dataId, universe=butler.dimensions),
+                run=self.default_run,
+            )
+            uri2, components2 = butler.getURIs(ref, predict=True)
+            self.assertFalse(components2)
+            self.assertEqual(uri, uri2)
 
     def testCompositePutGetVirtual(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadComp")
