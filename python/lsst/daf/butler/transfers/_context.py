@@ -175,12 +175,13 @@ class RepoExportContext:
                 if element.has_own_table:
                     standardized_elements.add(element)
 
-        expanded_data_ids = self._butler._registry.expand_data_ids(dataIds)
-        for dataId in expanded_data_ids:
-            for element_name in dataId.dimensions.elements:
-                record = dataId.records[element_name]
-                if record is not None and record.definition in standardized_elements:
-                    self._records[record.definition].setdefault(record.dataId, record)
+        dimension_records = self._butler._extract_all_dimension_records_from_data_ids(
+            self._butler, set(dataIds), frozenset(standardized_elements)
+        )
+        for element, record_mapping in dimension_records.items():
+            if element in standardized_elements:
+                for record in record_mapping.values():
+                    self._records[element].setdefault(record.dataId, record)
 
     def saveDatasets(
         self,
