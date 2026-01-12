@@ -83,6 +83,7 @@ from lsst.daf.butler import (
     DatasetProvenance,
     DatasetRef,
     DatasetType,
+    DimensionRecord,
     FileDataset,
     NoDefaultCollectionError,
     StorageClassFactory,
@@ -113,6 +114,7 @@ from lsst.daf.butler.tests.server_available import butler_server_import_error, b
 from lsst.daf.butler.tests.utils import (
     MetricTestRepo,
     TestCaseMixin,
+    create_populated_sqlite_registry,
     makeTestTempDir,
     removeTestTempDir,
     safeTestTempDir,
@@ -1694,6 +1696,84 @@ class ButlerTests(ButlerPutGetTests):
         with butler._caching_context():
             with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
                 func("chain", "a")
+
+    def test_transfer_dimension_records_from(self) -> None:
+        source_butler = self.create_empty_butler(writeable=True)
+        source_butler.import_(filename=_get_test_data_path("lsstcam-subset.yaml"))
+
+        visit_id = 2025120200439
+        exposure_id = visit_id
+        target_butler = self.enterContext(create_populated_sqlite_registry())
+        target_butler.transfer_dimension_records_from(
+            source_butler,
+            [
+                DataCoordinate.standardize(
+                    {"instrument": "LSSTCam", "visit": visit_id, "detector": 10},
+                    universe=source_butler.dimensions,
+                )
+            ],
+        )
+
+        def _fetch_record(dimension: str) -> DimensionRecord:
+            records = target_butler.query_dimension_records(dimension)
+            self.assertEqual(len(records), 1)
+            return records[0]
+
+        visit = _fetch_record("visit")
+        self.assertEqual(visit.id, visit_id)
+        self.assertEqual(visit.day_obs, 20251202)
+        self.assertEqual(visit.target_name, "lowdust")
+        self.assertEqual(visit.seq_num, 439)
+        original_visit = source_butler.query_dimension_records("visit", instrument="LSSTCam", visit=visit_id)[
+            0
+        ]
+        self.assertEqual(visit.region, original_visit.region)
+        self.assertEqual(visit.timespan, original_visit.timespan)
+
+        visit_detector_region = _fetch_record("visit_detector_region")
+        self.assertEqual(visit_detector_region.instrument, "LSSTCam")
+        self.assertEqual(visit_detector_region.detector, 10)
+        self.assertEqual(visit_detector_region.visit, visit_id)
+        original_visit_detector_region = source_butler.query_dimension_records(
+            "visit_detector_region", instrument="LSSTCam", visit=visit_id, detector=10
+        )[0]
+        self.assertEqual(visit_detector_region.region, original_visit_detector_region.region)
+
+        visit_definition = _fetch_record("visit_definition")
+        self.assertEqual(visit_definition.instrument, "LSSTCam")
+        self.assertEqual(visit_definition.exposure, 2025120200439)
+        self.assertEqual(visit_definition.visit, visit_id)
+
+        # The matching exposure record should have been pulled in via
+        # visit -> visit_definition.
+        exposure = _fetch_record("exposure")
+        self.assertEqual(exposure.instrument, "LSSTCam")
+        self.assertEqual(exposure.id, 2025120200439)
+        self.assertEqual(exposure.obs_id, "MC_O_20251202_000439")
+        original_exposure = source_butler.query_dimension_records(
+            "exposure", instrument="LSSTCam", exposure=exposure_id
+        )[0]
+        self.assertEqual(exposure.timespan, original_exposure.timespan)
+
+        group = _fetch_record("group")
+        self.assertEqual(group.instrument, "LSSTCam")
+        self.assertEqual(group.name, "2025-12-03T07:58:10.858")
+
+        visit_system_memberships = target_butler.query_dimension_records("visit_system_membership")
+        visit_system_memberships.sort(key=lambda record: record.visit_system)
+        self.assertEqual(len(visit_system_memberships), 2)
+        self.assertEqual(visit_system_memberships[0].visit_system, 0)
+        self.assertEqual(visit_system_memberships[1].visit_system, 2)
+        self.assertEqual(visit_system_memberships[0].visit, visit_id)
+        self.assertEqual(visit_system_memberships[1].visit, visit_id)
+
+        visit_systems = target_butler.query_dimension_records("visit_system")
+        visit_systems.sort(key=lambda record: record.id)
+        visit_system_memberships.sort(key=lambda record: record.visit_system)
+        self.assertEqual(visit_systems[0].id, 0)
+        self.assertEqual(visit_systems[1].id, 2)
+        self.assertEqual(visit_systems[0].name, "one-to-one")
+        self.assertEqual(visit_systems[1].name, "by-seq-start-end")
 
 
 class FileDatastoreButlerTests(ButlerTests):
