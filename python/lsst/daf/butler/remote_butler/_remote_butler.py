@@ -65,6 +65,7 @@ from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, Dimension
 from ..queries import Query
 from ..queries.tree import make_column_literal
 from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry.expand_data_ids import expand_data_ids
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._defaults import DefaultsHolder
 from ._get import convert_http_url_to_resource_path, get_dataset_as_python_object
@@ -633,7 +634,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
@@ -737,6 +738,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def close(self) -> None:
         pass
+
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        return expand_data_ids(data_ids, self.dimensions, self.query, None)
 
     @property
     def _file_transfer_source(self) -> RemoteFileTransferSource:

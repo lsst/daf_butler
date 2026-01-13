@@ -1,0 +1,191 @@
+description: Butler Data Repository Export
+version: 1.0.2
+universe_version: 7
+universe_namespace: daf_butler
+data:
+- type: dimension
+  element: instrument
+  records:
+  - name: LSSTCam
+    visit_max: 6050123199999
+    visit_system: 2
+    exposure_max: 6050123199999
+    detector_max: 1000
+    class_name: lsst.obs.lsst.LsstCam
+- type: dimension
+  element: day_obs
+  records:
+  - instrument: LSSTCam
+    id: 20251202
+    datetime_begin: !butler_time/tai/iso '2025-12-02 12:00:00.000000000'
+    datetime_end: !butler_time/tai/iso '2025-12-03 12:00:00.000000000'
+- type: dimension
+  element: detector
+  records:
+  - instrument: LSSTCam
+    id: 10
+    full_name: R02_S01
+    name_in_raft: S01
+    raft: R02
+    purpose: SCIENCE
+  - instrument: LSSTCam
+    id: 11
+    full_name: R02_S02
+    name_in_raft: S02
+    raft: R02
+    purpose: SCIENCE
+- type: dimension
+  element: group
+  records:
+  - instrument: LSSTCam
+    name: '2025-12-03T07:58:10.858'
+  - instrument: LSSTCam
+    name: '2025-12-03T07:58:25.583'
+- type: dimension
+  element: physical_filter
+  records:
+  - instrument: LSSTCam
+    name: z_20
+    band: z
+- type: dimension
+  element: visit_system
+  records:
+  - instrument: LSSTCam
+    id: 0
+    name: one-to-one
+  - instrument: LSSTCam
+    id: 2
+    name: by-seq-start-end
+- type: dimension
+  element: exposure
+  records:
+  - instrument: LSSTCam
+    id: 2025120200439
+    day_obs: 20251202
+    group: '2025-12-03T07:58:10.858'
+    physical_filter: z_20
+    obs_id: MC_O_20251202_000439
+    exposure_time: 30.0
+    dark_time: 30.9296
+    observation_type: science
+    observation_reason: singles_z
+    seq_num: 439
+    seq_start: 439
+    seq_end: 439
+    target_name: lowdust
+    science_program: BLOCK-407
+    tracking_ra: 104.55395819494994
+    tracking_dec: -42.69572623114717
+    sky_angle: 314.98128613456913
+    azimuth: 222.066471281557
+    zenith_angle: 18.114896072334602
+    has_simulated: false
+    can_see_sky: true
+    datetime_begin: !butler_time/tai/iso '2025-12-03 07:59:07.425363958'
+    datetime_end: !butler_time/tai/iso '2025-12-03 07:59:38.355000000'
+  - instrument: LSSTCam
+    id: 2025120200440
+    day_obs: 20251202
+    group: '2025-12-03T07:58:25.583'
+    physical_filter: z_20
+    obs_id: MC_O_20251202_000440
+    exposure_time: 30.0
+    dark_time: 30.9303
+    observation_type: science
+    observation_reason: singles_z
+    seq_num: 440
+    seq_start: 440
+    seq_end: 440
+    target_name: dusty_plane
+    science_program: BLOCK-407
+    tracking_ra: 125.6049150178604
+    tracking_dec: -49.58422076567679
+    sky_angle: 250.7803018484177
+    azimuth: 171.977440002199
+    zenith_angle: 19.626699659649404
+    has_simulated: false
+    can_see_sky: true
+    datetime_begin: !butler_time/tai/iso '2025-12-03 08:00:33.880859613'
+    datetime_end: !butler_time/tai/iso '2025-12-03 08:01:04.811000000'
+- type: dimension
+  element: visit
+  records:
+  - instrument: LSSTCam
+    id: 2025120200439
+    day_obs: 20251202
+    physical_filter: z_20
+    name: MC_O_20251202_000439
+    seq_num: 439
+    exposure_time: 30.0
+    target_name: lowdust
+    observation_reason: singles_z
+    science_program: BLOCK-407
+    azimuth: 222.066471281557
+    zenith_angle: 18.114896072334602
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 709f2616dbe950cbbfd1695e3d4c3fe63fec1e82d2d2f6e5bfd2b5f450bb59cbbfc947227f0f40e63f0132ed675df5e5bf0e2bc2a2ffc4cbbf810ce8d04b49e63f79c1356b8ee3e5bf55733b8d76efcbbf55bb2b0eff65e63f00319fe5c9c2e5bf5293160b3013ccbfe00ef1748288e63f20e6025c269ce5bf9472e2dae725ccbfd6bf6c4ecca6e63fd893dbc5dc7ae5bf059a6d18e7dacbbffbc59646b1bce63f3cd6c18ed069e5bfe3682cba03d6cbbf7f2a664f1dbee63f4cdc89a5b368e5bf8f31700ad460cabfad34b2ed0629e73fce2af391f212e5bfb93570b2ea14cabfbb3cbfc3553ee73f65cda55c5d01e5bfaa95285be60fcabf44c68b02bd3fe73f725765643300e5bfd596a360e4c8c9bf1aa7c5df8853e73fe49dfa9eb3efe4bfc3bf8f38dec3c9bfdcc9f542ee54e73f8ad7cc5188eee4bf52449e14bc77c9bffd8e0bf9026ae73fc28a1e74c9dce4bfaa653f44f1cac8bfb4471a597377e73f23f99718b2dae4bfcfca446b61ffc7bf205883b3a484e73ffac60081b7dae4bf1b7f26ebfc4fc7bf107e39bbbd8de73fe8b6a209e2dce4bf8c96310e80e4c6bf3dfb007d9184e73fe8547f02a4eee4bf2d91e593aadbc6bfb878a25fcf83e73f25065d8018f0e4bff8203259e278c6bf2a924e25497be73f16ae16315200e5bfc705f6580a70c6bfc58bd9bc847ae73fd6abe006c501e5bf98864073840cc6bfc66970b9d671e73ff758c57c0612e5bfb05a4f834d04c6bf5070965b1e71e73f2c52e1025d13e5bf3c02ecaab0a0c5bf453834035768e73f2b811be68a23e5bf50d30993d497c5bfb61542168e67e73f0191603efa24e5bff63e7ed0c734c5bf40444235bc5ee73fbf4b6f7ef934e5bff0a3512aea2bc5bf6968a312f15de73ffaf8b3046736e5bfa540b9392ac8c4bf54da11e0f754e73f2b2d1ad76b46e5bfef445af3eebfc4bfd51888583954e73fbfbdad49bd47e5bf8d81e404235cc4bf3722beca274be73fbcb56ac4ac57e5bfd8746d3b4353c4bfb0fd2f50584ae73f1edb5a7c1659e5bf1f7d83b312f0c3bf76c248b33d41e73f09c34601d668e5bf76ddad5832e7c3bf98b9361a6c40e73f66e74ac03d6ae5bf126d08c51c7bc3bf4bc9844c6636e73fe7fcf5ad4c7be5bff79a2522cb50c3bf1912e0baed19e73fd89d11c4479ce5bf796b0bce112dc3bf31834f7c6af7e63f23360174ebc2e5bf9da79734d019c3bfac3b3634e0d8e63fae06ac0707e4e5bf37d035bea165c3bfae03c050c4c3e63f0e8ce6e9d2f5e5bfdbb43449a36ac3bf739a64845ec2e63fcc7ed4f5fef6e5bfa68433606db1c3bfd37828ad8daee63f7cfdfbc18707e6bfd8bafc6c6eb6c3bfcaeb562326ade63f829a4d42b208e6bfe7c6c2eca2fdc3bfc929ecac1c99e63fe8f5377f3f19e6bfeb14be8f3002c4bf258586cfd397e63fabc8abcc4d1ae6bf523822005a49c4bf5c9555a7b283e63fb7ed541bc42ae6bf246f067e594ec4bf311eacc64782e63fc3065e60eb2be6bf461132970295c4bf33eda92b306ee63f932f23b12f3ce6bffcaf3307019ac4bfa81b84b4c36ce63feb3d5e49553de6bf71e1f9600ce1c4bf4a9842387558e63f8e794ec69b4de6bf6ecaeb2197e5c4bf12c2b7022857e63fbbc9727ea54ee6bf4e987c9b8f2cc5bfe98f9e0dc442e63f45eb8440d35ee6bf893587628b31c5bf71a0d58f5441e63f9fe5875cf55fe6bff1b4af1efc77c5bf289d5cd6fc2ce63f66f284d0ef6fe6bf9e46544df67cc5bfbff75aeb8b2be63f0e0af51f1071e6bf5d01f29e47c8c5bf120a4e20ae15e63f9b669d500f82e6bfa7a8216b5075c6bfba85f16f7908e63fb5d518915f84e6bf0134dd6de040c7bff039bd3d48fbe53f4a55034f5a84e6bf29eb578f1ff0c7bfdfddfc60f4f1e53ff1ba880ff981e6bf12b7fda96d5cc8bf857c661beafbe53ff688b825f770e6bfbbd9e9085265c8bf5ecd1890bafce53fada16b53906fe6bfb05d8e01a9c8c8bf3e19603eca05e63fdcbb5fa8d95fe6bfcf3f55a88bd1c8bf266160e89806e63f93764a99705ee6bf495d8b527135c9bf3e0c8624a30fe63fa0078f0b874ee6bf5a6c6d30ae3dc9bf03ca26386110e63fb9eed4f6354de6bfaec07aff7aa1c9bfa3fd86c15619e63fbc3e491b343de6bf49d4893759aac9bf8ef5a0ba211ae63f8c02a4b6c63be6bfc27a35f8650dcabf3ee6bf9bf322e63f794f9576c72be6bf044adf7d4116cabfc67e3cb2bc23e63ffccfb0fc572ae6bf6ca90674d179cabfd3c60eb4872ce63f3a2c9c22271ae6bf9be124cc0682cabf05f2d685402de63f9dbca63ed018e6bfe80d50f272e5cabfe14523dbf535e63ff795c0db8808e6bf4ce6e51448eecabfaac32b14bb36e63f7fb91b5d1507e6bf
+    datetime_begin: !butler_time/tai/iso '2025-12-03 07:59:07.425363958'
+    datetime_end: !butler_time/tai/iso '2025-12-03 07:59:38.355000000'
+  - instrument: LSSTCam
+    id: 2025120200440
+    day_obs: 20251202
+    physical_filter: z_20
+    name: MC_O_20251202_000440
+    seq_num: 440
+    exposure_time: 30.0
+    target_name: dusty_plane
+    observation_reason: singles_z
+    science_program: BLOCK-407
+    azimuth: 171.977440002199
+    zenith_angle: 19.626699659649404
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70e7009720b815dabfc5f19be05fdee03f0374b5cc65dce7bf848c54708316dabf6a50767e7de0e03f4e321a2dafdae7bf770d59cb1c20dabf5fa1dcbc34fae03f79f51125c6c5e7bf918adb0e9ef4d9bf22cdc451b71ee13f04bb62207cb7e7bf75a90e30e4bbd9bf01f6718e6d48e13f59f4b8ebaaa8e7bf77139cd67486d9bfda7ca3cf3a6be13f45adb02e9b9de7bf9bf1e32fb349d9bf2fd044bb2477e13f174697a624a5e7bf51667792bd45d9bfc5230595ea77e13f91e0f46aa1a5e7bfae0420495617d8bf7b5c2fb3beb1e13f55ebed4c70c9e7bfd357b434e2d9d7bff11617e52dbde13fa62d199266d0e7bfe61dae89d2d5d7bf63f6676deebde13f12f5675fdbd0e7bf823d9b54589cd7bf829a6e3087c8e13fc498877443d7e7bfb8bdd04d4798d7bf8ec0c54246c9e13fd311bd92b6d7e7bf3f7d34bca85ad7bf4ed448c087d4e13f0796b12978dee7bf385b6bf38013d7bfca7dab7b42c9e13f8ad4b73520f8e7bf6b3751165ec4d6bf4922fe1c42b9e13ff508713ed216e8bf58256fe33a84d6bffc1eb55e20a9e13f74974b82ae31e8bf8efcaec0737ad6bf4b21ecca718fe13fda1767e39c46e8bfd99e4a30a579d6bfcb1cb1ca548de13f93ba47e45348e8bfae71c0a09670d6bfb6050655ac75e13fa84e46b0725be8bf5e705845c66fd6bfcfed627e8d73e13f3ef030a3275de8bfae239bad9466d6bfa51cdfb2a95be13fcc8c68714e70e8bf4c44f6afd165d6bfdd4fe054b059e13fe29357f0e171e8bfd6269f5d8c5cd6bf0695e92cb941e13f2a63cb8bf084e8bf2664977db85bd6bf43e75ce2963fe13f1837032ea186e8bf1a232b076f52d6bfe4361e9ab427e13fe0d841b87799e8bf0dcd2d719951d6bfda19cab49025e13fdac9b21b269be8bff62870872d48d6bfa5345059750de13fe5fddf0f02aee8bf093aabc46547d6bfc5c7a881770be13f7fa9cd4b8fafe8bf5cfe4d27e73dd6bf6e620f6e4bf3e03f10a4c5f750c2e8bf14af9a3b0e3dd6bfe276788d24f1e03f8e3d5aabfac3e8bfc0bc9bf08c33d6bfcdffe15810d9e03f9257d6b882d6e8bf579fd368b232d6bffcc5961ae8d6e03fcf2641ff29d8e8bf90c89a3c4328d6bf275a748f9bbce03fb4c634643bece8bfae79141af653d6bf37bf50a54198e03fbfc59102c6fae8bf38dd8b23b08cd6bfa5676e868b6ee03f447143629709e9bf2c0dc12bd6c1d6bf9e40c6b6814be03fa7df62af7514e9bfcc24ad2e6dffd6bfed0cb3c92c40e03ff340d16cc30de9bf2774bac67d03d7bfea73909a6c3fe03f2f3a3c2f510de9bf09ae51bef23cd7bf4b368f5dc634e03f168838bbf306e9bf0dc1591a0241d7bf0db8170a0534e03f520b258e7f06e9bfb1d5b28bc17ad7bf4d4786693d29e03f2cd4c842fcffe8bfe525ac81727ed7bf1d19e7638c28e03fe098eebd90ffe8bf216448241db8d7bf25794811b51de03f8279353df2f8e8bf6003ad9129bcd7bf39769287f11ce03f8208803a7af8e8bf8cf9e36860f5d7bf53bfad6b1c12e03f68422983cbf1e8bfa517ce266bf9d7bfd34c26d25711e03f76f3839d51f1e8bf9384dfabe532d8bfa9d338306206e03f53fea9417deae8bff43652059236d8bffb16fa42ae05e03f1d2961930ceae8bf17669267f16fd8bff4be754354f5df3f30fd62bf1de3e8bfe13a7452f873d8bfe1cd65fac6f3df3f55bfc81ea0e2e8bf8f6eac1cdeacd8bf3ee84f2fc6dddf3f25eff559a2dbe8bf559d0be7e2b0d8bf8a781bf436dcdf3f851f8de422dbe8bfb7292e16acedd8bf64e874f989c4df3f304414188ad3e8bf05a984351335d9bf231dd4f66cdbdf3f38ac3ced21bae8bf434f493d3684d9bfb876c4ef6dfbdf3fa85c8b0f709be8bfce58ca2b25c4d9bf1b0714efaf0de03fae3b29045380e8bf2e7a211ec2ced9bf6f9945cff327e03f69a3c2463c6ce8bfa49a6ee69fcfd9bf43a4ea6f1b2ae03f678f1f9f946ae8bf1d1d505240d9d9bfb0d471bf2942e03fc7e813ef0858e8bf4dced98f1bdad9bfbd57932f5044e03fe5c127f65e56e8bff1092604afe3d9bffae8ce50785ce03f211345db9a43e8bfa4b6f21078e4d9bfc2f3f3e9755ee03f3e81cf780d42e8bf2cc00567eeedd9bfc23df04b8f76e03faa6d2c4d302fe8bf54cb3473c4eed9bf3d0add1ab378e03f24eff1db812de8bfbd6fe6e80df8d9bfb205f6629590e03f8aaafb51ab1ae8bf8a169b52e1f8d9bf3844e3c3b792e03ffd579abdfa18e8bf5bcb24371c02dabf23a00be5b0aae03f7c372e5aed05e8bffadda2eadd02dabf72888681aaace03fe621d3015a04e8bfce02f8a9fa0bdabf6ef81b3f92c4e03f497a18a335f1e7bf2e0768b3c80cdabf7bae2d86b1c6e03f2c6e92f580efe7bf
+    datetime_begin: !butler_time/tai/iso '2025-12-03 08:00:33.880859613'
+    datetime_end: !butler_time/tai/iso '2025-12-03 08:01:04.811000000'
+- type: dimension
+  element: visit_definition
+  records:
+  - instrument: LSSTCam
+    exposure: 2025120200439
+    visit: 2025120200439
+  - instrument: LSSTCam
+    exposure: 2025120200440
+    visit: 2025120200440
+- type: dimension
+  element: visit_detector_region
+  records:
+  - instrument: LSSTCam
+    detector: 10
+    visit: 2025120200439
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70aec07aff7aa1c9bfa3fd86c15619e63fbc3e491b343de6bf044adf7d4116cabfc67e3cb2bc23e63ffccfb0fc572ae6bfcc8d75f09fc6c9bf028d3797543be63faedbfdf98518e6bf0d0ea2dbce51c9bf8d5d2fb5ed30e63fc2eb4fce632be6bf
+  - instrument: LSSTCam
+    detector: 10
+    visit: 2025120200440
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 702cc00567eeedd9bfc23df04b8f76e03faa6d2c4d302fe8bf8a169b52e1f8d9bf3844e3c3b792e03ffd579abdfa18e8bf7bc4b8488cb8d9bf5b9fabb9969fe03fa081fed15b21e8bf6801f65e98add9bf492e2eb46b83e03f74180d659337e8bf
+  - instrument: LSSTCam
+    detector: 11
+    visit: 2025120200439
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70495d8b527135c9bf3e0c8624a30fe63fa0078f0b874ee6bf49d4893759aac9bf8ef5a0ba211ae63f8c02a4b6c63be6bfcb9e2ad7ad5ac9bf110bf8c3b831e63fcde15146f629e6bffd38b867bce5c8bf7e0f9ee33827e63ff8f84889b83ce6bf
+  - instrument: LSSTCam
+    detector: 11
+    visit: 2025120200440
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f1092604afe3d9bffae8ce50785ce03f211345db9a43e8bf54cb3473c4eed9bf3d0add1ab378e03f24eff1db812de8bf71c632766eaed9bfc1f498b68f85e03fab7510cee435e8bf1a15eee158a3d9bfb69bb42c5269e03f5fa03eadff4be8bf
+- type: dimension
+  element: visit_system_membership
+  records:
+  - instrument: LSSTCam
+    visit_system: 0
+    visit: 2025120200439
+  - instrument: LSSTCam
+    visit_system: 0
+    visit: 2025120200440
+  - instrument: LSSTCam
+    visit_system: 2
+    visit: 2025120200439
+  - instrument: LSSTCam
+    visit_system: 2
+    visit: 2025120200440

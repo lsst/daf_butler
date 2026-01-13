@@ -338,7 +338,7 @@ class HybridButler(Butler):
         )
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         return self._direct_butler.transfer_dimension_records_from(source_butler, source_refs)
 
@@ -424,6 +424,9 @@ class HybridButler(Butler):
         return self._direct_butler._extract_all_dimension_records_from_data_ids(
             source_butler, data_ids, allowed_elements
         )
+
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        return self._remote_butler._expand_data_ids(data_ids)
 
     @property
     def collection_chains(self) -> ButlerCollections:

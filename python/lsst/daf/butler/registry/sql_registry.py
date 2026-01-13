@@ -34,7 +34,6 @@ __all__ = ("SqlRegistry",)
 import contextlib
 import logging
 import warnings
-from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -54,7 +53,6 @@ from ..dimensions import (
     DataCoordinate,
     DataId,
     DimensionConfig,
-    DimensionDataAttacher,
     DimensionElement,
     DimensionGroup,
     DimensionRecord,
@@ -78,6 +76,7 @@ from ..registry.interfaces import ChainedCollectionRecord, ReadOnlyDatabaseError
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 from ..utils import transactional
+from .expand_data_ids import expand_data_ids
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
@@ -1415,28 +1414,7 @@ class SqlRegistry:
         return DataCoordinate.standardize(keys, dimensions=standardized.dimensions).expanded(records=records)
 
     def expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
-        output = list(data_ids)
-
-        grouped_by_dimensions: defaultdict[DimensionGroup, list[int]] = defaultdict(list)
-        for i, data_id in enumerate(data_ids):
-            if not data_id.hasRecords():
-                grouped_by_dimensions[data_id.dimensions].append(i)
-
-        if not grouped_by_dimensions:
-            # All given DataCoordinate values are already expanded.
-            return output
-
-        attacher = DimensionDataAttacher(
-            cache=self.dimension_record_cache,
-            dimensions=DimensionGroup.union(*grouped_by_dimensions.keys(), universe=self.dimensions),
-        )
-        with self._query() as query:
-            for dimensions, indexes in grouped_by_dimensions.items():
-                expanded = attacher.attach(dimensions, (output[index] for index in indexes), query)
-                for index, data_id in zip(indexes, expanded):
-                    output[index] = data_id
-
-        return output
+        return expand_data_ids(data_ids, self.dimensions, self._query, self.dimension_record_cache)
 
     def expand_refs(self, dataset_refs: list[DatasetRef]) -> list[DatasetRef]:
         expanded_ids = self.expand_data_ids([ref.dataId for ref in dataset_refs])

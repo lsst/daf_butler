@@ -1995,7 +1995,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             doImport(filename)  # type: ignore
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef | DataCoordinate]
     ) -> None:
         # Allowed dimensions in the target butler.
         elements = frozenset(element for element in self.dimensions.elements if element.has_own_table)
@@ -2025,16 +2025,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             source_butler, data_ids, allowed_elements
         )
 
-        can_query = True if isinstance(source_butler, Butler) else False
-
         additional_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         for original_element, record_mapping in primary_records.items():
             # Get dimensions that depend on this dimension.
             populated_by = self.dimensions.get_elements_populated_by(
                 self.dimensions[original_element.name]  # type: ignore
             )
-
-            for data_id in record_mapping.keys():
+            if populated_by:
                 for element in populated_by:
                     if element not in allowed_elements:
                         continue
@@ -2053,28 +2050,32 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         # have to be scanned.
                         continue
 
-                    if not can_query:
-                        raise RuntimeError(
-                            f"Transferring populated_by records like {element.name} requires a full Butler."
-                        )
+                    if record_mapping:
+                        if not isinstance(source_butler, Butler):
+                            raise RuntimeError(
+                                f"Transferring populated_by records like {element.name}"
+                                " requires a full Butler."
+                            )
 
-                    records = source_butler.query_dimension_records(  # type: ignore
-                        element.name,
-                        explain=False,
-                        **data_id.mapping,  # type: ignore
-                    )
-                    for record in records:
-                        additional_records[record.definition].setdefault(record.dataId, record)
+                        with source_butler.query() as query:
+                            records = query.join_data_coordinates(record_mapping.keys()).dimension_records(
+                                element.name
+                            )
+                            for record in records:
+                                additional_records[record.definition].setdefault(record.dataId, record)
 
         # The next step is to walk back through the additional records to
         # pick up any missing content (such as visit_definition needing to
         # know the exposure). Want to ensure we do not request records we
         # already have.
         missing_data_ids = set()
-        for name, record_mapping in additional_records.items():
+        for record_mapping in additional_records.values():
             for data_id in record_mapping.keys():
-                if data_id not in primary_records[name]:
-                    missing_data_ids.add(data_id)
+                for dimension in data_id.dimensions.required:
+                    element = source_butler.dimensions[dimension]
+                    dimension_key = data_id.subset(dimension)
+                    if dimension_key not in primary_records[element]:
+                        missing_data_ids.add(dimension_key)
 
         # Fill out the new records. Assume that these new records do not
         # also need to carry over additional populated_by records.
@@ -2091,19 +2092,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _extract_dimension_records_from_data_ids(
         self,
         source_butler: LimitedButler | Butler,
-        data_ids: set[DataCoordinate],
+        data_ids: Iterable[DataCoordinate],
         allowed_elements: frozenset[DimensionElement],
     ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
         dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
 
+        data_ids = set(data_ids)
+        if not all(data_id.hasRecords() for data_id in data_ids):
+            if isinstance(source_butler, Butler):
+                data_ids = source_butler._expand_data_ids(data_ids)
+            else:
+                raise TypeError("Input butler needs to be a full butler to expand DataId.")
+
         for data_id in data_ids:
-            # Need an expanded record, if not expanded that we need a full
-            # butler with registry (allow mocks with registry too).
-            if not data_id.hasRecords():
-                if registry := getattr(source_butler, "registry", None):
-                    data_id = registry.expandDataId(data_id)
-                else:
-                    raise TypeError("Input butler needs to be a full butler to expand DataId.")
             # If this butler doesn't know about a dimension in the source
             # butler things will break later.
             for element_name in data_id.dimensions.elements:
@@ -2581,6 +2582,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _preload_cache(self, *, load_dimension_record_cache: bool = True) -> None:
         """Immediately load caches that are used for common operations."""
         self._registry.preload_cache(load_dimension_record_cache=load_dimension_record_cache)
+
+    def _expand_data_ids(self, data_ids: Iterable[DataCoordinate]) -> list[DataCoordinate]:
+        return self._registry.expand_data_ids(data_ids)
 
     _config: ButlerConfig
     """Configuration for this Butler instance."""
