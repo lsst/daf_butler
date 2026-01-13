@@ -53,17 +53,21 @@ class ButlerFactoryTestCase(unittest.TestCase):
             index_file.write(f"test_repo: {self.config_file_uri}\n".encode())
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
-                factory = LabeledButlerFactory()
-                self.addCleanup(factory.close)
-                self._test_factory(factory)
+                with LabeledButlerFactory() as factory:
+                    self._test_factory(factory)
 
     def test_factory_via_custom_index(self):
-        factory = LabeledButlerFactory({"test_repo": self.config_file_uri})
-        self.addCleanup(factory.close)
-        self._test_factory(factory)
+        with LabeledButlerFactory({"test_repo": self.config_file_uri}) as factory:
+            self._test_factory(factory)
+
+        with LabeledButlerFactory({"test_repo": self.config_file_uri}, writeable=True) as writeable_factory:
+            self._test_factory(writeable_factory)
+            with writeable_factory.create_butler(label="test_repo", access_token=None) as butler:
+                butler.collections.register("new_run")
+                self.assertIsNotNone(butler.collections.get_info("new_run"))
 
     def _test_factory(self, factory: LabeledButlerFactory) -> None:
-        butler = factory.create_butler(label="test_repo", access_token=None)
+        butler = factory.create_butler("test_repo")
         self.assertIsInstance(butler, DirectButler)
         # This identical second call covers a read from the cache.
         butler2 = factory.create_butler(label="test_repo", access_token=None)
