@@ -1707,10 +1707,15 @@ class ButlerTests(ButlerPutGetTests):
         target_butler.transfer_dimension_records_from(
             source_butler,
             [
+                # Should trigger the lookup of visit and all its associated
+                # "populated_by" records (visit_detector_region,
+                # visit_definition, etc.)
                 DataCoordinate.standardize(
                     {"instrument": "LSSTCam", "visit": visit_id, "detector": 10},
                     universe=source_butler.dimensions,
-                )
+                ),
+                # Shouldn't add any records to the lookup.
+                DataCoordinate.make_empty(source_butler.dimensions),
             ],
         )
 

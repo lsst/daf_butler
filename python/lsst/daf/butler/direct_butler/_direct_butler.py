@@ -2032,15 +2032,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 self.dimensions[original_element.name]  # type: ignore
             )
             if populated_by:
-                # Extract only the data IDs that contain the keys required to
-                # identify the original element's rows, which will then be used
-                # to look up its populated_by children.
-                relevant_data_ids = {
-                    data_id.subset(original_element.required.names)
-                    for data_id in record_mapping.keys()
-                    if data_id.dimensions.required >= original_element.minimal_group.required
-                }
-
                 for element in populated_by:
                     if element not in allowed_elements:
                         continue
@@ -2059,7 +2050,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         # have to be scanned.
                         continue
 
-                    if relevant_data_ids:
+                    if record_mapping:
                         if not isinstance(source_butler, Butler):
                             raise RuntimeError(
                                 f"Transferring populated_by records like {element.name}"
@@ -2067,7 +2058,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                             )
 
                         with source_butler.query() as query:
-                            records = query.join_data_coordinates(relevant_data_ids).dimension_records(
+                            records = query.join_data_coordinates(record_mapping.keys()).dimension_records(
                                 element.name
                             )
                             for record in records:
