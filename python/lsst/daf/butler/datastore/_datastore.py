@@ -284,6 +284,14 @@ class DatasetRefURIs(abc.Sequence):
     def __repr__(self) -> str:
         return f"DatasetRefURIs({repr(self.primaryURI)}, {repr(self.componentURIs)})"
 
+    def iter_all(self) -> Iterator[ResourcePath]:
+        """Iterate over all URIs without regard to whether they are primary
+        or component.
+        """
+        if self.primaryURI is not None:
+            yield self.primaryURI
+        yield from self.componentURIs.values()
+
 
 class Datastore(FileTransferSource, metaclass=ABCMeta):
     """Datastore interface.

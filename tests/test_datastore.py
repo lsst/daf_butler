@@ -369,13 +369,16 @@ class DatastoreTests(DatastoreTestsBase):
             self.assertEqual(metrics, metricsOut)
 
             # Get the URI(s)
-            primaryURI, componentURIs = datastore.getURIs(ref)
+            allURIs = datastore.getURIs(ref)
+            primaryURI, componentURIs = allURIs
             if disassembled:
                 self.assertIsNone(primaryURI)
                 self.assertEqual(len(componentURIs), 3)
+                self.assertEqual(list(allURIs.iter_all()), list(componentURIs.values()))
             else:
                 self.assertIn(datasetTypeName, primaryURI.path)
                 self.assertFalse(componentURIs)
+                self.assertEqual(list(allURIs.iter_all()), [primaryURI])
 
             # Delete registry entry so now we are trusting
             datastore.removeStoredItemInfo(ref)
