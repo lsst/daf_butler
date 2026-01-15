@@ -1,1 +1,0 @@
-Added support for ``obs_publisher_did`` value in ObsCore config file.

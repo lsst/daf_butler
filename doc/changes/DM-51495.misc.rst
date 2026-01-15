@@ -1,3 +1,0 @@
-* Modified ObsCore records to place "exposure" in any visit fields if there is an exposure but no visit defined.
-  This required the addition of a new method to the ``RecordFactory`` which can be subclassed by other plugins.
-* Added ability to hard code the ``s_xel1`` and ``s_xel2`` ObsCore fields per dataset type.
