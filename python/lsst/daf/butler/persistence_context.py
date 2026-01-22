@@ -180,12 +180,14 @@ class PersistenceContextVars:
 
         Parameters
         ----------
-        function : `Callable`
+        function : `collections.abc.Callable`
             A callable which is to be executed inside a specific context.
         *args : tuple
-            Positional arguments which are to be passed to the `Callable`.
+            Positional arguments which are to be passed to the
+            `~collections.abc.Callable`.
         **kwargs : dict, optional
-            Extra key word arguments which are to be passed to the `Callable`.
+            Extra key word arguments which are to be passed to the
+            `~collections.abc.Callable`.
 
         Returns
         -------

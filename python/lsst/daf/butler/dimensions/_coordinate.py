@@ -35,8 +35,6 @@ from __future__ import annotations
 __all__ = (
     "DataCoordinate",
     "DataId",
-    "DataIdKey",
-    "DataIdValue",
     "SerializedDataCoordinate",
     "SerializedDataId",
 )
@@ -55,7 +53,7 @@ from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._group import DimensionGroup
-from ._records import DataIdKey, DataIdValue, DimensionRecord, SerializedDimensionRecord
+from ._records import DataIdValue, DimensionRecord, SerializedDimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry

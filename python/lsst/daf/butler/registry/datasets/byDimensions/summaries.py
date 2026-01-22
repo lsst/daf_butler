@@ -304,7 +304,7 @@ class CollectionSummaryManager:
         dataset_type_names : `~collections.abc.Iterable` [`str`]
             Names of dataset types to include into returned summaries. If
             `None` then all dataset types will be included.
-        dataset_type_factory : `Callable`
+        dataset_type_factory : `~collections.abc.Callable`
             Method that takes a table row and make `DatasetType` instance out
             of it.
 

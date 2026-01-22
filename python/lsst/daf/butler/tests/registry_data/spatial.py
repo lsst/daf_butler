@@ -44,6 +44,8 @@ in the future.
 
 from __future__ import annotations
 
+__all__ = []
+
 import argparse
 import os.path
 from collections.abc import Callable, Iterable, Iterator

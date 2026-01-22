@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+__all__ = ["pruneDatasets"]
+
 import itertools
 from collections.abc import Callable, Iterable
 from enum import Enum, auto

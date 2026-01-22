@@ -27,7 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecord", "SerializedDimensionRecord", "SerializedKeyValueDimensionRecord")
+__all__ = (
+    "DataIdKey",
+    "DataIdValue",
+    "DimensionRecord",
+    "SerializedDimensionRecord",
+    "SerializedKeyValueDimensionRecord",
+)
 
 import itertools
 from collections.abc import Callable, Hashable

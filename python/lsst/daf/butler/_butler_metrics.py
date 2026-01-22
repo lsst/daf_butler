@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+__all__ = ["ButlerMetrics"]
+
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Concatenate, ParamSpec
