@@ -267,7 +267,7 @@ class DatasetProvenance(pydantic.BaseModel):
         use_upper : `bool` or `None`
             If `True` use upper case for provenance keys, if `False` use lower
             case, if `None` match the case of the prefix.
-        keys : `tuple` of `str` | `int`
+        *keys : `tuple` of `str` | `int`
             Components of key to combine with prefix and separator.
 
         Returns

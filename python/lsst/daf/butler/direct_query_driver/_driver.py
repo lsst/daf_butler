@@ -610,15 +610,15 @@ class DirectQueryDriver(QueryDriver):
         ----------
         tree : `.queries.tree.QueryTree`
             Description of the joins and row filters in the query.
+        allow_duplicate_overlaps : `bool`, optional
+            If set to `True` then query will be allowed to generate
+            non-distinct rows for spatial overlaps.
 
         Returns
         -------
         tree_analysis : `QueryTreeAnalysis`
             Struct containing additional information need to build the joins
             stage of a query.
-        allow_duplicate_overlaps : `bool`, optional
-            If set to `True` then query will be allowed to generate
-            non-distinct rows for spatial overlaps.
 
         Notes
         -----

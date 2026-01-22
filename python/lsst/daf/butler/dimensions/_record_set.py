@@ -97,7 +97,7 @@ def fail_record_lookup(
 
     Returns
     -------
-    record :  `DimensionRecord`
+    record : `DimensionRecord`
         Never returned; this function always raises `LookupError`.
     """
     raise LookupError(

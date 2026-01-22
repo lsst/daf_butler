@@ -360,10 +360,10 @@ class ButlerCollections(ABC, Sequence):
         name : `str`
             The name of the collection of interest.
         include_parents : `bool`, optional
-           If `True` any parents of this collection will be included.
+            If `True` any parents of this collection will be included.
         include_summary : `bool`, optional
-           If `True` dataset type names and governor dimensions of datasets
-           stored in this collection will be included in the result.
+            If `True` dataset type names and governor dimensions of datasets
+            stored in this collection will be included in the result.
 
         Returns
         -------

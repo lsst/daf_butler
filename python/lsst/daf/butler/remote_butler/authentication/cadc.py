@@ -89,12 +89,13 @@ def _get_authentication_token_from_environment(server_url: str) -> str | None:
 
     Parameters
     ----------
-        server_url (str): The URL of the server for which an authentication
-            token is being retrieved.
+    server_url : The URL of the server for which an authentication
+        token is being retrieved.
 
     Returns
     -------
-        str | None: The authentication token if available and hostname matches
+    str | None
+        The authentication token if available and hostname matches
         the whitelist; otherwise, None.
     """
     hostname = urlparse(server_url.lower()).hostname

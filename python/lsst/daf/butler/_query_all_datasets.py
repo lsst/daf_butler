@@ -151,6 +151,8 @@ def _filter_collections_and_dataset_types(
 
     Parameters
     ----------
+    butler
+        Butler repository to use.
     collections
         List of collection names or collection search globs.
     dataset_type_query

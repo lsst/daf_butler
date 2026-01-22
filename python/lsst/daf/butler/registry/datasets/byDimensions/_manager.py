@@ -822,8 +822,10 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
         Parameters
         ----------
-        storage : `_DatasetREcordStorage`
-            Struct that holds the tables and ID for a dataset type.
+        dimensions : `DimensionGroup`
+            Dimensions to validate.
+        tags : `sqlalchemy.schema.Table`
+            ???
         tmp_tags : `sqlalchemy.schema.Table`
             Temporary table with new datasets and the same schema as tags
             table.
