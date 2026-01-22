@@ -1077,6 +1077,10 @@ class ChainedDatastore(Datastore):
             If `True`, output a log message for every validation error
             detected.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         DatastoreValidationError

@@ -590,6 +590,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         ignore_errors : `bool`, optional
             Indicate that errors should be ignored.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         FileNotFoundError
@@ -720,6 +724,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.
+
+        Returns
+        -------
+        None
 
         Raises
         ------

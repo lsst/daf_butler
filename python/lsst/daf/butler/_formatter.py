@@ -910,6 +910,10 @@ class FormatterV2:
         provenance : `DatasetProvenance` | `None`, optional
             Provenance to attach to the file being written.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         FormatterNotImplementedError
@@ -1136,6 +1140,10 @@ class FormatterV2:
         ----------
         location : `Location`
             Location from which to extract a file extension.
+
+        Returns
+        -------
+        None
 
         Raises
         ------
@@ -1582,6 +1590,10 @@ class Formatter(metaclass=ABCMeta):
         ----------
         location : `Location`
             Location from which to extract a file extension.
+
+        Returns
+        -------
+        None
 
         Raises
         ------

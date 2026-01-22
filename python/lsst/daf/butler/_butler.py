@@ -1390,6 +1390,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raised if any datasets with the same dataset ID already exist
             in the datastore.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         TypeError

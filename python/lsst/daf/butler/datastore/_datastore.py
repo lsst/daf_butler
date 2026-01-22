@@ -833,6 +833,10 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             in an external system or if the file is to be compressed in place.
             It is up to the datastore whether this parameter is relevant.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         NotImplementedError
@@ -1151,6 +1155,10 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             Determine whether errors should be ignored. When multiple
             refs are being trashed there will be no per-ref check.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         FileNotFoundError
@@ -1285,6 +1293,10 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         entity : `DatasetRef`, `DatasetType`, or `StorageClass`
             Entity to compare with configuration retrieved using the
             specified lookup key.
+
+        Returns
+        -------
+        None
 
         Raises
         ------
