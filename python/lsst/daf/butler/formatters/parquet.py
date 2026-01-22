@@ -270,18 +270,18 @@ def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
 
 
 def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
-    """Convert a pyarrow table to an `astropy.Table`.
+    """Convert a pyarrow table to an `astropy.table.Table`.
 
     Parameters
     ----------
     arrow_table : `pyarrow.Table`
         Input arrow table to convert. If the table has astropy unit
         metadata in the schema it will be used in the construction
-        of the ``astropy.Table``.
+        of the ``astropy.table.Table``.
 
     Returns
     -------
-    table : `astropy.Table`
+    table : `astropy.table.Table`
         Converted astropy table.
     """
     from astropy.table import Table
@@ -520,7 +520,7 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
 
     Parameters
     ----------
-    astropy_table : `astropy.Table`
+    astropy_table : `astropy.table.Table`
         Input astropy table.
 
     Returns
@@ -584,7 +584,7 @@ def astropy_to_pandas(astropy_table: atable.Table, index: str | None = None) -> 
 
     Parameters
     ----------
-    astropy_table : `astropy.Table`
+    astropy_table : `astropy.table.Table`
         Input astropy table.
     index : `str`, optional
         Name of column to set as index.
@@ -640,7 +640,7 @@ def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]
 
     Parameters
     ----------
-    astropy_table : `astropy.Table`
+    astropy_table : `astropy.table.Table`
         Input astropy table.
 
     Returns
