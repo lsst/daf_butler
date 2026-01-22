@@ -56,7 +56,7 @@ test = [
     "pytest >= 3.2",
     "numpy >= 1.17",
     "matplotlib >= 3.0.3",
-    "pandas >= 1.0",
+    "pandas >= 1.0, < 3.0",
 ]
 # Also expose the optional dependencies of lsst-resources as optional
 # dependencies of lsst-daf-butler.  lsst-daf-butler itself doesn't care what
