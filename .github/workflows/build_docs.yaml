@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: "pip"
           cache-dependency-path: "setup.cfg"
 
@@ -47,7 +47,7 @@ jobs:
         run: sudo apt-get install graphviz
 
       - name: Install documenteer
-        run: uv pip install --system 'documenteer[pipelines]==0.8.2' sphinx-automodapi==0.19 sphinx-prompt==1.6.0
+        run: uv pip install --system -r doc/requirements.txt
 
       - name: Build documentation
         working-directory: ./doc
