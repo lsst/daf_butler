@@ -1375,7 +1375,7 @@ class SqlRegistry:
             records = {}
         else:
             records = dict(records)
-        if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
+        if isinstance(dataId, DataCoordinate) and dataId.hasRecords() and not kwargs:
             for element_name in dataId.dimensions.elements:
                 records[element_name] = dataId.records[element_name]
         keys: dict[str, str | int] = dict(standardized.mapping)

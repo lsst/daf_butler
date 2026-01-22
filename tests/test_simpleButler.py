@@ -777,6 +777,16 @@ class SimpleButlerTests(TestCaseMixin):
         path = file_template.format(ref)
         self.assertEqual(path, "test/warp/HSCA02713600_HSC_12345_12345_12345_12345")
 
+    def test_expand_changed_id(self):
+        """Test that expandDataId doesn't reuse records invalidated by kwarg
+        changes.
+        """
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename="resource://lsst.daf.butler/tests/registry_data/base.yaml")
+        data_id_1 = butler.registry.expandDataId(instrument="Cam1", detector=1)
+        data_id_2 = butler.registry.expandDataId(data_id_1, detector=2)
+        self.assertEqual(data_id_2.records["detector"].id, 2)
+
     def test_clone(self):
         # This just tests that the default-overriding logic works as expected.
         # The actual internals are tested in test_butler.py, in

@@ -884,6 +884,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if isinstance(datasetRefOrType, DatasetRef):
             if collections is not None:
                 warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
+            if predict and not datasetRefOrType.dataId.hasRecords():
+                return datasetRefOrType.expanded(self.registry.expandDataId(datasetRefOrType.dataId))
             # May need to retrieve datastore records if requested.
             if datastore_records and datasetRefOrType._datastore_records is None:
                 datasetRefOrType = self._registry.get_datastore_records(datasetRefOrType)
@@ -936,6 +938,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     run = self.run
                     if run is None:
                         raise TypeError("Cannot predict dataset ID/location with run=None.")
+                dataId = self.registry.expandDataId(dataId)
                 return DatasetRef(datasetType, dataId, run=run)
             else:
                 if collections is None:
