@@ -39,6 +39,7 @@ dependencies = [
 dynamic = ["version"]
 [project.urls]
 "Homepage" = "https://github.com/lsst/daf_butler"
+"Source" = "https://github.com/lsst/daf_butler"
 
 [project.optional-dependencies]
 postgres = ["psycopg2"]
