@@ -561,7 +561,7 @@ class PolygonNode(Node):
 
     Parameters
     ----------
-    vertices : `list`[`tuple`[`Node`, `Node`]]
+    vertices : `list` [`tuple` [`Node`, `Node`]]
         Node representing vertices of polygon.
     """
 

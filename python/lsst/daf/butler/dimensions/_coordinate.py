@@ -35,8 +35,6 @@ from __future__ import annotations
 __all__ = (
     "DataCoordinate",
     "DataId",
-    "DataIdKey",
-    "DataIdValue",
     "SerializedDataCoordinate",
     "SerializedDataId",
 )
@@ -55,7 +53,7 @@ from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
 from ._group import DimensionGroup
-from ._records import DataIdKey, DataIdValue, DimensionRecord, SerializedDimensionRecord
+from ._records import DataIdValue, DimensionRecord, SerializedDimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
@@ -559,11 +557,11 @@ class DataCoordinate:
         Returns
         -------
         state : `bool`
-            If `True`, `__getitem__`, `get`, and `__contains__` (but not
-            `keys`!) will act as though the mapping includes key-value pairs
-            for implied dimensions, and the `full` property may be used.  If
+            If `True`, ``__getitem__``, `get`, and ``__contains__`` (but not
+            ``keys``!) will act as though the mapping includes key-value pairs
+            for implied dimensions, and the ``full`` property may be used.  If
             `False`, these operations only include key-value pairs for required
-            dimensions, and accessing `full` is an error.  Always `True` if
+            dimensions, and accessing ``full`` is an error.  Always `True` if
             there are no implied dimensions.
         """
         raise NotImplementedError()
@@ -718,7 +716,7 @@ class DataCoordinate:
 
         Parameters
         ----------
-        simple : `dict` of [`str`, `Any`]
+        simple : `dict` of [`str`, `typing.Any`]
             The `dict` returned by `to_simple()`.
         universe : `DimensionUniverse`
             Object that manages all known dimensions.

@@ -114,18 +114,7 @@ def remove_runs(context: click.Context, confirm: bool, force: bool, **kwargs: An
 
     This command can be used to remove RUN collections and the datasets within
     them.
-
-    Parameters
-    ----------
-    context : `click.Context`
-        Context provided by Click.
-    confirm : `bool`
-        Confirmation for removal of the run.
-    force : `bool`
-        Force removal.
-    **kwargs : `dict` [`str`, `str`]
-        The parameters to pass to `~lsst.daf.butler.script.removeRuns`.
-    """
+    """  # numpydoc ignore=PR01
     result = script.removeRuns(**kwargs)
     canRemoveRuns = len(result.runs)
     if not canRemoveRuns:

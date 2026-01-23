@@ -43,13 +43,13 @@ def _parseDatasetTypes(dataset_types: frozenset[str] | list[str] | None) -> list
 
     Parameters
     ----------
-    dataset_types : `frozenset`[`str`] | `list`[`str`] | `None`
+    dataset_types : `frozenset` [`str`] | `list` [`str`] | `None`
         The dataset types to parse. If `None`, an empty list is returned.
         If a `frozenset` or `list` is provided, it is returned as a list.
 
     Returns
     -------
-    dataset_types : `list`[`str`]
+    dataset_types : `list` [`str`]
         The parsed dataset types.
     """
     return [""] if not dataset_types else list(dataset_types)

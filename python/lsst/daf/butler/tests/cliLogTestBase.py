@@ -35,6 +35,8 @@ lsst.log, and only uses it if it has been setup by another package.
 
 from __future__ import annotations
 
+__all__ = ["CliLogTestBase"]
+
 import logging
 import os
 import re

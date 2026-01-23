@@ -27,7 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecord", "SerializedDimensionRecord", "SerializedKeyValueDimensionRecord")
+__all__ = (
+    "DataIdKey",
+    "DataIdValue",
+    "DimensionRecord",
+    "SerializedDimensionRecord",
+    "SerializedKeyValueDimensionRecord",
+)
 
 import itertools
 from collections.abc import Callable, Hashable
@@ -451,8 +457,8 @@ class DimensionRecord:
         registry : `lsst.daf.butler.Registry`, optional
             Registry from which a universe can be extracted. Can be `None`
             if universe is provided explicitly.
-        cacheKey : `Hashable` or `None`
-            If this is not None, it will be used as a key for any cached
+        cacheKey : `collections.abc.Hashable` or `None`
+            If this is not `None`, it will be used as a key for any cached
             reconstruction instead of calculating a value from the serialized
             format.
 

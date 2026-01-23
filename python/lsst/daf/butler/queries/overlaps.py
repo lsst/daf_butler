@@ -69,9 +69,9 @@ class _NaiveDisjointSet(Generic[_T]):
 
         Parameters
         ----------
-        a :
+        a
             Element whose subset should be merged.
-        b :
+        b
             Element whose subset should be merged.
 
         Returns

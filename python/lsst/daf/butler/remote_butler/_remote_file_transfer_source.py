@@ -25,6 +25,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
+__all__ = ["RemoteFileTransferSource"]
+
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from typing import Any, cast

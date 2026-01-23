@@ -155,7 +155,7 @@ class DatasetTypeCache:
         dataset_type : `DatasetType` or `None`
             Cached dataset type, `None` is returned if the name is not in the
             cache.
-        extra : `Any` or `None`
+        extra : `typing.Any` or `None`
             Cached opaque data, `None` is returned if the name is not in the
             cache.
         """

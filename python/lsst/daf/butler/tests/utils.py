@@ -432,7 +432,7 @@ def mock_env(new_environment: dict[str, str]) -> Iterator[None]:
 
     Parameters
     ----------
-    new_environment : `dict`[`str`, `str`]
+    new_environment : `dict` [`str`, `str`]
         New environment variable values.
     """
     with patch.dict(os.environ, new_environment, clear=True):

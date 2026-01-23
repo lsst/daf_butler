@@ -304,13 +304,14 @@ class CollectionSummaryManager:
         dataset_type_names : `~collections.abc.Iterable` [`str`]
             Names of dataset types to include into returned summaries. If
             `None` then all dataset types will be included.
-        dataset_type_factory : `Callable`
+        dataset_type_factory : `~collections.abc.Callable`
             Method that takes a table row and make `DatasetType` instance out
             of it.
 
         Returns
         -------
-        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+        summaries : `~collections.abc.Mapping` [`typing.Any`, \
+              `CollectionSummary`]
             Collection summaries indexed by collection record key. This mapping
             will also contain all nested non-chained collections of the chained
             collections.

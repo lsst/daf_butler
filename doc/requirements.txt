@@ -1,0 +1,3 @@
+documenteer[guide] > 2.0, <3.0
+lsst-sphinxutils @ git+https://github.com/lsst/sphinxutils@main
+sphinx-click

@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+__all__ = ["removeCollections"]
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial

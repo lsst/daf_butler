@@ -610,15 +610,15 @@ class DirectQueryDriver(QueryDriver):
         ----------
         tree : `.queries.tree.QueryTree`
             Description of the joins and row filters in the query.
+        allow_duplicate_overlaps : `bool`, optional
+            If set to `True` then query will be allowed to generate
+            non-distinct rows for spatial overlaps.
 
         Returns
         -------
         tree_analysis : `QueryTreeAnalysis`
             Struct containing additional information need to build the joins
             stage of a query.
-        allow_duplicate_overlaps : `bool`, optional
-            If set to `True` then query will be allowed to generate
-            non-distinct rows for spatial overlaps.
 
         Notes
         -----
@@ -1313,7 +1313,8 @@ class DirectQueryDriver(QueryDriver):
             Mapping of collection names to collection records, must contain
             records for all collections in ``collection_names`` and all their
             children collections.
-        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+        summaries : `~collections.abc.Mapping` [`typing.Any`, \
+              `CollectionSummary`]
             Mapping of collection IDs to collection summaries, must contain
             summaries for all non-chained collections in the collection tree.
 

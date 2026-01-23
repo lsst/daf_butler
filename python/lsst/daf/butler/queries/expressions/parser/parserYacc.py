@@ -109,7 +109,7 @@ def _parseTimeString(time_str: str) -> astropy.time.Time:
     Returns
     -------
     time : `astropy.time.Time`
-       The parsed time.
+        The parsed time.
 
     Raises
     ------

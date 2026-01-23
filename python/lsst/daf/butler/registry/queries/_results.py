@@ -319,7 +319,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
         datasetType : `DatasetType` or `str`
             Dataset type or the name of one to search for.  Must have
             dimensions that are a subset of ``self.graph``.
-        collections : `Any`
+        collections : `typing.Any`
             An expression that fully or partially identifies the collections
             to search for the dataset, such as a `str`, `re.Pattern`, or
             iterable  thereof.  ``...`` can be used to return all collections.
@@ -368,7 +368,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
         datasetType : `DatasetType` or `str`
             Dataset type or the name of one to search for.  Must have
             dimensions that are a subset of ``self.graph``.
-        collections : `Any`
+        collections : `typing.Any`
             An expression that fully or partially identifies the collections
             to search for the dataset, such as a `str`, `re.Pattern`, or
             iterable  thereof.  ``...`` can be used to return all collections.

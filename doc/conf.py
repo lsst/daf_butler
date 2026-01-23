@@ -2,12 +2,8 @@
 
 This configuration only affects single-package Sphinx documenation builds.
 """
+# ruff: noqa: F403, F405
 
-from documenteer.conf.pipelinespkg import *  # noqa: F403, import *
+from documenteer.conf.guide import *
 
-project = "daf_butler"
-html_theme_options["logotext"] = project  # noqa: F405, unknown name
-html_title = project
-html_short_title = project
-doxylink = {}
-exclude_patterns = ["changes/*"]
+exclude_patterns.append("changes/*")

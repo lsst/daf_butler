@@ -537,7 +537,7 @@ class IndexSpec:
     ----------
     *columns : `str`
         Names of the columns to index.
-    **kwargs : `Any`
+    **kwargs : `typing.Any`
         Additional keyword arguments to pass directly to
         `sqlalchemy.schema.Index` constructor. This could be used to provide
         backend-specific options, e.g. to create a ``GIST`` index in PostgreSQL
@@ -556,7 +556,7 @@ class IndexSpec:
 
     kwargs: dict[str, Any]
     """Additional keyword arguments passed directly to
-    `sqlalchemy.schema.Index` constructor (`dict` [ `str`, `Any` ]).
+    `sqlalchemy.schema.Index` constructor (`dict` [ `str`, `typing.Any` ]).
     """
 
 

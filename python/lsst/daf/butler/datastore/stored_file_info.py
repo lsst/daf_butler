@@ -423,8 +423,8 @@ def make_datastore_path_relative(path: str) -> str:
     path : `str`
         The file path from a `StoredFileInfo`.
 
-    Return
-    ------
+    Returns
+    -------
     normalized_path : `str`
         The original path, if it was relative. Otherwise, a version of it that
         was converted to a relative path, stripping URI scheme and netloc from

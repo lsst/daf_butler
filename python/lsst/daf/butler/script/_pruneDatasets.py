@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+__all__ = ["pruneDatasets"]
+
 import itertools
 from collections.abc import Callable, Iterable
 from enum import Enum, auto
@@ -57,11 +59,11 @@ class PruneDatasetsResult:
 
     Attributes
     ----------
-    tables
+    tables : `list` [`astropy.table.Table`]
         Same as in Parameters.
     state : ``PruneDatasetsResult.State``
         The current state of the action.
-    onConfirmation : `Callable[None, None]`
+    onConfirmation : `~collections.abc.Callable` [`None`, `None`]`
         The function to call to perform the action if the caller wants to
         confirm the tables before performing the action.
     """

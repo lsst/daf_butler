@@ -39,6 +39,7 @@ dependencies = [
 dynamic = ["version"]
 [project.urls]
 "Homepage" = "https://github.com/lsst/daf_butler"
+"Source" = "https://github.com/lsst/daf_butler"
 
 [project.optional-dependencies]
 postgres = ["psycopg2"]
@@ -56,7 +57,7 @@ test = [
     "pytest >= 3.2",
     "numpy >= 1.17",
     "matplotlib >= 3.0.3",
-    "pandas >= 1.0",
+    "pandas >= 1.0, < 3.0",
 ]
 # Also expose the optional dependencies of lsst-resources as optional
 # dependencies of lsst-daf-butler.  lsst-daf-butler itself doesn't care what
@@ -233,6 +234,7 @@ checks = [
     "RT01",  # Unfortunately our @property trigger this.
     "RT02",  # Does not want named return value. DM style says we do.
     "SS05",  # pydocstyle is better at finding infinitive verb.
+    "RT03",  # Temporarily disable for sphinx empty returns.
 ]
 exclude = [
     "^test_.*",  # Do not test docstrings in test code.

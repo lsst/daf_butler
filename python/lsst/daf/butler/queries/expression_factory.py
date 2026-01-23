@@ -557,7 +557,7 @@ class ExpressionFactory:
         -------
         logical_and : `tree.Predicate`
             A boolean expression that evaluates to `True` only if all operands
-            evaluate to `True.
+            evaluate to `True`.
         """
         return first.logical_and(*args)
 
@@ -575,7 +575,7 @@ class ExpressionFactory:
         -------
         logical_or : `tree.Predicate`
             A boolean expression that evaluates to `True` if any operand
-            evaluates to `True.
+            evaluates to `True`.
         """
         return first.logical_or(*args)
 

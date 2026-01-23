@@ -129,7 +129,8 @@ class FileDataset:
         ----------
         dataset : `SerializedFileDataset`
             Object to deserialize.
-        dataset_type_loader : `Callable` [[ `str` ], `DatasetType` ]
+        dataset_type_loader : `~collections.abc.Callable` \
+              [[ `str` ], `DatasetType` ]
             Function that takes a string dataset type name as its
             only parameter, and returns an instance of `DatasetType`.
             Used to deserialize the `DatasetRef` instances contained

@@ -479,7 +479,7 @@ class DatasetRef:
 
         Parameters
         ----------
-        simple : `dict` of [`str`, `Any`]
+        simple : `dict` of [`str`, `typing.Any`]
             The value returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.

@@ -188,13 +188,13 @@ class TimespanDatabaseRepresentation(ABC):
         name : `str`, optional
             Name for the logical column; a part of the name for multi-column
             representations.  Defaults to ``cls.NAME``.
-        result : `dict` [ `str`, `Any` ], optional
+        result : `dict` [ `str`, `typing.Any` ], optional
             A dictionary representing a database row that fields should be
             added to, or `None` to create and return a new one.
 
         Returns
         -------
-        result : `dict` [ `str`, `Any` ]
+        result : `dict` [ `str`, `typing.Any` ]
             A dictionary containing this representation of a timespan.  Exactly
             the `dict` passed as ``result`` if that is not `None`.
         """
@@ -207,7 +207,7 @@ class TimespanDatabaseRepresentation(ABC):
 
         Parameters
         ----------
-        mapping : `~collections.abc.Mapping` [ `Any`, `Any` ]
+        mapping : `~collections.abc.Mapping` [ `typing.Any`, `typing.Any` ]
             A dictionary representing a database row containing a `Timespan`
             in this representation.  Should have key(s) equal to the return
             value of `getFieldNames`.

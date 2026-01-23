@@ -437,6 +437,10 @@ class Registry(ABC):
             Name of the type to be removed or tuple containing a list of type
             names to be removed. Wildcards are allowed.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         lsst.daf.butler.registry.OrphanedRecordError

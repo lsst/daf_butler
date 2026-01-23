@@ -138,7 +138,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     without_datastore : `bool`, optional
         If `True` do not attach a datastore to this butler. Any attempts
         to use a datastore will fail.
-    **kwargs : `Any`
+    metrics : `ButlerMetrics` or `None`
+        External metrics object to be used for tracking butler usage. If `None`
+        a new metrics object is created.
+    **kwargs : `typing.Any`
         Additional keyword arguments passed to a constructor of actual butler
         class.
 
@@ -240,7 +243,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             to use a datastore will fail.
         metrics : `ButlerMetrics` or `None`, optional
             Metrics object to record butler usage statistics.
-        **kwargs : `Any`
+        **kwargs : `typing.Any`
             Default data ID key-value pairs.  These may only identify
             "governor" dimensions like ``instrument`` and ``skymap``.
 
@@ -1390,6 +1393,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             raised if any datasets with the same dataset ID already exist
             in the datastore.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         TypeError
@@ -2024,7 +2031,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        records : `list`[`DimensionRecord`]
+        records : `list` [`DimensionRecord`]
             Dimension records matching the given query parameters.
 
         Raises

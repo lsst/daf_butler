@@ -172,13 +172,13 @@ class PruneDatasetsTestCase(unittest.TestCase):
             A list of text fragments that should appear in the text output
             after calling the CLI command, or None if no output should be
             produced.
-        exPruneDatasetsCallArgs : `dict` [`str`, `Any`]
+        exPruneDatasetsCallArgs : `dict` [`str`, `typing.Any`]
             The arguments that ``Butler.pruneDatasets`` should have been called
             with, or None if that function should not have been called.
         exGetTablesCalled : bool
             `True` if ``QueryDatasets.getTables`` should have been called, else
             `False`.
-        exQueryDatasetsCallArgs : `dict` [`str`, `Any`]
+        exQueryDatasetsCallArgs : `dict` [`str`, `typing.Any`]
             The arguments that ``QueryDatasets.__init__`` should have bene
             called with, or `None` if the function should not have been called.
         invokeInput : `str`, optional.

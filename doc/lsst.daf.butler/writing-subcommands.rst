@@ -62,8 +62,8 @@ Example of a command or subcommand definition:
     if __name__ == "__main__":
         git()
 
-This creates a command that is called by `main`, which has a subcommand `pull`.
-It automatically has a `--help` option:
+This creates a command that is called by ``main``, which has a subcommand ``pull``.
+It automatically has a ``--help`` option:
 
 .. code-block:: text
 
@@ -75,7 +75,7 @@ It automatically has a `--help` option:
     Options:
       --help  Show this message and exit.
 
-And `pull` can be called as a subcommand:
+And ``pull`` can be called as a subcommand:
 
 .. code-block:: text
 
@@ -98,7 +98,7 @@ For example, the function
     def register_instrument():
         ...
 
-Becomes a subcommand of `butler` called ``register-instrument``.
+Becomes a subcommand of ``butler`` called ``register-instrument``.
 
 Butler Subcommands
 ~~~~~~~~~~~~~~~~~~

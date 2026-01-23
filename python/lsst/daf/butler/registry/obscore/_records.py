@@ -256,7 +256,7 @@ class RecordFactory:
 
         Returns
         -------
-        record : `dict` [ `str`, `Any` ] or `None`
+        record : `dict` [ `str`, `typing.Any` ] or `None`
             ObsCore record represented as a dictionary. `None` is returned if
             dataset does not need to be stored in the obscore table, e.g. when
             dataset type is not in obscore configuration.

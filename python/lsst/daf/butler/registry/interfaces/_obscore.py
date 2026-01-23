@@ -115,7 +115,7 @@ class ObsCoreTableManager(VersionedExtension):
             implemented with this manager.
         universe : `DimensionUniverse`
             All dimensions known to the registry.
-        config : `dict` [ `str`, `Any` ]
+        config : `dict` [ `str`, `typing.Any` ]
             Configuration of the obscore manager.
         datasets : `type`
             Type of dataset manager.

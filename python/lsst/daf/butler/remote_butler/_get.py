@@ -39,7 +39,7 @@ def get_dataset_as_python_object(
     auth : `RemoteButlerAuthenticationProvider`
         Provides authentication headers for HTTP service hosting the artifact
         files.
-    parameters : `Mapping`[`str`, `typing.Any`]
+    parameters : `~collections.abc.Mapping` [`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters to be used when converting
         the artifact to a Python object.
     cache_manager : `AbstractDatastoreCacheManager` or `None`, optional

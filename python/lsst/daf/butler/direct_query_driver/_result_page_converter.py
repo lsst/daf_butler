@@ -386,7 +386,7 @@ class _GeneralColumnConverter:
 
         Returns
         -------
-        value : `Any`
+        value : `typing.Any`
             Result of the conversion.
         """
         raise NotImplementedError()

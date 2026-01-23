@@ -55,8 +55,8 @@ def retrieve_file_transfer_records(
         Cache mapping datastore artifact to existence. Updated by
         this method with details of all artifacts tested.
 
-    Return
-    ------
+    Returns
+    -------
     files : `FileTransferMap`
         A dictionary from `DatasetId` to a list of `FileTransferRecord`,
         containing information about the files that were found for these
