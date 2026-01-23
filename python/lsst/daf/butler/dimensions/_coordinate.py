@@ -557,11 +557,11 @@ class DataCoordinate:
         Returns
         -------
         state : `bool`
-            If `True`, `__getitem__`, `get`, and `__contains__` (but not
-            `keys`!) will act as though the mapping includes key-value pairs
-            for implied dimensions, and the `full` property may be used.  If
+            If `True`, ``__getitem__``, `get`, and ``__contains__`` (but not
+            ``keys``!) will act as though the mapping includes key-value pairs
+            for implied dimensions, and the ``full`` property may be used.  If
             `False`, these operations only include key-value pairs for required
-            dimensions, and accessing `full` is an error.  Always `True` if
+            dimensions, and accessing ``full`` is an error.  Always `True` if
             there are no implied dimensions.
         """
         raise NotImplementedError()

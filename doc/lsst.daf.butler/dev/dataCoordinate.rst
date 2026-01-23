@@ -15,7 +15,7 @@ quite different from the other.
 There are two big reasons for this:
 
 - We want this object to behave much like a `dict`, because plain `dict` objects are frequently used as informal data IDs, but Python's `~collections.abc.Mapping` ABC specifies some behavior that isn't quite compatible with how data IDs conceptually behave.
-  In particular, its definition of how ``__eq__`` relates to `keys` isn't what we want.
+  In particular, its definition of how ``__eq__`` relates to ``keys`` isn't what we want.
   That leaves us stuck in tradeoff space between a (slight) Liskov substitutability violation, not actually making this a `~collections.abc.Mapping`, and not making a data ID behave the way one would expect given what it represents.
   See the class docs for a more complete description of the problem and how the current (4th) `DataCoordinate` handles it (the 2nd version took the same approach).
   In essence, it makes ``keys`` less convenient in some contexts (in that it doesn't always contain all of the keys the object actually knows about) in order to make the Liskov substitution violation in ``__eq__`` even smaller (in that it affects only comparisons between `DataCoordinate` and other `~collections.abc.Mapping` classes, not those between two `DataCoordinate` instances).

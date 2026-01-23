@@ -196,8 +196,8 @@ class ValidationError(RuntimeError):
 
 
 class EmptyQueryResultError(Exception):
-    """Exception raised when query methods return an empty result and `explain`
-    flag is set.
+    """Exception raised when query methods return an empty result and
+    ``explain`` flag is set.
 
     Parameters
     ----------
