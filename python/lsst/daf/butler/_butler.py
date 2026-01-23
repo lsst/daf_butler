@@ -138,6 +138,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     without_datastore : `bool`, optional
         If `True` do not attach a datastore to this butler. Any attempts
         to use a datastore will fail.
+    metrics : `ButlerMetrics` or `None`
+        External metrics object to be used for tracking butler usage. If `None`
+        a new metrics object is created.
     **kwargs : `Any`
         Additional keyword arguments passed to a constructor of actual butler
         class.
@@ -2028,7 +2031,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        records : `list`[`DimensionRecord`]
+        records : `list` [`DimensionRecord`]
             Dimension records matching the given query parameters.
 
         Raises

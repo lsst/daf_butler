@@ -43,7 +43,7 @@ _V = TypeVar("_V", bound=Copyable, covariant=True)
 
 
 class NonemptyMapping(Mapping[_K, _V]):
-    """A `Mapping` that implicitly adds values (like
+    """A `~collections.abc.Mapping` that implicitly adds values (like
     `~collections.defaultdict`) but treats any that evaluate to `False` as not
     present.
 

@@ -544,7 +544,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Returns
         -------
-        exists : `dict`[`DatasetRef`, `bool`]
+        exists : `dict` [`DatasetRef`, `bool`]
             Mapping of dataset to boolean indicating whether the dataset
             is known to the datastore.
         """

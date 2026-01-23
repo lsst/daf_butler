@@ -464,7 +464,7 @@ class ButlerCollections(ABC, Sequence):
 
         Returns
         -------
-        filtered : `~collections.abc.Mapping` [`str`, `list`[`str`]]
+        filtered : `~collections.abc.Mapping` [`str`, `list` [`str`]]
             Mapping of the dataset type name to its corresponding list of
             collection names.
         """

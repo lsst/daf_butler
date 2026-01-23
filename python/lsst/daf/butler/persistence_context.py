@@ -191,8 +191,9 @@ class PersistenceContextVars:
 
         Returns
         -------
-        result : `Any`
-            The result returned by executing the supplied `Callable`.
+        result : `typing.Any`
+            The result returned by executing the supplied
+            `~collections.abc.Callable`.
         """
         self._ctx = copy_context()
         # Type checkers seem to have trouble with a second layer nesting of

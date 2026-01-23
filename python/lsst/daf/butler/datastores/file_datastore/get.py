@@ -97,12 +97,12 @@ def generate_datastore_get_information(
 
     Parameters
     ----------
-    fileLocations : `list`[`DatasetLocationInformation`]
+    fileLocations : `list` [`DatasetLocationInformation`]
         List of file locations for this artifact and their associated datastore
         records.
     ref : `DatasetRef`
         The registry information associated with this artifact.
-    parameters : `Mapping`[`str`, `Any`]
+    parameters : `~collections.abc.Mapping` [`str`, `Any`]
         `StorageClass` and `Formatter` parameters.
     readStorageClass : `StorageClass` | `None`, optional
         The StorageClass to use when ultimately returning the resulting object
@@ -255,12 +255,12 @@ def get_dataset_as_python_object_from_get_info(
 
     Parameters
     ----------
-    allGetInfo : `list`[`DatastoreFileGetInformation`]
+    allGetInfo : `list` [`DatastoreFileGetInformation`]
         Pre-processed information about each file associated with this
         artifact.
     ref : `DatasetRef`
         The registry information associated with this artifact.
-    parameters : `Mapping`[`str`, `Any`]
+    parameters : `~collections.abc.Mapping` [`str`, `Any`]
         `StorageClass` and `Formatter` parameters.
     cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files.

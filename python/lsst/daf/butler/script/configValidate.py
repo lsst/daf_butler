@@ -40,9 +40,9 @@ def configValidate(repo: str, quiet: bool, dataset_type: list[str], ignore: list
         URI to the location to create the repo.
     quiet : `bool`
         Do not report individual failures if True.
-    dataset_type : `list`[`str`]
+    dataset_type : `list` [`str`]
         Specific DatasetTypes to validate.
-    ignore : `list`[`str`]
+    ignore : `list` [`str`]
         DatasetTypes to ignore for validation.
 
     Returns

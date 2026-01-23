@@ -92,13 +92,13 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         collection : `str`
             The name of the collection, or glob pattern for collections, to
             remove.
-        before_rows : `Sequence` [ `QueryCollectionsRow` ]
+        before_rows : `~collections.abc.Sequence` [ `QueryCollectionsRow` ]
             The rows that should be in the table returned by query-collections
             before removing the collection.
-        remove_rows : `Sequence` [ `RemoveCollectionRow` ]
+        remove_rows : `~collections.abc.Sequence` [ `RemoveCollectionRow` ]
             The rows that should be in the "will remove" table while removing
             collections.
-        after_rows : `Sequence` [ `QueryCollectionsRow` ]
+        after_rows : `~collections.abc.Sequence` [ `QueryCollectionsRow` ]
             The rows that should be in the table returned by query-collections
             after removing the collection.
         """

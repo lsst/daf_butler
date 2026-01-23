@@ -528,7 +528,7 @@ def plot_pixels(
         Pixelization that interprets ``indices``.
     wcs : `WCS`
         Tangent plane to project spherical polygons onto.
-    indices : `Iterable` [ `int` ]
+    indices : `~collections.abc.Iterable` [ `int` ]
         Pixel indices to plot.
     *callbacks
         Callbacks to call for each pixel, passing the pixel index, the
@@ -557,7 +557,7 @@ def plot_hull(
         Pixelization that interprets ``indices``.
     wcs : `WCS`
         Tangent plane to project spherical polygons onto.
-    indices : `Iterable` [ `int` ]
+    indices : `~collections.abc.Iterable` [ `int` ]
         Pixel indices to plot.
     *callbacks
         Callbacks to call passing the list of pixel indices, the

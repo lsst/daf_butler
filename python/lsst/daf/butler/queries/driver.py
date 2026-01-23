@@ -245,7 +245,7 @@ class QueryDriver(AbstractContextManager[None]):
         ----------
         dimensions : `DimensionGroup`
             Dimensions of the data coordinates.
-        rows : `Iterable` [ `tuple` ]
+        rows : `~collections.abc.Iterable` [ `tuple` ]
             Tuples of data coordinate values, covering just the "required"
             subset of ``dimensions``.
 

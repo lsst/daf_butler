@@ -59,11 +59,11 @@ class PruneDatasetsResult:
 
     Attributes
     ----------
-    tables
+    tables : `list` [`astropy.table.Table`]
         Same as in Parameters.
     state : ``PruneDatasetsResult.State``
         The current state of the action.
-    onConfirmation : `Callable[None, None]`
+    onConfirmation : `~collections.abc.Callable` [`None`, `None`]`
         The function to call to perform the action if the caller wants to
         confirm the tables before performing the action.
     """

@@ -429,7 +429,7 @@ class ColumnOrder:
 
         Parameters
         ----------
-        row : `Sequence` [ `DataIdValue` ]
+        row : `~collections.abc.Sequence` [ `DataIdValue` ]
             A row output by the SQL query associated with these columns.
         """
         return row[: len(self._dimension_keys)]
