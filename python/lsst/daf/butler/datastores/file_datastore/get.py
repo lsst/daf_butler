@@ -102,7 +102,7 @@ def generate_datastore_get_information(
         records.
     ref : `DatasetRef`
         The registry information associated with this artifact.
-    parameters : `~collections.abc.Mapping` [`str`, `Any`]
+    parameters : `~collections.abc.Mapping` [`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters.
     readStorageClass : `StorageClass` | `None`, optional
         The StorageClass to use when ultimately returning the resulting object
@@ -260,7 +260,7 @@ def get_dataset_as_python_object_from_get_info(
         artifact.
     ref : `DatasetRef`
         The registry information associated with this artifact.
-    parameters : `~collections.abc.Mapping` [`str`, `Any`]
+    parameters : `~collections.abc.Mapping` [`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters.
     cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files.

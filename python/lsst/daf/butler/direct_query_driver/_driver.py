@@ -1313,7 +1313,8 @@ class DirectQueryDriver(QueryDriver):
             Mapping of collection names to collection records, must contain
             records for all collections in ``collection_names`` and all their
             children collections.
-        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+        summaries : `~collections.abc.Mapping` [`typing.Any`, \
+              `CollectionSummary`]
             Mapping of collection IDs to collection summaries, must contain
             summaries for all non-chained collections in the collection tree.
 

@@ -135,7 +135,7 @@ class CollectionRecordCache:
 
         Parameters
         ----------
-        key : `Any`
+        key : `typing.Any`
             Collection key.
 
         Returns

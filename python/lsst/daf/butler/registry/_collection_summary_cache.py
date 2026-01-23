@@ -54,7 +54,8 @@ class CollectionSummaryCache:
 
         Parameters
         ----------
-        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+        summaries : `~collections.abc.Mapping` [`typing.Any`, \
+              `CollectionSummary`]
             Summary records indexed by collection key, records must include all
             dataset types.
         """
@@ -65,15 +66,15 @@ class CollectionSummaryCache:
 
         Parameters
         ----------
-        keys : `~collections.abc.Iterable` [`Any`]
+        keys : `~collections.abc.Iterable` [`typing.Any`]
             Sequence of collection keys.
 
         Returns
         -------
-        summaries : `dict` [`Any`, `CollectionSummary`]
+        summaries : `dict` [`typing.Any`, `CollectionSummary`]
             Dictionary of summaries indexed by collection keys, includes
             records found in the cache.
-        missing_keys : `set` [`Any`]
+        missing_keys : `set` [`typing.Any`]
             Collection keys that are not present in the cache.
         """
         found = {}

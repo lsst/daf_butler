@@ -72,7 +72,7 @@ class SpatialObsCorePlugin(ABC):
         name : `str`
             Arbitrary name given to this plugin (usually key in
             configuration).
-        config : `dict` [ `str`, `Any` ]
+        config : `dict` [ `str`, `typing.Any` ]
             Plugin configuration dictionary.
         db : `Database`, optional
             Interface to the underlying database engine and namespace. In some
@@ -120,7 +120,7 @@ class SpatialObsCorePlugin(ABC):
 
         Returns
         -------
-        record : `dict` [ `str`, `Any` ] or `None`
+        record : `dict` [ `str`, `typing.Any` ] or `None`
             Data to store in the main obscore table with column values
             corresponding to a region or `None` if there is nothing to store.
 

@@ -93,7 +93,7 @@ class GeneralQueryResults(QueryResultsBase):
 
         Yields
         ------
-        row_dict : `dict` [`str`, `Any`]
+        row_dict : `dict` [`str`, `typing.Any`]
             Result row as dictionary, the keys are the names of the dimensions,
             dimension fields (separated from dimension by dot) or dataset type
             fields (separated from dataset type name by dot).

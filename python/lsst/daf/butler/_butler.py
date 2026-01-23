@@ -141,7 +141,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     metrics : `ButlerMetrics` or `None`
         External metrics object to be used for tracking butler usage. If `None`
         a new metrics object is created.
-    **kwargs : `Any`
+    **kwargs : `typing.Any`
         Additional keyword arguments passed to a constructor of actual butler
         class.
 
@@ -243,7 +243,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             to use a datastore will fail.
         metrics : `ButlerMetrics` or `None`, optional
             Metrics object to record butler usage statistics.
-        **kwargs : `Any`
+        **kwargs : `typing.Any`
             Default data ID key-value pairs.  These may only identify
             "governor" dimensions like ``instrument`` and ``skymap``.
 

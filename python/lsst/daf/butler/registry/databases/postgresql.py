@@ -92,7 +92,8 @@ class PostgresqlDatabase(Database):
         allow_temporary_tables: bool = True,
     ):
         with engine.connect() as connection:
-            # `Any` to make mypy ignore the line below, can't use type: ignore
+            # `typing.Any` to make mypy ignore the line below, can't
+            # use type: ignore
             dbapi: Any = connection.connection
             try:
                 dsn = dbapi.get_dsn_parameters()

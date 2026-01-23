@@ -716,7 +716,7 @@ class DataCoordinate:
 
         Parameters
         ----------
-        simple : `dict` of [`str`, `Any`]
+        simple : `dict` of [`str`, `typing.Any`]
             The `dict` returned by `to_simple()`.
         universe : `DimensionUniverse`
             Object that manages all known dimensions.

@@ -109,12 +109,12 @@ class ColumnValueSerializer(ABC):
 
         Parameters
         ----------
-        value : `Any`
+        value : `typing.Any`
             Column value to be serialized.
 
         Returns
         -------
-        value : `Any`
+        value : `typing.Any`
             Column value in serializable format.
         """
         raise NotImplementedError
@@ -125,12 +125,12 @@ class ColumnValueSerializer(ABC):
 
         Parameters
         ----------
-        value : `Any`
+        value : `typing.Any`
             Serialized column value.
 
         Returns
         -------
-        value : `Any`
+        value : `typing.Any`
             Deserialized column value.
         """
         raise NotImplementedError

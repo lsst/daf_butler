@@ -378,7 +378,8 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+        summaries : `~collections.abc.Mapping` [`typing.Any`, \
+              `CollectionSummary`]
             Collection summaries indexed by collection record key. This mapping
             will also contain all nested non-chained collections of the chained
             collections.
