@@ -1727,7 +1727,18 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             datasets, progress, dry_run=dry_run, transfer_dimensions=transfer_dimensions
         )
 
-        with self.transaction():
+        # Calculate some statistics based on the given list of datasets.
+        n_datasets = 0
+        for d in datasets:
+            n_datasets += len(d.refs)
+        srefs = "s" if n_datasets != 1 else ""
+
+        with (
+            self._metrics.instrument_ingest(
+                n_datasets, _LOG, msg=f"Ingesting zip file {zip_file} with {n_datasets} dataset{srefs}"
+            ),
+            self.transaction(),
+        ):
             # Do not need expanded dataset refs so can ignore the return value.
             self._ingest_file_datasets(datasets, import_info, progress, dry_run=dry_run)
 
