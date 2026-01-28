@@ -1047,6 +1047,15 @@ class ButlerTests(ButlerPutGetTests):
             self.assertFalse(butler.exists(refs[0]))
 
             butler.ingest_zip(zip, transfer="copy")
+            self.assertGreater(butler._metrics.time_in_ingest, 0.0)
+            self.assertEqual(butler._metrics.n_ingest, len(refs))
+
+            # Check that it fails if we try it again.
+            with self.assertRaises(ConflictingDefinitionError):
+                butler.ingest_zip(zip, transfer="copy")
+
+            # This will be a no-op.
+            butler.ingest_zip(zip, transfer="copy", skip_existing=True)
 
             # Create an entirely new local file butler in this temp directory.
             new_butler_cfg = Butler.makeRepo(tmpdir)

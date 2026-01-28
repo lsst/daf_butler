@@ -2152,7 +2152,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         return artifact_map
 
-    def ingest_zip(self, zip_path: ResourcePath, transfer: str | None, *, dry_run: bool = False) -> None:
+    def ingest_zip(
+        self,
+        zip_path: ResourcePath,
+        transfer: str | None,
+        *,
+        dry_run: bool = False,
+    ) -> None:
         """Ingest an indexed Zip file and contents.
 
         The Zip file must have an index file as created by `retrieveArtifacts`.
