@@ -1658,29 +1658,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         *,
         transfer_dimensions: bool = False,
         dry_run: bool = False,
+        skip_existing: bool = False,
     ) -> None:
-        """Ingest a Zip file into this butler.
-
-        The Zip file must have been created by `retrieve_artifacts_zip`.
-
-        Parameters
-        ----------
-        zip_file : `lsst.resources.ResourcePathExpression`
-            Path to the Zip file.
-        transfer : `str`, optional
-            Method to use to transfer the Zip into the datastore.
-        transfer_dimensions : `bool`, optional
-            If `True`, dimension record data associated with the new datasets
-            will be transferred from the Zip, if present.
-        dry_run : `bool`, optional
-            If `True` the ingest will be processed without any modifications
-            made to the target butler and as if the target butler did not
-            have any of the datasets.
-
-        Notes
-        -----
-        Run collections and dataset types are created as needed.
-        """
+        # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
@@ -1706,6 +1686,29 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             datasets.append(dataset)
             processed_ids.update(unprocessed)
 
+        new_datasets, existing_datasets = self._partition_datasets_by_known(datasets)
+        if existing_datasets:
+            if skip_existing:
+                _LOG.info(
+                    "Skipping %d datasets from zip file %s which already exist in the repository.",
+                    len(existing_datasets),
+                    zip_file,
+                )
+            else:
+                raise ConflictingDefinitionError(
+                    f"Datastore already contains {len(existing_datasets)} of the given datasets."
+                    f" Example: {existing_datasets[0]}"
+                )
+            if new_datasets:
+                # Can not yet support partial zip ingests where a zip contains
+                # some datasets that are already in another zip.
+                raise ValueError(
+                    f"The given zip file from {zip_file} contains {len(new_datasets)} datasets not known "
+                    f"to this butler but also contains {len(existing_datasets)} datasets already known to "
+                    "this butler. Currently butler can not ingest zip files with overlapping content."
+                )
+            return
+
         # Ingest doesn't create the RUN collections so we have to do that
         # here.
         #
@@ -1724,7 +1727,18 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             datasets, progress, dry_run=dry_run, transfer_dimensions=transfer_dimensions
         )
 
-        with self.transaction():
+        # Calculate some statistics based on the given list of datasets.
+        n_datasets = 0
+        for d in datasets:
+            n_datasets += len(d.refs)
+        srefs = "s" if n_datasets != 1 else ""
+
+        with (
+            self._metrics.instrument_ingest(
+                n_datasets, _LOG, msg=f"Ingesting zip file {zip_file} with {n_datasets} dataset{srefs}"
+            ),
+            self.transaction(),
+        ):
             # Do not need expanded dataset refs so can ignore the return value.
             self._ingest_file_datasets(datasets, import_info, progress, dry_run=dry_run)
 

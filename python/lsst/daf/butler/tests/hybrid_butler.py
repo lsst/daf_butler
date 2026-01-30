@@ -284,10 +284,15 @@ class HybridButler(Butler):
         *,
         transfer_dimensions: bool = False,
         dry_run: bool = False,
+        skip_existing: bool = False,
     ) -> None:
         # Docstring inherited.
         return self._direct_butler.ingest_zip(
-            zip_file, transfer=transfer, transfer_dimensions=transfer_dimensions, dry_run=dry_run
+            zip_file,
+            transfer=transfer,
+            transfer_dimensions=transfer_dimensions,
+            dry_run=dry_run,
+            skip_existing=skip_existing,
         )
 
     def ingest(
