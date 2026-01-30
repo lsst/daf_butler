@@ -274,7 +274,11 @@ class ZipIndex(BaseModel):
             Path to the Zip file.
         """
         with zip_path.open("rb") as fd, zipfile.ZipFile(fd) as zf:
-            json_data = zf.read(cls.index_name)
+            return cls.from_open_zip(zf)
+
+    @classmethod
+    def from_open_zip(cls, zf: zipfile.ZipFile) -> Self:
+        json_data = zf.read(cls.index_name)
         return cls.model_validate_json(json_data)
 
 
