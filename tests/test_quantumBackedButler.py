@@ -30,6 +30,7 @@ import os
 import tempfile
 import unittest
 import unittest.mock
+import zipfile
 from typing import cast
 
 from lsst.daf.butler import (
@@ -247,6 +248,12 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             zip = qbb.retrieve_artifacts_zip(self.output_refs, destination=tmpdir)
 
             index = ZipIndex.from_zip_file(zip)
+
+            # Check that using the alternate API gives the same index.
+            with zipfile.ZipFile(zip.ospath) as zf:
+                index2 = ZipIndex.from_open_zip(zf)
+            self.assertEqual(index, index2)
+
         zip_refs = index.refs.to_refs(universe=qbb.dimensions)
         self.assertEqual(len(zip_refs), 4)
         self.assertEqual(set(zip_refs), set(self.output_refs))

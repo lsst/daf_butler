@@ -1436,6 +1436,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         *,
         transfer_dimensions: bool = False,
         dry_run: bool = False,
+        skip_existing: bool = False,
     ) -> None:
         """Ingest a Zip file into this butler.
 
@@ -1454,6 +1455,14 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             If `True` the ingest will be processed without any modifications
             made to the target butler and as if the target butler did not
             have any of the datasets.
+        skip_existing : `bool`, optional
+            If `True`, a zip will not be ingested if the dataset entries listed
+            in the index with the same dataset ID already exists in the butler.
+            If `False` (the default), a `ConflictingDefinitionError` will be
+            raised if any datasets with the same dataset ID already exist
+            in the repository. If, somehow, some datasets are known to the
+            butler and some are not, this is currently treated as an error
+            rather than attempting to do a partial ingest.
 
         Notes
         -----
