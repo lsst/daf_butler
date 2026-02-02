@@ -3256,9 +3256,28 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
             storageClassName="StructuredComposite", storageClassNameTarget="MetricsConversion"
         )
 
+    def testUnsafeDirectTransfer(self) -> None:
+        """Test that transfer='unsafe_direct' records the absolute URI of
+        source files in the target datastore.
+        """
+        self.create_butlers()
+        dataset_type = DatasetType("dt", [], "int", universe=self.source_butler.dimensions)
+        self.source_butler.registry.registerDatasetType(dataset_type)
+        self.source_butler.collections.register("run")
+        ref = self.source_butler.put(123, "dt", [], run="run")
+        self.target_butler.transfer_from(
+            self.source_butler, [ref], transfer="unsafe_direct", register_dataset_types=True
+        )
+        self.assertEqual(self.target_butler.get(ref), 123)
+        self.assertEqual(self.source_butler.getURI(ref), self.target_butler.getURI(ref))
+
     def testAbsoluteURITransferDirect(self) -> None:
         """Test transfer using an absolute URI."""
         self._absolute_transfer("auto")
+
+    def testAbsoluteURITransferUnsafeDirect(self) -> None:
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("unsafe_direct")
 
     def testAbsoluteURITransferCopy(self) -> None:
         """Test transfer using an absolute URI."""
@@ -3290,7 +3309,7 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
             )
 
             uri = self.target_butler.getURI(dataset.refs[0])
-            if transfer == "auto":
+            if transfer == "auto" or transfer == "unsafe_direct":
                 self.assertEqual(uri, temp)
             else:
                 self.assertNotEqual(uri, temp)

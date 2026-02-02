@@ -215,6 +215,18 @@ class Location:
         """
         return self.uri.getExtension()
 
+    def toAbsolute(self) -> Location:
+        """Return this location as an absolute URI, detached from the
+        datastore root.
+
+        Returns
+        -------
+        location
+            `Location` with ``datastoreRootUri`` = `None`, and an absolute
+            path.
+        """
+        return Location(None, self.uri)
+
 
 class LocationFactory:
     """Factory for `Location` instances.
