@@ -1,3 +1,26 @@
+Butler v30.0.1 (2026-02-02)
+===========================
+
+API Changes
+-----------
+
+- * Added ``ZipIndex.from_open_zip()`` method to allow the index to be read from a previously opened zip file.
+  * Added ``skip_existing`` parameter to ``Butler.ingest_zip`` to allow the command to ignore any previously ingested datasets. (`DM-52925 <https://rubinobs.atlassian.net/browse/DM-52925>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed a bug that caused datastore checksums to be read back in as UUIDs, which would then break task execution with the ``QuantumBackedButler``. (`DM-53631 <https://rubinobs.atlassian.net/browse/DM-53631>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added ``PhotozModel`` as an alternate name for the ``PZModel`` storage class. (`DM-51660 <https://rubinobs.atlassian.net/browse/DM-51660>`_)
+- Added metrics recording to ``Butler.ingest_zip()``. (`DM-52925 <https://rubinobs.atlassian.net/browse/DM-52925>`_)
+
+
 Butler v30.0.0 (2026-01-15)
 ===========================
 
