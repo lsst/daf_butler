@@ -1,3 +1,25 @@
+Butler v30.0.1 (2026-02-02)
+===========================
+
+API Changes
+-----------
+
+- * Added ``ZipIndex.from_open_zip()`` method to allow the index to be read from a previously opened zip file.
+  * Added ``skip_existing`` parameter to ``Butler.ingest_zip`` to allow the command to ignore any previously ingested datasets. (`DM-52925 <https://rubinobs.atlassian.net/browse/DM-52925>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed a bug that caused datastore checksums to be read back in as UUIDs, which would then break task execution with the ``QuantumBackedButler``. (`DM-53631 <https://rubinobs.atlassian.net/browse/DM-53631>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added metrics recording to ``Butler.ingest_zip()``. (`DM-52925 <https://rubinobs.atlassian.net/browse/DM-52925>`_)
+
+
 Butler v30.0.0 (2026-01-15)
 ===========================
 
@@ -76,6 +98,7 @@ Other Changes and Additions
 - * Modified ``ObsCore`` records to place "exposure" in any visit fields if there is an exposure but no visit defined.
     This required the addition of a new method to the ``RecordFactory`` which can be subclassed by other plugins.
   * Added ability to hard code the ``s_xel1`` and ``s_xel2`` ObsCore fields per dataset type. (`DM-51495 <https://rubinobs.atlassian.net/browse/DM-51495>`_)
+- Added ``PhotozModel`` as an alternate name for the ``PZModel`` storage class. (`DM-51660 <https://rubinobs.atlassian.net/browse/DM-51660>`_)
 - Drop incomplete support for case-insensitive handling of identifiers in query expressions.
 
   Some code in the query generation system was trying to allow dimension names to be case-insensitive, but was actually just inadvertently requiring all dimension names to be defined as lowercase.
