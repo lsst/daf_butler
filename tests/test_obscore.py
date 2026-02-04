@@ -35,6 +35,7 @@ import astropy.time
 import sqlalchemy
 
 from lsst.daf.butler import (
+    Butler,
     CollectionType,
     Config,
     DataCoordinate,
@@ -628,6 +629,50 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
         query = f"SELECT * FROM {table.key} WHERE '(272d,3d)'::spoint @ pgs_region"
         with db.query(sqlalchemy.text(query)) as results:
             self.assertEqual(len(list(results)), 2)
+
+
+class TestMissingObscoreConfig(unittest.TestCase):
+    """Test case for making butler instance with obscore manager but missing
+    configuration.
+    """
+
+    root: str
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def make_butler_config(self, obscore_config: str | dict[str, str | dict]) -> Config:
+        registry_config = RegistryConfig()
+        registry_config["db"] = f"sqlite:///{self.root}/butler.sqlite3"
+        registry_config["managers", "obscore"] = obscore_config
+        return Config({"registry": registry_config})
+
+    def test_missing_config_one(self) -> None:
+        """Test setup when obscore key defines manager class."""
+        config = self.make_butler_config("lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager")
+
+        with self.assertWarnsRegex(UserWarning, "configuration is missing"):
+            Butler.makeRepo(self.root, config)
+
+        # Now instanciate Butler from the same repo.
+        Butler.from_config(self.root)
+
+    def test_missing_config_two(self) -> None:
+        """Test setup when obscore key defines manager class and empty
+        config.
+        """
+        config = self.make_butler_config(
+            {"cls": "lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager", "config": {}}
+        )
+
+        with self.assertWarnsRegex(UserWarning, "configuration is missing"):
+            Butler.makeRepo(self.root, config)
+
+        # Now instanciate Butler from the same repo.
+        Butler.from_config(self.root)
 
 
 if __name__ == "__main__":

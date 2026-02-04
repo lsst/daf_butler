@@ -32,6 +32,7 @@ __all__ = ["Butler"]
 import dataclasses
 import urllib.parse
 import uuid
+import warnings
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
@@ -495,6 +496,18 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             configURI = outfile
         else:
             configURI = root_uri
+        # Check that if obscore key is present then its config must be there
+        # too, this is to avoid common mistake when people copy butler.yaml
+        # from existing repo with obscore but do not fill its config.
+        if (obscore_key := ("registry", "managers", "obscore")) in config:
+            obscore_config_key = ("registry", "managers", "obscore", "config")
+            if obscore_config_key not in config or not config[obscore_config_key]:
+                warnings.warn(
+                    "Obscore manager is declared in registry configuration, "
+                    "but obscore configuration is missing, obscore manager will be removed.",
+                    stacklevel=2,
+                )
+                del config[obscore_key]
         # Strip obscore configuration, if it is present, before writing config
         # to a file, obscore config will be stored in registry.
         if (obscore_config_key := ("registry", "managers", "obscore", "config")) in config:
