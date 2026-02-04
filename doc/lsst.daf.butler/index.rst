@@ -159,6 +159,10 @@ Example formatters
    :no-main-docstr:
    :no-inherited-members:
    :headings: ^"
+.. automodapi:: lsst.daf.butler.formatters.typeless
+   :no-main-docstr:
+   :no-inherited-members:
+   :headings: ^"
 
 Test utilities
 --------------

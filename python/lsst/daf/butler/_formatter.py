@@ -163,7 +163,8 @@ class FormatterV2:
     """Declare whether `read_from_stream` is available to this formatter."""
 
     can_read_from_local_file: ClassVar[bool] = False
-    """Declare whether `read_from_file` is available to this formatter."""
+    """Declare whether `read_from_local_file` is available to this
+    formatter."""
 
     def __init__(
         self,
@@ -433,7 +434,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if no implementations were found that could read this
             resource.
         """
@@ -783,7 +784,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if there is no support for direct reads from a, possibly,
             remote URI.
 
@@ -853,7 +854,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if there is no implementation written to read data
             from a local file.
 
@@ -874,7 +875,7 @@ class FormatterV2:
         ----------
         in_memory_dataset : `object`
             The dataset to serialize.
-        provenance : `DatasetProvenance` or `None`, optional
+        provenance : `~lsst.daf.butler.DatasetProvenance` or `None`, optional
             Provenance to attach to dataset.
 
         Returns
@@ -916,7 +917,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if the formatter subclass has not implemented
             `write_local_file` and `to_bytes` was not called.
         Exception
@@ -965,7 +966,7 @@ class FormatterV2:
         ------
         Exception
             Raised if there was a failure from serializing to bytes that
-            was not `FormatterNotImplementedError`.
+            was not `~lsst.daf.butler.FormatterNotImplementedError`.
 
         Notes
         -----
@@ -1028,7 +1029,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if the formatter subclass has not implemented
             `write_local_file`.
         Exception
@@ -1073,7 +1074,7 @@ class FormatterV2:
         ----------
         in_memory_dataset : `object`
             The Python object to serialize.
-        uri : `ResourcePath`
+        uri : `~lsst.resources.ResourcePath`
             The URI to use when writing the file.
 
         Notes
@@ -1083,7 +1084,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if the formatter subclass has not implemented this method
             or has failed to implement the `to_bytes` method.
         """
@@ -1106,7 +1107,7 @@ class FormatterV2:
 
         Raises
         ------
-        FormatterNotImplementedError
+        lsst.daf.butler.FormatterNotImplementedError
             Raised if the formatter has not implemented the method. This will
             not cause a problem if `write_local_file` has been implemented.
         """
