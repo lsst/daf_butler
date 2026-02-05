@@ -60,4 +60,9 @@ class MatplotlibFormatter(FormatterV2):
         # The fname for savefig can take a file descriptor. If it works
         # with ResourcePath handles then it may be possible to do direct
         # writes. Alternatively, implement with BytesIO and do direct put.
-        in_memory_dataset.savefig(uri.ospath)
+
+        metadata = {}
+        if hasattr(in_memory_dataset, "metadata"):
+            metadata = in_memory_dataset.metadata
+
+        in_memory_dataset.savefig(uri.ospath, metadata=metadata)

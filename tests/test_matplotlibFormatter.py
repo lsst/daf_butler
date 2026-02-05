@@ -64,6 +64,12 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testMatplotlibFormatter(self):
+        self.doMatplotlibTest()
+
+    def testMatplotlibFormatterWithMetadata(self):
+        self.doMatplotlibTest(metadata={"test": "123"})
+
+    def doMatplotlibTest(self, metadata=None):
         butler = Butler.from_config(self.root, run="testrun")
         self.enterContext(butler)
         datasetType = DatasetType("test_plot", [], "Plot", universe=butler.dimensions)
@@ -76,12 +82,16 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
                 self.rng.sample(range(50), 10),
             ]
         )
-        ref = butler.put(pyplot.gcf(), datasetType)
+        plot_figure = pyplot.gcf()
+
+        if metadata:
+            plot_figure.metadata = metadata
+        ref = butler.put(plot_figure, datasetType)
         uri = butler.getURI(ref)
 
         # Following test needs a local file
         with uri.as_local() as local, tempfile.NamedTemporaryFile(suffix=".png") as file:
-            pyplot.gcf().savefig(file.name)
+            pyplot.gcf().savefig(file.name, metadata=metadata)
             self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
         self.assertTrue(butler.exists(ref))
         with self.assertRaises(ValueError):
