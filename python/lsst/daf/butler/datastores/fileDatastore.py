@@ -2846,7 +2846,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 info = transfer_info.file_info
                 source_location = transfer_info.location
                 target_location = info.file_location(self.locationFactory)
-                if source_location == target_location and not source_location.pathInStore.isabs():
+                if transfer == "unsafe_direct":
+                    # Use the existing file from the source location in place,
+                    # by recording the absolute URI in the target DB.  This is
+                    # "unsafe" because the file could be deleted from the
+                    # source Butler at any time, leaving a dangling reference.
+                    source_location = source_location.toAbsolute()
+                    direct_transfers.append(source_location)
+                    info = info.update(path=str(source_location.uri))
+                elif source_location == target_location and not source_location.pathInStore.isabs():
                     # Artifact is already in the target location.
                     # (which is how execution butler currently runs)
                     pass
