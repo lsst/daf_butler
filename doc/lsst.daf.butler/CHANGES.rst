@@ -1,3 +1,13 @@
+Butler v30.0.2 (2026-02-06)
+===========================
+
+Bug Fixes
+---------
+
+- Fixed handling of inconsistent ObsCore configuration in a seed file when creating new Butler repo.
+  Now if ObsCore manager is defined but its configuration is missing a warning will be issued and ObsCore will be disabled. (`DM-41280 <https://rubinobs.atlassian.net/browse/DM-41280>`_)
+
+
 Butler v30.0.1 (2026-02-02)
 ===========================
 
