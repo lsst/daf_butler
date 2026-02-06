@@ -498,8 +498,8 @@ class FileTemplate:
 
         Notes
         -----
-        The returned set will include the special values such as `datasetType`
-        and `component`.
+        The returned set will include the special values such as
+        ``datasetType`` and ``component``.
         """
         fmt = string.Formatter()
         parts = fmt.parse(self.template)

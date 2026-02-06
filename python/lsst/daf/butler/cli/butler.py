@@ -124,8 +124,8 @@ class LoaderCLI(click.Group, abc.ABC):
         package.
 
         `getLocalCommands` assumes that the commands can be found in
-        `localCmdPkg.__all__`, if this is not the case then getLocalCommands
-        should be overridden.
+        ``localCmdPkg.__all__``, if this is not the case then
+        `getLocalCommands` should be overridden.
 
         Returns
         -------
@@ -136,8 +136,8 @@ class LoaderCLI(click.Group, abc.ABC):
 
     def getLocalCommands(self) -> defaultdict[str, list[str | PluginCommand]]:
         """Get the commands offered by the local package. This assumes that the
-        commands can be found in `localCmdPkg.__all__`, if this is not the case
-        then this function should be overridden.
+        commands can be found in ``localCmdPkg.__all__``, if this is not the
+        case then this function should be overridden.
 
         Returns
         -------

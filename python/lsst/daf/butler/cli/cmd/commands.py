@@ -707,9 +707,9 @@ def collection_chain(**kwargs: Any) -> None:
 
     CHILDREN are the collections to be used to modify the chain. The supplied
     values will be split on comma. The exact usage depends on the MODE option.
-    For example,
+    For example::
 
-    $ butler collection-chain REPO PARENT child1,child2 child3
+      $ butler collection-chain REPO PARENT child1,child2 child3
 
     will result in three children being included in the chain.
 
@@ -717,9 +717,9 @@ def collection_chain(**kwargs: Any) -> None:
     collections to be removed from the current chain.
     MODE 'pop' can take negative integers to indicate removal relative to the
     end of the chain, but when doing that '--' must be given to indicate the
-    end of the options specification.
+    end of the options specification::
 
-    $ butler collection-chain REPO --mode=pop PARENT -- -1
+      $ butler collection-chain REPO --mode=pop PARENT -- -1
 
     Will remove the final collection from the chain.
     """

@@ -289,10 +289,11 @@ class CliLog:
         Parameters
         ----------
         logLevels : `list` of `tuple`
-            Per-component logging levels, each item in the list is a tuple
-            (component, level), `component` is a logger name or an empty string
-            or `None` for default root logger, `level` is a logging level name,
-            one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+            Per-component logging levels, each item in the list is a `tuple`
+            of (component, level), ``component`` is a logger name or an empty
+            string or `None` for default root logger, ``level`` is a logging
+            level name, one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case
+            insensitive).
 
         Notes
         -----

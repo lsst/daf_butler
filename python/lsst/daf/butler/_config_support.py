@@ -338,7 +338,7 @@ def processLookupConfigList(
         Contents of a configuration listing keys that can be
         dataset type names, storage class names, dimensions
         or dataId components.  DataId components are represented as entries
-        in the `list` of `dicts` with a single key with a value of a `list`
+        in the `list` of `dict` with a single key with a value of a `list`
         of new keys.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to expand and validate any used

@@ -383,9 +383,9 @@ class FormatterV2:
         Notes
         -----
         This method should not be subclassed. Instead formatter subclasses
-        should re-implement the specific `read_from_*` methods as appropriate.
-        Each of these methods has a corresponding class property that must
-        be `True` for the method to be called.
+        should re-implement the specific ``read_from_*`` methods as
+        appropriate. Each of these methods has a corresponding class property
+        that must be `True` for the method to be called.
 
         The priority for reading is:
 

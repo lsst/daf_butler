@@ -795,7 +795,7 @@ API Changes
 - ``DimensionUniverse`` now has a ``isCompatibleWith()`` method to check if two universes are compatible with each other.
   The initial test is very basic but can be improved later. (`DM-35082 <https://rubinobs.atlassian.net/browse/DM-35082>`_)
 - Deprecated support for components in `Registry.query*` methods, per `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>`_. (`DM-36312 <https://rubinobs.atlassian.net/browse/DM-36312>`_)
-- Multiple minor API changes to query methods from `RFC-878 <https://rubinobs.atlassian.net/browse/RFC-878>`_ and `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>_`.
+- Multiple minor API changes to query methods from `RFC-878 <https://rubinobs.atlassian.net/browse/RFC-878>`_ and `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>`_.
 
   This includes:
 
@@ -861,7 +861,7 @@ New Features
   * Remove ``visit_system`` dimension and add ``visit_system_membership`` record to allow a visit to be associated with multiple visit systems. (`DM-30948 <https://rubinobs.atlassian.net/browse/DM-30948>`_)
 - ``butler export-calibs`` now takes a ``--transfer`` option to control how data are exported (use ``direct`` to do in-place export) and a ``--datasets`` option to limit the dataset types to be exported.
   It also now takes a default collections parameter (all calibration collections). (`DM-32061 <https://rubinobs.atlassian.net/browse/DM-32061>`_)
-- Iterables returned from registry methods `queryDataIds` and `queryDimensionRecords` have two new methods - `order_by` and `limit`. (`DM-32403 <https://rubinobs.atlassian.net/browse/DM-32403>`_)
+- Iterables returned from registry methods `queryDataIds` and `queryDimensionRecords` have two new methods - ``order_by`` and ``limit``. (`DM-32403 <https://rubinobs.atlassian.net/browse/DM-32403>`_)
 - Builds using ``setuptools`` now calculate versions from the Git repository, including the use of alpha releases for those associated with weekly tags. (`DM-32408 <https://rubinobs.atlassian.net/browse/DM-32408>`_)
 - Butler can now support lookup of repositories by label if the user environment is correctly configured.
   This is done using the new `~lsst.daf.butler.Butler.get_repo_uri()` and `~lsst.daf.butler.Butler.get_known_repos()` APIs. (`DM-32491 <https://rubinobs.atlassian.net/browse/DM-32491>`_)
@@ -926,7 +926,7 @@ Bug Fixes
 
 - ``butler export-calibs`` can now copy files that require the use of a file template (for example if a direct URI was stored in datastore) with metadata records.
   File templates that use metadata records now complain if the record is not attached to the ``DatasetRef``. (`DM-32061 <https://rubinobs.atlassian.net/browse/DM-32061>`_)
-- Make it possible to run `queryDimensionRecords` while constraining on the existence of a dataset whose dimensions are not a subset of the record element's dependencies (e.g. `raw` and `exposure`). (`DM-32454 <https://rubinobs.atlassian.net/browse/DM-32454>`_)
+- Make it possible to run `queryDimensionRecords` while constraining on the existence of a dataset whose dimensions are not a subset of the record element's dependencies (e.g., ``raw`` and ``exposure``). (`DM-32454 <https://rubinobs.atlassian.net/browse/DM-32454>`_)
 - Butler constructor can now take a `os.PathLike` object when the ``butler.yaml`` is not included in the path. (`DM-32467 <https://rubinobs.atlassian.net/browse/DM-32467>`_)
 - In the butler presets file (used by the ``--@`` option), use option names that match the butler CLI command option names (without leading dashes).
   Fail if option names used in the presets file do not match options for the current butler command. (`DM-32986 <https://rubinobs.atlassian.net/browse/DM-32986>`_)
@@ -950,9 +950,9 @@ Bug Fixes
 Other Changes and Additions
 ---------------------------
 
-- Add a `NOT NULL` constraint to dimension implied dependency columns.
+- Add a ``NOT NULL`` constraint to dimension implied dependency columns.
 
-  `NULL` values in these columns already cause the query system to misbehave. (`DM-21840 <https://rubinobs.atlassian.net/browse/DM-21840>`_)
+  ``NULL`` values in these columns already cause the query system to misbehave. (`DM-21840 <https://rubinobs.atlassian.net/browse/DM-21840>`_)
 - Update parquet writing to use default per-column compression. (`DM-31963 <https://rubinobs.atlassian.net/browse/DM-31963>`_)
 - Tidy up ``remove-runs`` subcommand confirmation report by sorting dataset types and filtering out those with no datasets in the collections to be deleted. (`DM-33584 <https://rubinobs.atlassian.net/browse/DM-33584>`_)
 - The constraints on collection names have been relaxed.
@@ -1059,7 +1059,7 @@ Other Changes and Additions
 ---------------------------
 
 - Enable serialization of ``DatasetRef`` and related classes to JSON format. (`DM-28678 <https://rubinobs.atlassian.net/browse/DM-28678>`_)
-- `ButlerURI` ``http`` schemes can now handle non-WebDAV endpoints.
+- ``ButlerURI`` ``http`` schemes can now handle non-WebDAV endpoints.
   Warnings are only issued if WebDAV functionality is requested. (`DM-29708 <https://rubinobs.atlassian.net/browse/DM-29708>`_)
 - Switch logging such that all logging messages are now forwarded to Python ``logging`` from ``lsst.log``.
   Previously all Python ``logging`` messages were being forwarded to ``lsst.log``. (`DM-31120 <https://rubinobs.atlassian.net/browse/DM-31120>`_)

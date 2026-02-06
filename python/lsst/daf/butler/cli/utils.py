@@ -460,16 +460,16 @@ def split_kv(
         If true, the value may contain multiple comma-separated values. By
         default True.
     normalize : `bool`, optional
-        If True and `choice.case_sensitive == False`, normalize the string the
-        user provided to match the choice's case. By default `False`.
+        If True and ``choice.case_sensitive == False``, normalize the string
+        the user provided to match the choice's case. By default `False`.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
-        for tuples; `type=(str, str)`). By default "=".
+        for tuples; ``type=(str, str)``). By default "=".
     unseparated_okay : `bool`, optional
         If True, allow values that do not have a separator. They will be
         returned in the values dict as a tuple of values in the key '', that
-        is: `values[''] = (unseparated_values, )`. By default False.
+        is: ``values[''] = (unseparated_values, )``. By default False.
     return_type : `type`, must be `dict` or `tuple`
         The type of the value that should be returned.
         If `dict` then the returned object will be a dict, for each item in
@@ -495,7 +495,7 @@ def split_kv(
 
     Returns
     -------
-    values : `dict` [`str`, `str`] or `tuple`[`tuple`[`str`, `str`], ...]
+    values : `dict` [`str`, `str`] or `tuple` [`tuple` [`str`, `str`], ...]
         The passed-in values in dict form or tuple form.
 
     Raises
@@ -829,18 +829,19 @@ class OptionSection(MWOption):
     does not pass any value to the command function.
 
     This class does a bit of hackery to add a section label to a click command
-    help output: first, `expose_value` is set to `False` so that no value is
+    help output: first, ``expose_value`` is set to `False` so that no value is
     passed to the command function. Second, this class overrides
     `click.Option.get_help_record` to return the section label string without
     any prefix so that it stands out as a section label.
 
     This class overrides the hidden attribute because our documentation build
     tool, sphinx-click, implements its own `get_help_record` function which
-    builds the record from other option values (e.g. `name`, `opts`), which
+    builds the record from other option values (e.g. ``name``, ``opts``), which
     breaks the hack we use to make `get_help_record` only return the
-    `sectionText`. Fortunately, Click gets the value of `hidden` inside the
-    `Option`'s `get_help_record`, and `sphinx-click` calls `opt.hidden` before
-    entering its `_get_help_record` function. So, making the hidden property
+    ``sectionText``. Fortunately, Click gets the value of `hidden` inside the
+    `click.Option`'s `get_help_record`, and `sphinx-click` calls ``opt.hidden``
+    before
+    entering its ``_get_help_record`` function. So, making the hidden property
     return True hides this option from sphinx-click, while allowing the section
     text to be returned by our `get_help_record` method when using Click.
 
@@ -1036,8 +1037,8 @@ class MWCommand(click.Command):
         The call to `_capture_args` in this override stores the arguments
         (option names, option value, and argument values) that were used by the
         caller on the command line in the context object. These stored
-        arugments can be used by the command function, e.g. to process options
-        in the order they appeared on the command line (pipetask uses this
+        arguments can be used by the command function, e.g. to process options
+        in the order they appeared on the command line (``pipetask`` uses this
         feature to create pipeline actions in an order from different options).
 
         Parameters
@@ -1091,14 +1092,14 @@ class MWCtxObj:
     """Helper object for managing the `click.Context.obj` parameter, allows
     obj data to be managed in a consistent way.
 
-    `Context.obj` defaults to None. `MWCtxObj.getFrom(ctx)` can be used to
+    `Context.obj` defaults to None. ``MWCtxObj.getFrom(ctx)`` can be used to
     initialize the obj if needed and return a new or existing `MWCtxObj`.
 
     The `args` attribute contains a list of options, option values, and
     argument values that is similar to the list of arguments and options that
     were passed in on the command line, with differences noted below:
 
-    * Option namess and option values are first in the list, and argument
+    * Option names and option values are first in the list, and argument
       values come last. The order of options and option values is preserved
       within the options. The order of argument values is preserved.
 
@@ -1138,7 +1139,7 @@ class MWCtxObj:
 
     @staticmethod
     def getFrom(ctx: click.Context) -> Any:
-        """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
+        """If needed, initialize ``ctx.obj`` with a new `MWCtxObj`, and return
         the new or already existing `MWCtxObj`.
 
         Parameters

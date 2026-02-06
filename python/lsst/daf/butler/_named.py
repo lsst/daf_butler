@@ -510,7 +510,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     -----
     Iteration order is guaranteed to be the same as insertion order (with
     the same general behavior as `dict` ordering).
-    Like `dicts`, sets with the same elements will compare as equal even if
+    Like `dict`, sets with the same elements will compare as equal even if
     their iterator order is not the same.
     """
 

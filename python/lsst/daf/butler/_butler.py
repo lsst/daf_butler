@@ -1748,8 +1748,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     @abstractmethod
     def query(self) -> AbstractContextManager[Query]:
-        """Context manager returning a `Query` object used for construction
-        and execution of complex queries.
+        """Context manager returning a `.queries.Query` object used for
+        construction and execution of complex queries.
         """
         raise NotImplementedError()
 
