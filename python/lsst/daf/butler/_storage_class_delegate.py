@@ -265,7 +265,7 @@ class StorageClassDelegate:
         ----------
         composite : `object`
             Parent composite object consisting of components to be extracted.
-        subset : iterable, optional
+        subset : `~collections.abc.Iterable`, optional
             Iterable containing subset of components to extract from composite.
             Must be a subset of those defined in
             `StorageClassDelegate.storageClass`.
@@ -451,7 +451,7 @@ class StorageClassDelegate:
 
         Notes
         -----
-        The default implementation uses `copy.deepcopy()`.
+        The default implementation uses `copy.deepcopy`.
         It is generally expected that this method is the equivalent of a deep
         copy. Subclasses can override this method if they already know the
         optimal approach for deep copying.

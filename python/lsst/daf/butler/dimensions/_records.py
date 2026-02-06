@@ -541,7 +541,7 @@ class DimensionRecord:
 
         Returns
         -------
-        value
+        value : `typing.Any`
             The metadata value.
 
         Raises
@@ -566,7 +566,7 @@ class DimensionRecord:
         Notes
         -----
         Unlike `to_simple` / `from_simple`, this serialization approach does
-        not encode the `definition` element in the serialized form.  This is
+        not encode the ``definition`` element in the serialized form.  This is
         expected to be serialized separately (e.g. as part of a homogeneous set
         of dimension records).
         """

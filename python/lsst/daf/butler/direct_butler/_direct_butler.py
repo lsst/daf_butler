@@ -368,7 +368,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
         for_put : `bool`, optional
-            If `True` this call is invoked as part of a `Butler.put()`.
+            If `True` this call is invoked as part of a `Butler.put`.
             Otherwise it is assumed to be part of a `Butler.get()`. This
             parameter is only relevant if there is dataset type
             inconsistency.

@@ -170,7 +170,7 @@ LocalBase64Bytes = Base64Bytes
 class Base64Region(Base64Bytes):
     """A SQLAlchemy custom type for Python `lsst.sphgeom.Region`.
 
-    Maps Python `sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
+    Maps Python `lsst.sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
 
     cache_ok = True  # have to be set explicitly in each class

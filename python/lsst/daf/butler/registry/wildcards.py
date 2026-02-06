@@ -81,14 +81,14 @@ class CategorizedWildcard:
              - two-element tuples of (`str`, value) where value is recognized
                by ``coerceItemValue`` (if provided);
              - a non-`str`, non-mapping iterable containing any of the above;
-             - the special value `...` (only if ``allowAny`` is `True`), which
-               matches anything;
+             - the special value ``...`` (only if ``allowAny`` is `True`),
+               which matches anything;
              - a mapping from `str` to a value are recognized by
                ``coerceItemValue`` (if provided);
              - a `CategorizedWildcard` instance (passed through unchanged if
                it meets the requirements specified by keyword arguments).
         allowAny : `bool`, optional
-            If `False` (`True` is default) raise `TypeError` if `...` is
+            If `False` (`True` is default) raise `TypeError` if ``...`` is
             encountered.
         allowPatterns : `bool`, optional
             If `False` (`True` is default) raise `TypeError` if a `re.Pattern`
@@ -297,7 +297,7 @@ class CollectionWildcard:
     """Regular expression patterns to match against collection names, or the
     special value ``...`` indicating all collections.
 
-    `...` must be accompanied by ``strings=()``.
+    ``...`` must be accompanied by ``strings=()``.
     """
 
     def __post_init__(self) -> None:
@@ -369,7 +369,7 @@ class CollectionWildcard:
 
         Returns
         -------
-        wildcard : ~CollectionWildcard`
+        wildcard : `CollectionWildcard`
             A `CollectionWildcard` instance.  `require_ordered` is guaranteed
             to succeed and return the given names in order.
         """

@@ -139,7 +139,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         Configuration as either a `Config` object or URI to file.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
-    root : `ResourcePath`
+    root : `lsst.resources.ResourcePath`
         Root directory URI of this `Datastore`.
     formatterFactory : `FormatterFactory`
         Factory for creating instances of formatters.
@@ -2052,7 +2052,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             Location to write the file artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            supported by `lsst.resources.ResourcePath.transfer_from`.
             "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the file artifact within the datastore

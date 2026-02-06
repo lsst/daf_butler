@@ -240,8 +240,8 @@ class DatasetRefURIs(abc.Sequence):
     DatasetRef.
 
     This is used in places where its members used to be represented as a tuple
-    `(primaryURI, componentURIs)`. To maintain backward compatibility this
-    inherits from Sequence and so instances can be treated as a two-item
+    (``primaryURI``, ``componentURIs``). To maintain backward compatibility
+    this inherits from Sequence and so instances can be treated as a two-item
     tuple.
 
     Parameters
@@ -475,7 +475,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Mapping from datastore name to root URI. The URI can be `None`
         if a datastore has no concept of a root URI.
-        (`dict` [`str`, `ResourcePath` | `None`])
+        (`dict` [`str`, `lsst.resources.ResourcePath` | `None`])
         """
         return {self.name: None}
 
@@ -599,7 +599,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         parameters: Mapping[str, Any] | None = None,
         storageClass: StorageClass | str | None = None,
     ) -> Any:
-        """Load an `InMemoryDataset` from the store.
+        """Load an in-memory dataset from the store.
 
         Parameters
         ----------
@@ -618,7 +618,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested Dataset or slice thereof as an in-memory dataset.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -642,7 +642,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
     def put(
         self, inMemoryDataset: Any, datasetRef: DatasetRef, provenance: DatasetProvenance | None = None
     ) -> None:
-        """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
+        """Write an in-memory dataset with a given `DatasetRef` to the store.
 
         Parameters
         ----------
@@ -658,7 +658,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
     @abstractmethod
     def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
+        """Write an in-memory dataset with a given `DatasetRef` to the store.
 
         Parameters
         ----------
@@ -1054,7 +1054,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             Location to write the artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            supported by `lsst.resources.ResourcePath.transfer_from`.
             "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the artifact within the datastore

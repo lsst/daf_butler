@@ -11,9 +11,23 @@ clean = true
 extensions = [
     "sphinx_click"
 ]
+nitpick_ignore = [
+    ["py:class", "logging.Filterer"],  # no python 3 docs for this
+    ["py:obj", "lsst.sphgeom"],
+    ["py:class", "dataset type expression"],
+    ["py:class", "collection expression"],
+]
+nitpick_ignore_regex = [
+    ['py:.*', 'pyarrow\..*'],
+    ['py:.*', 'lsst.sphgeom\..*'],  # sphgeom has pybind11 docs
+    ['py:.*', 'lsst.afw\..*'],  # afw has pybind11 docs
+]
 
 [sphinx.intersphinx.projects]
 astropy = "https://docs.astropy.org/en/stable"
 python = "https://docs.python.org/3"
 lsst = "https://pipelines.lsst.io/v/daily/"
 click = "https://click.palletsprojects.com/en/stable"
+sqlalchemy = "https://docs.sqlalchemy.org/en/20/"
+pandas = "https://pandas.pydata.org/docs/"
+numpy = "https://numpy.org/doc/stable/"

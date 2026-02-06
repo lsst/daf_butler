@@ -7,7 +7,7 @@ The Butler Command
 .. note::
 
     This page describes how to extend the ``butler`` subcommand; see :ref:`lsst.daf.butler-scripts` for documentation on the subcommands defined in `lsst.daf.butler`.
-    Additional subcommands are defined in other packages, especially `lsst.obs.base`; use ``butler --help`` to get a complete list.
+    Additional subcommands are defined in other packages, especially ``lsst.obs.base``; use ``butler --help`` to get a complete list.
 
 ``daf_butler`` provides a command line interface command called ``butler``. It supports subcommands, some of
 which are implemented in ``daf_butler``.

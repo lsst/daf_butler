@@ -112,7 +112,7 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     Parameters
     ----------
-    stream : `io.IO`
+    stream : `typing.IO`
         A writeable file-like object.
     universe : `DimensionUniverse`
         The dimension universe to use for the export.
@@ -299,7 +299,7 @@ class YamlRepoImportBackend(RepoImportBackend):
 
     Parameters
     ----------
-    stream : `io.IO`
+    stream : `typing.IO`
         A readable file-like object.
     butler : `Butler`
         The butler datasets will be imported into.  Only used to retrieve

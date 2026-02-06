@@ -51,7 +51,7 @@ F = TypeVar("F", bound=Callable)
 def transactional(func: F) -> F:
     """Decorate a method and makes it transactional.
 
-    This depends on the class also defining a `transaction` method
+    This depends on the class also defining a ``transaction`` method
     that takes no arguments and acts as a context manager.
 
     Parameters
@@ -84,8 +84,8 @@ def stripIfNotNone(s: str | None) -> str | None:
     Returns
     -------
     r : `str` or `None`
-        A string with leading and trailing whitespace stripped if `s` is not
-        `None`, or `None` if `s` is `None`.
+        A string with leading and trailing whitespace stripped if ``s`` is not
+        `None`, or `None` if ``s`` is `None`.
     """
     if s is not None:
         s = s.strip()

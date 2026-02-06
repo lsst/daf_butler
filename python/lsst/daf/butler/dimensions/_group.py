@@ -151,7 +151,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
     contexts where a collection of dimensions is required and a
     `DimensionUniverse` is available.  Exceptions include cases where order
     matters (and is different from the consistent ordering defined by the
-    `DimensionUniverse`), or complete `~collection.abc.Set` semantics are
+    `DimensionUniverse`), or complete `~collections.abc.Set` semantics are
     required.
 
     This class is not a Pydantic model, but it implements the

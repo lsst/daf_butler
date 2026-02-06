@@ -124,7 +124,7 @@ class CliCmdTestBase(abc.ABC):
         the expected arguments.
 
         Returns the result object for inspection, e.g. sometimes it's useful to
-        be able to inspect or print `result.output`.
+        be able to inspect or print ``result.output``.
 
         Parameters
         ----------

@@ -701,7 +701,7 @@ class Config(MutableMapping):
     def update(self, other: Mapping[str, Any]) -> None:  # type: ignore[override]
         """Update config from other `Config` or `dict`.
 
-        Like `dict.update()`, but will add or modify keys in nested dicts,
+        Like `dict.update`, but will add or modify keys in nested dicts,
         instead of overwriting the nested dict entirely.
 
         Parameters
@@ -813,7 +813,7 @@ class Config(MutableMapping):
 
         Raises
         ------
-        ValueError:
+        ValueError
             The supplied delimiter is alphanumeric.
         """
         if topLevelOnly:
@@ -939,7 +939,7 @@ class Config(MutableMapping):
             URI of location where the Config will be written.
         updateFile : bool, optional
             If True and uri does not end on a filename with extension, will
-            append `defaultFileName` to the target uri. True by default.
+            append ``defaultFileName`` to the target uri. True by default.
         defaultFileName : bool, optional
             The file name that will be appended to target uri if updateFile is
             True and uri does not end on a file with an extension.

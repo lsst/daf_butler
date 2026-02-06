@@ -52,7 +52,7 @@ class RegistryConfig(ConfigSubset):
     defaultConfigFile = "registry.yaml"
 
     def getDialect(self) -> str:
-        """Parse the `db` key of the config and returns the database dialect.
+        """Parse the ``db`` key of the config and returns the database dialect.
 
         Returns
         -------
@@ -65,9 +65,9 @@ class RegistryConfig(ConfigSubset):
     def getDatabaseClass(self) -> type[Database]:
         """Return the `Database` class targeted by configuration values.
 
-        The appropriate class is determined by parsing the `db` key to extract
-        the dialect, and then looking that up under the `engines` key of the
-        registry config.
+        The appropriate class is determined by parsing the ``db`` key to
+        extract the dialect, and then looking that up under the ``engines`` key
+        of the registry config.
         """
         dialect = self.getDialect()
         if dialect not in self["engines"]:

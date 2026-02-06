@@ -811,7 +811,7 @@ class DimensionDataAttacher:
             coordinates are immutable).
         query : `.queries.Query`, optional
             A butler query that can be used to look up missing dimension
-            records.  Records fetched via query are cached in the `records`
+            records.  Records fetched via query are cached in the ``records``
             attribute.
 
         Returns

@@ -123,8 +123,8 @@ class TimeConverter(metaclass=Singleton):
         -----
         Only the limited range of input times is supported by this method as it
         is defined useful in the context of Butler and Registry. If input time
-        is earlier `min_time` then this method returns `min_nsec`. If input
-        time comes after `max_time` then it returns `max_nsec`.
+        is earlier than ``min_time`` then this method returns ``min_nsec``. If
+        input time comes after ``max_time`` then it returns ``max_nsec``.
         """
         # sometimes comparison produces warnings if input value is in UTC
         # scale, transform it to TAI before doing anything but also trap

@@ -136,7 +136,7 @@ class DatasetProvenance(pydantic.BaseModel):
             if `True`.
         use_upper : `bool` or `None`, optional
             If `None` the case of the keys matches the case of the first
-            character of the prefix (defined by whether `str.isupper()` returns
+            character of the prefix (defined by whether `str.isupper` returns
             true, else they will be lower case). If `False` the case will be
             lower case, and if `True` the case will be upper case.
         max_inputs : `int` or `None`, optional

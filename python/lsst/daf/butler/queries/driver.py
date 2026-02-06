@@ -251,7 +251,7 @@ class QueryDriver(AbstractContextManager[None]):
 
         Returns
         -------
-        key
+        key : `DataCoordinateUploadKey`
             Unique identifier for the upload that allows it to be referenced in
             a `QueryTree`.
         """

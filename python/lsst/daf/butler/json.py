@@ -129,20 +129,20 @@ def from_json_generic(
 ) -> SupportsSimple:
     """Return new class from JSON string.
 
-    Converts a JSON string created by `to_json` and return
+    Converts a JSON string created by ``to_json`` and return
     something of the supplied class.
 
     Parameters
     ----------
     json_str : `str`
         Representation of the dimensions in JSON format as created
-        by `to_json()`.
+        by ``to_json()``.
     universe : `DimensionUniverse`, optional
         The special graph of all known dimensions. Passed directly
-        to `from_simple()`.
+        to ``from_simple``.
     registry : `lsst.daf.butler.Registry`, optional
         Registry to use to convert simple name of a DatasetType to
-        a full `DatasetType`. Passed directly to `from_simple()`.
+        a full `DatasetType`. Passed directly to ``from_simple``.
 
     Returns
     -------

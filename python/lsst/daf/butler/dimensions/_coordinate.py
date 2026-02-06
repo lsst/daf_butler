@@ -182,7 +182,7 @@ class DataCoordinate:
         defaults : `DataCoordinate`, optional
             Default dimension key-value pairs to use when needed.  These are
             never used to infer ``group``, and are ignored if a different value
-            is provided for the same key in ``mapping`` or `**kwargs``.
+            is provided for the same key in ``mapping`` or ``**kwargs``.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
@@ -305,8 +305,8 @@ class DataCoordinate:
         -------
         dataId : `DataCoordinate`
             A data ID object that identifies no dimensions.  `hasFull` and
-            `hasRecords` are guaranteed to return `True`, because both `full`
-            and `records` are just empty mappings.
+            `hasRecords` are guaranteed to return `True`, because both
+            `full_values` and `records` are just empty mappings.
         """
         return DataCoordinate.make_empty(universe)
 
@@ -325,8 +325,8 @@ class DataCoordinate:
         -------
         data_id : `DataCoordinate`
             A data ID object that identifies no dimensions.  `hasFull` and
-            `hasRecords` are guaranteed to return `True`, because both `full`
-            and `records` are just empty mappings.
+            `hasRecords` are guaranteed to return `True`, because both
+            `full_values` and `records` are just empty mappings.
         """
         return _ExpandedTupleDataCoordinate(universe.empty, (), {})
 

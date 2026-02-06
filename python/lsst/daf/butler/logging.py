@@ -403,7 +403,7 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
     extra : `dict`, optional
         Additional JSON data included with the log records.  Subclasses may
         interpret structured information, but the base class just sets this as
-        the `extra` attribute.
+        the ``extra`` attribute.
 
     Notes
     -----
@@ -422,9 +422,9 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
 
     Subclasses of `ButlerLogRecords` are expected to support these formats by
     using the "extra" JSON fields to hold any additional state.   If subclasses
-    intercept `extra` at construction in a way that prevents that information
-    from being held in the base class `extra` field, they must override
-    `_from_record_subset` and `to_json_data` to pass that state to slices and
+    intercept ``extra`` at construction in a way that prevents that information
+    from being held in the base class ``extra`` field, they must override
+    ``_from_record_subset`` and `to_json_data` to pass that state to slices and
     save it, respectively.
     """
 
@@ -449,7 +449,7 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
         extra : `dict`, optional
             Additional JSON data included with the log records.  Subclasses may
             interpret structured information, but the base class just sets this
-            as the `extra` attribute.
+            as the ``extra`` attribute.
 
         Returns
         -------

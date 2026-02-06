@@ -430,10 +430,11 @@ class DatasetRecordStorageManager(VersionedExtension):
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``dataset_type.dimensions``.
         id_generation_mode : `DatasetIdGenEnum`
-            With `UNIQUE` each new dataset is inserted with its new unique ID.
-            With non-`UNIQUE` mode ID is computed from some combination of
-            dataset type, dataId, and run collection name; if the same ID is
-            already in the database then new record is not inserted.
+            With `~DatasetIdGenEnum.UNIQUE` each new dataset is inserted with
+            its new unique ID. With non-`~DatasetIdGenEnum.UNIQUE` mode the ID
+            is computed from some combination of dataset type, dataId, and run
+            collection name; if the same ID is already in the database then new
+            record is not inserted.
 
         Returns
         -------

@@ -46,6 +46,15 @@ class MatplotlibFormatter(FormatterV2):
     default_extension = ".png"
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        """Serialize the in memory dataset to a local image file.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The Python object to serialize.
+        uri : `lsst.resources.ResourcePath`
+            The location to write the local file.
+        """
         # Format is not forced so if there is no extension in uri one will
         # be added and the datastore will not know what happened.
         # The fname for savefig can take a file descriptor. If it works

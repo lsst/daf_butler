@@ -398,7 +398,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             configuration, insulating it from changes to the defaults (which
             may be good or bad, depending on the nature of the changes).
             Future *additions* to the defaults will still be picked up when
-            initializing `Butlers` to repos created with ``standalone=True``.
+            initializing a `Butler` for repos created with ``standalone=True``.
         searchPaths : `list` of `str`, optional
             Directory paths to search when calculating the full butler
             configuration.
@@ -409,7 +409,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             of the root directory for a datastore or registry to be given.
             If this parameter is `True` the values for ``root`` will be
             forced into the resulting config if appropriate.
-        outfile : `lss.resources.ResourcePathExpression`, optional
+        outfile : `lsst.resources.ResourcePathExpression`, optional
             If not-`None`, the output configuration will be written to this
             location rather than into the repository itself. Can be a URI
             string.  Can refer to a directory that will be used to write
@@ -1221,7 +1221,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Location to write the artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `~lsst.resources.ResourcePath.transfer_from()`.
+            supported by `~lsst.resources.ResourcePath.transfer_from`.
             "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the artifact within the datastore
@@ -1748,8 +1748,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     @abstractmethod
     def query(self) -> AbstractContextManager[Query]:
-        """Context manager returning a `Query` object used for construction
-        and execution of complex queries.
+        """Context manager returning a `.queries.Query` object used for
+        construction and execution of complex queries.
         """
         raise NotImplementedError()
 
@@ -2021,8 +2021,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             in the query.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  See
-            `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
-            information.
+            `Registry.queryDataIds` and :ref:`daf_butler_dimension_expressions`
+            for more information.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.

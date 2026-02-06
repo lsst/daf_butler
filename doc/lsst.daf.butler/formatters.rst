@@ -40,7 +40,7 @@ Composites
 A composite storage class declares that the Python type consists of discrete components that can be accessed individually.
 Each of these components must declare its storage class as well.
 
-For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` composite storage class, the user can `Butler.get()` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
+For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` composite storage class, the user can `Butler.get` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
 The implementation details of how that metadata is retrieved depend on the details of how the dataset was serialized within the datastore.
 
 Composites must declare **all** the components for the Python type and Butler requires that if a composite is dissassembled into its components and then reassembled to form the composite again, this operation must be lossless.
@@ -62,7 +62,7 @@ If your Python type has useful components that can be accessed but which do not 
 Read Parameters
 ^^^^^^^^^^^^^^^
 
-A storage class definition includes read parameters that can control how a particular storage class is modified by `Butler.get()` before being returned to the caller.
+A storage class definition includes read parameters that can control how a particular storage class is modified by `Butler.get` before being returned to the caller.
 These read parameters can be thought of as being understood by the Python type being returned and modifying it in a way that still returns that identical Python type.
 The canonical example of this is subsetting where the caller passes in a bounding box that reduces the size of the image being returned.
 
@@ -70,7 +70,7 @@ If a parameter would change the Python type its functionality should be encapsul
 
 .. note::
 
-  Parameters that control how to serialize a dataset into an artifact within the datastore are not supported by user code doing a `Butler.put()`.
+  Parameters that control how to serialize a dataset into an artifact within the datastore are not supported by user code doing a `Butler.put`.
   This is because a user storing a dataset does not know which formatter the datastore has been configured to use or even if a dataset will be persisted.
   For example, the caller has no real idea whether a particular compression option is supported or not because they have no visibility into whether the file written is in HDF5 or FITS or plain text.
   For this reason write parameters are part of formatter configuration.
@@ -176,10 +176,10 @@ Composite Disassembly
 ^^^^^^^^^^^^^^^^^^^^^
 
 A composite is declared by specifying components in the `StorageClass` definition.
-Storage class delegate classes must provide at minimum a `StorageClassDelegate.getComponent()` method to enable a specific component to be extracted from the composite Python type.
+Storage class delegate classes must provide at minimum a `StorageClassDelegate.getComponent` method to enable a specific component to be extracted from the composite Python type.
 Datastores can be configured to prefer to write composite datasets out as the individual components and to reconstruct the composite on read.
 This can lead to more efficient use of datastore bandwidth (especially an issue for an S3-like storage rather than a local file system) if a pipeline always takes as input a component and does not require the full dataset or if a user in the science platform wants to retrieve the metadata for many datasets.
-To allow this the delegate subclass must provide `StorageClassDelegate.assemble()` and `StorageClassDelegate.disassemble()`.
+To allow this the delegate subclass must provide `StorageClassDelegate.assemble` and `StorageClassDelegate.disassemble`.
 
 Datastores can be configured to always disassemble composites or never disassemble them.
 Additionally datastores can choose to only disassemble specific storage classes or dataset types.
@@ -193,36 +193,36 @@ Derived Components
 ^^^^^^^^^^^^^^^^^^
 
 Just as for components of a composite, if a storage class defines derived components, it must also specify a delegate to support the calculation of that derived component.
-This should be implemented in the `StorageClassDelegate.getComponent()` method.
+This should be implemented in the `StorageClassDelegate.getComponent` method.
 
 Additionally, if the storage class refers to a composite, the datastore can be configured to disassemble the dataset into discrete artifacts.
 Since derived components are computed and are not persisted themselves, the datastore needs to be told which component should be used to calculate this derived quantity.
-To enable this the delegate must implement `StorageClassDelegate.selectResponsibleComponent()`.
+To enable this the delegate must implement `StorageClassDelegate.selectResponsibleComponent`.
 This method is given the name of the derived component and a list of all available persisted components and must return one and only one relevant component.
 The datastore will then make a component request to the `~lsst.daf.butler.Formatter` associated with that component.
 
 .. note::
 
-  All delegates must support read/write components and derived components in the `StorageClassDelegate.getComponent()` implementation method.
+  All delegates must support read/write components and derived components in the `StorageClassDelegate.getComponent` implementation method.
   As a corollary, all storage classes using components must specify a delegate.
 
 .. note::
 
-   A component returned by `~StorageClassDelegate.selectResponsibleComponent()` may require a custom formatter, to support the derived component, even if it otherwise would not.
+   A component returned by `~StorageClassDelegate.selectResponsibleComponent` may require a custom formatter, to support the derived component, even if it otherwise would not.
 
 Read Parameters
 ^^^^^^^^^^^^^^^
 
-Read parameters are used to adjust what is returned by the `Butler.get()` call but there is a requirement that whatever those read parameters do to modify the `Butler.get()` the Python type returned must match the type associated with the `Butler.StorageClass` associated with the `Butler.DatasetType`.
+Read parameters are used to adjust what is returned by the `Butler.get` call but there is a requirement that whatever those read parameters do to modify the `Butler.get` the Python type returned must match the type associated with the `StorageClass` associated with the `DatasetType`.
 For example this means that a read parameter that subsets an image is valid because the type returned would still be an image.
 
-If read parameters are defined then a `StorageClassDelegate.handleParameters()` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
+If read parameters are defined then a `StorageClassDelegate.handleParameters` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
 This method must be written even if a `FormatterV2` is to be used.
 There are two reasons for this; firstly, there is no guarantee that a particular formatter implementation will understand the parameter (and no requirement for that to be the case), and secondly there is no guarantee that a formatter will be involved in retrieval of the dataset.
 In-memory datastores never involve a file artifact so whilst composite disassembly is never an issue, a delegate must at least provide the parameter handler to allow the user to configure such a datastore.
 
 For derived components parameters are handled by the composite component prior to deriving the derived component.
-The delegate `StorageClassDelegate.handleParameters()` method will only be called in this situation if no formatter is used (such as with an in-memory datastore).
+The delegate `StorageClassDelegate.handleParameters` method will only be called in this situation if no formatter is used (such as with an in-memory datastore).
 
 Formatters
 ==========

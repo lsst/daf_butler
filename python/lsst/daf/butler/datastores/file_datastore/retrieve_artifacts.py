@@ -289,9 +289,9 @@ def determine_destination_for_retrieved_artifact(
 
     Parameters
     ----------
-    destination_directory : `ResourcePath`
+    destination_directory : `lsst.resources.ResourcePath`
         Path to the output directory where file will be stored.
-    source_path : `ResourcePath`
+    source_path : `lsst.resources.ResourcePath`
         Path to the source file to be transferred.  This may be relative to the
         datastore root, or an absolute path.
     preserve_path : `bool`

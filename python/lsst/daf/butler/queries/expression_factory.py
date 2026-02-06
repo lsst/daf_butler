@@ -372,7 +372,7 @@ class RegionProxy(ExpressionProxy):
 
         Parameters
         ----------
-        other : `RegionProxy` or `Region`
+        other : `RegionProxy` or `lsst.sphgeom.Region`
             Expression or literal to compare to.
 
         Returns

@@ -78,12 +78,12 @@ class Query(QueryBase):
 
     Parameters
     ----------
-    driver : `~lsst.daf.butler.queries.driver.QueryDriver`
+    driver : `~.queries.driver.QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `~lsst.daf.butler.queries.tree.QueryTree`, optional
+    tree : `~.queries.tree.QueryTree`, optional
         Description of the query as a tree of joins and column expressions.
         Defaults to the result of a call to
-        `~lsst.daf.butler.queries.tree.make_identity_query_tree`.
+        `~.queries.tree.make_identity_query_tree`.
 
     Notes
     -----

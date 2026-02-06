@@ -196,6 +196,22 @@ class BadWriteFormatter(YamlFormatter):
         uri: ResourcePath,
         cache_manager: AbstractDatastoreCacheManager | None = None,
     ) -> bool:
+        """Write empty file and immediately fail.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The Python object to serialize.
+        uri : `lsst.resources.ResourcePath`
+            The location to write the content.
+        cache_manager : `AbstractDatastoreCacheManager`
+            Cache manager. Unused.
+
+        Raises
+        ------
+        RuntimeError
+            Raised every time specifically for testing this scenario.
+        """
         uri.write(b"")
         raise RuntimeError("Did not succeed in writing file.")
 

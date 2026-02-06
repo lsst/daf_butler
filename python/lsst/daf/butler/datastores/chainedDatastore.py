@@ -100,9 +100,9 @@ class ChainedDatastore(Datastore):
 
     Notes
     -----
-    ChainedDatastore never supports `None` or `"move"` as an `ingest` transfer
-    mode.  It supports `"copy"`, `"symlink"`, `"relsymlink"`
-    and `"hardlink"` if and only if all its child datastores do.
+    ChainedDatastore never supports `None` or ``"move"`` as an ingest transfer
+    mode.  It supports ``"copy"``, ``"symlink"``, ``"relsymlink"``
+    and ``"hardlink"`` if and only if all its child datastores do.
     """
 
     defaultConfigFile = "datastores/chainedDatastore.yaml"
@@ -830,7 +830,7 @@ class ChainedDatastore(Datastore):
             Location to write the file artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            supported by `lsst.resources.ResourcePath.transfer_from`.
             "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the file artifact within the datastore

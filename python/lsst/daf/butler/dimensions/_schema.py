@@ -150,7 +150,7 @@ class DimensionRecordSchema:
         ----------
         remainder_only : `bool`, optional
             If `True`, skip the fields in `dimensions` and convert only those
-            in `remainder`.
+            in ``remainder``.
         dimensions : `DimensionGroup`, optional
             Full set of dimensions over which the rows of the table are unique
             or close to unique.  This is used to determine whether to use
@@ -160,10 +160,10 @@ class DimensionRecordSchema:
 
         Returns
         -------
-        converters : `list` [ `arrow_utils.ToArrow` ]
+        converters : `list` [ `..arrow_utils.ToArrow` ]
             List of objects that can convert `DimensionRecord` attribute values
-            to Arrow records, corresponding exactly to either `all` or
-            `remainder`, depending on ``remainder_only``.
+            to Arrow records, corresponding exactly to either ``all`` or
+            ``remainder``, depending on ``remainder_only``.
         """
         if dimensions is None:
             dimensions = self.element.minimal_group

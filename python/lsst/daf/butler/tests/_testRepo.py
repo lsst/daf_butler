@@ -68,11 +68,12 @@ def makeTestRepo(
     ----------
     root : `str`
         The location of the root directory for the repository.
-    dataIds : `~collections.abc.Mapping` [`str`, `iterable`], optional
+    dataIds : `~collections.abc.Mapping` \
+            [`str`, `~collections.abc.Iterable`], optional
         A mapping keyed by the dimensions used in the test. Each value is an
         iterable of names for that dimension (e.g., detector IDs for
-        `"detector"`). Related dimensions (e.g., instruments and detectors) are
-        linked arbitrarily, with values created for implied dimensions only
+        ``"detector"``). Related dimensions (e.g., instruments and detectors)
+        are linked arbitrarily, with values created for implied dimensions only
         when needed. This parameter is provided for compatibility with old
         code; newer code should make the repository, then call
         `~lsst.daf.butler.tests.addDataIdValue`.
@@ -164,16 +165,16 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
 
     Parameters
     ----------
-    dataIds : `~collections.abc.Mapping` [`str`, `iterable`]
+    dataIds : `~collections.abc.Mapping` [`str`, `~collections.abc.Iterable`]
         A mapping keyed by the dimensions of interest. Each value is an
         iterable of names for that dimension (e.g., detector IDs for
-        `"detector"`).
+        ``"detector"``).
     universe : lsst.daf.butler.DimensionUniverse
         Set of all known dimensions and their relationships.
 
     Returns
     -------
-    dataIds : `~collections.abc.Mapping` [`str`, `iterable`]
+    dataIds : `~collections.abc.Mapping` [`str`, `~collections.abc.Iterable`]
         A mapping keyed by the dimensions of interest, giving one
         `~lsst.daf.butler.DimensionRecord` for each input name. Related
         dimensions (e.g., instruments and detectors) are linked arbitrarily.
