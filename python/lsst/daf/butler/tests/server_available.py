@@ -32,6 +32,8 @@ __all__ = (
     "butler_server_is_available",
 )
 
+import sys
+
 butler_server_is_available = True
 """`True` if all dependencies required to use Butler server and RemoteButler
 are installed.
@@ -51,3 +53,7 @@ try:
 except ImportError as e:
     butler_server_is_available = False
     butler_server_import_error = f"Server libraries could not be loaded: {str(e)}"
+
+if sys.version_info.major == 3 and sys.version_info.minor < 13:
+    butler_server_is_available = False
+    butler_server_import_error = "Butler server requires Python 3.13 or later."

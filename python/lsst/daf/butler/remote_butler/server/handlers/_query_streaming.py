@@ -28,11 +28,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import AbstractContextManager
 from typing import Protocol, TypeVar
 
-from fastapi.concurrency import contextmanager_in_threadpool, iterate_in_threadpool
 from fastapi.responses import StreamingResponse
 
 from lsst.daf.butler.remote_butler.server_models import (
@@ -43,7 +42,6 @@ from lsst.daf.butler.remote_butler.server_models import (
 
 from ...._exceptions import ButlerUserError
 from ..._errors import serialize_butler_user_error
-from .._telemetry import get_telemetry_context
 from ._query_limits import QueryLimits
 
 # Alias this function so we can mock it during unit tests.
@@ -136,15 +134,18 @@ async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncI
     async with _query_limits.track_query(user):
         # `None` signals that there is no more data to send.
         queue = asyncio.Queue[QueryExecuteResultData | None](1)
-        async with asyncio.TaskGroup() as tg:
-            # Run a background task to read from the DB and insert the result
-            # pages into a queue.
-            tg.create_task(_enqueue_query_pages(queue, query))
+        # Run a background task to read from the DB and insert the result
+        # pages into a queue.
+        task = asyncio.create_task(_enqueue_query_pages(queue, query))
+        try:
             # Read the result pages from the queue and send them to the client,
             # inserting a keep-alive message every 15 seconds if we are waiting
             # a long time for the database.
             async for message in _dequeue_query_pages_with_keepalive(queue):
                 yield message.model_dump_json() + "\n"
+        finally:
+            queue.shutdown()  # type: ignore[attr-defined]
+            await task
 
 
 async def _enqueue_query_pages(
@@ -153,20 +154,54 @@ async def _enqueue_query_pages(
     """Set up a QueryDriver to run the query, and copy the results into a
     queue.  Send `None` to the queue when there is no more data to read.
     """
+    loop = asyncio.get_event_loop()
+
+    def result_callback(page: QueryExecuteResultData) -> None:
+        asyncio.run_coroutine_threadsafe(queue.put(page), loop).result()
+
+    done_event = asyncio.Event()
+
+    def done_callback() -> None:
+        loop.call_soon_threadsafe(done_event.set)
+
     try:
-        telemetry = get_telemetry_context()
-        with telemetry.span("Execute query"):
-            async with contextmanager_in_threadpool(query.setup()) as ctx:
-                with telemetry.span("Read from DB and send results"):
-                    async for page in iterate_in_threadpool(query.execute(ctx)):
-                        await queue.put(page)
+        await asyncio.to_thread(_execute_query_sync, query, result_callback, done_callback)
+        # Signal that there is no more data to read.
+        await queue.put(None)
+    finally:
+        # Abort the database thread if cancellation or some other error occurs.
+        queue.shutdown()  # type: ignore[attr-defined]
+        # Wait for the thread to complete -- we don't want to release the
+        # user's query limit until their query is actually done.
+        # This is most relevant if they cancel a query that has a long startup
+        # time (due to a bad ORDER BY clause or similar.)
+        #
+        # From the `await asyncio.to_thread` above, the thread is usually
+        # finished before we get here -- but the `await` exits immediately
+        # when cancellation occurs, without waiting for the thread.
+        await done_event.wait()
+
+
+def _execute_query_sync(
+    query: StreamingQuery,
+    result_callback: Callable[[QueryExecuteResultData], None],
+    done_callback: Callable[[], None],
+) -> None:
+    # Postgres cursors are not thread safe.  Cursor setup/usage/teardown needs
+    # to run in a single thread to ensure that cursors are always closed, and
+    # that the closing doesn't happen until after we are done using the cursor.
+    try:
+        with query.setup() as ctx:
+            for page in query.execute(ctx):
+                result_callback(page)
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
         # client.
-        await queue.put(QueryErrorResultModel(error=serialize_butler_user_error(e)))
-
-    # Signal that there is no more data to read.
-    await queue.put(None)
+        result_callback(QueryErrorResultModel(error=serialize_butler_user_error(e)))
+    except asyncio.QueueShutdown:  # type: ignore[attr-defined]
+        pass
+    finally:
+        done_callback()
 
 
 async def _dequeue_query_pages_with_keepalive(

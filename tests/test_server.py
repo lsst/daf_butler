@@ -35,10 +35,30 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import DEFAULT, AsyncMock, NonCallableMock, patch
 
+from lsst.daf.butler import (
+    Butler,
+    DataCoordinate,
+    DatasetId,
+    DatasetNotFoundError,
+    DatasetRef,
+    DatasetType,
+    FileDataset,
+    InvalidQueryError,
+    LabeledButlerFactory,
+    MissingDatasetTypeError,
+    NoDefaultCollectionError,
+    StorageClassFactory,
+)
+from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.registry import RegistryDefaults
+from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
+from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, mock_env
+from lsst.resources import ResourcePath
+from lsst.resources.http import HttpResourcePath
 
-try:
-    # Failing to import any of these should disable the tests.
+if butler_server_is_available:
     import fastapi
     import httpx
     import safir.dependencies.logger
@@ -64,37 +84,11 @@ try:
     from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
-    reason_text = ""
-except ImportError as e:
-    create_test_server = None
-    reason_text = str(e)
-
-
-from lsst.daf.butler import (
-    Butler,
-    DataCoordinate,
-    DatasetId,
-    DatasetNotFoundError,
-    DatasetRef,
-    DatasetType,
-    FileDataset,
-    InvalidQueryError,
-    LabeledButlerFactory,
-    MissingDatasetTypeError,
-    NoDefaultCollectionError,
-    StorageClassFactory,
-)
-from lsst.daf.butler.datastore import DatasetRefURIs
-from lsst.daf.butler.registry import RegistryDefaults
-from lsst.daf.butler.tests import DatastoreMock, addDatasetType
-from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, mock_env
-from lsst.resources import ResourcePath
-from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 
@@ -600,7 +594,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
                 list(query.join_data_coordinates(data_coordinates).datasets(ref.datasetType, ref.run))
 
 
-@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerClientServerAuthorizationTestCase(unittest.TestCase):
     """Test authentication/authorization functionality."""
 
@@ -701,7 +695,7 @@ def _timeout_twice():
     return timeout
 
 
-@unittest.skipIf(create_test_server is None, f"Server dependencies not installed: {reason_text}")
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class QueryLimitsTestCase(unittest.IsolatedAsyncioTestCase):
     """Test details of the code that limits the maximum number of concurrent
     queries in the server.
