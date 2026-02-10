@@ -27,7 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("ZipIndex", "determine_destination_for_retrieved_artifact", "retrieve_and_zip", "unpack_zips")
+__all__ = (
+    "ArtifactIndexInfo",
+    "ZipIndex",
+    "determine_destination_for_retrieved_artifact",
+    "retrieve_and_zip",
+    "unpack_zips",
+)
 
 import logging
 import tempfile
@@ -237,7 +243,8 @@ class ZipIndex(BaseModel):
         ----------
         refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets present in the index.
-        artifact_map : `dict` [ `lsst.resources.ResourcePath`, `ArtifactMap` ]
+        artifact_map : `dict` [ `lsst.resources.ResourcePath`, \
+                `ArtifactIndexInfo` ]
             Mapping of artifact path to information linking it to the
             associated refs and datastore information.
         root : `lsst.resources.ResourcePath`

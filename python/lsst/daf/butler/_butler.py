@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ["Butler"]
+__all__ = ["Butler", "ParsedButlerDatasetURI", "SpecificButlerDataset"]
 
 import dataclasses
 import urllib.parse
@@ -80,15 +80,25 @@ _LOG = getLogger(__name__)
 
 @dataclasses.dataclass
 class ParsedButlerDatasetURI:
+    """Representation of the contents of an IVOA IVOID or dataset URI."""
+
     label: str
+    """Label of the associated butler repository. (`str`)"""
     dataset_id: uuid.UUID
+    """Dataset ID of the referenced dataset within the labeled repository.
+    (`uuid.UUID`)"""
     uri: str
+    """The original URI that was parsed (`str`)."""
 
 
 @dataclasses.dataclass
 class SpecificButlerDataset:
+    """A dataset ref associated with a specific butler."""
+
     butler: Butler
+    """A specific butler repository (`Butler`)."""
     dataset: DatasetRef | None
+    """The reference of a specific dataset in that butler (`DatasetRef`)."""
 
 
 class _DeprecatedDefault:
