@@ -301,7 +301,7 @@ class ColumnSet:
 
         Parameters
         ----------
-        logical_table : `str` or ``ANY_DATASET```
+        logical_table : `str` or ``ANY_DATASET``
             Name of the dimension element or dataset type the column belongs
             to.  ``ANY_DATASET`` is used to represent any dataset type.
         field : `str` or `None`

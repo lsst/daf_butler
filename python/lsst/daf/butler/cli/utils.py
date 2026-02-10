@@ -840,10 +840,10 @@ class OptionSection(MWOption):
     breaks the hack we use to make `get_help_record` only return the
     ``sectionText``. Fortunately, Click gets the value of `hidden` inside the
     `click.Option`'s `get_help_record`, and sphinx-click calls ``opt.hidden``
-    before
-    entering its ``_get_help_record`` function. So, making the hidden property
-    return True hides this option from sphinx-click, while allowing the section
-    text to be returned by our `get_help_record` method when using Click.
+    before entering its ``_get_help_record`` function. So, making the hidden
+    property return True hides this option from sphinx-click, while allowing
+    the section text to be returned by our `get_help_record` method when using
+    Click.
 
     The intention for this implementation is to do minimally invasive overrides
     of the click classes so as to be robust and easy to fix if the click
