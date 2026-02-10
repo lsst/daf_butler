@@ -135,7 +135,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
     ----------
     universe : `DimensionUniverse`
         Object that manages all known dimensions.
-    names : iterable of `str`, optional
+    names : `~collections.abc.Iterable` of `str`, optional
         An iterable of the names of dimensions that must be included in the
         group.  All (recursive) dependencies of these dimensions will also be
         included.  At most one of ``dimensions`` and ``names`` must be
@@ -151,7 +151,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
     contexts where a collection of dimensions is required and a
     `DimensionUniverse` is available.  Exceptions include cases where order
     matters (and is different from the consistent ordering defined by the
-    `DimensionUniverse`), or complete `~collection.abc.Set` semantics are
+    `DimensionUniverse`), or complete `~collections.abc.Set` semantics are
     required.
 
     This class is not a Pydantic model, but it implements the

@@ -210,6 +210,15 @@ class ParquetFormatter(FormatterV2):
         return _add_arrow_provenance(in_memory_dataset, self.dataset_ref, provenance)
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        """Serialize the in memory dataset to a local parquet file.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The Python object to serialize.
+        uri : `lsst.resources.ResourcePath`
+            The location to write the local file.
+        """
         if isinstance(in_memory_dataset, pa.Schema):
             pq.write_metadata(in_memory_dataset, uri.ospath)
             return
@@ -488,7 +497,9 @@ def numpy_dict_to_arrow(numpy_dict: dict[str, np.ndarray]) -> pa.Table:
 
     Raises
     ------
-    ValueError if columns in numpy_dict have unequal numbers of rows.
+    ValueError
+        Raised if columns in ``numpy_dict`` have unequal numbers of
+        rows.
     """
     dtype, rowcount = _numpy_dict_to_dtype(numpy_dict)
     type_list = _numpy_dtype_to_arrow_types(dtype)

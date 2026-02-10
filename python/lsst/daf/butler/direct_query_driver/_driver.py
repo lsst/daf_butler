@@ -1469,8 +1469,8 @@ class DirectQueryDriver(QueryDriver):
         fields : `~collections.abc.Set` [ `str` ]
             Dataset fields to include.
         union_dataset_type_name : `str`, optional
-            Dataset type name to use when `resolved_search` represents multiple
-            union datasets.
+            Dataset type name to use when ``resolved_search`` represents
+            multiple union datasets.
         """
         # The asserts below will need to be dropped (and the implications
         # dealt with instead) if materializations start having dataset fields.

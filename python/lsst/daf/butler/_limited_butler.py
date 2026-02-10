@@ -302,7 +302,7 @@ class LimitedButler(AbstractContextManager):
 
         Parameters
         ----------
-        refs : iterable of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the required datasets.
         predict : `bool`, optional
             If `True`, allow URIs to be returned of datasets that have not
@@ -357,7 +357,7 @@ class LimitedButler(AbstractContextManager):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
 
         Returns

@@ -540,7 +540,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets for which artifacts are to be retrieved.
             A single ref can result in multiple artifacts. The refs must
             be resolved.
@@ -548,7 +548,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             Location to write the artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            supported by `lsst.resources.ResourcePath.transfer_from`.
             "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the artifact within the datastore
@@ -718,7 +718,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         Parameters
         ----------
-        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+        entities : `~collections.abc.Iterable` [`DatasetRef` | `DatasetType`\
+                | `StorageClass`]
             Entities to test against this configuration.  Can be differing
             types.
         logFailures : `bool`, optional

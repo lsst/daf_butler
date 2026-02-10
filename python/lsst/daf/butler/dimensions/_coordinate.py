@@ -139,10 +139,10 @@ class DataCoordinate:
 
     Lookups for implied dimensions (those in ``self.dimensions.implied``) are
     supported if and only if `has_full_values` is `True`.  This also sets the
-    keys of the `mapping` attribute.  This means that `DataCoordinate` equality
-    is not the same as testing for equality on the `mapping` attribute
-    (instead, it is the same as testing for equality on the `required`
-    attribute).
+    keys of the ``mapping`` attribute.  This means that `DataCoordinate`
+    equality is not the same as testing for equality on the ``mapping``
+    attribute (instead, it is the same as testing for equality on the
+    ``required`` attribute).
 
     See also :ref:`lsst.daf.butler-dimensions_data_ids`
     """
@@ -182,7 +182,7 @@ class DataCoordinate:
         defaults : `DataCoordinate`, optional
             Default dimension key-value pairs to use when needed.  These are
             never used to infer ``group``, and are ignored if a different value
-            is provided for the same key in ``mapping`` or `**kwargs``.
+            is provided for the same key in ``mapping`` or ``**kwargs``.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
@@ -305,8 +305,8 @@ class DataCoordinate:
         -------
         dataId : `DataCoordinate`
             A data ID object that identifies no dimensions.  `hasFull` and
-            `hasRecords` are guaranteed to return `True`, because both `full`
-            and `records` are just empty mappings.
+            `hasRecords` are guaranteed to return `True`, because both
+            `full_values` and `records` are just empty mappings.
         """
         return DataCoordinate.make_empty(universe)
 
@@ -325,8 +325,8 @@ class DataCoordinate:
         -------
         data_id : `DataCoordinate`
             A data ID object that identifies no dimensions.  `hasFull` and
-            `hasRecords` are guaranteed to return `True`, because both `full`
-            and `records` are just empty mappings.
+            `hasRecords` are guaranteed to return `True`, because both
+            `full_values` and `records` are just empty mappings.
         """
         return _ExpandedTupleDataCoordinate(universe.empty, (), {})
 
@@ -580,7 +580,6 @@ class DataCoordinate:
              - `records`
              - `region`
              - `timespan`
-             - `pack`
 
             If `False`, accessing any of these is considered a logic error.
         """

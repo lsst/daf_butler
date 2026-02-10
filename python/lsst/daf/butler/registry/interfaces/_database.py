@@ -490,7 +490,7 @@ class Database(ABC):
             nested within an outer one, and attempting to do so is a logic
             (i.e. assertion) error.
         savepoint : `bool`, optional
-            If `True` (`False` is default), create a `SAVEPOINT`, allowing
+            If `True` (`False` is default), create a ``SAVEPOINT``, allowing
             exceptions raised by the database (e.g. due to constraint
             violations) during this transaction's context to be caught outside
             it without also rolling back all operations in an outer transaction
@@ -624,7 +624,7 @@ class Database(ABC):
             nested without an outer one, and attempting to do so is a logic
             (i.e. assertion) error.
         savepoint : `bool`, optional
-            If `True` (`False` is default), create a `SAVEPOINT`, allowing
+            If `True` (`False` is default), create a ``SAVEPOINT``, allowing
             exceptions raised by the database (e.g. due to constraint
             violations) during this transaction's context to be caught outside
             it without also rolling back all operations in an outer transaction
@@ -1268,9 +1268,10 @@ class Database(ABC):
          - Timespans appear in relatively few tables and queries in our
            typical usage, and the code that operates on them is already aware
            that it is working with timespans.  In contrast, a
-           timespan-representation-aware implementation of, say, `insert`,
-           would need to have extra logic to identify when timespan-mangling
-           needed to occur, which would usually be useless overhead.
+           timespan-representation-aware implementation of, say,
+           `Database.insert`, would need to have extra logic to identify when
+           timespan-mangling needed to occur, which would usually be useless
+           overhead.
 
          - SQLAlchemy's rich SELECT query expression system has no way to wrap
            multiple columns in a single expression object (the ORM does, but

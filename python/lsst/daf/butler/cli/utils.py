@@ -361,7 +361,7 @@ def split_commas(
     param : `click.core.Option` or `None`
         The parameter being handled. Unused, but Click always passes it to
         callbacks.
-    values : iterable of `str` or `str`
+    values : `~collections.abc.Iterable` of `str` or `str`
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values unless they
         are within ``[]``.
@@ -460,16 +460,16 @@ def split_kv(
         If true, the value may contain multiple comma-separated values. By
         default True.
     normalize : `bool`, optional
-        If True and `choice.case_sensitive == False`, normalize the string the
-        user provided to match the choice's case. By default `False`.
+        If True and ``choice.case_sensitive == False``, normalize the string
+        the user provided to match the choice's case. By default `False`.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
-        for tuples; `type=(str, str)`). By default "=".
+        for tuples; ``type=(str, str)``). By default "=".
     unseparated_okay : `bool`, optional
         If True, allow values that do not have a separator. They will be
         returned in the values dict as a tuple of values in the key '', that
-        is: `values[''] = (unseparated_values, )`. By default False.
+        is: ``values[''] = (unseparated_values, )``. By default False.
     return_type : `type`, must be `dict` or `tuple`
         The type of the value that should be returned.
         If `dict` then the returned object will be a dict, for each item in
@@ -495,7 +495,7 @@ def split_kv(
 
     Returns
     -------
-    values : `dict` [`str`, `str`] or `tuple`[`tuple`[`str`, `str`], ...]
+    values : `dict` [`str`, `str`] or `tuple` [`tuple` [`str`, `str`], ...]
         The passed-in values in dict form or tuple form.
 
     Raises
@@ -607,7 +607,7 @@ def to_upper(context: click.Context, param: click.core.Option, value: str) -> st
 
     Returns
     -------
-    string
+    str
         A copy of the passed-in value, converted to upper case.
     """
     return value.upper()
@@ -829,20 +829,21 @@ class OptionSection(MWOption):
     does not pass any value to the command function.
 
     This class does a bit of hackery to add a section label to a click command
-    help output: first, `expose_value` is set to `False` so that no value is
+    help output: first, ``expose_value`` is set to `False` so that no value is
     passed to the command function. Second, this class overrides
     `click.Option.get_help_record` to return the section label string without
     any prefix so that it stands out as a section label.
 
     This class overrides the hidden attribute because our documentation build
     tool, sphinx-click, implements its own `get_help_record` function which
-    builds the record from other option values (e.g. `name`, `opts`), which
+    builds the record from other option values (e.g. ``name``, ``opts``), which
     breaks the hack we use to make `get_help_record` only return the
-    `sectionText`. Fortunately, Click gets the value of `hidden` inside the
-    `Option`'s `get_help_record`, and `sphinx-click` calls `opt.hidden` before
-    entering its `_get_help_record` function. So, making the hidden property
-    return True hides this option from sphinx-click, while allowing the section
-    text to be returned by our `get_help_record` method when using Click.
+    ``sectionText``. Fortunately, Click gets the value of `hidden` inside the
+    `click.Option`'s `get_help_record`, and sphinx-click calls ``opt.hidden``
+    before entering its ``_get_help_record`` function. So, making the hidden
+    property return True hides this option from sphinx-click, while allowing
+    the section text to be returned by our `get_help_record` method when using
+    Click.
 
     The intention for this implementation is to do minimally invasive overrides
     of the click classes so as to be robust and easy to fix if the click
@@ -852,8 +853,8 @@ class OptionSection(MWOption):
     ----------
     sectionName : `str`
         The parameter declaration for this option. It is not shown to the user,
-        it must be unique within the command. If using the `section` decorator
-        to add a section to a command's options, the section name is
+        it must be unique within the command. If using the ``section``
+        decorator to add a section to a command's options, the section name is
         auto-generated.
     sectionText : `str`
         The text to print in the section identifier.
@@ -1036,8 +1037,8 @@ class MWCommand(click.Command):
         The call to `_capture_args` in this override stores the arguments
         (option names, option value, and argument values) that were used by the
         caller on the command line in the context object. These stored
-        arugments can be used by the command function, e.g. to process options
-        in the order they appeared on the command line (pipetask uses this
+        arguments can be used by the command function, e.g. to process options
+        in the order they appeared on the command line (``pipetask`` uses this
         feature to create pipeline actions in an order from different options).
 
         Parameters
@@ -1076,7 +1077,7 @@ class ButlerCommand(MWCommand):
 
 class OptionGroup:
     """Base class for an option group decorator. Requires the option group
-    subclass to have a property called `decorator`.
+    subclass to have a property called ``decorator``.
     """
 
     decorators: list[Any]
@@ -1091,44 +1092,44 @@ class MWCtxObj:
     """Helper object for managing the `click.Context.obj` parameter, allows
     obj data to be managed in a consistent way.
 
-    `Context.obj` defaults to None. `MWCtxObj.getFrom(ctx)` can be used to
-    initialize the obj if needed and return a new or existing `MWCtxObj`.
+    `click.Context.obj` defaults to None. ``MWCtxObj.getFrom(ctx)`` can be used
+    to initialize the obj if needed and return a new or existing `MWCtxObj`.
 
     The `args` attribute contains a list of options, option values, and
     argument values that is similar to the list of arguments and options that
     were passed in on the command line, with differences noted below:
 
-    * Option namess and option values are first in the list, and argument
+    * Option names and option values are first in the list, and argument
       values come last. The order of options and option values is preserved
       within the options. The order of argument values is preserved.
 
     * The longest option name is used for the option in the `args` list, e.g.
-      if an option accepts both short and long names "-o / --option" and the
-      short option name "-o" was used on the command line, the longer name will
-      be the one that appears in `args`.
+      if an option accepts both short and long names ``"-o / --option"`` and
+      the short option name ``"-o"`` was used on the command line, the longer
+      name will be the one that appears in ``args``.
 
-    * A long option name (which begins with two dashes "--") and its value may
-      be separated by an equal sign; the name and value are split at the equal
-      sign and it is removed. In `args`, the option is in one list item, and
-      the option value (without the equal sign) is in the next list item. e.g.
-      "--option=foo" and "--option foo" both become `["--opt", "foo"]` in
-      `args`.
+    * A long option name (which begins with two dashes ``"--"``) and its value
+      may be separated by an equal sign; the name and value are split at the
+      equal sign and it is removed. In ``args``, the option is in one list
+      item, and the option value (without the equal sign) is in the next list
+      item. e.g. ``"--option=foo"`` and ``"--option foo"`` both become
+      ``["--opt", "foo"]`` in ``args``.
 
-    * A short option name, (which begins with one dash "-") and its value are
-      split immediately after the short option name, and if there is
+    * A short option name, (which begins with one dash ``"-"``) and its value
+      are split immediately after the short option name, and if there is
       whitespace between the short option name and its value it is removed.
       Everything after the short option name (excluding whitespace) is included
-      in the value. If the `Option` has a long name, the long name will be used
-      in `args` e.g. for the option "-o / --option": "-ofoo" and "-o foo"
-      become `["--option", "foo"]`, and (note!) "-o=foo" will become
-      `["--option", "=foo"]` (because everything after the short option name,
-      except whitespace, is used for the value (as is standard with unix
-      command line tools).
+      in the value. If the ``Option`` has a long name, the long name will be
+      used in ``args`` e.g. for the option ``"-o / --option"``: ``"-ofoo"`` and
+      ``"-o foo"`` become ``["--option", "foo"]``, and (note!) ``"-o=foo"``
+      will become ``["--option", "=foo"]`` (because everything after the short
+      option name, except whitespace, is used for the value (as is standard
+      with unix command line tools).
 
     Attributes
     ----------
     args : `list` [`str`]
-        A list of options, option values, and arguments simialr to those that
+        A list of options, option values, and arguments similar to those that
         were passed in on the command line. See comments about captured options
         & arguments above.
     """
@@ -1138,7 +1139,7 @@ class MWCtxObj:
 
     @staticmethod
     def getFrom(ctx: click.Context) -> Any:
-        """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
+        """If needed, initialize ``ctx.obj`` with a new `MWCtxObj`, and return
         the new or already existing `MWCtxObj`.
 
         Parameters
@@ -1157,7 +1158,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
 
     Parameters
     ----------
-    ctx : `click.context`
+    ctx : `click.Context`
         The context for the click operation. Used to extract the subcommand
         name and translate option & argument names.
     param : `str`
@@ -1187,7 +1188,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
         ------
         RuntimeError
             Raised if the option name from the yaml file does not exist in the
-            command parameters. This catches misspellings and incorrect useage
+            command parameters. This catches misspellings and incorrect usage
             in the yaml file.
         """
         for param in ctx.command.params:

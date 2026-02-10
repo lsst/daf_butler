@@ -165,7 +165,7 @@ class ObsCoreTableManager(VersionedExtension):
 
         Parameters
         ----------
-        refs : `iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
@@ -199,7 +199,7 @@ class ObsCoreTableManager(VersionedExtension):
 
         Parameters
         ----------
-        refs : `iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
@@ -231,7 +231,7 @@ class ObsCoreTableManager(VersionedExtension):
 
         Parameters
         ----------
-        refs : `iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Dataset refs to remove. Dataset refs have to be resolved.
         collection : `CollectionRecord`
             Collection record for a TAGGED collection.

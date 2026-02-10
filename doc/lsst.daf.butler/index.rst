@@ -192,6 +192,8 @@ Datastore utilities
 Advanced query system internals
 -------------------------------
 
+
+
 .. automodapi:: lsst.daf.butler.queries.tree
    :no-main-docstr:
    :no-inherited-members:
@@ -199,6 +201,12 @@ Advanced query system internals
    :include: Predicate
    :skip: DataCoordinateUploadKey
    :skip: MaterializationKey
+
+.. automodapi:: lsst.daf.butler.queries.driver
+   :no-main-docstr:
+   :no-inherited-members:
+   :headings: ^"
+
 
 Registry utilities and interfaces
 ---------------------------------

@@ -78,7 +78,7 @@ class DerivedRegionFactory:
 
         Returns
         -------
-        region : `Region`
+        region : `lsst.sphgeom.Region`
             `None` is returned if region cannot be determined.
         """
         raise NotImplementedError()

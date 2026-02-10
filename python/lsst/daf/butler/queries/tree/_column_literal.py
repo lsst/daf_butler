@@ -292,7 +292,7 @@ class TimespanColumnLiteral(ColumnLiteralBase):
 
         Parameters
         ----------
-        value : `..Timespan`
+        value : `~lsst.daf.butler.Timespan`
             Value to wrap.
 
         Returns
@@ -330,7 +330,7 @@ class RegionColumnLiteral(ColumnLiteralBase):
 
         Parameters
         ----------
-        value : `..Region`
+        value : `~lsst.sphgeom.Region`
             Value to wrap.
 
         Returns

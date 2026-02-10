@@ -196,7 +196,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
 
         Returns
         -------
-        converter : `arrow_utils.ToArrow`
+        converter : `.arrow_utils.ToArrow`
             A converter object with schema information in Arrow form.
         """
         raise NotImplementedError()

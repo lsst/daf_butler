@@ -47,10 +47,10 @@ def queryDatasetTypes(
     verbose : `bool`
         If false only return the name of the dataset types. If false return
         name, dimensions, and storage class of each dataset type.
-    glob : iterable [`str`]
+    glob : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
-    collections : iterable [`str`] or `None`, optional
+    collections : `~collections.abc.Iterable` [`str`] or `None`, optional
         Constrains resulting dataset types such that only dataset type
         found (at some point) in these collections will be returned.
 

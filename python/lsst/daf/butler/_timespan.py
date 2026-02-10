@@ -474,7 +474,7 @@ class Timespan(pydantic.BaseModel):
         `Timespan.fromInstant`, because Timespan cannot exactly represent
         zero-duration intervals.  In particular, ``[a, b)`` contains the time
         ``b``, but not the timespan ``[b, b + 1ns)`` that would be returned
-        by `Timespan.fromInstant(b)``.
+        by ``Timespan.fromInstant(b)``.
         """
         if isinstance(other, astropy.time.Time):
             nsec = TimeConverter().astropy_to_nsec(other)

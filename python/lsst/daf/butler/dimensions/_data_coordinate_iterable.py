@@ -119,7 +119,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         Returns
         -------
         set : `DataCoordinateSet`
-            A `DatasetCoordinateSet` instance with the same elements as
+            A `DataCoordinateSet` instance with the same elements as
             ``self``, after removing any duplicates.  May be ``self`` if it is
             already a `DataCoordinateSet`.
         """

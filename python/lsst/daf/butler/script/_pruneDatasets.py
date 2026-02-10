@@ -149,10 +149,10 @@ def pruneDatasets(
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    collections : iterable [`str`]
+    collections : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that identify the collections to
         search for.
-    datasets : iterable [`str`]
+    datasets : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that identify the dataset type names
         to search for.
     where : `str`

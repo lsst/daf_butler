@@ -58,7 +58,7 @@ def collectionChain(
     parent : `str`
         Name of the chained collection to update. Will be created if it
         does not exist already.
-    children : iterable of `str`
+    children : `~collections.abc.Iterable` of `str`
         Names of the children to be included in the chain.
     doc : `str`
         If the chained collection is being created, the documentation string

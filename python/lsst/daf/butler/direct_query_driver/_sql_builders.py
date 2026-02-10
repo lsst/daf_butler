@@ -263,8 +263,8 @@ class SqlSelectBuilder:
         -------
         builder : `SqlSelectBuilder`
             `SqlSelectBuilder` with at least all columns in `columns`
-            available.  This may or may not be the `builder` attribute of this
-            object.
+            available.  This may or may not be the ``builder`` attribute of
+            this object.
         """
         return SqlSelectBuilder(
             self.into_joins_builder(cte=cte, force=force, postprocessing=postprocessing), columns=self.columns
@@ -357,12 +357,12 @@ class SqlColumns:
         ----------
         dimensions : `~collections.abc.Iterable` [ `str` ]
             Names of dimensions to include, assuming that their names in
-            `sql_columns` are just the dimension names.
+            ``sql_columns`` are just the dimension names.
         column_collection : `sqlalchemy.ColumnCollection`
             SQLAlchemy column collection to extract from.
 
         **kwargs : `str`
-            Additional dimensions to include, with the names in `sql_columns`
+            Additional dimensions to include, with the names in ``sql_columns``
             as keys and the actual dimension names as values.
 
         Returns
@@ -392,7 +392,7 @@ class SqlColumns:
         columns : `.queries.tree.ColumnSet`
             Columns to include, assuming that
             `.queries.tree.ColumnSet.get_qualified_name` corresponds to the
-            name used in `sql_columns` (after name shrinking).
+            name used in ``sql_columns`` (after name shrinking).
         postprocessing : `Postprocessing`, optional
             Postprocessing object whose needed columns should also be included.
         special : `~collections.abc.Iterable` [ `str` ], optional
@@ -483,12 +483,12 @@ class SqlJoinsBuilder(SqlColumns):
         ----------
         dimensions : `~collections.abc.Iterable` [ `str` ]
             Names of dimensions to include, assuming that their names in
-            `sql_columns` are just the dimension names.
+            ``sql_columns`` are just the dimension names.
         column_collection : `sqlalchemy.ColumnCollection`, optional
             SQLAlchemy column collection to extract from.  Defaults to
             ``self.from_clause.columns``.
         **kwargs : `str`
-            Additional dimensions to include, with the names in `sql_columns`
+            Additional dimensions to include, with the names in ``sql_columns``
             as keys and the actual dimension names as values.
 
         Returns
@@ -517,7 +517,7 @@ class SqlJoinsBuilder(SqlColumns):
         columns : `.queries.tree.ColumnSet`
             Columns to include, assuming that
             `.queries.tree.ColumnSet.get_qualified_name` corresponds to the
-            name used in `sql_columns` (after name shrinking).
+            name used in ``sql_columns`` (after name shrinking).
         postprocessing : `Postprocessing`, optional
             Postprocessing object whose needed columns should also be included.
         special : `~collections.abc.Iterable` [ `str` ], optional

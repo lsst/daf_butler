@@ -91,7 +91,7 @@ class DatasetAssociation:
             timespans for `~CollectionType.RUN` and `~CollectionType.TAGGED`
             collections will be bounded, instead of `None`; this is actually
             more consistent with how those timespans are used elsewhere in the
-            query system, but is a change from how `DatasetAssocation` has
+            query system, but is a change from how `DatasetAssociation` has
             historically worked.
         """
         timespan_key = f"{dataset_type.name}.timespan"

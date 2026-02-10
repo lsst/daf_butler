@@ -65,7 +65,7 @@ def make_identity_query_tree(universe: DimensionUniverse) -> QueryTree:
 
     Parameters
     ----------
-    universe : `..DimensionUniverse`
+    universe : `~lsst.daf.butler.DimensionUniverse`
         Definitions for all dimensions.
 
     Returns

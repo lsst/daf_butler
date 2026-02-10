@@ -256,9 +256,9 @@ class CliLog:
         in `initLog`, it will be removed here.
 
         For each logger level that was set by this class, sets that logger's
-        level to the value it was before this class set it. For lsst.log, if a
-        component level was uninitialized, it will be set to
-        `Log.defaultLsstLogLevel` because there is no log4cxx api to set a
+        level to the value it was before this class set it. For ``lsst.log``,
+        if a component level was uninitialized, it will be set to
+        `CliLog.defaultLsstLogLevel` because there is no log4cxx api to set a
         component back to an uninitialized state.
         """
         if lsstLog:
@@ -289,10 +289,11 @@ class CliLog:
         Parameters
         ----------
         logLevels : `list` of `tuple`
-            Per-component logging levels, each item in the list is a tuple
-            (component, level), `component` is a logger name or an empty string
-            or `None` for default root logger, `level` is a logging level name,
-            one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+            Per-component logging levels, each item in the list is a `tuple`
+            of (component, level), ``component`` is a logger name or an empty
+            string or `None` for default root logger, ``level`` is a logging
+            level name, one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case
+            insensitive).
 
         Notes
         -----

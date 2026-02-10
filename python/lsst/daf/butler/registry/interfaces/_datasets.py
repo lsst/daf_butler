@@ -430,10 +430,11 @@ class DatasetRecordStorageManager(VersionedExtension):
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``dataset_type.dimensions``.
         id_generation_mode : `DatasetIdGenEnum`
-            With `UNIQUE` each new dataset is inserted with its new unique ID.
-            With non-`UNIQUE` mode ID is computed from some combination of
-            dataset type, dataId, and run collection name; if the same ID is
-            already in the database then new record is not inserted.
+            With `~DatasetIdGenEnum.UNIQUE` each new dataset is inserted with
+            its new unique ID. With non-`~DatasetIdGenEnum.UNIQUE` mode the ID
+            is computed from some combination of dataset type, dataId, and run
+            collection name; if the same ID is already in the database then new
+            record is not inserted.
 
         Returns
         -------
@@ -614,8 +615,8 @@ class DatasetRecordStorageManager(VersionedExtension):
         fields: Set[AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
-        """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
-        search for datasets of this type.
+        """Make a `lsst.daf.butler.direct_query_driver.SqlJoinsBuilder`
+        that represents a search for datasets of this type.
 
         Parameters
         ----------
@@ -644,7 +645,7 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        builder : `..direct_query_driver.SqlJoinsBuilder`
+        builder : `lsst.daf.butler.direct_query_driver.SqlJoinsBuilder`
             A query-construction object representing a table or subquery.
         """
         raise NotImplementedError()

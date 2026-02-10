@@ -106,7 +106,7 @@ class DeferredValidation(Generic[_T]):
             pass
 
     The type parameter for `DeferredValidation` may be a special typing object
-    like `typing.Union` or `typing.Annotated` instead of an actual `type`
+    such as `typing.Annotated` instead of an actual `type`
     object.  The only requirement is that it must be a type Pydantic
     recognizes, like a `pydantic.BaseModel` subclass, a dataclass, or a
     primitive built-in.
@@ -170,7 +170,7 @@ class DeferredValidation(Generic[_T]):
 
         Returns
         -------
-        wrapped
+        wrapped : `typing.Any`
             An instance of the wrapped type.  This is also cached for the next
             call to `validated`, *which will ignore ``**kwargs``*.
         """

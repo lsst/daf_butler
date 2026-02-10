@@ -469,7 +469,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
 
         Parameters
         ----------
-        elements : iterable of `DimensionElement`
+        elements : `~collections.abc.Iterable` of `DimensionElement`
             Elements to be sorted.
         reverse : `bool`, optional
             If `True`, sort in the opposite order.

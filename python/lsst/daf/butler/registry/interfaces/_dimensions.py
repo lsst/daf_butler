@@ -287,8 +287,8 @@ class DimensionRecordStorageManager(VersionedExtension):
 
     @abstractmethod
     def make_joins_builder(self, element: DimensionElement, fields: Set[str]) -> SqlJoinsBuilder:
-        """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
-        dimension element table.
+        """Make a `~lsst.daf.butler.direct_query_driver.SqlJoinsBuilder` that
+        represents a dimension element table.
 
         Parameters
         ----------
@@ -302,7 +302,7 @@ class DimensionRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        builder : `..direct_query_driver.SqlJoinsBuilder`
+        builder : `~lsst.daf.butler.direct_query_driver.SqlJoinsBuilder`
             A query-construction object representing a table or subquery.  This
             is guaranteed to have rows that are unique over dimension keys and
             all possible key values for this dimension, so joining in a
@@ -329,20 +329,20 @@ class DimensionRecordStorageManager(VersionedExtension):
 
         Parameters
         ----------
-        dimensions : `..dimensions.DimensionGroup`
+        dimensions : `~lsst.daf.butler.dimensions.DimensionGroup`
             Full dimensions of all tables to be joined into the query (even if
             they are not included in the query results).
-        predicate : `..queries.tree.Predicate`
+        predicate : `~lsst.daf.butler.queries.tree.Predicate`
             Boolean column expression that may contain user-provided  spatial
             and/or temporal overlaps intermixed with other constraints.
         join_operands : `~collections.abc.Iterable` [ \
-                `..dimensions.DimensionGroup` ]
+                `~lsst.daf.butler.dimensions.DimensionGroup` ]
             Dimensions of tables or subqueries that are already going to be
             joined into the query that may establish their own spatial or
             temporal relationships (e.g. a dataset search with both ``visit``
             and ``patch`` dimensions).
         calibration_dataset_types : `~collections.abc.Set` [ `str` or \
-                `..queries.tree.AnyDatasetType` ]
+                `~lsst.daf.butler.queries.tree.AnyDatasetType` ]
             The names of dataset types that have been joined into the query via
             a search that includes at least one calibration collection.
         allow_duplicates : `bool`
@@ -354,12 +354,12 @@ class DimensionRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        predicate : `..queries.tree.Predicate`
+        predicate : `lsst.daf.butler.queries.tree.Predicate`
             A version of the given predicate that preserves the overall
             behavior of the filter while possibly rewriting overlap expressions
             that have been partially moved into ``builder`` as some combination
             of new nested predicates, joins, and postprocessing.
-        builder : `..direct_query_driver.SqlSelectBuilder`
+        builder : `~lsst.daf.butler.direct_query_driver.SqlSelectBuilder`
             A query-construction helper object that includes any initial joins
             and postprocessing needed to handle overlap expression extracted
             from the original predicate.

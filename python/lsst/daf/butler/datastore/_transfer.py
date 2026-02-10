@@ -72,7 +72,7 @@ class FileTransferSource(Protocol):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
             Optional mapping of datastore artifact to existence. Updated by

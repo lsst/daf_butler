@@ -49,7 +49,7 @@ class _Table:
 
     Parameters
     ----------
-    dataIds : `iterable` [ ``DataId`` ]
+    dataIds : `~collections.abc.Iterable` [ ``DataId`` ]
         The DataIds to add to the table.
     """
 

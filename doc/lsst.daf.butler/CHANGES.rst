@@ -630,7 +630,7 @@ API Changes
     The results are returned in an `~enum.Flag` object (specifically `~lsst.daf.butler.DatasetExistence`) that evaluates to `True` if the dataset is available for retrieval.
 
   Additionally `~lsst.daf.butler.DatasetRef` now has a new method for checking whether two `~lsst.daf.butler.DatasetRef` only differ by compatible storage classes. (`DM-32940 <https://rubinobs.atlassian.net/browse/DM-32940>`_)
-- `lsst.daf.Butler.transfer_from` method now accepts ``LimitedButler`` as a source Butler.
+- ``lsst.daf.butler.Butler.transfer_from`` method now accepts ``LimitedButler`` as a source Butler.
   In cases when a full butler is needed as a source it will try to cast it to a ``Butler``. (`DM-33497 <https://rubinobs.atlassian.net/browse/DM-33497>`_)
 - * Creating an unresolved dataset reference now issues an ``UnresolvedRefWarning`` and is deprecated (and subsequently removed).
   * A resolved `~lsst.daf.butler.DatasetRef` can now be created by specifying the run without the ID -- the constructor will now automatically issue an ID.
@@ -639,7 +639,7 @@ API Changes
 - - `~lsst.daf.butler.DatasetRef` constructor now requires ``run`` argument in all cases and always constructs a resolved reference.
   - Methods ``DatasetRef.resolved()``, ``DatasetRef.unresolved()``, and ``DatasetRef.getCheckedId()`` were removed. (`DM-37704 <https://rubinobs.atlassian.net/browse/DM-37704>`_)
 - Added ``StorageClassDelegate.copy()`` method.
-  By default this method calls `copy.deepcopy()` but subclasses can override as needed. (`DM-38694 <https://rubinobs.atlassian.net/browse/DM-38694>`_)
+  By default this method calls `copy.deepcopy` but subclasses can override as needed. (`DM-38694 <https://rubinobs.atlassian.net/browse/DM-38694>`_)
 - ``Database.fromUri`` and ``Database.makeEngine`` methods now accept `sqlalchemy.engine.URL` instances in addition to strings. (`DM-39484 <https://rubinobs.atlassian.net/browse/DM-39484>`_)
 - Added new parameter ``without_datastore`` to the ``Butler`` and ``ButlerConfig`` constructors to allow a butler to be created that can not access a datastore.
   This can be helpful if you want to query registry without requiring the overhead of the datastore. (`DM-40120 <https://rubinobs.atlassian.net/browse/DM-40120>`_)
@@ -706,7 +706,7 @@ Other Changes and Additions
 - * Enhanced the JSON and YAML formatters so that they can both handle dataclasses and Pydantic models (previously JSON supported Pydantic and YAML supported dataclasses).
   * Rationalized the storage class conversion handling to always convert from a `dict` to the original type even if the caller is requesting a `dict`.
     Without this change it was possible to have some confusion where a Pydantic model's serialization did not match the `dict`-like view it was emulating. (`DM-37214 <https://rubinobs.atlassian.net/browse/DM-37214>`_)
-- Added an `obsCoreTableManager` property to `~lsst.daf.butler.Registry` for access to the ObsCore table manager.
+- Added an ``obsCoreTableManager`` property to ``~lsst.daf.butler.Registry`` for access to the ObsCore table manager.
   This will be set to `None` when repository lacks an ObsCore table.
   It should only be used by a limited number of clients, e.g. ``lsst.obs.base.DefineVisitsTask``, which need to update the table. (`DM-38205 <https://rubinobs.atlassian.net/browse/DM-38205>`_)
 - * Modified ``Butler.ingest()`` such that it can now ingest resolved ``DatasetRef``.
@@ -804,8 +804,8 @@ API Changes
 - Deprecate support for accessing data repositories with integer dataset IDs, and disable creation of new data repositories with integer dataset IDs, as per `RFC-854 <https://rubinobs.atlassian.net/browse/RFC-854>`_. (`DM-35063 <https://rubinobs.atlassian.net/browse/DM-35063>`_)
 - ``DimensionUniverse`` now has a ``isCompatibleWith()`` method to check if two universes are compatible with each other.
   The initial test is very basic but can be improved later. (`DM-35082 <https://rubinobs.atlassian.net/browse/DM-35082>`_)
-- Deprecated support for components in `Registry.query*` methods, per `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>`_. (`DM-36312 <https://rubinobs.atlassian.net/browse/DM-36312>`_)
-- Multiple minor API changes to query methods from `RFC-878 <https://rubinobs.atlassian.net/browse/RFC-878>`_ and `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>_`.
+- Deprecated support for components in ``Registry.query*`` methods, per `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>`_. (`DM-36312 <https://rubinobs.atlassian.net/browse/DM-36312>`_)
+- Multiple minor API changes to query methods from `RFC-878 <https://rubinobs.atlassian.net/browse/RFC-878>`_ and `RFC-879 <https://rubinobs.atlassian.net/browse/RFC-879>`_.
 
   This includes:
 
@@ -832,7 +832,7 @@ Other Changes and Additions
 ---------------------------
 
 - For command-line options that split on commas, it is now possible to specify parts of the string not to split by using ``[]`` to indicate comma-separated list content. (`DM-35917 <https://rubinobs.atlassian.net/browse/DM-35917>`_)
-- Moved the typing workaround for the built-in `Ellipsis` (`...`) singleton to ``lsst.utils``. (`DM-36108 <https://rubinobs.atlassian.net/browse/DM-36108>`_)
+- Moved the typing workaround for the built-in `Ellipsis` (``...``) singleton to ``lsst.utils``. (`DM-36108 <https://rubinobs.atlassian.net/browse/DM-36108>`_)
 - Now define regions for data IDs with multiple spatial dimensions to the intersection of those dimensions' regions. (`DM-36111 <https://rubinobs.atlassian.net/browse/DM-36111>`_)
 - Added support for in-memory datastore to roll back a call to ``datastore.trash()``.
   This required that the ``bridge.moveToTrash()`` method now takes an additional ``transaction`` parameter (that can be `None`). (`DM-36172 <https://rubinobs.atlassian.net/browse/DM-36172>`_)
@@ -871,10 +871,10 @@ New Features
   * Remove ``visit_system`` dimension and add ``visit_system_membership`` record to allow a visit to be associated with multiple visit systems. (`DM-30948 <https://rubinobs.atlassian.net/browse/DM-30948>`_)
 - ``butler export-calibs`` now takes a ``--transfer`` option to control how data are exported (use ``direct`` to do in-place export) and a ``--datasets`` option to limit the dataset types to be exported.
   It also now takes a default collections parameter (all calibration collections). (`DM-32061 <https://rubinobs.atlassian.net/browse/DM-32061>`_)
-- Iterables returned from registry methods `queryDataIds` and `queryDimensionRecords` have two new methods - `order_by` and `limit`. (`DM-32403 <https://rubinobs.atlassian.net/browse/DM-32403>`_)
+- Iterables returned from registry methods ``queryDataIds`` and ``queryDimensionRecords`` have two new methods - ``order_by`` and ``limit``. (`DM-32403 <https://rubinobs.atlassian.net/browse/DM-32403>`_)
 - Builds using ``setuptools`` now calculate versions from the Git repository, including the use of alpha releases for those associated with weekly tags. (`DM-32408 <https://rubinobs.atlassian.net/browse/DM-32408>`_)
 - Butler can now support lookup of repositories by label if the user environment is correctly configured.
-  This is done using the new `~lsst.daf.butler.Butler.get_repo_uri()` and `~lsst.daf.butler.Butler.get_known_repos()` APIs. (`DM-32491 <https://rubinobs.atlassian.net/browse/DM-32491>`_)
+  This is done using the new ``Butler.get_repo_uri()`` and ``Butler.get_known_repos()`` APIs. (`DM-32491 <https://rubinobs.atlassian.net/browse/DM-32491>`_)
 - Add a butler command line command called ``butler remove-collections`` that can remove non-RUN collections. (`DM-32687 <https://rubinobs.atlassian.net/browse/DM-32687>`_)
 - Add a butler command line command called ``butler remove-runs`` that can remove RUN collections and contained datasets. (`DM-32831 <https://rubinobs.atlassian.net/browse/DM-32831>`_)
 - It is now possible to register type conversion functions with storage classes.
@@ -891,9 +891,9 @@ New Features
   Declares that if a ``TaskMetadata`` is expected then a ``PropertySet`` can be converted to the correct python type. (`DM-32883 <https://rubinobs.atlassian.net/browse/DM-32883>`_)
 - Dimension record imports now ignore conflicts (without checking for consistency) instead of failing. (`DM-33148 <https://rubinobs.atlassian.net/browse/DM-33148>`_)
 - Storage class converters can now also be used on `~lsst.daf.butler.Butler.put`. (`DM-33155 <https://rubinobs.atlassian.net/browse/DM-33155>`_)
-- If a `~lsst.daf.butler.DatasetType` has been constructed that differs from the registry definition, but in a way that is compatible through `~lsst.daf.butler.StorageClass` conversion, then using that in a `lsst.daf.butler.Butler.get()` call will return a python type that matches the user-specified `~lsst.daf.butler.StorageClass` instead of the internal python type. (`DM-33303 <https://rubinobs.atlassian.net/browse/DM-33303>`_)
+- If a `~lsst.daf.butler.DatasetType` has been constructed that differs from the registry definition, but in a way that is compatible through ``lsst.daf.butler.StorageClass``` conversion, then using that in a ``lsst.daf.butler.Butler.get()`` call will return a python type that matches the user-specified `~lsst.daf.butler.StorageClass` instead of the internal python type. (`DM-33303 <https://rubinobs.atlassian.net/browse/DM-33303>`_)
 - The dataset ID can now be used in a file template for datastore (using ``{id}``). (`DM-33414 <https://rubinobs.atlassian.net/browse/DM-33414>`_)
-- Add `Registry.getCollectionParentChains` to find the `CHAINED` collections that another collection belongs to. (`DM-33643 <https://rubinobs.atlassian.net/browse/DM-33643>`_)
+- Add ``Registry.getCollectionParentChains`` to find the ``CHAINED`` collections that another collection belongs to. (`DM-33643 <https://rubinobs.atlassian.net/browse/DM-33643>`_)
 - Added ``has_simulated`` to the ``exposure`` record to indicate that some content of this exposure was simulated. (`DM-33728 <https://rubinobs.atlassian.net/browse/DM-33728>`_)
 - The command-line tooling has changed how it sets the default logger when using ``--log-level``.
   Now only the default logger(s) (``lsst`` and the colon-separated values stored in the ``$DAF_BUTLER_ROOT_LOGGER``) will be affected by using ``--log-level`` without a specific logger name.
@@ -904,10 +904,10 @@ New Features
 - * Added ``visit_system`` to ``instrument`` record and allowed it to be used as a tie breaker in dataset determination if a dataId is given using ``seq_num`` and ``day_obs`` and it matches multiple visits.
   * Modify export YAML format to include the dimension universe version and namespace.
   * Allow export files with older visit definitions to be read (this does not fill in the new metadata records).
-  * `DimensionUniverse` now supports the ``in`` operator to check if a dimension is part of the universe. (`DM-33942 <https://rubinobs.atlassian.net/browse/DM-33942>`_)
+  * ``DimensionUniverse`` now supports the ``in`` operator to check if a dimension is part of the universe. (`DM-33942 <https://rubinobs.atlassian.net/browse/DM-33942>`_)
 - * Added a definition for using healpix in skypix definitions.
   * Change dimension universe caching to support a namespace in addition to a version number. (`DM-33946 <https://rubinobs.atlassian.net/browse/DM-33946>`_)
-- Added a formatter for `lsst.utils.packages.Packages` Python types in `lsst.daf.butler.formatters.packages.PackagesFormatter`. (`DM-34105 <https://rubinobs.atlassian.net/browse/DM-34105>`_)
+- Added a formatter for ``lsst.utils.packages.Packages`` Python types in ``lsst.daf.butler.formatters.packages.PackagesFormatter``. (`DM-34105 <https://rubinobs.atlassian.net/browse/DM-34105>`_)
 - Added an optimization that speeds up ``butler query-datasets`` when using ``--show-uri``. (`DM-35120 <https://rubinobs.atlassian.net/browse/DM-35120>`_)
 
 
@@ -918,14 +918,14 @@ API Changes
 - The ``ButlerURI`` class has now been removed from this package.
   It now exists as `lsst.resources.ResourcePath`.
   All code should be modified to use the new class name. (`DM-31723 <https://rubinobs.atlassian.net/browse/DM-31723>`_)
-- `lsst.daf.butler.Registry.registerRun` and `lsst.daf.butler.Registry.registerCollection` now return a Booelan indicating whether the collection was created or already existed. (`DM-31976 <https://rubinobs.atlassian.net/browse/DM-31976>`_)
+- ``lsst.daf.butler.Registry.registerRun`` and ``lsst.daf.butler.Registry.registerCollection`` now return a Booelan indicating whether the collection was created or already existed. (`DM-31976 <https://rubinobs.atlassian.net/browse/DM-31976>`_)
 - A new optional parameter, ``record_validation_info`` has been added to `~lsst.daf.butler.Butler.ingest` (and related datastore APIs) to allow the caller to declare that file attributes such as the file size or checksum should not be recorded.
   This can be useful if the file is being monitored by an external system or it is known that the file might be compressed in-place after ingestion. (`DM-33086 <https://rubinobs.atlassian.net/browse/DM-33086>`_)
-- Added a new `DatasetType.is_compatible_with` method.
+- Added a new ``DatasetType.is_compatible_with`` method.
   This method determines if two dataset types are compatible with each other, taking into account whether the storage classes allow type conversion. (`DM-33278 <https://rubinobs.atlassian.net/browse/DM-33278>`_)
-- The `run` parameter has been removed from Butler method `lsst.daf.butler.Butler.pruneDatasets`.
+- The ``run`` parameter has been removed from Butler method ``lsst.daf.butler.Butler.pruneDatasets``.
   It was never used in Butler implementation, client code should simply remove it. (`DM-33488 <https://rubinobs.atlassian.net/browse/DM-33488>`_)
-- Registry methods now raise exceptions belonging to a class hierarchy rooted at `lsst.daf.butler.registry.RegistryError`.
+- Registry methods now raise exceptions belonging to a class hierarchy rooted at ``lsst.daf.butler.registry.RegistryError``.
   See also :ref:`daf_butler_query_error_handling` for details. (`DM-33600 <https://rubinobs.atlassian.net/browse/DM-33600>`_)
 - Added ``DatasetType.storageClass_name`` property to allow the name of the storage class to be retrieved without requiring that the storage class exists.
   This is possible if people have used local storage class definitions or a test ``DatasetType`` was created temporarily. (`DM-34460 <https://rubinobs.atlassian.net/browse/DM-34460>`_)
@@ -936,7 +936,7 @@ Bug Fixes
 
 - ``butler export-calibs`` can now copy files that require the use of a file template (for example if a direct URI was stored in datastore) with metadata records.
   File templates that use metadata records now complain if the record is not attached to the ``DatasetRef``. (`DM-32061 <https://rubinobs.atlassian.net/browse/DM-32061>`_)
-- Make it possible to run `queryDimensionRecords` while constraining on the existence of a dataset whose dimensions are not a subset of the record element's dependencies (e.g. `raw` and `exposure`). (`DM-32454 <https://rubinobs.atlassian.net/browse/DM-32454>`_)
+- Make it possible to run ``queryDimensionRecords`` while constraining on the existence of a dataset whose dimensions are not a subset of the record element's dependencies (e.g., ``raw`` and ``exposure``). (`DM-32454 <https://rubinobs.atlassian.net/browse/DM-32454>`_)
 - Butler constructor can now take a `os.PathLike` object when the ``butler.yaml`` is not included in the path. (`DM-32467 <https://rubinobs.atlassian.net/browse/DM-32467>`_)
 - In the butler presets file (used by the ``--@`` option), use option names that match the butler CLI command option names (without leading dashes).
   Fail if option names used in the presets file do not match options for the current butler command. (`DM-32986 <https://rubinobs.atlassian.net/browse/DM-32986>`_)
@@ -949,7 +949,7 @@ Bug Fixes
 - Fix garbled printing of raw-byte hashes in query-dimension-records. (`DM-34007 <https://rubinobs.atlassian.net/browse/DM-34007>`_)
 - The automatic addition of ``butler.yaml`` to the Butler configuration URI now also happens when a ``ResourcePath`` instance is given. (`DM-34172 <https://rubinobs.atlassian.net/browse/DM-34172>`_)
 - Fix handling of "doomed" (known to return no results even before execution) follow-up queries for datasets.
-  This frequently manifested as a `KeyError` with a message about dataset type registration during `QuantumGraph` generation. (`DM-34202 <https://rubinobs.atlassian.net/browse/DM-34202>`_)
+  This frequently manifested as a `KeyError` with a message about dataset type registration during ``QuantumGraph`` generation. (`DM-34202 <https://rubinobs.atlassian.net/browse/DM-34202>`_)
 - Fix `~lsst.daf.butler.Registry.queryDataIds` bug involving dataset constraints with no dimensions. (`DM-34247 <https://rubinobs.atlassian.net/browse/DM-34247>`_)
 - The `click.Path` API changed, change from ordered arguments to keyword arguments when calling it. (`DM-34261 <https://rubinobs.atlassian.net/browse/DM-34261>`_)
 - Fix `~lsst.daf.butler.Registry.queryCollections` bug in which children of chained collections were being alphabetically sorted instead of ordered consistently with the order in which they would be searched. (`DM-34328 <https://rubinobs.atlassian.net/browse/DM-34328>`_)
@@ -960,9 +960,9 @@ Bug Fixes
 Other Changes and Additions
 ---------------------------
 
-- Add a `NOT NULL` constraint to dimension implied dependency columns.
+- Add a ``NOT NULL`` constraint to dimension implied dependency columns.
 
-  `NULL` values in these columns already cause the query system to misbehave. (`DM-21840 <https://rubinobs.atlassian.net/browse/DM-21840>`_)
+  ``NULL`` values in these columns already cause the query system to misbehave. (`DM-21840 <https://rubinobs.atlassian.net/browse/DM-21840>`_)
 - Update parquet writing to use default per-column compression. (`DM-31963 <https://rubinobs.atlassian.net/browse/DM-31963>`_)
 - Tidy up ``remove-runs`` subcommand confirmation report by sorting dataset types and filtering out those with no datasets in the collections to be deleted. (`DM-33584 <https://rubinobs.atlassian.net/browse/DM-33584>`_)
 - The constraints on collection names have been relaxed.
@@ -1062,14 +1062,14 @@ Performance Enhancement
 - Made 20x speed improvement for ``Butler.transfer_from``.
   The main slow down is asking the datastore whether a file artifact exists.
   This is now parallelized and the result is cached for later. (`DM-31785 <https://rubinobs.atlassian.net/browse/DM-31785>`_)
-- Minor efficiency improvements when accessing `lsst.daf.butler.Config` hierarchies. (`DM-32305 <https://rubinobs.atlassian.net/browse/DM-32305>`_)
+- Minor efficiency improvements when accessing ``lsst.daf.butler.Config`` hierarchies. (`DM-32305 <https://rubinobs.atlassian.net/browse/DM-32305>`_)
 - FileDatastore: Improve removing of datasets from the trash by at least a factor of 10. (`DM-29849 <https://rubinobs.atlassian.net/browse/DM-29849>`_)
 
 Other Changes and Additions
 ---------------------------
 
 - Enable serialization of ``DatasetRef`` and related classes to JSON format. (`DM-28678 <https://rubinobs.atlassian.net/browse/DM-28678>`_)
-- `ButlerURI` ``http`` schemes can now handle non-WebDAV endpoints.
+- ``ButlerURI`` ``http`` schemes can now handle non-WebDAV endpoints.
   Warnings are only issued if WebDAV functionality is requested. (`DM-29708 <https://rubinobs.atlassian.net/browse/DM-29708>`_)
 - Switch logging such that all logging messages are now forwarded to Python ``logging`` from ``lsst.log``.
   Previously all Python ``logging`` messages were being forwarded to ``lsst.log``. (`DM-31120 <https://rubinobs.atlassian.net/browse/DM-31120>`_)
@@ -1078,7 +1078,7 @@ Other Changes and Additions
 - Change release note creation to use [Towncrier](https://towncrier.readthedocs.io/en/actual-freaking-docs/index.html). (`DM-30291 <https://rubinobs.atlassian.net/browse/DM-30291>`_)
 - Add a Butler configuration for an execution butler that has pre-defined registry entries but no datastore records.
 
-  The `Butler.put()` will return the pre-existing dataset ref but will still fail if a datastore record is found. (`DM-30335 <https://rubinobs.atlassian.net/browse/DM-30335>`_)
+  The ``Butler.put()`` will return the pre-existing dataset ref but will still fail if a datastore record is found. (`DM-30335 <https://rubinobs.atlassian.net/browse/DM-30335>`_)
 - If an unrecognized dimension is used as a look up key in a configuration file (using the ``+`` syntax) a warning is used suggesting a possible typo rather than a confusing `KeyError`.
   This is no longer a fatal error and the key will be treated as a name. (`DM-30685 <https://rubinobs.atlassian.net/browse/DM-30685>`_)
 - Add ``split`` transfer mode that can be used when some files are inside the datastore and some files are outside the datastore.

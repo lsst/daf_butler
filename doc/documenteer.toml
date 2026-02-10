@@ -11,9 +11,33 @@ clean = true
 extensions = [
     "sphinx_click"
 ]
+nitpick_ignore = [
+    ["py:class", "logging.Filterer"],  # no python 3 docs for this
+    ["py:obj", "lsst.sphgeom"],
+    ["py:obj", "lsst.resources.ResourcePathExpression"],
+    ["py:class", "lsst.resources.ResourcePathExpression"],
+    ["py:class", "_contextvars.ContextVar"],
+    ["py:class", "dataset type expression"],
+    ["py:class", "collection expression"],
+    ["py:obj", "lsst.daf.butler._named.K"],
+    ["py:obj", "lsst.daf.butler._named.K_co"],
+    ["py:obj", "lsst.daf.butler._named.V"],
+    ["py:obj", "lsst.daf.butler._named.V_co"],
+    ["py:data", "typing.Union"],
+]
+nitpick_ignore_regex = [
+    ['py:.*', 'pyarrow\..*'],
+    ['py:.*', 'lsst.sphgeom\..*'],  # sphgeom has pybind11 docs
+    ['py:.*', 'lsst.afw\..*'],  # afw has pybind11 docs
+    ['py:.*', 'sqlalchemy\..*'],  # not every sqlalchemy class resolves
+    ['py:.*', 'yaml\..*'],  # YAML has no sphinx docs
+]
 
 [sphinx.intersphinx.projects]
 astropy = "https://docs.astropy.org/en/stable"
 python = "https://docs.python.org/3"
 lsst = "https://pipelines.lsst.io/v/daily/"
 click = "https://click.palletsprojects.com/en/stable"
+sqlalchemy = "https://docs.sqlalchemy.org/en/20/"
+pandas = "https://pandas.pydata.org/docs/"
+numpy = "https://numpy.org/doc/stable/"

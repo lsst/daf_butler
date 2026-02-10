@@ -861,7 +861,8 @@ class Registry(ABC):
             Datasets that overlap this range but are not contained by it will
             have their validity ranges adjusted to not overlap it, which may
             split a single dataset validity range into two.
-        dataIds : iterable [`dict` or `DataCoordinate`], optional
+        dataIds : `~collections.abc.Iterable` [`dict` or `DataCoordinate`], \
+                optional
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``self.datasetType`` will be
             decertified.

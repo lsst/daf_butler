@@ -975,7 +975,7 @@ cached:
 
         Parameters
         ----------
-        cache_entries : iterable of `str`
+        cache_entries : `~collections.abc.Iterable` of `str`
             The entries to remove from the cache. The values are the path
             within the cache.
         """

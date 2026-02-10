@@ -435,7 +435,7 @@ class ProgressHandler(ABC):
             A user-friendly description for this progress bar; usually appears
             next to it.
         total : `int` or `None`
-            The total number of steps in this progress bar.  If `None``,
+            The total number of steps in this progress bar.  If `None`,
             ``len(iterable)`` should be used.  If that does not work, whether
             the progress bar works at all is handler-defined.
         level : `int`

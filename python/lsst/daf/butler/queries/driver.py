@@ -132,7 +132,7 @@ ResultPage: TypeAlias = Union[
 
 
 class QueryDriver(AbstractContextManager[None]):
-    """Base class for the implementation object inside `Query2` objects
+    """Base class for the implementation object inside `Query` objects
     that is specialized for DirectButler vs. RemoteButler.
 
     Notes
@@ -251,7 +251,7 @@ class QueryDriver(AbstractContextManager[None]):
 
         Returns
         -------
-        key
+        key : `DataCoordinateUploadKey`
             Unique identifier for the upload that allows it to be referenced in
             a `QueryTree`.
         """

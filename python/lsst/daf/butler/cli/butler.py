@@ -124,8 +124,8 @@ class LoaderCLI(click.Group, abc.ABC):
         package.
 
         `getLocalCommands` assumes that the commands can be found in
-        `localCmdPkg.__all__`, if this is not the case then getLocalCommands
-        should be overridden.
+        ``localCmdPkg.__all__``, if this is not the case then
+        `getLocalCommands` should be overridden.
 
         Returns
         -------
@@ -136,12 +136,13 @@ class LoaderCLI(click.Group, abc.ABC):
 
     def getLocalCommands(self) -> defaultdict[str, list[str | PluginCommand]]:
         """Get the commands offered by the local package. This assumes that the
-        commands can be found in `localCmdPkg.__all__`, if this is not the case
-        then this function should be overridden.
+        commands can be found in ``localCmdPkg.__all__``, if this is not the
+        case then this function should be overridden.
 
         Returns
         -------
-        commands : `defaultdict` [`str`, `list` [`str` | `PluginCommand` ]]
+        commands : `collections.defaultdict` \
+                [`str`, `list` [`str` | `PluginCommand` ]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
@@ -289,14 +290,16 @@ class LoaderCLI(click.Group, abc.ABC):
 
         Parameters
         ----------
-        a : `defaultdict` [`str`, `list` [`str` | `PluginCommand` ]]
+        a : `collections.defaultdict` \
+                [`str`, `list` [`str` | `PluginCommand` ]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
         b : (same as a)
 
         Returns
         -------
-        commands : `defaultdict` [`str`: [`str` | `PluginCommand` ]]
+        commands : `collections.defaultdict` \
+                [`str`: [`str` | `PluginCommand` ]]
             For convenience, returns a extended with b. ('a' is modified in
             place.)
         """
@@ -310,7 +313,7 @@ class LoaderCLI(click.Group, abc.ABC):
 
         Returns
         -------
-        commands : `defaultdict` [`str`, `list` [`str`]]
+        commands : `collections.defaultdict` [`str`, `list` [`str`]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
 
@@ -357,7 +360,8 @@ class LoaderCLI(click.Group, abc.ABC):
 
         Returns
         -------
-        commands : `defaultdict` [`str`, `list` [`str` | `PluginCommand` ]]
+        commands : `collections.defaultdict` \
+                [`str`, `list` [`str` | `PluginCommand` ]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
@@ -370,7 +374,8 @@ class LoaderCLI(click.Group, abc.ABC):
 
         Parameters
         ----------
-        commands : `defaultdict` [`str`, `list` [`str` | `PLuginCommand` ]]
+        commands : `collections.defaultdict` \
+                [`str`, `list` [`str` | `PLuginCommand` ]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
 
@@ -435,7 +440,8 @@ class UncachedButlerCLI(ButlerCLI):
 
         Returns
         -------
-        commands : `defaultdict` [`str`, `list` [`str` | `PluginCommand` ]]
+        commands : `collections.defaultdict` \
+                [`str`, `list` [`str` | `PluginCommand` ]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """

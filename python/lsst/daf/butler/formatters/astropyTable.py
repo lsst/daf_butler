@@ -60,4 +60,17 @@ class AstropyTableFormatter(FormatterV2):
         return pytype.read(path)  # type: ignore
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        """Serialize the in memory dataset to a local file.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The Python object to serialize.
+        uri : `lsst.resources.ResourcePath`
+            The location to write the local file.
+
+        Notes
+        -----
+        By default the file will be written in ECSV format.
+        """
         in_memory_dataset.write(uri.ospath)

@@ -115,7 +115,7 @@ class SpatialObsCorePlugin(ABC):
 
         Parameters
         ----------
-        region : `Region`, optional
+        region : `lsst.sphgeom.Region`, optional
             Spatial region, can be `None` if dataset has no associated region.
 
         Returns
