@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from .._butler import Butler
 from .._butler_collections import CollectionInfo
 from .._collection_type import CollectionType
+from .._exceptions import CollectionTypeError
 
 
 def synchronize_collection_structure(
@@ -22,6 +23,11 @@ def synchronize_collection_structure(
             missing_collections.append(source_collection)
             if source_collection.type == CollectionType.CHAINED:
                 mismatched_children[source_collection.name] = source_collection.children
+        elif source_collection.type != target_collection.type:
+            raise CollectionTypeError(
+                f"Collection '{source_collection.name}' has different types in source and target repos."
+                f" Source: {source_collection.type.name} Target: {target_collection.type.name}"
+            )
         elif source_collection.children != target_collection.children:
             mismatched_children[source_collection.name] = source_collection.children
 
