@@ -30,6 +30,7 @@ nitpick_ignore_regex = [
     ['py:.*', 'lsst.sphgeom\..*'],  # sphgeom has pybind11 docs
     ['py:.*', 'lsst.afw\..*'],  # afw has pybind11 docs
     ['py:.*', 'sqlalchemy\..*'],  # not every sqlalchemy class resolves
+    ['py:.*', 'yaml\..*'],  # YAML has no sphinx docs
 ]
 
 [sphinx.intersphinx.projects]
