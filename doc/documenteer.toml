@@ -14,13 +14,22 @@ extensions = [
 nitpick_ignore = [
     ["py:class", "logging.Filterer"],  # no python 3 docs for this
     ["py:obj", "lsst.sphgeom"],
+    ["py:obj", "lsst.resources.ResourcePathExpression"],
+    ["py:class", "lsst.resources.ResourcePathExpression"],
+    ["py:class", "_contextvars.ContextVar"],
     ["py:class", "dataset type expression"],
     ["py:class", "collection expression"],
+    ["py:obj", "lsst.daf.butler._named.K"],
+    ["py:obj", "lsst.daf.butler._named.K_co"],
+    ["py:obj", "lsst.daf.butler._named.V"],
+    ["py:obj", "lsst.daf.butler._named.V_co"],
+    ["py:data", "typing.Union"],
 ]
 nitpick_ignore_regex = [
     ['py:.*', 'pyarrow\..*'],
     ['py:.*', 'lsst.sphgeom\..*'],  # sphgeom has pybind11 docs
     ['py:.*', 'lsst.afw\..*'],  # afw has pybind11 docs
+    ['py:.*', 'sqlalchemy\..*'],  # not every sqlalchemy class resolves
 ]
 
 [sphinx.intersphinx.projects]
