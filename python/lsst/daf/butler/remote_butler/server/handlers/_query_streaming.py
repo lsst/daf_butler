@@ -143,6 +143,10 @@ async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncI
             # a long time for the database.
             async for message in _dequeue_query_pages_with_keepalive(queue):
                 yield message.model_dump_json() + "\n"
+        except GeneratorExit:
+            # FastAPI calls aclose() to inject GeneratorExit if the caller
+            # disconnects.
+            pass
         finally:
             queue.shutdown()  # type: ignore[attr-defined]
             await task
@@ -198,7 +202,7 @@ def _execute_query_sync(
         # If a user-facing error occurs, serialize it and send it to the
         # client.
         result_callback(QueryErrorResultModel(error=serialize_butler_user_error(e)))
-    except asyncio.QueueShutdown:  # type: ignore[attr-defined]
+    except asyncio.QueueShutDown:  # type: ignore[attr-defined]
         pass
     finally:
         done_callback()
