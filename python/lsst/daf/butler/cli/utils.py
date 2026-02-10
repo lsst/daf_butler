@@ -361,7 +361,7 @@ def split_commas(
     param : `click.core.Option` or `None`
         The parameter being handled. Unused, but Click always passes it to
         callbacks.
-    values : iterable of `str` or `str`
+    values : `~collections.abc.Iterable` of `str` or `str`
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values unless they
         are within ``[]``.

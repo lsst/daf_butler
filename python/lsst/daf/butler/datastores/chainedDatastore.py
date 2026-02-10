@@ -319,7 +319,7 @@ class ChainedDatastore(Datastore):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
             Optional mapping of datastore artifact to existence. Updated by
@@ -822,7 +822,7 @@ class ChainedDatastore(Datastore):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets for which file artifacts are to be retrieved.
             A single ref can result in multiple files. The refs must
             be resolved.
@@ -1070,7 +1070,8 @@ class ChainedDatastore(Datastore):
 
         Parameters
         ----------
-        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+        entities : `~collections.abc.Iterable` [`DatasetRef` | `DatasetType` \
+                | `StorageClass`]
             Entities to test against this configuration.  Can be differing
             types.
         logFailures : `bool`, optional

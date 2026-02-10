@@ -86,7 +86,7 @@ class StoredDatastoreItemInfo:
 
         Returns
         -------
-        info : instance of the relevant type.
+        info : `StoredDatastoreItemInfo`
             The newly-constructed item corresponding to the record.
         """
         raise NotImplementedError()

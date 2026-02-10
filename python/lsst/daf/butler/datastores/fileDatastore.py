@@ -514,7 +514,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             The refs for which records are to be retrieved.
         ignore_datastore_records : `bool`
             If `True` then do not use datastore records stored in refs.
@@ -1485,7 +1485,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
             Optional mapping of datastore artifact to existence. Updated by
@@ -1581,7 +1581,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
             Optional mapping of datastore artifact to existence. Updated by
@@ -1637,7 +1637,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked. These are assumed not to be known
             to datastore.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
@@ -2044,7 +2044,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets for which file artifacts are to be retrieved.
             A single ref can result in multiple files. The refs must
             be resolved.
@@ -2983,7 +2983,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         Parameters
         ----------
-        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+        entities : `~collections.abc.Iterable` [`DatasetRef` | `DatasetType` \
+                | `StorageClass`]
             Entities to test against this configuration.  Can be differing
             types.
         logFailures : `bool`, optional

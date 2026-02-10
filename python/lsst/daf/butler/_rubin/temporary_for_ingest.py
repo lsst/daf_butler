@@ -180,9 +180,9 @@ class TemporaryForIngest:
 
         Parameters
         ----------
-        ref : `..DatasetRef`
+        ref : `~lsst.daf.butler.DatasetRef`
             A dataset reference the temporaries correspond to.
-        butler : `lsst.daf.butler.LimitedButler`
+        butler : `~lsst.daf.butler.LimitedButler`
             Butler that can be used to obtain a predicted URI for a dataset.
 
         Returns

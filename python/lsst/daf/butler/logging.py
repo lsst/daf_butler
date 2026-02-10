@@ -444,7 +444,7 @@ class ButlerLogRecords(MutableSequence[ButlerLogRecord]):
 
         Parameters
         ----------
-        records : iterable of `ButlerLogRecord` or `LogRecord`
+        records : `~collections.abc.Iterable` [`ButlerLogRecord`]
             The records to seed this class with.
         extra : `dict`, optional
             Additional JSON data included with the log records.  Subclasses may
@@ -781,7 +781,7 @@ class ButlerLogRecordHandler(StreamHandler):
 
 
 class JsonLogFormatter(Formatter):
-    """Format a `LogRecord` in JSON format."""
+    """Format a `logging.LogRecord` in JSON format."""
 
     def format(self, record: LogRecord) -> str:
         butler_record = ButlerLogRecord.from_record(record)

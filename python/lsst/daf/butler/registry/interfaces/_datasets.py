@@ -615,8 +615,8 @@ class DatasetRecordStorageManager(VersionedExtension):
         fields: Set[AnyDatasetFieldName],
         is_union: bool = False,
     ) -> SqlJoinsBuilder:
-        """Make a `..direct_query_driver.SqlJoinsBuilder` that represents a
-        search for datasets of this type.
+        """Make a `lsst.daf.butler.direct_query_driver.SqlJoinsBuilder`
+        that represents a search for datasets of this type.
 
         Parameters
         ----------
@@ -645,7 +645,7 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        builder : `..direct_query_driver.SqlJoinsBuilder`
+        builder : `lsst.daf.butler.direct_query_driver.SqlJoinsBuilder`
             A query-construction object representing a table or subquery.
         """
         raise NotImplementedError()

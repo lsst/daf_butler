@@ -124,7 +124,7 @@ class IngestPrepData:
 
     Parameters
     ----------
-    refs : iterable of `DatasetRef`
+    refs : `~collections.abc.Iterable` of `DatasetRef`
         References for the datasets that can be ingested by this datastore.
     """
 
@@ -539,7 +539,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : iterable `DatasetRef`
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             The datasets to check.
 
         Returns
@@ -558,7 +558,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets to be checked.
         artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
             Optional mapping of datastore artifact to existence. Updated by
@@ -938,7 +938,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : iterable of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the required datasets.
         predict : `bool`, optional
             If `True`, allow URIs to be returned of datasets that have not
@@ -1046,7 +1046,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets for which artifacts are to be retrieved.
             A single ref can result in multiple artifacts. The refs must
             be resolved.
@@ -1228,7 +1228,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             Dataset references to be exported.
         directory : `str`, optional
             Path to a directory that should contain files corresponding to
@@ -1243,7 +1243,7 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Returns
         -------
-        dataset : iterable of `DatasetTransfer`
+        dataset : `~collections.abc.Iterable` of `DatasetTransfer`
             Structs containing information about the exported datasets, in the
             same order as ``refs``.
 
@@ -1262,7 +1262,8 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
 
         Parameters
         ----------
-        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+        entities : `~collections.abc.Iterable` [`DatasetRef` | `DatasetType` |\
+                `StorageClass`]
             Entities to test against this configuration.    Can be differing
             types.
         logFailures : `bool`, optional

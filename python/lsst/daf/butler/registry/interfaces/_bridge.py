@@ -221,7 +221,8 @@ class DatastoreRegistryBridge(ABC):
 
         Yields
         ------
-        matches : iterable of (`DatasetIdRef`, `StoredDatastoreItemInfo`)
+        matches : `~collections.abc.Iterable` [`DatasetIdRef`, \
+                `StoredDatastoreItemInfo`]
             The IDs of datasets that can be safely removed from this datastore
             and the corresponding information from the records table.
             Can be empty.

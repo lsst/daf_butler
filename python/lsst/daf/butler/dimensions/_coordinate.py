@@ -139,10 +139,10 @@ class DataCoordinate:
 
     Lookups for implied dimensions (those in ``self.dimensions.implied``) are
     supported if and only if `has_full_values` is `True`.  This also sets the
-    keys of the `mapping` attribute.  This means that `DataCoordinate` equality
-    is not the same as testing for equality on the `mapping` attribute
-    (instead, it is the same as testing for equality on the `required`
-    attribute).
+    keys of the ``mapping`` attribute.  This means that `DataCoordinate`
+    equality is not the same as testing for equality on the ``mapping``
+    attribute (instead, it is the same as testing for equality on the
+    ``required`` attribute).
 
     See also :ref:`lsst.daf.butler-dimensions_data_ids`
     """
@@ -580,7 +580,6 @@ class DataCoordinate:
              - `records`
              - `region`
              - `timespan`
-             - `pack`
 
             If `False`, accessing any of these is considered a logic error.
         """

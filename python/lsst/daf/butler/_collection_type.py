@@ -108,7 +108,7 @@ class CollectionType(enum.IntEnum):
 
         Parameters
         ----------
-        names : iterable of `str`, or `None`
+        names : `~collections.abc.Iterable` of `str`, or `None`
             Names of collection types. Case insensitive. If `None` or empty,
             all collection types will be returned.
 

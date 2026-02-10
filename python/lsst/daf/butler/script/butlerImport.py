@@ -50,7 +50,7 @@ def butlerImport(
     directory : `str`, or None
         Directory containing dataset files.  If `None`, all file paths must be
         absolute.
-    export_file : `TextIO`, or None
+    export_file : `typing.TextIO`, or None
         Name for the file that contains database information associated with
         the exported datasets.  If this is not an absolute path, does not exist
         in the current working directory, and `directory` is not `None`, it is

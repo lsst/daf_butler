@@ -140,10 +140,10 @@ class QueryDatasets:
 
     Parameters
     ----------
-    glob : iterable [`str`]
+    glob : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
-    collections : iterable [`str`]
+    collections : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that fully or partially identify
         the collections to search for.
     where : `str`

@@ -526,7 +526,7 @@ class QuantumBackedButler(LimitedButler):
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             The datasets for which artifacts are to be retrieved.
             A single ref can result in multiple artifacts. The refs must
             be resolved.

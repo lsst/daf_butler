@@ -160,7 +160,7 @@ class DimensionRecordSchema:
 
         Returns
         -------
-        converters : `list` [ `..arrow_utils.ToArrow` ]
+        converters : `list` [ `~lsst.daf.butler.arrow_utils.ToArrow` ]
             List of objects that can convert `DimensionRecord` attribute values
             to Arrow records, corresponding exactly to either ``all`` or
             ``remainder``, depending on ``remainder_only``.

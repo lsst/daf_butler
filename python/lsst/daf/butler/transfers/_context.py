@@ -152,13 +152,14 @@ class RepoExportContext:
 
         Parameters
         ----------
-        dataIds : iterable of `DataCoordinate`
+        dataIds : `~collections.abc.Iterable` of `DataCoordinate`
             Data IDs to export.  For large numbers of data IDs obtained by
             calls to `Registry.queryDataIds`, it will be much more efficient if
             these are expanded to include records (i.e.
             `DataCoordinate.hasRecords` returns `True`) prior to the call to
             `saveDataIds` via e.g. ``Registry.queryDataIds(...).expanded()``.
-        elements : iterable of `DimensionElement` or `str`, optional
+        elements : `~collections.abc.Iterable` [`DimensionElement`] or `str`,\
+                optional
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
         """
@@ -197,13 +198,14 @@ class RepoExportContext:
 
         Parameters
         ----------
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetRef`
             References to the datasets to export.  Their `DatasetRef.id`
             attributes must not be `None`.  Duplicates are automatically
             ignored.  Nested data IDs must have `DataCoordinate.hasRecords`
             return `True`.  If any reference is to a component dataset, the
             parent will be exported instead.
-        elements : iterable of `DimensionElement` or `str`, optional
+        elements : `~collections.abc.Iterable` [`DimensionElement`] \
+                or `str`, optional
             Dimension elements whose records should be exported; this is
             forwarded to `saveDataIds` when exporting the data IDs of the
             given datasets.

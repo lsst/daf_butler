@@ -588,7 +588,7 @@ class Dimension(DimensionElement):
 
         Returns
         -------
-        converter : `..arrow_utils.ToArrow`
+        converter : `~lsst.daf.butler.arrow_utils.ToArrow`
             Converter for this dimension's primary key.
         """
         if spec is None:
