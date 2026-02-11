@@ -147,6 +147,11 @@ async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncI
             # FastAPI calls aclose() to inject GeneratorExit if the caller
             # disconnects.
             pass
+        except asyncio.QueueShutDown:  # type: ignore[attr-defined]
+            # If an exception occurs in _enqueue_query_pages,
+            # it will trigger queue shutdown to kick us out of the
+            # iterator.
+            pass
         finally:
             queue.shutdown()  # type: ignore[attr-defined]
             await task
@@ -172,6 +177,9 @@ async def _enqueue_query_pages(
         await asyncio.to_thread(_execute_query_sync, query, result_callback, done_callback)
         # Signal that there is no more data to read.
         await queue.put(None)
+    except asyncio.QueueShutDown:  # type: ignore[attr-defined]
+        # The caller will trigger queue shutdown if it is cancelled.
+        pass
     finally:
         # Abort the database thread if cancellation or some other error occurs.
         queue.shutdown()  # type: ignore[attr-defined]
@@ -203,6 +211,7 @@ def _execute_query_sync(
         # client.
         result_callback(QueryErrorResultModel(error=serialize_butler_user_error(e)))
     except asyncio.QueueShutDown:  # type: ignore[attr-defined]
+        # The caller will trigger queue shutdown if it is cancelled.
         pass
     finally:
         done_callback()
