@@ -92,6 +92,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
+from lsst.daf.butler._rubin.transfer_datasets_in_place import transfer_datasets_in_place
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
@@ -3404,6 +3405,97 @@ class ButlerServerDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
 
             with mock_file_transfer_uris_for_unit_test(_remap_transfer_url):
                 self.assertButlerTransfers()
+
+
+class TransferDatasetsInPlace(unittest.TestCase):
+    """Test behavior of transfer_datasets_in_place() specialty function used by
+    Prompt Publication service.
+    """
+
+    def test_file_datastore(self) -> None:
+        configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+        with (
+            tempfile.TemporaryDirectory() as datastore_root,
+            tempfile.TemporaryDirectory() as other_repo_root,
+        ):
+            config = Config(configFile)
+            config["datastore", "datastore", "name"] = "file_datastore"
+            Butler.makeRepo(datastore_root, config=config)
+            config["datastore", "datastore", "root"] = datastore_root
+            Butler.makeRepo(other_repo_root, config, forceConfigRoot=False)
+            with (
+                Butler(datastore_root, writeable=True) as source_butler,
+                Butler(other_repo_root, writeable=True) as target_butler,
+            ):
+                self._test_transfer_datasets_in_place(source_butler, target_butler)
+
+    def test_chained_datastore(self) -> None:
+        configFile = os.path.join(TESTDIR, "config/basic/butler-chained-posix.yaml")
+        with (
+            tempfile.TemporaryDirectory() as datastore_root,
+            tempfile.TemporaryDirectory() as other_repo_root,
+        ):
+            config = Config(configFile)
+            config["datastore", "datastore", "datastores", 0, "datastore", "root"] = (
+                f"{datastore_root}/butler_test_repository"
+            )
+            config["datastore", "datastore", "datastores", 1, "datastore", "root"] = (
+                f"{datastore_root}/butler_test_repository2"
+            )
+            Butler.makeRepo(datastore_root, config=config, forceConfigRoot=False)
+            Butler.makeRepo(other_repo_root, config=config, forceConfigRoot=False)
+            with (
+                Butler(datastore_root, writeable=True) as source_butler,
+                Butler(other_repo_root, writeable=True) as target_butler,
+            ):
+                self._test_transfer_datasets_in_place(source_butler, target_butler)
+
+    def _test_transfer_datasets_in_place(
+        self, source_butler: DirectButler, target_butler: DirectButler
+    ) -> None:
+        metric_repo = MetricTestRepo.create_from_butler(
+            source_butler,
+            source_butler._config,
+        )
+        target_butler.transfer_dimension_records_from(source_butler, [metric_repo.ref1, metric_repo.ref2])
+        # Verify that the setup was correct and the two repos have
+        # independent registries.
+        self.assertIsNone(target_butler.get_dataset(metric_repo.ref1.id))
+        # Copy one dataset, and make sure we can load it from the
+        # target repo.
+        self.assertEqual(
+            transfer_datasets_in_place(source_butler, target_butler, [metric_repo.ref1]),
+            [metric_repo.ref1],
+        )
+        self.assertEqual(target_butler.get(metric_repo.ref1), source_butler.get(metric_repo.ref1))
+        self.assertIsNone(target_butler.get_dataset(metric_repo.ref2.id))
+        self.assertEqual(source_butler.getURIs(metric_repo.ref1), target_butler.getURIs(metric_repo.ref1))
+        # Trying to copy the same dataset again is a no-op.
+        self.assertEqual(
+            transfer_datasets_in_place(source_butler, target_butler, [metric_repo.ref1]),
+            [],
+        )
+        self.assertEqual(target_butler.get(metric_repo.ref1), source_butler.get(metric_repo.ref1))
+        # A mix of existing and non-existing datasets.
+        self.assertEqual(
+            transfer_datasets_in_place(source_butler, target_butler, [metric_repo.ref1, metric_repo.ref2]),
+            [metric_repo.ref2],
+        )
+        self.assertEqual(target_butler.get(metric_repo.ref1), source_butler.get(metric_repo.ref1))
+        self.assertEqual(target_butler.get(metric_repo.ref2), source_butler.get(metric_repo.ref2))
+
+        # For testing datastore chaining, set up a dataset that is only
+        # accepted by one of the datastores.
+        source_butler.registry.registerDatasetType(
+            DatasetType("rejected_by_first", source_butler.dimensions.conform([]), "int")
+        )
+        source_butler.registry.registerRun("run")
+        ref = source_butler.put(1, "rejected_by_first", dataId={}, run="run")
+        self.assertEqual(
+            transfer_datasets_in_place(source_butler, target_butler, [ref]),
+            [ref],
+        )
+        self.assertEqual(1, target_butler.get(ref))
 
 
 class NullDatastoreTestCase(unittest.TestCase):
