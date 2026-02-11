@@ -235,6 +235,7 @@ checks = [
     "RT02",  # Does not want named return value. DM style says we do.
     "SS05",  # pydocstyle is better at finding infinitive verb.
     "RT03",  # Temporarily disable for sphinx empty returns.
+    "PR04",  # New Sphinx can infer types from python typing
 ]
 exclude = [
     "^test_.*",  # Do not test docstrings in test code.
