@@ -309,23 +309,24 @@ class MetricTestRepo:
 
     @classmethod
     def create_from_butler(
-        cls, butler: Butler, butler_config_file: str, storageClassName: str | None = None
+        cls, butler: Butler, butler_config_file: str | Config, storageClassName: str | None = None
     ) -> MetricTestRepo:
         """Create a MetricTestRepo from an existing Butler instance.
 
         Parameters
         ----------
-        butler : `Butler`
+        butler
             `Butler` instance used for setting up the repository.
-        butler_config_file : `str`
-            Path to the config file used to set up that Butler instance.
-        storageClassName : `bool` or `None`, optional
+        butler_config_file
+            Path to the config file or the `Config` instance used to set up
+            that Butler instance.
+        storageClassName
             Name of storage class to use for datasets added to the test
             repository. A default will be used if none is specified.
 
         Returns
         -------
-        repo : `MetricTestRepo`
+        repo
             New instance of `MetricTestRepo` using the provided `Butler`
             instance.
         """
