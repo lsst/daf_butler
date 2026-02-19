@@ -263,7 +263,6 @@ storageClasses:
     pytype: lsst.afw.image.Exposure
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
-
       # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
       - bbox
 
@@ -446,15 +445,15 @@ storageClasses:
   ProvenanceQuantumGraph:
     pytype: lsst.pipe.base.quantum_graph.ProvenanceQuantumGraph
     parameters:
-      - import_mode   # lsst.pipe.base.pipeline_graph.TaskImportMode
-      - quanta  # iterable of uuid.UUID; quanta to read
-      - datasets  # iterable of uuid.UUID; datasets to read
-      - read_init_quanta  # bool, defaults to True; whether to read pre-exec-init info
+      - import_mode # lsst.pipe.base.pipeline_graph.TaskImportMode
+      - quanta # iterable of uuid.UUID; quanta to read
+      - datasets # iterable of uuid.UUID; datasets to read
+      - read_init_quanta # bool, defaults to True; whether to read pre-exec-init info
     derivedComponents:
-      packages: Packages  # ignores node parameters
+      packages: Packages # ignores node parameters
 
       # UUID keys can be quantum or data IDs (whichever is passed in via
       # parameters).  Nested lists are attempts to run the quantum (last is
       # most recent).
-      logs: StructuredDataDict  # dict[uuid.UUID, list[ButlerLogRecords]]
-      metadata: StructuredDataDict  # dict[uuid.UUID, list[TaskMetadata]]
+      logs: StructuredDataDict # dict[uuid.UUID, list[ButlerLogRecords]]
+      metadata: StructuredDataDict # dict[uuid.UUID, list[TaskMetadata]]
