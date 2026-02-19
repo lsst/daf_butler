@@ -452,7 +452,7 @@ storageClasses:
     derivedComponents:
       packages: Packages # ignores node parameters
 
-      # UUID keys can be quantum or data IDs (whichever is passed in via
+      # UUID keys can be quantum or dataset IDs (whichever is passed in via
       # parameters).  Nested lists are attempts to run the quantum (last is
       # most recent).
       logs: StructuredDataDict # dict[uuid.UUID, list[ButlerLogRecords]]
