@@ -780,7 +780,12 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
         put_ref = self.butler.put(tab1, self.datasetType, dataId={})
 
-        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+        tab2 = self.butler.get(
+            self.datasetType,
+            dataId={},
+            storageClass="ArrowAstropy",
+            parameters={"strip_astropy_meta_yaml": False},
+        )
 
         # Check that minimal provenance was written by default.
         expected = {
@@ -813,7 +818,12 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
         put_ref = self.butler.put(tab1, self.datasetType, dataId={}, provenance=provenance)
 
-        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+        tab2 = self.butler.get(
+            self.datasetType,
+            dataId={},
+            storageClass="ArrowAstropy",
+            parameters={"strip_astropy_meta_yaml": False},
+        )
 
         expected = {
             "LSST.BUTLER.ID": str(put_ref.id),
@@ -1029,7 +1039,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
-        tab2 = self.butler.get(self.datasetType, dataId={})
+        tab2 = self.butler.get(self.datasetType, dataId={}, parameters={"strip_astropy_meta_yaml": False})
         # This will check that the metadata is equivalent as well.
         _checkAstropyTableEquality(tab1, tab2)
 
