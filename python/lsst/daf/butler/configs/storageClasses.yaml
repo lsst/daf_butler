@@ -135,6 +135,7 @@ storageClasses:
     parameters:
       - columns
       - filters
+      - no_strip_astropy_meta_yaml
   DataFrameIndex:
     pytype: pandas.Index
     converters:
@@ -161,6 +162,7 @@ storageClasses:
     parameters:
       - columns
       - filters
+      - no_strip_astropy_meta_yaml
   ArrowColumnList:
     pytype: list
     converters:
@@ -187,6 +189,7 @@ storageClasses:
     parameters:
       - columns
       - filters
+      - no_strip_astropy_meta_yaml
   ArrowAstropySchema:
     pytype: lsst.daf.butler.formatters.parquet.ArrowAstropySchema
     converters:
