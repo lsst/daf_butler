@@ -101,3 +101,9 @@ VignettingCorrection: lsst.ts.observatory.control.utils.extras.vignetting_storag
 SSPAuxiliaryFile: lsst.pipe.tasks.sspAuxiliaryFile.SSPAuxiliaryFileFormatter
 VisitGeometry: lsst.daf.butler.formatters.json.JsonFormatter
 ProvenanceQuantumGraph: lsst.pipe.base.quantum_graph.formatter.ProvenanceFormatter
+Transform: lsst.images.fits.formatters.GenericFormatter
+Projection: lsst.images.fits.formatters.GenericFormatter
+ImageV2: lsst.images.fits.formatters.ImageFormatter
+MaskV2: lsst.images.fits.formatters.ImageFormatter
+MaskedImageV2: lsst.images.fits.formatters.MaskedImageFormatter
+VisitImage: lsst.images.fits.formatters.VisitImageFormatter

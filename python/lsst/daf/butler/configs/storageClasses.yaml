@@ -457,3 +457,60 @@ storageClasses:
       # most recent).
       logs: StructuredDataDict # dict[uuid.UUID, list[ButlerLogRecords]]
       metadata: StructuredDataDict # dict[uuid.UUID, list[TaskMetadata]]
+  BoxV2:
+    pytype: lsst.images.Box
+    converters:
+      lsst.geom.Box2I: lsst.images.Box.from_legacy
+  Transform:
+    pytype: lsst.images.Transform
+  Projection:
+    pytype: lsst.images.Projection
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter and opportunity to do the conversion on read.
+      lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
+  ImageV2:
+    pytype: lsst.images.Image
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+    converters:
+      lsst.afw.image.Image: lsst.images.Image.from_legacy
+  MaskV2:
+    pytype: lsst.images.Mask
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+    converters:
+      lsst.afw.image.Mask: lsst.images.Mask.from_legacy
+  MaskedImageV2:
+    pytype: lsst.images.MaskedImage
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+      image: ImageV2
+      mask: MaskV2
+      variance: ImageV2
+    converters:
+      lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
+  PointSpreadFunction:
+    pytype: lsst.images.psfs.PointSpreadFunction
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter and opportunity to do the conversion on read.
+      lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
+  VisitImage:
+    inheritsFrom: MaskedImageV2
+    pytype: lsst.images.VisitImage
+    derivedComponents:
+      psf: PointSpreadFunction
+    converters:
+      lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
