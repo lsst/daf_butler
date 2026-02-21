@@ -514,3 +514,9 @@ storageClasses:
       psf: PointSpreadFunction
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
+  ColorImage:
+    pytype: lsst.images.ColorImage
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
