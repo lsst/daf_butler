@@ -468,7 +468,7 @@ storageClasses:
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
-      # legacy formatter and opportunity to do the conversion on read.
+      # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
   ImageV2:
     pytype: lsst.images.Image
@@ -505,7 +505,7 @@ storageClasses:
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
-      # legacy formatter and opportunity to do the conversion on read.
+      # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
   VisitImage:
     inheritsFrom: MaskedImageV2
