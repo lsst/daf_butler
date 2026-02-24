@@ -1,3 +1,18 @@
+Butler v30.0.4 (2026-02-23)
+===========================
+
+New Features
+------------
+
+- Enabled saving metadata to Matplotlib PNGs. (`DM-52892 <https://rubinobs.atlassian.net/browse/DM-52892>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed an intermittent segfault in Butler server caused by a concurrency error related to Postgres cursors. Butler server now requires Python 3.13 or later. (`DM-54067 <https://rubinobs.atlassian.net/browse/DM-54067>`_)
+
+
 Butler v30.0.2 (2026-02-06)
 ===========================
 
