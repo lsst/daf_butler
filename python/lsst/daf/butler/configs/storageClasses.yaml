@@ -263,7 +263,6 @@ storageClasses:
     pytype: lsst.afw.image.Exposure
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
-
       # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
       - bbox
 
@@ -446,15 +445,72 @@ storageClasses:
   ProvenanceQuantumGraph:
     pytype: lsst.pipe.base.quantum_graph.ProvenanceQuantumGraph
     parameters:
-      - import_mode   # lsst.pipe.base.pipeline_graph.TaskImportMode
-      - quanta  # iterable of uuid.UUID; quanta to read
-      - datasets  # iterable of uuid.UUID; datasets to read
-      - read_init_quanta  # bool, defaults to True; whether to read pre-exec-init info
+      - import_mode # lsst.pipe.base.pipeline_graph.TaskImportMode
+      - quanta # iterable of uuid.UUID; quanta to read
+      - datasets # iterable of uuid.UUID; datasets to read
+      - read_init_quanta # bool, defaults to True; whether to read pre-exec-init info
     derivedComponents:
-      packages: Packages  # ignores node parameters
+      packages: Packages # ignores node parameters
 
-      # UUID keys can be quantum or data IDs (whichever is passed in via
+      # UUID keys can be quantum or dataset IDs (whichever is passed in via
       # parameters).  Nested lists are attempts to run the quantum (last is
       # most recent).
-      logs: StructuredDataDict  # dict[uuid.UUID, list[ButlerLogRecords]]
-      metadata: StructuredDataDict  # dict[uuid.UUID, list[TaskMetadata]]
+      logs: StructuredDataDict # dict[uuid.UUID, list[ButlerLogRecords]]
+      metadata: StructuredDataDict # dict[uuid.UUID, list[TaskMetadata]]
+  BoxV2:
+    pytype: lsst.images.Box
+    converters:
+      lsst.geom.Box2I: lsst.images.Box.from_legacy
+  Transform:
+    pytype: lsst.images.Transform
+  Projection:
+    pytype: lsst.images.Projection
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter an opportunity to do the conversion on read.
+      lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
+  ImageV2:
+    pytype: lsst.images.Image
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+    converters:
+      lsst.afw.image.Image: lsst.images.Image.from_legacy
+  MaskV2:
+    pytype: lsst.images.Mask
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+    converters:
+      lsst.afw.image.Mask: lsst.images.Mask.from_legacy
+  MaskedImageV2:
+    pytype: lsst.images.MaskedImage
+    parameters:
+      - bbox
+    derivedComponents:
+      projection: Projection
+      bbox: BoxV2
+      image: ImageV2
+      mask: MaskV2
+      variance: ImageV2
+    converters:
+      lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
+  PointSpreadFunction:
+    pytype: lsst.images.psfs.PointSpreadFunction
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter an opportunity to do the conversion on read.
+      lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
+  VisitImage:
+    inheritsFrom: MaskedImageV2
+    pytype: lsst.images.VisitImage
+    derivedComponents:
+      psf: PointSpreadFunction
+    converters:
+      lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
