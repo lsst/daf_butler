@@ -1,0 +1,26 @@
+datastore:
+  cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  datastore_constraints:
+    - constraints:
+        reject:
+          - rejected_by_first
+    - constraints:
+        reject:
+          - arbitrary
+  datastores:
+    - datastore:
+        name: "FirstDatastore"
+        cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+        root: <butlerRoot>/butler_test_repository
+        templates: !include templates.yaml
+        formatters: !include formatters.yaml
+        composites: !include composites.yaml
+    - datastore:
+        name: "SecondDatastore"
+        cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+        root: <butlerRoot>/butler_test_repository2
+        records:
+          table: second_datastore_records
+        templates: !include templates.yaml
+        formatters: !include formatters.yaml
+        composites: !include composites.yaml
