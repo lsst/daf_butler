@@ -116,6 +116,7 @@ class DirectButlerCollections(ButlerCollections):
         include_summary: bool = False,
         include_doc: bool = False,
         summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
+        ignore_missing: bool = False,
     ) -> Sequence[CollectionInfo]:
         info = []
         if collection_types is None:
@@ -128,6 +129,7 @@ class DirectButlerCollections(ButlerCollections):
             collection_types=collection_types,
             flatten_chains=flatten_chains,
             include_chains=include_chains,
+            ignore_missing=ignore_missing,
         )
 
         summaries: Mapping[Any, CollectionSummary] = {}
