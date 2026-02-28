@@ -1,3 +1,12 @@
+Butler v30.0.5 (2026-02-28)
+===========================
+
+Other Changes and Additions
+---------------------------
+
+- Add storage class and formatter declarations for the new types in `lsst.images`. (`DM-54083 <https://rubinobs.atlassian.net/browse/DM-54083>`_)
+
+
 Butler v30.0.4 (2026-02-23)
 ===========================
 
