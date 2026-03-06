@@ -107,3 +107,4 @@ ImageV2: lsst.images.fits.formatters.ImageFormatter
 MaskV2: lsst.images.fits.formatters.ImageFormatter
 MaskedImageV2: lsst.images.fits.formatters.MaskedImageFormatter
 VisitImage: lsst.images.fits.formatters.VisitImageFormatter
+ColorImage: lsst.images.fits.formatters.ImageFormatter
