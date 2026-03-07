@@ -533,6 +533,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         collection_types: Set[CollectionType] = CollectionType.all(),
         flatten_chains: bool = True,
         include_chains: bool | None = None,
+        ignore_missing: bool = False,
     ) -> list[CollectionRecord[_Key]]:
         """Iterate over collection records that match a wildcard.
 
