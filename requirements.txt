@@ -2,5 +2,5 @@
 -r requirements/test.in
 
 lsst-sphgeom @ git+https://github.com/lsst/sphgeom@main
-lsst-utils @ git+https://github.com/lsst/utils@main
+lsst-utils @ git+https://github.com/lsst/utils@tickets/DM-42273
 lsst-resources[https,s3] @ git+https://github.com/lsst/resources@main
