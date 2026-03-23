@@ -44,6 +44,7 @@ import os
 import zipfile
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Iterator, Mapping, Set
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar, TypeAlias, final
 
 from lsst.resources import ResourceHandleProtocol, ResourcePath
@@ -81,6 +82,22 @@ class FormatterNotImplementedError(NotImplementedError):
     """Formatter does not implement the specific read or write method
     that is being requested.
     """
+
+
+@dataclass(frozen=True)
+class FormatterWriteResult:
+    """Information about the write executed by ``FormatterV2.write()``"""
+
+    file_size: int
+    """Size of the file written, in bytes."""
+
+
+@dataclass(frozen=True)
+class _DirectWriteResult:
+    written: bool
+    """`True` if the direct write occurred, `False` if it did not."""
+    file_size: int
+    """Size of the file written, in bytes. -1 if ``written`` is `False`."""
 
 
 class FormatterV2:
@@ -898,7 +915,7 @@ class FormatterV2:
         *,
         cache_manager: AbstractDatastoreCacheManager | None = None,
         provenance: DatasetProvenance | None = None,
-    ) -> None:
+    ) -> FormatterWriteResult:
         """Write a Dataset.
 
         Parameters
@@ -935,16 +952,20 @@ class FormatterV2:
         # a different object.
         in_memory_dataset = self.add_provenance(in_memory_dataset, provenance=provenance)
 
-        written = self._write_direct(in_memory_dataset, uri, cache_manager)
-        if not written:
-            self._write_locally_then_move(in_memory_dataset, uri, cache_manager)
+        direct_result = self._write_direct(in_memory_dataset, uri, cache_manager)
+        if direct_result.written:
+            size = direct_result.file_size
+        else:
+            size = self._write_locally_then_move(in_memory_dataset, uri, cache_manager)
+
+        return FormatterWriteResult(file_size=size)
 
     def _write_direct(
         self,
         in_memory_dataset: Any,
         uri: ResourcePath,
         cache_manager: AbstractDatastoreCacheManager | None = None,
-    ) -> bool:
+    ) -> _DirectWriteResult:
         """Serialize and write directly to final location.
 
         Parameters
@@ -959,8 +980,9 @@ class FormatterV2:
 
         Returns
         -------
-        written : `bool`
-            Flag to indicate whether the direct write did happen.
+        result : ``_DirectWriteResult``
+            Result object with flag to indicate whether the direct write did
+            happen, and the size of the file written.
 
         Raises
         ------
@@ -975,11 +997,12 @@ class FormatterV2:
         directly.
 
         If the dataset should be cached or is local the file will not be
-        written and the method will return `False`. This is because local URIs
-        should be written to a temporary file name and then renamed to allow
-        atomic writes. That path is handled by `_write_locally_then_move`
-        through `write_local_file`) and is preferred over this method being
-        subclassed and the atomic write re-implemented.
+        written and the method will return a result object with
+        ``written=False``.
+        This is because local URIs should be written to a temporary file name
+        and then renamed to allow atomic writes. That path is handled by
+        `_write_locally_then_move` through `write_local_file`) and is preferred
+        over this method being subclassed and the atomic write re-implemented.
         """
         cache_manager = self._ensure_cache(cache_manager)
 
@@ -989,10 +1012,12 @@ class FormatterV2:
         # a file is always written and direct write to the remote
         # datastore is bypassed.
         data_written = False
+        size = -1
         if not uri.isLocal and not cache_manager.should_be_cached(self._get_cache_ref()):
             # Remote URI that is not cached so can write directly.
             try:
                 serialized_dataset = self.to_bytes(in_memory_dataset)
+                size = len(serialized_dataset)
             except FormatterNotImplementedError:
                 # Fallback to the file writing option.
                 pass
@@ -1007,14 +1032,14 @@ class FormatterV2:
                 uri.write(serialized_dataset, overwrite=True)
                 log.debug("Successfully wrote bytes directly to %s", uri)
                 data_written = True
-        return data_written
+        return _DirectWriteResult(written=data_written, file_size=size)
 
     def _write_locally_then_move(
         self,
         in_memory_dataset: Any,
         uri: ResourcePath,
         cache_manager: AbstractDatastoreCacheManager | None = None,
-    ) -> None:
+    ) -> int:
         """Write file to file system and then move to final location.
 
         Parameters
@@ -1034,6 +1059,11 @@ class FormatterV2:
             `write_local_file`.
         Exception
             Raised if there is an error serializing the dataset to disk.
+
+        Returns
+        -------
+        file_size : `int`
+            Size of the file written, in bytes.
         """
         cache_manager = self._ensure_cache(cache_manager)
 
@@ -1046,6 +1076,7 @@ class FormatterV2:
             # to_bytes will be called using the base class definition.
             try:
                 self.write_local_file(in_memory_dataset, temporary_uri)
+                size = temporary_uri.size()
             except Exception as e:
                 e.add_note(
                     f"Failed to serialize dataset {self.dataset_ref} of type"
@@ -1066,6 +1097,7 @@ class FormatterV2:
                 cache_manager.move_to_cache(temporary_uri, self._get_cache_ref())
 
         log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+        return size
 
     def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
         """Serialize the in-memory dataset to a local file.
