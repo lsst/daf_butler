@@ -935,11 +935,11 @@ class FormatterV2:
         # a different object.
         in_memory_dataset = self.add_provenance(in_memory_dataset, provenance=provenance)
 
-        written = self.write_direct(in_memory_dataset, uri, cache_manager)
+        written = self._write_direct(in_memory_dataset, uri, cache_manager)
         if not written:
-            self.write_locally_then_move(in_memory_dataset, uri, cache_manager)
+            self._write_locally_then_move(in_memory_dataset, uri, cache_manager)
 
-    def write_direct(
+    def _write_direct(
         self,
         in_memory_dataset: Any,
         uri: ResourcePath,
@@ -977,7 +977,7 @@ class FormatterV2:
         If the dataset should be cached or is local the file will not be
         written and the method will return `False`. This is because local URIs
         should be written to a temporary file name and then renamed to allow
-        atomic writes. That path is handled by `write_locally_then_move`
+        atomic writes. That path is handled by `_write_locally_then_move`
         through `write_local_file`) and is preferred over this method being
         subclassed and the atomic write re-implemented.
         """
@@ -1009,7 +1009,7 @@ class FormatterV2:
                 data_written = True
         return data_written
 
-    def write_locally_then_move(
+    def _write_locally_then_move(
         self,
         in_memory_dataset: Any,
         uri: ResourcePath,
