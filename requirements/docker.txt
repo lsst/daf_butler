@@ -25,7 +25,7 @@ astropy==7.2.0 \
     --hash=sha256:dc7c340ba1713e55c93071b32033f3153470a0f663a4d539c03a7c9b44020790 \
     --hash=sha256:efac04df4cc488efe630c2fff1992d6516dfb16a06e197fb68bc9e8e3b85def1
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   lsst-resources
     #   lsst-utils
 astropy-iers-data==0.2026.2.9.0.50.33 \
@@ -259,7 +259,7 @@ click==8.3.1 \
     --hash=sha256:12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a \
     --hash=sha256:981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   safir
     #   uvicorn
 cryptography==45.0.7 \
@@ -311,13 +311,13 @@ deprecated==1.3.1 \
     --hash=sha256:597bfef186b6f60181535a29fbe44865ce137a5079f295b479886c82729d5f3f \
     --hash=sha256:b1b50e0ff0c1fddaa5708a2c6b0a6588bb09b892825ab2b214ac9ea9d92a5223
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   lsst-utils
 fastapi==0.128.6 \
     --hash=sha256:0cb3946557e792d731b26a42b04912f16367e3c3135ea8290f620e234f2b604f \
     --hash=sha256:bb1c1ef87d6086a7132d0ab60869d6f1ee67283b20fbf84ec0003bd335099509
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   safir
     #   sentry-sdk
 gidgethub==5.4.0 \
@@ -412,7 +412,7 @@ httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   safir
 idna==3.11 \
     --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea \
@@ -427,10 +427,10 @@ jmespath==1.1.0 \
     # via
     #   boto3
     #   botocore
-lsst-resources==30.2026.300 \
+lsst-resources[https,s3]==30.2026.300 \
     --hash=sha256:013f91bd0f5be24e3754ce436b2d454a8cd66627db9cf827c8308f7654f01ce8 \
     --hash=sha256:ffebe247592c2faa04c0673f9fe403f7129eea29f91b29d024529f0d30749630
-    # via -r ./docker.in
+    # via -r docker.in
 lsst-sphgeom==30.2026.500 \
     --hash=sha256:0502b0376619f52f15b1ca91d1cc1252610407ea9c83828e8e0e1da65c3b0b49 \
     --hash=sha256:15b8d57c086ee2a6a9e7b88e145192a4b35966a8b2eaff46893a19964a2e8dee \
@@ -453,12 +453,12 @@ lsst-sphgeom==30.2026.500 \
     --hash=sha256:d82519575a44ab44f181e1bc513620bdc6372cd84d956f2bca46eedddb657220 \
     --hash=sha256:ece5960cdc2f39428b1ce856ce5bdbd0e8b16e197919d32c5fc1ad8f500044bd \
     --hash=sha256:ef681f2a462bd8baaed691b5f74a733ace62c1fd2a239037746d4653d98379eb
-    # via -r ./docker.in
+    # via -r docker.in
 lsst-utils==30.2026.500 \
     --hash=sha256:3e30b375508fa6b2c7025dc245e9e97efe8d6c17fd90bcddd66731c2f40a7a74 \
     --hash=sha256:67e030db3c6c9a8b7202cc43626186e1582375b2861fb108b202d335ae42359a
     # via
-    #   -r ./docker.in
+    #   -r docker.in
     #   lsst-resources
 numpy==2.4.2 \
     --hash=sha256:00ab83c56211a1d7c07c25e3217ea6695e50a3e2f255053686b081dc0b091a82 \
@@ -534,7 +534,7 @@ numpy==2.4.2 \
     --hash=sha256:fcf92bee92742edd401ba41135185866f7026c502617f422eb432cfeca4fe236 \
     --hash=sha256:fd49860271d52127d61197bb50b64f58454e9f578cb4b2c001a6de8b1f50b0b1
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   astropy
     #   hpgeom
     #   lsst-sphgeom
@@ -575,7 +575,7 @@ psycopg2==2.9.11 \
     --hash=sha256:964d31caf728e217c697ff77ea69c2ba0865fa41ec20bb00f0977e62fdcc52e3 \
     --hash=sha256:e03e4a6dbe87ff81540b434f2e5dc2bddad10296db5eea7bdc995bf5f4162938 \
     --hash=sha256:f10a48acba5fe6e312b891f290b4d2ca595fc9a06850fe53320beac353575578
-    # via -r ./main.in
+    # via -r main.in
 pyarrow==23.0.0 \
     --hash=sha256:068701f6823449b1b6469120f399a1239766b117d211c5d2519d4ed5861f75de \
     --hash=sha256:075c29aeaa685fd1182992a9ed2499c66f084ee54eea47da3eb76e125e06064c \
@@ -627,7 +627,7 @@ pyarrow==23.0.0 \
     --hash=sha256:e438dd3f33894e34fd02b26bd12a32d30d006f5852315f611aa4add6c7fab4bc \
     --hash=sha256:ebc017d765d71d80a3f8584ca0566b53e40464586585ac64176115baa0ada7d3 \
     --hash=sha256:ef7cac8fe6fccd8b9e7617bfac785b0371a7fe26af59463074e4882747145d40
-    # via -r ./main.in
+    # via -r main.in
 pycparser==3.0 \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
     --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
@@ -636,7 +636,7 @@ pydantic==2.12.5 \
     --hash=sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49 \
     --hash=sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   fastapi
     #   pydantic-settings
     #   safir
@@ -782,10 +782,12 @@ pyerfa==2.0.1.5 \
     --hash=sha256:be1aeb70390dd03a34faf96749d5cabc58437410b4aab7213c512323932427df \
     --hash=sha256:d30b9b0df588ed5467e529d851ea324a67239096dd44703125072fd11b351ea2
     # via astropy
-pyjwt==2.11.0 \
-    --hash=sha256:35f95c1f0fbe5d5ba6e43f00271c275f7a1a4db1dab27bf708073b75318ea623 \
-    --hash=sha256:94a6bde30eb5c8e04fee991062b534071fd1439ef58d2adc9ccb823e7bcd0469
-    # via gidgethub
+pyjwt[crypto]==2.12.0 \
+    --hash=sha256:2f62390b667cd8257de560b850bb5a883102a388829274147f1d724453f8fb02 \
+    --hash=sha256:9bb459d1bdd0387967d287f5656bf7ec2b9a26645d1961628cda1764e087fd6e
+    # via
+    #   gidgethub
+    #   pyjwt
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
@@ -869,7 +871,7 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   astropy
     #   lsst-utils
 requests==2.32.5 \
@@ -883,16 +885,16 @@ s3transfer==0.16.0 \
 safir==14.2.0 \
     --hash=sha256:99aea5818393d51b25571392229d10f2dc868dbd394776307728df2ab2ff25f1 \
     --hash=sha256:ac58f12b48d7eadede0efe1ef5022f663a4df16c224478400ff1135f4c39b55f
-    # via -r ./main.in
+    # via -r main.in
 safir-logging==14.2.0 \
     --hash=sha256:0823ae78200db751ceb8a44272bd37bbc44afd923f3b201577985bc5b8648c65 \
     --hash=sha256:443856aeeec7fc1ad53b7c8b19c5a471e759e148849f82962352fb633d639e6f
     # via safir
-sentry-sdk==2.52.0 \
+sentry-sdk[fastapi,sqlalchemy]==2.52.0 \
     --hash=sha256:931c8f86169fc6f2752cb5c4e6480f0d516112e78750c312e081ababecbaf2ed \
     --hash=sha256:fa0bec872cfec0302970b2996825723d67390cdd5f0229fb9efed93bd5384899
     # via
-    #   -r ./docker.in
+    #   -r docker.in
     #   safir
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
@@ -959,7 +961,7 @@ sqlalchemy==2.0.46 \
     --hash=sha256:f9c11766e7e7c0a2767dda5acb006a118640c9fc0a4104214b96269bfb78399e \
     --hash=sha256:ff33c6e6ad006bbc0f34f5faf941cfc62c45841c64c0a058ac38c799f15b5ede
     # via
-    #   -r ./main.in
+    #   -r main.in
     #   sentry-sdk
 starlette==0.52.1 \
     --hash=sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74 \
@@ -1009,7 +1011,7 @@ urllib3==2.6.3 \
 uvicorn==0.40.0 \
     --hash=sha256:839676675e87e73694518b5574fd0f24c9d97b46bea16df7b8c05ea1a51071ea \
     --hash=sha256:c6c8f55bc8bf13eb6fa9ff87ad62308bbbc33d0b67f84293151efe87e0d5f2ee
-    # via -r ./docker.in
+    # via -r docker.in
 wrapt==2.1.1 \
     --hash=sha256:05c0db35ccffd7480143e62df1e829d101c7b86944ae3be7e4869a7efa621f53 \
     --hash=sha256:0bb7207130ce6486727baa85373503bf3334cc28016f6928a0fa7e19d7ecdc06 \
