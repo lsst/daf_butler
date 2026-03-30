@@ -470,6 +470,11 @@ storageClasses:
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
+  ObservationInfo:
+    # In theory we could have a conversion from VisitInfo but there is
+    # no need for that at the moment (and where would those 5 lines of code
+    # live).
+    pytype: astro_metadata_translator.ObservationInfo
   ImageV2:
     pytype: lsst.images.Image
     parameters:
@@ -477,6 +482,7 @@ storageClasses:
     derivedComponents:
       projection: Projection
       bbox: BoxV2
+      obs_info: ObservationInfo
     converters:
       lsst.afw.image.Image: lsst.images.Image.from_legacy
   MaskV2:
@@ -486,6 +492,7 @@ storageClasses:
     derivedComponents:
       projection: Projection
       bbox: BoxV2
+      obs_info: ObservationInfo
     converters:
       lsst.afw.image.Mask: lsst.images.Mask.from_legacy
   MaskedImageV2:
@@ -498,6 +505,7 @@ storageClasses:
       image: ImageV2
       mask: MaskV2
       variance: ImageV2
+      obs_info: ObservationInfo
     converters:
       lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
   PointSpreadFunction:
