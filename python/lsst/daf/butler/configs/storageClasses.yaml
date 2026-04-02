@@ -17,6 +17,8 @@ storageClasses:
     pytype: lsst.afw.image.CoaddInputs
   VisitInfo:
     pytype: lsst.afw.image.VisitInfo
+    converters:
+      astro_metadata_translator.ObservationInfo: lsst.obs.base.MakeRawVisitInfoViaObsInfo.observationInfo2visitInfo
   ApCorr:
     pytype: lsst.afw.image.ApCorrMap
   PhotoCalib:
@@ -471,10 +473,9 @@ storageClasses:
       # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
   ObservationInfo:
-    # In theory we could have a conversion from VisitInfo but there is
-    # no need for that at the moment (and where would those 5 lines of code
-    # live).
     pytype: astro_metadata_translator.ObservationInfo
+    converters:
+      lsst.afw.image.VisitInfo: lsst.obs.base.MakeRawVisitInfoViaObsInfo.visitInfo2observationInfo
   ImageV2:
     pytype: lsst.images.Image
     parameters:
