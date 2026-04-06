@@ -1,3 +1,13 @@
+Butler v30.0.6 (2026-04-06)
+===========================
+
+Other Changes and Additions
+---------------------------
+
+- Add storage class and formatter declaration for ``lsst.images.ColorImage``. (`DM-54220 <https://rubinobs.atlassian.net/browse/DM-54220>`_)
+- Add ``ObservationInfo`` storage class. (`DM-54472 <https://rubinobs.atlassian.net/browse/DM-54472>`_)
+- Add storage class converters for ``ObservationInfo`` to and from ``VisitInfo`` (`DM-54514 <https://rubinobs.atlassian.net/browse/DM-54514>`_)
+
 Butler v30.0.4 (2026-02-23)
 ===========================
 
