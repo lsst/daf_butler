@@ -154,9 +154,7 @@ def interpret_identifier(context: IdentifierContext, identifier: str) -> ColumnE
             elif second in DATASET_FIELD_NAMES:
                 # We just assume the dataset type is okay; it's the job of
                 # higher-level code to complain otherwise.
-                return DatasetFieldReference.model_construct(
-                    dataset_type=first, field=cast(DatasetFieldName, second)
-                )
+                return DatasetFieldReference.model_construct(dataset_type=first, field=second)
             if first == "timespan":
                 base = interpret_identifier(context, "timespan")
                 if second == "begin":

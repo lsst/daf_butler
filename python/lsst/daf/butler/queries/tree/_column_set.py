@@ -341,7 +341,7 @@ class ColumnSet:
                 update=dict(name=qualified_name)
             )
         if logical_table in self._dimension_fields:
-            assert logical_table is not ANY_DATASET
+            assert logical_table is not ANY_DATASET  # type: ignore[comparison-overlap]
             return (
                 self._dimensions.universe[logical_table]
                 .schema.all[field]

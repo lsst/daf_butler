@@ -41,7 +41,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, ClassVar, cast
+from typing import IO, TYPE_CHECKING, Any, ClassVar
 
 import yaml
 from yaml.representer import Representer
@@ -582,7 +582,7 @@ class Config(MutableMapping):
         """
         keys: list[str | int]
         if name in self._data:
-            keys = [cast(str, name)]
+            keys = [name]
         else:
             keys = self._splitIntoKeys(name)
         return keys
