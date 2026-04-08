@@ -287,7 +287,11 @@ class DefaultCollectionManager(CollectionManager[K]):
         return result
 
     def _find_many(
-        self, names: Iterable[str], flatten_chains: bool, collection_cache: CollectionRecordCache | None
+        self,
+        names: Iterable[str],
+        flatten_chains: bool,
+        collection_cache: CollectionRecordCache | None,
+        ignore_missing: bool = False,
     ) -> list[CollectionRecord[K]]:
         """Return multiple records given their names.
 
@@ -373,11 +377,14 @@ class DefaultCollectionManager(CollectionManager[K]):
                 records[record.name] = record
                 self._addCachedRecord(record, collection_cache)
 
-        missing_names = [name for name in names if name not in records]
-        if len(missing_names) == 1:
-            raise MissingCollectionError(f"No collection with name '{missing_names[0]}' found.")
-        elif len(missing_names) > 1:
-            raise MissingCollectionError(f"No collections with names '{' '.join(missing_names)}' found.")
+        if ignore_missing:
+            names = [name for name in names if name in records]
+        else:
+            missing_names = [name for name in names if name not in records]
+            if len(missing_names) == 1:
+                raise MissingCollectionError(f"No collection with name '{missing_names[0]}' found.")
+            elif len(missing_names) > 1:
+                raise MissingCollectionError(f"No collections with names '{' '.join(missing_names)}' found.")
 
         def order(names: Iterable[str]) -> Iterator[CollectionRecord[K]]:
             for name in names:
@@ -409,6 +416,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         collection_types: Set[CollectionType] = CollectionType.all(),
         flatten_chains: bool = True,
         include_chains: bool | None = None,
+        ignore_missing: bool = False,
     ) -> list[CollectionRecord[K]]:
         # Docstring inherited
         include_chains = include_chains if include_chains is not None else not flatten_chains
@@ -451,7 +459,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         if explicit_names:
             # _find_many() returns correctly ordered records, but there may be
             # duplicates.
-            for record in filter_types(self._find_many(explicit_names, flatten_chains, cache)):
+            for record in filter_types(
+                self._find_many(explicit_names, flatten_chains, cache, ignore_missing=ignore_missing)
+            ):
                 if record.key not in done_keys:
                     result.append(record)
                     done_keys.add(record.key)
