@@ -987,6 +987,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         formatter: Formatter | FormatterV2 | type[Formatter | FormatterV2],
         transfer: str | None = None,
         record_validation_info: bool = True,
+        file_size: int | None = None,
     ) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
         to-be-ingested file.
@@ -1010,6 +1011,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             or file sizes. This can be useful if such information is tracked
             in an external system or if the file is to be compressed in place.
             It is up to the datastore whether this parameter is relevant.
+        file_size : `int`, optional
+            Size of the file, to be recorded as validation information.
 
         Returns
         -------
@@ -1029,12 +1032,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         if self._transaction is None:
             raise RuntimeError("Ingest called without transaction enabled")
 
+        checksum = None
+
         # Create URI of the source path, do not need to force a relative
         # path to absolute.
         srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
-
-        # Track whether we have read the size of the source yet
-        have_sized = False
 
         tgtLocation: Location | None
         if transfer is None or transfer == "split":
@@ -1073,9 +1075,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # it may be more efficient to get the size and checksum of the
             # local file rather than the transferred one
             if record_validation_info and srcUri.isLocal:
-                size = srcUri.size()
-                checksum = self.computeChecksum(srcUri) if self.useChecksum else None
-                have_sized = True
+                if file_size is None:
+                    file_size = srcUri.size()
+                if checksum is None:
+                    checksum = self.computeChecksum(srcUri) if self.useChecksum else None
 
             # Transfer the resource to the destination.
             # Allow overwrite of an existing file. This matches the behavior
@@ -1096,20 +1099,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # the file should exist in the datastore now
         if record_validation_info:
-            if not have_sized:
-                size = targetUri.size()
+            if file_size is None:
+                file_size = targetUri.size()
+            if checksum is None:
                 checksum = self.computeChecksum(targetUri) if self.useChecksum else None
-        else:
-            # Not recording any file information.
-            size = -1
-            checksum = None
 
         return StoredFileInfo(
             formatter=formatter,
             path=targetPath,
             storageClass=ref.datasetType.storageClass,
             component=ref.datasetType.component(),
-            file_size=size,
+            file_size=file_size if file_size is not None else -1,
             checksum=checksum,
         )
 
@@ -1343,7 +1343,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         with time_this(log, msg="Writing dataset %s with formatter %s", args=(ref, formatter.name())):
             try:
-                formatter_compat.write(
+                write_result = formatter_compat.write(
                     inMemoryDataset, cache_manager=self.cacheManager, provenance=provenance
                 )
             except Exception as e:
@@ -1353,7 +1353,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 ) from e
 
         # URI is needed to resolve what ingest case are we dealing with
-        return self._extractIngestInfo(uri, ref, formatter=formatter)
+        return self._extractIngestInfo(uri, ref, formatter=formatter, file_size=write_result.file_size)
 
     def knows(self, ref: DatasetRef) -> bool:
         """Check if the dataset is known to the datastore.
