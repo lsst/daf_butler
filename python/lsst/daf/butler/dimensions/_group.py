@@ -84,8 +84,10 @@ class SortedSequenceSet(Set[str]):
             return seq == self._seq
         return super().__eq__(other)
 
+    # MyPy really wants _from_iterable to be generic, but this set doesn't
+    # support anything other than strings.
     @classmethod
-    def _from_iterable(cls, iterable: Iterable[str]) -> set[str]:
+    def _from_iterable(cls, iterable: Iterable[str]) -> set[str]:  # type: ignore[override]
         # This is used by collections.abc.Set mixin methods when they need
         # to return a new object (e.g. in `__and__`).
         return set(iterable)

@@ -335,8 +335,11 @@ class NamedValueAbstractSet(Set[K_co]):
         except KeyError:
             return default
 
+    # MyPy wants _from_iterable to be fully generic and work on all types,
+    # but a NamedValueSet only wants to be iterable with other sets that have
+    # the same item type.
     @classmethod
-    def _from_iterable(cls, iterable: Iterable[K_co]) -> NamedValueSet[K_co]:
+    def _from_iterable(cls, iterable: Iterable[K_co]) -> NamedValueSet[K_co]:  # type: ignore[override]
         """Construct class from an iterable.
 
         Hook to ensure that inherited `collections.abc.Set` operators return

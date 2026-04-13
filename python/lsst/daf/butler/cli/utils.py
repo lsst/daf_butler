@@ -561,7 +561,9 @@ def split_kv(
     if add_to_default:
         default = param.get_default(context)
         if default and default != _CLICK_UNSET_SENTINEL:
-            vals = tuple(v for v in itertools.chain(default, vals))  # Convert to tuple for mypy
+            vals = tuple(
+                v for v in itertools.chain(ensure_iterable(default), vals)
+            )  # Convert to tuple for mypy
 
     ret: RetDict | RetTuple
     if return_type is dict:
