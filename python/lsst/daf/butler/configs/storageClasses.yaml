@@ -374,10 +374,6 @@ storageClasses:
     pytype: lsst.meas.algorithms.Stamps
     parameters:
       - bbox
-  BrightStarStamps:
-    pytype: lsst.meas.algorithms.brightStarStamps.BrightStarStamps
-    parameters:
-      - bbox
   AstropyTable:
     pytype: astropy.table.Table
     converters:
@@ -532,3 +528,7 @@ storageClasses:
       projection: Projection
   ObservationSummaryStats:
     pytype: lsst.images.ObservationSummaryStats
+  ExtendedPsfCandidates:
+    pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
+    parameters:
+      - bbox
