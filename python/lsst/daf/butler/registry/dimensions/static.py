@@ -545,14 +545,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         records: Sequence[DimensionRecord],
     ) -> list[dict[str, Any]]:
         _LOG.debug("Precomputing common skypix overlaps for %s.", element.name)
+        records = [record for record in records if record.region is not None]
+        envelopes = self.universe.commonSkyPix.pixelization.envelope_many(
+            [record.region for record in records]
+        )
         overlap_records: list[dict[str, Any]] = []
-        for record in records:
-            if record.region is None:
-                continue
+        for record, envelope in zip(records, envelopes):
             base_overlap_record = dict(record.dataId.required)
             base_overlap_record["skypix_system"] = self.universe.commonSkyPix.system.name
             base_overlap_record["skypix_level"] = self.universe.commonSkyPix.level
-            for begin, end in self.universe.commonSkyPix.pixelization.envelope(record.region):
+            for begin, end in envelope:
                 for index in range(begin, end):
                     overlap_records.append({"skypix_index": index, **base_overlap_record})
         return overlap_records
