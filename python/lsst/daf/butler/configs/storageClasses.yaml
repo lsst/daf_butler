@@ -521,6 +521,7 @@ storageClasses:
     pytype: lsst.images.VisitImage
     derivedComponents:
       psf: PointSpreadFunction
+      summary_stats: ObservationSummaryStats
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   ColorImage:
@@ -529,3 +530,5 @@ storageClasses:
       - bbox
     derivedComponents:
       projection: Projection
+  ObservationSummaryStats:
+    pytype: lsst.images.ObservationSummaryStats
