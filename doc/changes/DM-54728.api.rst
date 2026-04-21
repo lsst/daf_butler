@@ -1,0 +1,1 @@
+Added ``Butler.has_repo_config`` method that can be used to check if a directory URI is configured as a butler repository.

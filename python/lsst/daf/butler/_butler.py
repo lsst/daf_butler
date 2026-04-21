@@ -373,6 +373,24 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 raise TypeError(f"Unknown Butler type '{butler_type}'")
 
     @staticmethod
+    def has_repo_config(root: ResourcePathExpression) -> bool:
+        """Check whether the given directory path contains a Butler
+        configuration or not.
+
+        Parameters
+        ----------
+        root : `lsst.resources.ResourcePathExpression`
+            The directory URI to check.
+
+        Returns
+        -------
+        is_root : `bool`
+            `True` if this is a directory containing a butler configuration.
+        """
+        root_uri = ResourcePath(root, forceDirectory=True)
+        return root_uri.join("butler.yaml").exists()
+
+    @staticmethod
     def makeRepo(
         root: ResourcePathExpression,
         config: Config | str | None = None,
