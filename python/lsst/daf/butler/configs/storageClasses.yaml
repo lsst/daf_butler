@@ -516,6 +516,7 @@ storageClasses:
     derivedComponents:
       psf: PointSpreadFunction
       summary_stats: ObservationSummaryStats
+      aperture_corrections: StructuredDataDict
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   ColorImage:
