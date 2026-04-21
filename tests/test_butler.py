@@ -1439,7 +1439,9 @@ class ButlerTests(ButlerPutGetTests):
         root1 = tempfile.mkdtemp(dir=self.root)
         root2 = tempfile.mkdtemp(dir=self.root)
 
+        self.assertFalse(Butler.has_repo_config(root1))
         butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
+        self.assertTrue(Butler.has_repo_config(root1))
         limited = Config(self.configFile)
         butler1 = Butler.from_config(butlerConfig)
         self.enterContext(butler1)
