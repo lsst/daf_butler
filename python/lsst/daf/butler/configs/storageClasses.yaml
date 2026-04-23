@@ -374,18 +374,12 @@ storageClasses:
     pytype: lsst.meas.algorithms.Stamps
     parameters:
       - bbox
-  BrightStarStamps:
-    pytype: lsst.meas.algorithms.brightStarStamps.BrightStarStamps
-    parameters:
-      - bbox
   AstropyTable:
     pytype: astropy.table.Table
     converters:
       lsst.afw.table.Catalog: lsst.afw.table.Catalog.asAstropy
   AstropyQTable:
     pytype: astropy.table.QTable
-  ExtendedPsf:
-    pytype: lsst.pipe.tasks.extended_psf.ExtendedPsf
   HealSparseCoverage:
     pytype: healsparse.HealSparseCoverage
   HealSparseMap:
@@ -532,3 +526,7 @@ storageClasses:
       projection: Projection
   ObservationSummaryStats:
     pytype: lsst.images.ObservationSummaryStats
+  ExtendedPsfCandidates:
+    pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
+    parameters:
+      - bbox

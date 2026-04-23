@@ -71,7 +71,6 @@ MetricValue:
 StructuredDataDict: lsst.daf.butler.formatters.yaml.YamlFormatter
 StampsBase: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Stamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
-BrightStarStamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 AstropyTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 AstropyQTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 ArrowAstropy: lsst.daf.butler.formatters.parquet.ParquetFormatter
@@ -79,7 +78,6 @@ ArrowNumpy: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowNumpyDict: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowTable: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowSchema: lsst.daf.butler.formatters.parquet.ParquetFormatter
-ExtendedPsf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 HealSparseMap: lsst.pipe.tasks.healSparseMapping.HealSparseMapFormatter
 ButlerLogRecords: lsst.daf.butler.formatters.logs.ButlerLogRecordsFormatter
 TaskMetadata: lsst.daf.butler.formatters.json.JsonFormatter
@@ -108,3 +106,4 @@ MaskV2: lsst.images.fits.formatters.ImageFormatter
 MaskedImageV2: lsst.images.fits.formatters.MaskedImageFormatter
 VisitImage: lsst.images.fits.formatters.VisitImageFormatter
 ColorImage: lsst.images.fits.formatters.ImageFormatter
+ExtendedPsfCandidates: lsst.images.fits.formatters.GenericFormatter
