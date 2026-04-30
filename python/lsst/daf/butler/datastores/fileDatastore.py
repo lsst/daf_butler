@@ -3199,8 +3199,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Datasets (with or without files existing on disk) can persist in
         # this zombie state indefinitely, until someone manually empties
         # the trash.
-        exported_refs = list(self._bridge.check(refs))
-        ids = {ref.id for ref in exported_refs}
+        ids = self._bridge.check([ref.id for ref in refs])
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}
         for row in self._table.fetch(dataset_id=ids):
             info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
