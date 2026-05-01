@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import astropy.time
+import pydantic
 import sqlalchemy
 
 from lsst.utils.iteration import chunk_iterable
@@ -107,6 +108,15 @@ class _DatasetRecordStorage:
     dynamic_tables: DynamicTables
 
 
+class _DatasetTypeOverride(pydantic.BaseModel):
+    """A configuration struct that holds storage class overrides and/or a new
+    name for a dataset type.
+    """
+
+    storageClass: str | None = None
+    rename: str | None = None
+
+
 class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
@@ -141,6 +151,16 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         Structure containing tables that summarize the contents of collections.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
+    renames
+        Mapping from a dataset type name in the database to an client-level
+        override name.
+    reversed_renames
+        Mapping from the override name for a dataset type to its true (DB)
+        name.
+    storage_class_overrides
+        Mapping from the true (DB) name of a dataset type to an override
+        storage class this client should use instead of the one in the
+        database.
     _cache : `None`, optional
         For internal use only.
     """
@@ -153,6 +173,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        renames: Mapping[str, str],
+        reversed_renames: Mapping[str, str],
+        storage_class_overrides: Mapping[str, str],
         registry_schema_version: VersionTuple | None = None,
         _cache: DatasetTypeCache | None = None,
     ):
@@ -165,6 +188,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         self._cache = _cache if _cache is not None else DatasetTypeCache()
         self._use_astropy_ingest_date = self.ingest_date_dtype() is ddl.AstropyTimeNsecTai
         self._run_key_column = collections.getRunForeignKeyName()
+        self._renames = renames
+        self._reversed_renames = reversed_renames
+        self._storage_class_overrides = storage_class_overrides
 
     _versions: ClassVar[list[VersionTuple]] = [_VERSION_UUID, _VERSION_UUID_NS]
 
@@ -190,6 +216,21 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             type(collections), universe=dimensions.universe, schema_version=registry_schema_version
         )
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
+        dataset_type_overrides = {
+            dataset_type_name: _DatasetTypeOverride.model_validate(override_config)
+            for dataset_type_name, override_config in config.get("overrides", {}).items()
+        }
+        renames = {
+            db_name: override.rename
+            for db_name, override in dataset_type_overrides.items()
+            if override.rename is not None
+        }
+        reversed_renames = {v: k for k, v in renames.items()}
+        storage_class_overrides = {
+            db_name: override.storageClass
+            for db_name, override in dataset_type_overrides.items()
+            if override.storageClass is not None
+        }
         summaries = CollectionSummaryManager.initialize(
             db,
             context,
@@ -197,6 +238,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dimensions=dimensions,
             dataset_type_table=static.dataset_type,
             caching_context=caching_context,
+            reversed_renames=reversed_renames,
         )
         return cls(
             db=db,
@@ -205,6 +247,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             static=static,
             summaries=summaries,
             registry_schema_version=registry_schema_version,
+            renames=renames,
+            reversed_renames=reversed_renames,
+            storage_class_overrides=storage_class_overrides,
         )
 
     @classmethod
@@ -279,6 +324,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=self._static,
             summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
+            renames=self._renames,
+            reversed_renames=self._reversed_renames,
+            storage_class_overrides=self._storage_class_overrides,
             registry_schema_version=self._registry_schema_version,
             # See notes on DatasetTypeCache.clone() about cache behavior after
             # cloning.
@@ -291,16 +339,18 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
 
     def remove_dataset_type(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
+        db_name = self._reversed_renames.get(name, name)
         compositeName, componentName = DatasetType.splitDatasetTypeName(name)
         if componentName is not None:
             raise ValueError(f"Cannot delete a dataset type of a component of a composite (given {name})")
 
         # Delete the row
         try:
-            self._db.delete(self._static.dataset_type, ["name"], {"name": name})
+            self._db.delete(self._static.dataset_type, ["name"], {"name": db_name})
         except sqlalchemy.exc.IntegrityError as e:
+            msg = name if db_name == name else f"{db_name} (renamed to {name})"
             raise OrphanedRecordError(
-                f"Dataset type {name} can not be removed."
+                f"Dataset type {msg} can not be removed."
                 " It is associated with datasets that must be removed first."
             ) from e
 
@@ -345,9 +395,26 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                 dynamic_tables = dynamic_tables.add_calibs(
                     self._db, type(self._collections), self._cache.tables
                 )
+            db_name = self._reversed_renames.get(dataset_type.name, dataset_type.name)
+            if db_name == dataset_type.name and db_name in self._renames:
+                # We were asked to fetch a dataset type that has been renamed
+                # a config override, with no other existing dataset type
+                # to replace it. It should appear missing, but we still can't
+                # register it.
+                raise ConflictingDefinitionError(
+                    f"A dataset type with the name {db_name!r} has been renamed to , "
+                    f"{self._renames[db_name]!r} in this client; it can only be registered "
+                    "from a client without any rename configuration."
+                )
+            if db_name in self._storage_class_overrides:
+                raise ConflictingDefinitionError(
+                    f"Dataset type {db_name!r} has had its storage class overridden to "
+                    f"{dataset_type.storageClass_name!r} via butler configuration, and cannot "
+                    "be registered via this client since the database-level storage class is unknown."
+                )
             row, inserted = self._db.sync(
                 self._static.dataset_type,
-                keys={"name": dataset_type.name},
+                keys={"name": db_name},
                 compared={
                     "dimensions_key": dynamic_tables.dimensions_key,
                     # Force the storage class to be loaded to ensure it
@@ -493,13 +560,19 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
     def _fetch_dataset_type_record(self, name: str) -> _DatasetTypeRecord | None:
         """Retrieve all dataset types defined in database.
 
-        Yields
-        ------
-        dataset_types : `_DatasetTypeRecord`
+        Returns
+        -------
+        dataset_type
             Information from a single database record.
         """
+        db_name = self._reversed_renames.get(name, name)
+        if db_name == name and db_name in self._renames:
+            # We were asked to fetch a dataset type that has been renamed via
+            # a config override, with no other existing dataset type renamed
+            # to replace it.  It should appear missing.
+            return None
         c = self._static.dataset_type.columns
-        stmt = self._static.dataset_type.select().where(c.name == name)
+        stmt = self._static.dataset_type.select().where(c.name == db_name)
         with self._db.query(stmt) as sql_result:
             row = sql_result.mappings().one_or_none()
         if row is None:
@@ -508,11 +581,12 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             return self._record_from_row(row)
 
     def _record_from_row(self, row: Mapping) -> _DatasetTypeRecord:
-        name = row["name"]
+        name = self._renames.get(row["name"], row["name"])
         dimensions = self._dimensions.load_dimension_group(row["dimensions_key"])
         calibTableName = row["calibration_association_table"]
+        storage_class_name = self._storage_class_overrides.get(row["name"], row["storage_class"])
         datasetType = DatasetType(
-            name, dimensions, row["storage_class"], isCalibration=(calibTableName is not None)
+            name, dimensions, storage_class_name, isCalibration=(calibTableName is not None)
         )
         return _DatasetTypeRecord(
             dataset_type=datasetType,
