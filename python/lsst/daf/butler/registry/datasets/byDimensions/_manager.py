@@ -182,6 +182,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
+        config: Mapping,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.

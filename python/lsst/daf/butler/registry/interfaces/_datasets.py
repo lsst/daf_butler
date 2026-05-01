@@ -119,6 +119,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
+        config: Mapping,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
@@ -136,6 +137,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             Manager object for the dimensions in this `Registry`.
         caching_context : `CachingContext`
             Object controlling caching of information returned by managers.
+        config
+            Additional configuration for this manager.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.
 
