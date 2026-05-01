@@ -531,3 +531,16 @@ storageClasses:
     pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
     parameters:
       - bbox
+  CellCoaddProvenance:
+    pytype: lsst.images.cells.CoaddProvenance
+  CellCoadd:
+    inheritsFrom: MaskedImageV2
+    pytype: lsst.images.cells.CellCoadd
+    derivedComponents:
+      psf: PointSpreadFunction
+      provenance: CellCoaddProvenance
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter an opportunity to do the conversion on read.
+      lsst.cell_coadds.MultipleCellCoadd: lsst.images.cells.CellCoadd.from_legacy

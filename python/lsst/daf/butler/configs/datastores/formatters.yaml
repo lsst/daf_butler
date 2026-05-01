@@ -107,3 +107,4 @@ MaskedImageV2: lsst.images.fits.formatters.MaskedImageFormatter
 VisitImage: lsst.images.fits.formatters.VisitImageFormatter
 ColorImage: lsst.images.fits.formatters.ImageFormatter
 ExtendedPsfCandidates: lsst.images.fits.formatters.GenericFormatter
+CellCoadd: lsst.images.fits.formatters.CellCoaddFormatter
