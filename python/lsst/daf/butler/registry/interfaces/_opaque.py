@@ -34,7 +34,7 @@ from __future__ import annotations
 __all__ = ["OpaqueTableStorage", "OpaqueTableStorageManager"]
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ...ddl import TableSpec
@@ -126,6 +126,25 @@ class OpaqueTableStorage(ABC):
         ------
         row : `dict`
             A dictionary representing a single result row.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fetch_batches(
+        self,
+        **where: Any,
+    ) -> Iterator[Sequence[Mapping[str, Any]]]:
+        """Retrieve records from an opaque table in batches.
+
+        Parameters
+        ----------
+        **where
+            Same as ``OpaqueTableStorage.fetch``.
+
+        Yields
+        ------
+        batch
+            A batch of mappings representing a series of result rows.
         """
         raise NotImplementedError()
 

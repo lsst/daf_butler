@@ -36,7 +36,7 @@ import hashlib
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from sqlalchemy import BigInteger, String
@@ -75,8 +75,12 @@ from lsst.daf.butler.datastore.cache_manager import (
 from lsst.daf.butler.datastore.composites import CompositesMap
 from lsst.daf.butler.datastore.file_templates import FileTemplates, FileTemplateValidationError
 from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
-from lsst.daf.butler.datastore.record_data import DatastoreRecordData
-from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, StoredFileInfo
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData, DatastoreRecordTable
+from lsst.daf.butler.datastore.stored_file_info import (
+    StoredDatastoreItemInfo,
+    StoredFileInfo,
+    StoredFileInfoTable,
+)
 from lsst.daf.butler.datastores.file_datastore.get import (
     DatasetLocationInformation,
     DatastoreFileGetInformation,
@@ -3186,6 +3190,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
 
+        records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {}
+        for batch in self._export_rows([ref.id for ref in refs]):
+            for row in batch:
+                info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
+                dataset_records = records.setdefault(row["dataset_id"], {})
+                dataset_records.setdefault(self._table.name, []).append(info)
+
+        record_data = DatastoreRecordData(records=records)
+        return {self.name: record_data}
+
+    def _export_rows(self, datasets: Collection[DatasetId]) -> Iterator[Sequence[Mapping[str, Any]]]:
         # This call to 'bridge.check' filters out "partially deleted" datasets.
         # Specifically, ones in the unusual edge state that:
         # 1. They have an entry in the registry dataset tables
@@ -3199,15 +3214,20 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Datasets (with or without files existing on disk) can persist in
         # this zombie state indefinitely, until someone manually empties
         # the trash.
-        ids = self._bridge.check([ref.id for ref in refs])
-        records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}
-        for row in self._table.fetch(dataset_id=ids):
-            info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
-            dataset_records = records.setdefault(row["dataset_id"], {})
-            dataset_records.setdefault(self._table.name, []).append(info)
+        found_ids = self._bridge.check(datasets)
+        return self._table.fetch_batches(dataset_id=found_ids)
 
-        record_data = DatastoreRecordData(records=records)
-        return {self.name: record_data}
+    def export_table(self, datasets: Collection[DatasetId]) -> DatastoreRecordTable:
+        tables: list[DatastoreRecordTable] = []
+        for batch in self._export_rows(datasets):
+            file_info = StoredFileInfoTable.from_records(batch)
+            tables.append(DatastoreRecordTable.from_stored_file_info_table(self.name, file_info))
+        return DatastoreRecordTable.combine(tables)
+
+    def import_table(self, table: DatastoreRecordTable) -> None:
+        records = table.to_stored_file_info_table().to_records()
+        if len(records) > 0:
+            self._table.insert(*records, transaction=self._transaction)
 
     def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
         # Docstring inherited from the base class.

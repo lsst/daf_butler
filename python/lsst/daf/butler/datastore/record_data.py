@@ -33,15 +33,18 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 
 import dataclasses
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Iterable, Mapping
+from functools import cache
 from typing import TYPE_CHECKING, TypeAlias
 
+import pyarrow
+import pyarrow.compute as pc
 import pydantic
 
 from .._dataset_ref import DatasetId
 from ..dimensions import DimensionUniverse
 from ..persistence_context import PersistenceContextVars
-from .stored_file_info import StoredDatastoreItemInfo
+from .stored_file_info import StoredDatastoreItemInfo, StoredFileInfoTable
 
 if TYPE_CHECKING:
     from ..registry import Registry
@@ -260,3 +263,58 @@ class DatastoreRecordData:
         if cache is not None:
             cache[key] = newRecord
         return newRecord
+
+
+class DatastoreRecordTable:
+    def __init__(self, table: pyarrow.Table) -> None:
+        self.table = table
+
+    def filter_by_datastore_name(self, datastore_name: str) -> DatastoreRecordTable:
+        return DatastoreRecordTable(self.table.filter(pc.field("datastore_name") == datastore_name))
+
+    def validate_datastore_names(self, names: Iterable[str]) -> None:
+        names = list(names)
+        column = self.table.column("datastore_name")
+        matches = pc.is_in(column, names)
+        if not pc.all(matches):
+            mismatch = pc.filter(column, pc.invert(matches))[0]
+            raise ValueError(
+                f"Datastore name in table '{mismatch}' is not one of the known datastores: '{names}'"
+            )
+
+    def is_empty(self) -> bool:
+        return len(self.table) == 0
+
+    @staticmethod
+    def from_stored_file_info_table(datastore_name: str, table: StoredFileInfoTable) -> DatastoreRecordTable:
+        datastore_name_column = pyarrow.repeat(pyarrow.scalar(datastore_name), len(table.table))
+        return DatastoreRecordTable(
+            pyarrow.Table.from_arrays(
+                [datastore_name_column, *table.table.columns], schema=DatastoreRecordTable.get_schema()
+            )
+        )
+
+    def to_stored_file_info_table(self) -> StoredFileInfoTable:
+        table = self.table.drop_columns("datastore_name")
+        return StoredFileInfoTable(table)
+
+    @cache
+    @staticmethod
+    def get_schema() -> pyarrow.Schema:
+        return StoredFileInfoTable.get_schema().insert(
+            0, pyarrow.field("datastore_name", pyarrow.dictionary(pyarrow.int8(), pyarrow.string()))
+        )
+
+    @staticmethod
+    def combine(tables: Collection[DatastoreRecordTable]) -> DatastoreRecordTable:
+        if len(tables) == 0:
+            return DatastoreRecordTable.create_empty()
+
+        return DatastoreRecordTable(pyarrow.concat_tables([t.table for t in tables]))
+
+    @staticmethod
+    def create_empty() -> DatastoreRecordTable:
+        return DatastoreRecordTable(pyarrow.Table.from_pylist([], schema=DatastoreRecordTable.get_schema()))
+
+    def __len__(self) -> int:
+        return len(self.table)
