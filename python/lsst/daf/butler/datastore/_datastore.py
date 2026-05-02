@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+from .record_data import DatastoreRecordTable
+
 __all__ = (
     "DatasetRefURIs",
     "Datastore",
@@ -1401,6 +1403,37 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             Exported datastore records indexed by datastore name.
         """
         raise NotImplementedError()
+
+    def export_table(self, datasets: Collection[DatasetId]) -> DatastoreRecordTable:
+        """Export datastore records to an arrow table.
+
+        Parameters
+        ----------
+        datasets
+            Dataset UUIDs for the records to export.
+
+        Returns
+        -------
+        table
+            Datastore records table.
+        """
+        return DatastoreRecordTable.create_empty()
+
+    def import_table(self, table: DatastoreRecordTable) -> None:
+        """Import datastore records from an arrow table.
+
+        Parameters
+        ----------
+        table
+            Table containing the datastore records to import.
+
+        Raises
+        ------
+        ValueError
+            If the given table contains entries for a datastore that is not
+            known to this Butler.
+        """
+        pass
 
     def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
         """Export predicted datastore records and locations to an in-memory

@@ -32,8 +32,11 @@ __all__ = ("SerializedStoredFileInfo", "StoredDatastoreItemInfo", "StoredFileInf
 import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from functools import cache
 from typing import TYPE_CHECKING, Any
 
+import pyarrow as pa
+import pyarrow.compute as pc
 import pydantic
 
 from lsst.resources import ResourcePath
@@ -43,6 +46,7 @@ from lsst.utils.introspection import get_full_type_name
 from .._formatter import Formatter, FormatterParameter, FormatterV2
 from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
+from ..arrow_utils import ArrowTableUtils
 
 if TYPE_CHECKING:
     from .._dataset_ref import DatasetRef
@@ -412,6 +416,128 @@ class SerializedStoredFileInfo(pydantic.BaseModel):
 
     file_size: int
     """Size of the serialized dataset in bytes."""
+
+
+class StoredFileInfoTable:
+    """Arrow representation of the database rows from ``StoredFileInfo``.
+
+    Parameters
+    ----------
+    table
+        Arrow table containing the file information records.
+
+    Notes
+    -----
+    Users should not call the constructor directly -- use one of the ``from_*``
+    methods.
+    """
+
+    def __init__(self, table: pa.Table) -> None:
+        self._table = table
+
+    @staticmethod
+    def from_arrow(table: pa.Table) -> StoredFileInfoTable:
+        """Create an instance from an external `pyarrow.Table` object.
+
+        Parameters
+        ----------
+        table
+            `pyarrow.Table` instance with a schema compatible with the one
+            returned by ``StoredFileInfoTable.make_arrow_schema()``.
+
+        Returns
+        -------
+        table
+            New ``StoredFileInfoTable`` instance backed by the given table.
+        """
+        return StoredFileInfoTable(table.cast(StoredFileInfoTable.make_arrow_schema()))
+
+    def to_arrow(self) -> pa.Table:
+        """Convert to a raw `pyarrow.Table`."""
+        return self._table
+
+    @staticmethod
+    def from_records(records: Iterable[Mapping[str, Any]]) -> StoredFileInfoTable:
+        """Convert datastore records from raw database row mappings to an arrow
+        table representation.
+
+        Parameters
+        ----------
+        records
+            List of database records as mappings from database column name to
+            value.
+
+        Returns
+        -------
+        table
+            New ``StoredFileInfoTable`` instance containing the given records.
+
+        Notes
+        -----
+        This is a tabular version of ``StoredFileInfo.from_record()``.
+        """
+        records = [{**row, "dataset_id": row["dataset_id"].bytes} for row in records]
+        table = pa.Table.from_pylist(records, schema=StoredFileInfoTable.make_arrow_schema())
+
+        # The underlying database tables use a magic value "__NULL_STRING__"
+        # instead of SQL NULL for missing component values -- replace
+        # with actual nulls to avoid leaking this implementation detail
+        # to downstream consumers.
+        table = ArrowTableUtils.modify_column(table, "component", _replace_null_placeholder_with_null)
+
+        # Similarly, unknown file size is represented in the DB by a negative
+        # number -- replace with NULL to prevent accidental usage of negative
+        # file sizes downstream.
+        table = ArrowTableUtils.modify_column(table, "file_size", _replace_negative_with_null)
+
+        return StoredFileInfoTable(table)
+
+    def to_records(self) -> list[dict[str, Any]]:
+        """Convert datastore records in this table to dictionary instances in a
+        format suitable for insertion to the database.
+
+        Returns
+        -------
+        records
+            List of dictionaries suitable for insertion into datastore records
+            table.
+        """
+        # Undo the transformations done in ``from_records`` to get the database
+        # representation for component and file_size.
+        table = self._table
+        table = ArrowTableUtils.modify_column(table, "component", lambda c: c.fill_null(NULLSTR))
+        table = ArrowTableUtils.modify_column(table, "file_size", lambda c: c.fill_null(-1))
+        return table.to_pylist()
+
+    @cache
+    @staticmethod
+    def make_arrow_schema() -> pa.Schema:
+        """Return the `pyarrow.Schema` for the arrow table."""
+        string_dict = pa.dictionary(pa.int32(), pa.string())
+        return pa.schema(
+            [
+                pa.field("dataset_id", pa.uuid(), nullable=False),
+                pa.field("path", pa.string(), nullable=False),
+                pa.field("formatter", string_dict, nullable=False),
+                pa.field("storage_class", string_dict, nullable=False),
+                pa.field("component", string_dict, nullable=True),
+                pa.field("checksum", pa.string(), nullable=True),
+                pa.field("file_size", pa.int64(), nullable=True),
+            ]
+        )
+
+    def __len__(self) -> int:
+        return len(self._table)
+
+
+def _replace_null_placeholder_with_null(array: pa.Array) -> pa.Array:
+    mask = pc.equal(array, NULLSTR)
+    return pc.if_else(mask, pa.scalar(None), array)
+
+
+def _replace_negative_with_null(array: pa.Array) -> pa.Array:
+    mask = pc.less(array, 0)
+    return pc.if_else(mask, pa.scalar(None), array)
 
 
 def make_datastore_path_relative(path: str) -> str:

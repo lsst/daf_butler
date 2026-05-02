@@ -33,15 +33,18 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 
 import dataclasses
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from functools import cache
 from typing import TYPE_CHECKING, TypeAlias
 
+import pyarrow as pa
+import pyarrow.compute as pc
 import pydantic
 
 from .._dataset_ref import DatasetId
 from ..dimensions import DimensionUniverse
 from ..persistence_context import PersistenceContextVars
-from .stored_file_info import StoredDatastoreItemInfo
+from .stored_file_info import StoredDatastoreItemInfo, StoredFileInfoTable
 
 if TYPE_CHECKING:
     from ..registry import Registry
@@ -260,3 +263,169 @@ class DatastoreRecordData:
         if cache is not None:
             cache[key] = newRecord
         return newRecord
+
+
+class DatastoreRecordTable:
+    """Arrow table representation of datastore records.  Contains the same
+    information as ``DatastoreRecordData`` in a flat table format.
+
+    Parameters
+    ----------
+    table
+        Arrow table containing the file information records.
+
+    Notes
+    -----
+    Users should not call the constructor directly -- use one of the ``from_*``
+    methods.
+    """
+
+    def __init__(self, table: pa.Table) -> None:
+        self._table = table
+
+    @staticmethod
+    def from_arrow(table: pa.Table) -> DatastoreRecordTable:
+        """Create an instance from an external `pyarrow.Table` object.
+
+        Parameters
+        ----------
+        table
+            `pyarrow.Table` instance with a schema compatible with the one
+            returned by ``DatastoreRecordTable.make_arrow_schema()``.
+
+        Returns
+        -------
+        table
+            New ``DatastoreRecordTable`` instance backed by the given table.
+        """
+        return DatastoreRecordTable(table.cast(DatastoreRecordTable.make_arrow_schema()))
+
+    def to_arrow(self) -> pa.Table:
+        """Convert to a raw `pyarrow.Table`."""
+        return self._table
+
+    def filter_by_datastore_name(self, datastore_name: str) -> DatastoreRecordTable:
+        """Return a table containing only the entries corresponding to the
+        given datastore name.
+
+        Parameters
+        ----------
+        datastore_name
+            Datastore name to filter on.
+
+        Return
+        ------
+        table
+            A copy of this table with only the rows that have a
+            ``datastore_name`` column value matching the given value.
+        """
+        return DatastoreRecordTable(self._table.filter(pc.field("datastore_name") == datastore_name))
+
+    def validate_datastore_names(self, names: Iterable[str]) -> None:
+        """Check that all entries in the ``datastore_name`` column are in the
+        given list of names.
+
+        Parameters
+        ----------
+        names
+            List of allowed datastore names.
+
+        Raises
+        ------
+        ValueError
+            If any of the ``datastore_name`` column entries has a value not in
+            the given list.
+        """
+        column = self._table.column("datastore_name")
+        if len(column) == 0:
+            return
+
+        matches = pc.is_in(column, pa.array(names))
+        if not pc.all(matches).as_py():
+            mismatches = column.filter(pc.invert(matches)).unique().to_pylist()
+            raise ValueError(
+                f"Datastore names '{mismatches}' in table do not match known datastores: '{names}'"
+            )
+
+    @staticmethod
+    def from_stored_file_info_table(datastore_name: str, table: StoredFileInfoTable) -> DatastoreRecordTable:
+        """Create an instance of ``DatastoreRecordTable`` given datastore
+        records as a ``StoredFileInfoTable``.
+
+        Parameters
+        ----------
+        datastore_name
+            Datastore name to assign to the ``datastore_name`` column in all
+            rows of the resulting table.
+        table
+            Table of file information records.
+
+        Returns
+        -------
+        table
+            New ``DatastoreRecordTable`` instance.
+        """
+        column_type = DatastoreRecordTable.make_arrow_schema().field("datastore_name").type
+        datastore_name_column = pa.repeat(pa.scalar(datastore_name, type=column_type), len(table))
+        return DatastoreRecordTable(
+            pa.Table.from_arrays(
+                [datastore_name_column, *table.to_arrow().columns],
+                schema=DatastoreRecordTable.make_arrow_schema(),
+            )
+        )
+
+    def to_stored_file_info_table(self) -> StoredFileInfoTable:
+        """Convert this table to a ``StoredFileInfoTable``.
+
+        Returns
+        -------
+        table
+            ``StoredFileInfoTable`` containing a row corresponding to each row
+            of the original table.
+        """
+        table = self._table.drop_columns("datastore_name")
+        return StoredFileInfoTable.from_arrow(table)
+
+    @cache
+    @staticmethod
+    def make_arrow_schema() -> pa.Schema:
+        """Return the `pyarrow.Schema` for the arrow table."""
+        return StoredFileInfoTable.make_arrow_schema().insert(
+            0, pa.field("datastore_name", pa.dictionary(pa.int8(), pa.string()))
+        )
+
+    @staticmethod
+    def combine(tables: Iterable[DatastoreRecordTable]) -> DatastoreRecordTable:
+        """Concatenate multiple ``DatastoreRecordTable`` instances into a
+        single table.
+
+        Parameters
+        ----------
+        tables
+            Tables to combine.
+
+        Returns
+        -------
+        combined_table
+            ``DatastoreRecordTable`` containing all the rows from all of the
+            given tables.
+        """
+        arrow_tables = [t._table for t in tables]
+        if len(arrow_tables) == 0:
+            return DatastoreRecordTable.create_empty()
+
+        return DatastoreRecordTable(pa.concat_tables(arrow_tables))
+
+    @staticmethod
+    def create_empty() -> DatastoreRecordTable:
+        """Create an empty ``DatastoreRecordTable``.
+
+        Returns
+        -------
+        table
+            New ``DatastoreRecordTable`` instance with no rows.
+        """
+        return DatastoreRecordTable(pa.Table.from_pylist([], schema=DatastoreRecordTable.make_arrow_schema()))
+
+    def __len__(self) -> int:
+        return len(self._table)

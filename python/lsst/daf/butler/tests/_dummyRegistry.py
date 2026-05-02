@@ -125,6 +125,10 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 else:
                     yield d
 
+    def fetch_batches(self, **where: Any) -> Iterator[list[dict]]:
+        # Docstring inherited from OpaqueTableStorage.
+        yield list(self.fetch(**where))
+
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
         kept_rows = []
