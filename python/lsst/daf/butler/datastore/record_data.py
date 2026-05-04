@@ -287,7 +287,10 @@ class DatastoreRecordTable:
 
     @staticmethod
     def from_stored_file_info_table(datastore_name: str, table: StoredFileInfoTable) -> DatastoreRecordTable:
-        datastore_name_column = pyarrow.repeat(pyarrow.scalar(datastore_name), len(table.table))
+        column_type = DatastoreRecordTable.get_schema().field("datastore_name").type
+        datastore_name_column = pyarrow.repeat(
+            pyarrow.scalar(datastore_name, type=column_type), len(table.table)
+        )
         return DatastoreRecordTable(
             pyarrow.Table.from_arrays(
                 [datastore_name_column, *table.table.columns], schema=DatastoreRecordTable.get_schema()
