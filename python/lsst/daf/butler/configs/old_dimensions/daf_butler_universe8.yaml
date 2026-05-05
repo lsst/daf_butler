@@ -435,40 +435,6 @@ elements:
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
-  ssp_hypothesis_table:
-    doc: >
-      A partitioned set of hypothesized r, r', r'' over which the solar system
-      pipelines (SSP) search in parallel for new solar system objects.
-    keys:
-      - name: name
-        type: string
-        length: 64
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
-
-  ssp_hypothesis_bundle:
-    doc: >
-      A subset of hypothesized r, r', r'' over which a single quanta of
-      HelioLinC searches for new SSOs.
-    keys:
-      - name: id
-        type: int
-    requires:
-      - ssp_hypothesis_table
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
-
-  ssp_balanced_index:
-    doc: >
-      Dummy index for parallelization of linkPurify and other tasks.
-    keys:
-      - name: id
-        type: int
-    requires:
-      - ssp_hypothesis_table
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
-
 topology:
   spatial:
     observation_regions: [visit_detector_region, visit]

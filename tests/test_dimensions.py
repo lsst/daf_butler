@@ -277,6 +277,9 @@ class DimensionTestCase(unittest.TestCase):
                 "skymap",
                 "tract",
                 "patch",
+                "ssp_hypothesis_table",
+                "ssp_hypothesis_bundle",
+                "ssp_balanced_index",
             }
             | {f"htm{level}" for level in range(1, 25)}
             | {f"healpix{level}" for level in range(1, 18)},
