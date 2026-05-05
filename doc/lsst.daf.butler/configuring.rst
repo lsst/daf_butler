@@ -54,3 +54,56 @@ At run time, this tag will be replaced by a value derived from the location of t
 
 Currently, if you create a butler configuration file that loads another butler configuration file, via ``includeConfigs``, then any ``<butlerRoot>`` tags will be replaced with the location of the new file, not the original.
 It is therefore recommended that an explicit ``root`` be defined at the top level when defining butler overrides via a new top level butler configuration.
+
+.. py:currentmodule:: lsst.daf.butler
+
+Overriding Dataset Type Definitions
+-----------------------------------
+
+When migrating from one definition of a dataset type to another, it can be useful to create a new repository configuration file that points at the same underlying database and storage as an existing repository configuration file while overriding some of the repository's dataset type names and/or storage classes.
+
+For example, if a dataset type with the name ``source`` exists in the repository, but you'd like to use that name for a different dataset type while phasing out the original, you can create a ``future_source`` dataset type with the new definition, and then create an alternate ``butler.yaml`` configuration file:
+
+.. code-block:: yaml
+
+  registry:
+    managers:
+      datasets:
+        cls: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID
+        config:
+          overrides:
+            source:
+              rename: legacy_source
+            future_source:
+              rename: source
+
+A `Butler` constructed from this configuration file will use ``source`` for the new dataset type and ``legacy_source`` for the old dataset type in all operations, with two exceptions:
+
+- Datasets `Butler.put` will still use the original dataset type name in filenames.
+- The `Butler` that has configuration overrides cannot be used to register a dataset type with the original name.
+
+To migrate the storage class of a dataset type while keeping the same name, instead use
+
+.. code-block:: yaml
+
+  registry:
+    managers:
+      datasets:
+        cls: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID
+        config:
+          overrides:
+            source:
+              storageClass: ArrowAstropy
+
+As with renames, a `Butler` constructed with this configuration will behave as if the dataset type really does have the new storage class:
+
+- Queries for datasets and dataset types will return the new storage class.
+
+- `Butler.get` calls on datasets written with the original storage class will invoke storage class conversion, just as if the caller passed ``overrideStorageClass="ArrowAstropy`` to `Butler.get`
+
+- `Butler.put` calls will use the new storage class to determine the formatter to use, and will not be converted to the original at any point.
+
+Configuration-level storage class overrides are thus much more useful when the new and old storage classes are bidirectionally convertible; when they are not, writes from one configuration will not be readable by the other.
+This is not checked until a conversion is actually needed, however, both to avoid unnecessary imports at `Butler` and to allow migrations where compatibility just isn't needed.
+
+A `Butler` constructed with a storage class override for a dataset type cannot be used to register that dataset type, but it will perform a no-op registration if that dataset type was already registered (i.e. via a `Butler` without that override).

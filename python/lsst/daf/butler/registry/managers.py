@@ -225,7 +225,9 @@ class RegistryManagerTypes(
 
         universe = DimensionUniverse(dimensionConfig)
         with database.declareStaticTables(create=True) as context:
-            instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
+            instances = RegistryManagerInstances.initialize(
+                database, context, types=self, universe=universe, manager_configs=self.manager_configs
+            )
 
         # store managers and their versions in attributes table
         versions = ButlerVersionsManager(instances.attributes)
@@ -297,7 +299,9 @@ class RegistryManagerTypes(
                 self.manager_configs["obscore"] = Config.fromString(obscoreString, format="json")
 
         with database.declareStaticTables(create=False) as context:
-            instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
+            instances = RegistryManagerInstances.initialize(
+                database, context, types=self, universe=universe, manager_configs=self.manager_configs
+            )
 
         # Load content from database that we try to keep in-memory.
         instances.refresh()
@@ -368,6 +372,7 @@ class RegistryManagerInstances(
         *,
         types: RegistryManagerTypes,
         universe: DimensionUniverse,
+        manager_configs: dict[str, Mapping],
         caching_context: CachingContext | None = None,
     ) -> RegistryManagerInstances:
         """Construct manager instances from their types and an existing
@@ -385,6 +390,8 @@ class RegistryManagerInstances(
             construct.
         universe : `DimensionUniverse`
             Object that describes all dimensions in this data repository.
+        manager_configs
+            Additional configuration for individual managers.
         caching_context : `CachingContext` or `None`, optional
             Caching context to use.
 
@@ -416,6 +423,7 @@ class RegistryManagerInstances(
             dimensions=kwargs["dimensions"],
             registry_schema_version=schema_versions.get("datasets"),
             caching_context=caching_context,
+            config=manager_configs.get("datasets", {}),
         )
         kwargs["datasets"] = datasets
         kwargs["opaque"] = types.opaque.initialize(

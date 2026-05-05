@@ -142,6 +142,9 @@ class CollectionSummaryManager:
         Table containing dataset type definitions.
     caching_context : `CachingContext`
         Object controlling caching of information returned by managers.
+    reversed_renames
+        Mapping from the new name for a dataset in a configured override to
+        the original name still used in the database.
     """
 
     def __init__(
@@ -152,6 +155,7 @@ class CollectionSummaryManager:
         tables: CollectionSummaryTables[sqlalchemy.schema.Table],
         dataset_type_table: sqlalchemy.schema.Table,
         caching_context: CachingContext,
+        reversed_renames: Mapping[str, str],
     ):
         self._db = db
         self._collections = collections
@@ -159,6 +163,7 @@ class CollectionSummaryManager:
         self._tables = tables
         self._dataset_type_table = dataset_type_table
         self._caching_context = caching_context
+        self._reversed_renames = reversed_renames
 
     def clone(
         self,
@@ -192,6 +197,7 @@ class CollectionSummaryManager:
             tables=self._tables,
             dataset_type_table=self._dataset_type_table,
             caching_context=caching_context,
+            reversed_renames=self._reversed_renames,
         )
 
     @classmethod
@@ -204,6 +210,7 @@ class CollectionSummaryManager:
         dimensions: DimensionRecordStorageManager,
         dataset_type_table: sqlalchemy.schema.Table,
         caching_context: CachingContext,
+        reversed_renames: dict[str, str],
     ) -> CollectionSummaryManager:
         """Create all summary tables (or check that they have been created),
         returning an object to manage them.
@@ -223,6 +230,9 @@ class CollectionSummaryManager:
             Table containing dataset type definitions.
         caching_context : `CachingContext`
             Object controlling caching of information returned by managers.
+        reversed_renames
+            Mapping from the new name for a dataset in a configured override
+            to the original name still used in the database.
 
         Returns
         -------
@@ -245,6 +255,7 @@ class CollectionSummaryManager:
             tables=tables,
             dataset_type_table=dataset_type_table,
             caching_context=caching_context,
+            reversed_renames=reversed_renames,
         )
 
     def update(
@@ -368,7 +379,10 @@ class CollectionSummaryManager:
         # For caching we need to fetch complete summaries.
         if self._caching_context.collection_summaries is None:
             if dataset_type_names is not None:
-                sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
+                db_dataset_type_names = [
+                    self._reversed_renames.get(name, name) for name in dataset_type_names
+                ]
+                sql = sql.where(self._dataset_type_table.columns["name"].in_(db_dataset_type_names))
 
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
