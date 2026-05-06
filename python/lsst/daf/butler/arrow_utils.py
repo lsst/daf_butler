@@ -41,6 +41,7 @@ __all__ = (
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, ClassVar, final
 
 import astropy.time
@@ -554,6 +555,25 @@ class DateTimeArrowScalar(pa.ExtensionScalar):
 
     def as_py(self, **_unused: Any) -> astropy.time.Time:
         return TimeConverter().nsec_to_astropy(self.value.as_py())
+
+
+class ArrowTableUtils:
+    @staticmethod
+    def replace_column(table: pa.Table, column_name: str, new_column: pa.Array) -> pa.Table:
+        index = table.schema.get_field_index(column_name)
+        if index < 0:
+            raise ValueError(
+                f"Column {column_name} not found in arrow table, or multiple columns have the same name."
+            )
+        return table.set_column(index, column_name, new_column)
+
+    @staticmethod
+    def modify_column(
+        table: pa.Table, column_name: str, function: Callable[[pa.Array], pa.Array]
+    ) -> pa.Table:
+        column = table.column(column_name)
+        new_column = function(column)
+        return ArrowTableUtils.replace_column(table, column_name, new_column)
 
 
 pa.register_extension_type(RegionArrowType())

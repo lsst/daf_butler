@@ -46,7 +46,7 @@ from lsst.daf.butler.datastore import (
     DatastoreValidationError,
 )
 from lsst.daf.butler.datastore.constraints import Constraints
-from lsst.daf.butler.datastore.record_data import DatastoreRecordData
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData, DatastoreRecordTable
 from lsst.daf.butler.datastores.file_datastore.get import DatasetLocationInformation
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ArtifactIndexInfo, ZipIndex
 from lsst.resources import ResourcePath
@@ -1169,6 +1169,16 @@ class ChainedDatastore(Datastore):
                 all_records[name] = record_data
 
         return all_records
+
+    def export_table(self, datasets: Collection[DatasetId]) -> DatastoreRecordTable:
+        return DatastoreRecordTable.combine(
+            [datastore.export_table(datasets) for datastore in self.datastores]
+        )
+
+    def import_table(self, table: DatastoreRecordTable) -> None:
+        table.validate_datastore_names(self.names)
+        for datastore in self.datastores:
+            datastore.import_table(table.filter_by_datastore_name(datastore.name))
 
     def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
         # Docstring inherited from the base class.

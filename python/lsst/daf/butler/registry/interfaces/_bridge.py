@@ -169,18 +169,18 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
-        """Check which refs are listed for this datastore.
+    def check(self, datasets: Iterable[DatasetId]) -> set[DatasetId]:
+        """Check which datasets are present in this datastore.
 
         Parameters
         ----------
-        refs : `~collections.abc.Iterable` of `DatasetIdRef`
-            References to the datasets.
+        datasets : `~collections.abc.Iterable` of `DatasetId`
+            UUIDs of the datasets to check.
 
         Returns
         -------
-        present : `~collections.abc.Iterable` [ `DatasetIdRef` ]
-            Datasets from ``refs`` that are recorded as being in this
+        present : `set` [ `DatasetId` ]
+            Datasets from ``datasets`` that are recorded as being in this
             datastore.
         """
         raise NotImplementedError()

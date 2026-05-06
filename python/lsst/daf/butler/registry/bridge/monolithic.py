@@ -212,12 +212,11 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
                 self._db.deleteWhere(location, where)
 
-    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
+    def check(self, datasets: Iterable[DatasetId]) -> set[DatasetId]:
         # Docstring inherited from DatastoreRegistryBridge
-        byId = {ref.id: ref for ref in refs}
-        found: list[DatasetIdRef] = []
+        found: set[DatasetId] = set()
         with self._db.session():
-            for batch in chunk_iterable(byId.keys(), 50000):
+            for batch in chunk_iterable(datasets, 50000):
                 sql = (
                     sqlalchemy.sql.select(self._tables.dataset_location.columns.dataset_id)
                     .select_from(self._tables.dataset_location)
@@ -230,7 +229,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 )
                 with self._db.query(sql) as sql_result:
                     sql_ids = sql_result.scalars().all()
-                found.extend(byId[id] for id in sql_ids)
+                found.update(sql_ids)
 
         return found
 

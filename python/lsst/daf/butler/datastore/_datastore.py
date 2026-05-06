@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+from .record_data import DatastoreRecordTable
+
 __all__ = (
     "DatasetRefURIs",
     "Datastore",
@@ -1401,6 +1403,12 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             Exported datastore records indexed by datastore name.
         """
         raise NotImplementedError()
+
+    def export_table(self, datasets: Collection[DatasetId]) -> DatastoreRecordTable:
+        return DatastoreRecordTable.create_empty()
+
+    def import_table(self, table: DatastoreRecordTable) -> None:
+        pass
 
     def export_predicted_records(self, refs: Iterable[DatasetRef]) -> dict[str, DatastoreRecordData]:
         """Export predicted datastore records and locations to an in-memory
