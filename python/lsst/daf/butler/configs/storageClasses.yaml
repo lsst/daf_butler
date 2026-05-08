@@ -544,6 +544,10 @@ storageClasses:
     pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
     parameters:
       - bbox
+  ExtendedPsfImage:
+    pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfImage
+    parameters:
+      - bbox
   CellCoaddProvenance:
     pytype: lsst.images.cells.CoaddProvenance
   CellCoadd:
