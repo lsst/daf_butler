@@ -106,8 +106,8 @@ class YamlFormatter(TypelessFormatter):
                 converted = True
 
         if not converted:
-            # The initial check this is not a type is to help mypy.
-            if not isinstance(in_memory_dataset, type) and dataclasses.is_dataclass(in_memory_dataset):
+            # The second check this is not a type is to help mypy.
+            if dataclasses.is_dataclass(in_memory_dataset) and not isinstance(in_memory_dataset, type):
                 in_memory_dataset = dataclasses.asdict(in_memory_dataset)
             elif hasattr(in_memory_dataset, "_asdict"):
                 in_memory_dataset = in_memory_dataset._asdict()
