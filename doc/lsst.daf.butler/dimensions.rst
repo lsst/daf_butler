@@ -112,5 +112,6 @@ The default namespace has had the following version changes:
    Dropped ``group_id`` from ``exposure`` and renamed ``group_name`` to ``group``.
 7. Added ``can_see_sky`` metadata field to ``exposure``.
    This field can indicate whether the detector received photons from the sky taking into account the camera shutter and the dome and telescope alignment.
+8. Added solar-system dimensions ``ssp_hypothesis_table``, ``ssp_hypothesis_bundle``, and ``ssp_balanced_index``.
 
 Prior to October 2020 there were no version numbers for the dimension universe.
