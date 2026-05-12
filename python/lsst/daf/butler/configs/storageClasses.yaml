@@ -38,6 +38,8 @@ storageClasses:
     pytype: lsst.afw.cameraGeom.Camera
   Detector:
     pytype: lsst.afw.cameraGeom.Detector
+    converter:
+      lsst.images.cameras.Detector: lsst.images.cameras.Detector.to_legacy
   Box2I:
     pytype: lsst.geom.Box2I
   Extent2I:
@@ -510,6 +512,13 @@ storageClasses:
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
+  DetectorV2:
+    pytype: lsst.images.cameras.Detector
+    converters:
+      # This converter function doesn't actually work, because it takes an
+      # extra argument.  But we need to declare it anyway to give the
+      # legacy formatter an opportunity to do the conversion on read.
+      lsst.afw.cameraGeom.Detector: lsst.images.cameras.Detector.from_legacy
   VisitImage:
     inheritsFrom: MaskedImageV2
     pytype: lsst.images.VisitImage
@@ -517,6 +526,7 @@ storageClasses:
       psf: PointSpreadFunction
       summary_stats: ObservationSummaryStats
       aperture_corrections: StructuredDataDict
+      detector: DetectorV2
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   ColorImage:
