@@ -34,7 +34,7 @@ from __future__ import annotations
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
@@ -103,7 +103,13 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         **where: Any,
     ) -> Iterator[sqlalchemy.RowMapping]:
         # Docstring inherited from OpaqueTableStorage.
+        for batch in self.fetch_batches(**where):
+            yield from batch
 
+    def fetch_batches(
+        self,
+        **where: Any,
+    ) -> Iterator[Sequence[sqlalchemy.RowMapping]]:
         def _batch_in_clause(
             column: sqlalchemy.schema.Column, values: Iterable[Any]
         ) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
@@ -145,7 +151,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         for sql_batch in batched_sql:
             with self._db.query(sql_batch) as sql_result:
                 sql_mappings = sql_result.mappings().fetchall()
-            yield from sql_mappings
+            yield sql_mappings
 
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.

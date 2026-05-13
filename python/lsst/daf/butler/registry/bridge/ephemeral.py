@@ -87,9 +87,9 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         with transaction.undoWith(f"Trash {len(ref_list)} datasets", self._rollbackMoveToTrash, ref_list):
             self._trashedIds.update(ref.id for ref in ref_list)
 
-    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
+    def check(self, datasets: Iterable[DatasetId]) -> set[DatasetId]:
         # Docstring inherited from DatastoreRegistryBridge
-        yield from (ref for ref in refs if ref in self)
+        return {id for id in datasets if FakeDatasetRef(id) in self}
 
     def __contains__(self, ref: DatasetIdRef) -> bool:
         return ref.id in self._datasetIds and ref.id not in self._trashedIds

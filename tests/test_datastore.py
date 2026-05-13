@@ -61,8 +61,16 @@ from lsst.daf.butler.datastore.cache_manager import (
     DatastoreCacheManagerConfig,
     DatastoreDisabledCacheManager,
 )
-from lsst.daf.butler.datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
-from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo, make_datastore_path_relative
+from lsst.daf.butler.datastore.record_data import (
+    DatastoreRecordData,
+    DatastoreRecordTable,
+    SerializedDatastoreRecordData,
+)
+from lsst.daf.butler.datastore.stored_file_info import (
+    StoredFileInfo,
+    StoredFileInfoTable,
+    make_datastore_path_relative,
+)
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
@@ -992,6 +1000,28 @@ class DatastoreTests(DatastoreTestsBase):
         self.assertIsNotNone(data)
         data = datastore2.get(refs[2])
         self.assertIsNotNone(data)
+
+    def testExportImportTable(self) -> None:
+        datastore, refs = self._populate_export_datastore("test_datastore")
+        table = datastore.export_table([ref.id for ref in refs])
+        datastore2 = self.makeDatastore("test_datastore")
+        datastore2.import_table(table)
+
+        for ref in refs:
+            self.assertIsNotNone(datastore2.get(ref))
+            self.assertEqual(datastore.getURI(ref), datastore2.getURI(ref))
+            original_info = datastore.get_file_info_for_transfer([ref.id])[ref.id][0]
+            imported_info_list = datastore.get_file_info_for_transfer([ref.id]).get(ref.id)
+            self.assertIsNotNone(imported_info_list)
+            self.assertEqual(len(imported_info_list), 1)
+            imported_info = imported_info_list[0]
+            self.assertEqual(imported_info.file_info.formatter, original_info.file_info.formatter)
+            self.assertEqual(
+                imported_info.file_info.storage_class_name, original_info.file_info.storage_class_name
+            )
+            self.assertEqual(imported_info.file_info.file_size, original_info.file_info.file_size)
+            self.assertEqual(imported_info.file_info.checksum, original_info.file_info.checksum)
+            self.assertEqual(imported_info.file_info.component, original_info.file_info.component)
 
     def testExportPredictedRecords(self):
         if self.isEphemeral:
@@ -2294,6 +2324,130 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
         d = DatastoreRecordData.from_simple(s)
         self.assertIsInstance(d.records[id]["file_datastore_records"][0], StoredFileInfo)
         self.assertIsInstance(d.records[id]["file_datastore_records"][0].checksum, str)
+
+
+class TestDatastoreRecordTable(unittest.TestCase):
+    """Test DatastoreRecordTable and StoredFileInfoTable."""
+
+    def test_empty_datastore_records_table(self) -> None:
+        file_info_table = StoredFileInfoTable.from_records([])
+        self.assertEqual(0, len(file_info_table))
+
+        self.assertEqual(
+            0, len(DatastoreRecordTable.from_stored_file_info_table("datastore_name", file_info_table))
+        )
+
+        self.assertEqual(0, len(DatastoreRecordTable.create_empty()))
+        self.assertEqual(0, len(DatastoreRecordTable.combine([])))
+        # Doesn't throw because there is no mismatch in datastore names.
+        DatastoreRecordTable.create_empty().validate_datastore_names("arbitrary_name")
+
+    def test_stored_file_info_table_records(self) -> None:
+        uuid1 = uuid.UUID("019e1892-7b9b-736d-8248-0e031723646c")
+        uuid2 = uuid.UUID("019e1895-9ec3-7431-bed9-8ae60096103f")
+        uuid3 = uuid.UUID("13d13272-454c-4bc4-94d5-3e322982eee8")
+        checksum = (
+            "021ced8799518305c451cde3e921515ef315ee7ba8937"
+            "a92697a20c571c776afa4102744bc28d2d99d35f44e073cde80cf96e387f65f3967cca45b0d015f5a6b"
+        )
+        input_records = [
+            {
+                "dataset_id": uuid1,
+                "path": "a/relative/path.fits",
+                "formatter": "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter",
+                "storage_class": "ExposureF",
+                "component": "__NULL_STRING__",
+                "checksum": None,
+                "file_size": 123,
+            },
+            {
+                "dataset_id": uuid2,
+                "path": "file:///an/absolute/path.fits",
+                "formatter": "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter",
+                "storage_class": "ExposureF",
+                "component": "comp",
+                "checksum": checksum,
+                "file_size": -1,
+            },
+        ]
+        table = StoredFileInfoTable.from_records(input_records)
+        self.assertEqual(len(table), 2)
+
+        def _check_records(records: list[dict]) -> None:
+            rec0 = records[0]
+            self.assertEqual(rec0["dataset_id"], uuid1)
+            self.assertEqual(rec0["path"], "a/relative/path.fits")
+            self.assertEqual(rec0["formatter"], "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter")
+            self.assertEqual(rec0["storage_class"], "ExposureF")
+            self.assertIsNone(rec0["component"])
+            self.assertIsNone(rec0["checksum"])
+            self.assertEqual(rec0["file_size"], 123)
+            rec1 = records[1]
+            self.assertEqual(rec1["dataset_id"], uuid2)
+            self.assertEqual(rec1["path"], "file:///an/absolute/path.fits")
+            self.assertEqual(rec1["formatter"], "lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter")
+            self.assertEqual(rec1["storage_class"], "ExposureF")
+            self.assertEqual(rec1["component"], "comp")
+            self.assertEqual(rec1["checksum"], checksum)
+            self.assertIsNone(rec1["file_size"])
+
+        arrow_records = table.to_arrow().to_pylist()
+        self.assertEqual(len(arrow_records), 2)
+        _check_records(arrow_records)
+        self.assertEqual(table.to_records(), input_records)
+
+        datastore_table = DatastoreRecordTable.from_stored_file_info_table("name_of_datastore", table)
+        datastore_arrow_records = datastore_table.to_arrow().to_pylist()
+        self.assertEqual(len(datastore_arrow_records), 2)
+        _check_records(datastore_arrow_records)
+        self.assertEqual(datastore_arrow_records[0]["datastore_name"], "name_of_datastore")
+        self.assertEqual(datastore_arrow_records[1]["datastore_name"], "name_of_datastore")
+        _check_records(datastore_table.to_stored_file_info_table().to_arrow().to_pylist())
+        # Check round-tripping to_arrow() through from_arrow()
+        _check_records(
+            datastore_table.from_arrow(datastore_table.to_arrow())
+            .to_stored_file_info_table()
+            .to_arrow()
+            .to_pylist()
+        )
+
+        with self.assertRaisesRegex(ValueError, "do not match known datastores"):
+            datastore_table.validate_datastore_names(["not_the_same_datastore"])
+        datastore_table.validate_datastore_names(["not_the_same_datastore", "name_of_datastore"])
+
+        second_table = DatastoreRecordTable.from_stored_file_info_table(
+            "other_datastore_name",
+            StoredFileInfoTable.from_records(
+                [
+                    {
+                        "dataset_id": uuid3,
+                        "path": "a/relative/path2.fits",
+                        "formatter": "lsst.obs.lsst.rawFormatter.LsstCamRawFormatter",
+                        "storage_class": "Exposure",
+                        "component": "__NULL_STRING__",
+                        "checksum": None,
+                        "file_size": 1000,
+                    },
+                ]
+            ),
+        )
+        combined_table = DatastoreRecordTable.combine([datastore_table, second_table])
+        combined_records = combined_table.to_arrow().to_pylist()
+        _check_records(combined_records)
+        rec2 = combined_records[2]
+        self.assertEqual(rec2["dataset_id"], uuid3)
+        self.assertEqual(rec2["path"], "a/relative/path2.fits")
+        self.assertEqual(rec2["formatter"], "lsst.obs.lsst.rawFormatter.LsstCamRawFormatter")
+        self.assertEqual(rec2["storage_class"], "Exposure")
+        self.assertIsNone(rec2["component"])
+        self.assertIsNone(rec2["checksum"])
+        self.assertEqual(rec2["file_size"], 1000)
+
+        self.assertEqual(0, len(datastore_table.filter_by_datastore_name("unknown_datastore")))
+        filtered_table = combined_table.filter_by_datastore_name("name_of_datastore")
+        self.assertEqual(len(filtered_table), 2)
+        _check_records(filtered_table.to_arrow().to_pylist())
+        self.assertEqual(filtered_table.to_stored_file_info_table().to_records(), input_records)
 
 
 @contextlib.contextmanager

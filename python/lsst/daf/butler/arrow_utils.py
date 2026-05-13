@@ -41,6 +41,7 @@ __all__ = (
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, ClassVar, final
 
 import astropy.time
@@ -554,6 +555,63 @@ class DateTimeArrowScalar(pa.ExtensionScalar):
 
     def as_py(self, **_unused: Any) -> astropy.time.Time:
         return TimeConverter().nsec_to_astropy(self.value.as_py())
+
+
+class ArrowTableUtils:
+    """Utility functions for manipulating `pyarrow.Table` instances."""
+
+    @staticmethod
+    def replace_column(table: pa.Table, column_name: str, new_column: pa.Array) -> pa.Table:
+        """Return a new `pyarrow.Table` instance, replacing a given column in
+        the table with a new one.
+
+        Parameters
+        ----------
+        table
+            Original arrow table.
+        column_name
+            Name of the column to be replaced.
+        new_column
+            Replacement arrow column.
+
+        Returns
+        -------
+        table
+            Copy of the given table with the column replaced.
+        """
+        index = table.schema.get_field_index(column_name)
+        if index < 0:
+            raise ValueError(
+                f"Column {column_name} not found in arrow table, or multiple columns have the same name."
+            )
+        return table.set_column(index, column_name, new_column)
+
+    @staticmethod
+    def modify_column(
+        table: pa.Table, column_name: str, function: Callable[[pa.Array], pa.Array]
+    ) -> pa.Table:
+        """Return a new `pyarrow.Table` instance, applying a function to
+        replace one of the columns with a new one.
+
+        Parameters
+        ----------
+        table
+            Original arrow table.
+        column_name
+            Name of the column to be replaced.
+        function
+            Function that takes an arrow array, and returns a modified version
+            of that array.
+
+        Returns
+        -------
+        table
+            Copy of the given table with the column replaced with the value
+            returned from the callback function.
+        """
+        column = table.column(column_name)
+        new_column = function(column)
+        return ArrowTableUtils.replace_column(table, column_name, new_column)
 
 
 pa.register_extension_type(RegionArrowType())
