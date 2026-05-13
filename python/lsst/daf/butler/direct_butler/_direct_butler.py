@@ -44,7 +44,7 @@ import os
 import uuid
 import warnings
 from collections import Counter, defaultdict
-from collections.abc import Collection, Iterable, Iterator, MutableMapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, MutableMapping, Sequence
 from functools import partial
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
@@ -67,7 +67,13 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._exceptions import DatasetNotFoundError, DimensionValueError, EmptyQueryResultError, ValidationError
+from .._exceptions import (
+    DatasetNotFoundError,
+    DimensionValueError,
+    EmptyQueryResultError,
+    InconsistentUniverseError,
+    ValidationError,
+)
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
 from .._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
@@ -2131,6 +2137,84 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return dimension_records
 
+    def _cast_universe_for_import_refs(
+        self, source_refs: Iterable[DatasetRef]
+    ) -> Mapping[DatasetType, list[DatasetRef]]:
+        """Try to cast imported refs to the target universe if possible.
+
+        Parameters
+        ----------
+        source_refs
+            The refs to be imported.
+
+        Returns
+        -------
+        refs
+            The refs to be imported, grouped by dataset type, with the dataset
+            types cast to the target universe.
+
+        Raises
+        ------
+        InconsistentUniverseError
+            Raised if any reference cannot be converted to target universe.
+
+        Notes
+        -----
+        Potentially this method can perform a non-trivial migrations of the
+        datasets by modifying dimensions and dataIds. Presently though it can
+        only perform a trivial validation of the dataset types compatibility.
+        Returned mapping will contain dataset types in the new universe, but
+        returned references will still have the original dataset types as
+        there is presently no easy way to replace dataset type in a reference.
+        """
+        # In theory input refs could come from multiple universes, but in
+        # practice this will not happen, so just group everything by dataset
+        # type.
+        refs_by_source_type: defaultdict[DatasetType, list[DatasetRef]] = defaultdict(list)
+        for ref in source_refs:
+            refs_by_source_type[ref.datasetType].append(ref)
+
+        refs_by_type: defaultdict[DatasetType, list[DatasetRef]] = defaultdict(list)
+        for source_type, refs in refs_by_source_type.items():
+            source_universe = source_type.dimensions.universe
+            if source_universe is self.dimensions:
+                target_type = source_type
+            else:
+                if source_universe.namespace != self.dimensions.namespace:
+                    raise InconsistentUniverseError(
+                        f"Source refs have universe {source_universe} with different namespace "
+                        f"than target universe {self.dimensions}."
+                    )
+
+                # Try to handle case of different universe versions. For now
+                # we can only do trivial check that dimension groups are
+                # identical.
+                try:
+                    target_dimensions = self.dimensions.conform(source_type.dimensions.names)
+                except Exception as exc:
+                    raise InconsistentUniverseError(
+                        f"Source dimensions {source_type.dimensions} are not compatible with "
+                        f"target universe dimensions {self.dimensions}."
+                    ) from exc
+                if target_dimensions != source_type.dimensions:
+                    raise InconsistentUniverseError(
+                        f"Source dimensions {source_type.dimensions} are different from a conforming "
+                        f"set of target universe dimensions {target_dimensions}."
+                    )
+
+                # Rebuild dataset type in new universe.
+                target_type = DatasetType(
+                    name=source_type.name,
+                    dimensions=target_dimensions,
+                    storageClass=source_type.storageClass,
+                    parentStorageClass=source_type.parentStorageClass,
+                    universe=self.dimensions,
+                    isCalibration=source_type.isCalibration(),
+                )
+            refs_by_type[target_type] = refs
+
+        return refs_by_type
+
     def _prepare_for_import_refs(
         self,
         source_butler: LimitedButler,
@@ -2159,19 +2243,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             str(self),
         )
 
+        refs_by_type = self._cast_universe_for_import_refs(source_refs)
+
         # Importing requires that we group the refs by dimension group and run
         # before doing the import.
-        source_dataset_types = set()
         grouped_refs: defaultdict[_RefGroup, list[DatasetRef]] = defaultdict(list)
         for ref in source_refs:
             grouped_refs[_RefGroup(ref.datasetType.dimensions, ref.run)].append(ref)
-            source_dataset_types.add(ref.datasetType)
 
         # Check to see if the dataset type in the source butler has
         # the same definition in the target butler and register missing
         # ones if requested. Registration must happen outside a transaction.
         newly_registered_dataset_types = set()
-        for datasetType in source_dataset_types:
+        for datasetType in refs_by_type:
             if register_dataset_types:
                 # Let this raise immediately if inconsistent. Continuing
                 # on to find additional inconsistent dataset types

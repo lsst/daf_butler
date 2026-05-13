@@ -63,6 +63,7 @@ from lsst.utils.classes import immutable
 
 from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
+from ._exceptions import InconsistentUniverseError
 from ._named import NamedKeyDict
 from ._uuid import generate_uuidv7
 from .datastore.stored_file_info import StoredDatastoreItemInfo
@@ -1084,7 +1085,7 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
             return []
 
         if universe.namespace != self.universe_namespace:
-            raise RuntimeError(
+            raise InconsistentUniverseError(
                 f"Can not convert to refs in universe {universe.namespace} that were created from "
                 f"universe {self.universe_namespace}"
             )
@@ -1092,16 +1093,36 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
         if universe.version != self.universe_version:
             _LOG.warning(
                 "Universe mismatch when attempting to reconstruct DatasetRef from serialized form. "
-                "Serialized with version %d but asked to use version %d.",
+                "Serialized with version %d but asked to use version %d. "
+                "There could be failures due to different universe versions.",
                 self.universe_version,
                 universe.version,
             )
 
         # Reconstruct the DatasetType objects.
-        dataset_types = {
-            name: DatasetType.from_simple(dtype, universe=universe)
-            for name, dtype in self.dataset_types.items()
-        }
+        dataset_types: dict[str, DatasetType] = {}
+        if universe.version == self.universe_version:
+            dataset_types = {
+                name: DatasetType.from_simple(dtype, universe=universe)
+                for name, dtype in self.dataset_types.items()
+            }
+        else:
+            # When versions are different the dimensions may either disappear
+            # or new dimensions can be aedded to conforming set.
+            for name, dtype in self.dataset_types.items():
+                try:
+                    dataset_type = DatasetType.from_simple(dtype, universe=universe)
+                except KeyError as exc:
+                    raise InconsistentUniverseError(
+                        f"Source dimensions {dtype.dimensions} are not compatible with "
+                        f"target universe dimensions {universe}."
+                    ) from exc
+                if set(dataset_type.dimensions.names) != set(dtype.dimensions or []):
+                    raise InconsistentUniverseError(
+                        f"Source dimensions {dtype.dimensions} are different from a conforming "
+                        f"set of target universe dimensions {dataset_type.dimensions}."
+                    )
+                dataset_types[name] = dataset_type
 
         # Dimension records can be attached if available.
         # We assume that all dimension information was stored.
