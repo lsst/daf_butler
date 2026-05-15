@@ -228,8 +228,6 @@ class InconsistentUniverseError(Exception):
     incompatible with the target butler universe.
     """
 
-    pass
-
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,

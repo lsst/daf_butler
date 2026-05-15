@@ -1117,7 +1117,7 @@ class SerializedDatasetRefContainerV1(SerializedDatasetRefContainer):
                         f"Source dimensions {dtype.dimensions} are not compatible with "
                         f"target universe dimensions {universe}."
                     ) from exc
-                if set(dataset_type.dimensions.names) != set(dtype.dimensions or []):
+                if set(dataset_type.dimensions.required) != set(dtype.dimensions or []):
                     raise InconsistentUniverseError(
                         f"Source dimensions {dtype.dimensions} are different from a conforming "
                         f"set of target universe dimensions {dataset_type.dimensions}."
