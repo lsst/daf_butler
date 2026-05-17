@@ -528,6 +528,7 @@ storageClasses:
       aperture_corrections: StructuredDataDict
       detector: DetectorV2
       photometric_scaling: ImageField
+      backgrounds: BackgroundMap
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   ColorImage:
@@ -540,6 +541,8 @@ storageClasses:
     pytype: lsst.images.ObservationSummaryStats
   ImageField:
     pytype: lsst.images.fields.BaseField
+  BackgroundMap:
+    pytype: lsst.images.BackgroundMap
   ExtendedPsfCandidates:
     pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
     parameters:
@@ -552,6 +555,7 @@ storageClasses:
     derivedComponents:
       psf: PointSpreadFunction
       provenance: CellCoaddProvenance
+      backgrounds: BackgroundMap
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
