@@ -38,6 +38,7 @@ __all__ = (
     "DimensionNameError",
     "EmptyQueryResultError",
     "InconsistentDataIdError",
+    "InconsistentUniverseError",
     "InvalidQueryError",
     "MissingCollectionError",
     "MissingDatasetTypeError",
@@ -220,6 +221,12 @@ class UnknownButlerUserError(ButlerUserError):
     """
 
     error_type = "unknown"
+
+
+class InconsistentUniverseError(Exception):
+    """Raised when an imported dataset has a dimension universe that is
+    incompatible with the target butler universe.
+    """
 
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
