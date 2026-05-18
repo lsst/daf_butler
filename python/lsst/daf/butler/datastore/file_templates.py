@@ -372,6 +372,11 @@ class FileTemplate:
     """Set of special fields that are available independently of the defined
     Dimensions."""
 
+    _special_fs_chars = str.maketrans({c: "_" for c in ' <>:"\\|?*'})
+    """Characters that can cause trouble if they leak into file names are
+    replaced by '_'.
+    """
+
     def __init__(self, template: str):
         if not isinstance(template, str):
             raise FileTemplateValidationError(
@@ -673,8 +678,9 @@ class FileTemplate:
                 replace_slash = False
 
             if isinstance(value, str):
-                # Replace spaces with underscores for more friendly file paths
-                value = value.replace(" ", "_")
+                # Replace any special characters that can cause difficulties
+                # if they appear in filenames.
+                value = value.translate(self._special_fs_chars)
                 if replace_slash:
                     value = value.replace("/", "_")
 
