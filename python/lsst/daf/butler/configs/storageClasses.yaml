@@ -479,7 +479,6 @@ storageClasses:
     derivedComponents:
       projection: Projection
       bbox: BoxV2
-      obs_info: ObservationInfo
     converters:
       lsst.afw.image.Image: lsst.images.Image.from_legacy
   MaskV2:
@@ -489,7 +488,6 @@ storageClasses:
     derivedComponents:
       projection: Projection
       bbox: BoxV2
-      obs_info: ObservationInfo
     converters:
       lsst.afw.image.Mask: lsst.images.Mask.from_legacy
   MaskedImageV2:
@@ -502,7 +500,6 @@ storageClasses:
       image: ImageV2
       mask: MaskV2
       variance: ImageV2
-      obs_info: ObservationInfo
     converters:
       lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
   PointSpreadFunction:
@@ -524,6 +521,7 @@ storageClasses:
     pytype: lsst.images.VisitImage
     derivedComponents:
       psf: PointSpreadFunction
+      obs_info: ObservationInfo
       summary_stats: ObservationSummaryStats
       aperture_corrections: StructuredDataDict
       detector: DetectorV2
