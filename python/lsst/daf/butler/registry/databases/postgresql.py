@@ -467,8 +467,9 @@ class PostgresqlDatabase(Database):
     def make_in_array_constraint(
         self, column: sqlalchemy.ColumnElement[_T], values: Iterable[_T]
     ) -> sqlalchemy.ColumnElement[bool]:
+        array_type = sqlalchemy.dialects.postgresql.ARRAY(column.type)
         return column == sqlalchemy.any_(
-            sqlalchemy.cast(values, sqlalchemy.dialects.postgresql.ARRAY(column.type))
+            sqlalchemy.cast(sqlalchemy.bindparam(key=None, value=values, type_=array_type), array_type)
         )
 
 
