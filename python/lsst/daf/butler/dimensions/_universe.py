@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 from lsst.utils.classes import cached_getter, immutable
 
 from .._config import Config
-from .._exceptions import InconsistentUniverseError
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 from .._utilities.thread_safe_cache import ThreadSafeCache
@@ -447,11 +446,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         """
         match dimensions:
             case DimensionGroup():
-                if dimensions.universe is not self:
-                    raise InconsistentUniverseError(
-                        f"DimensionGroup {dimensions} belongs to a different universe."
-                        f" Expected universe {self}, but got {dimensions.universe}."
-                    )
                 return dimensions
             case str() as name:
                 return self[name].minimal_group
