@@ -29,9 +29,9 @@ from __future__ import annotations
 
 __all__ = ["ButlerMetrics"]
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from typing import Concatenate, ParamSpec
+from typing import Any, Concatenate, ParamSpec
 
 from pydantic import BaseModel
 
@@ -112,15 +112,21 @@ class ButlerMetrics(BaseModel):
         handler: Callable[Concatenate[float, P], None],
         log: LsstLoggers | None = None,
         msg: str | None = None,
+        log_args: Iterable[Any] = (),
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> Iterator[None]:
-        with time_this(log=log, msg=msg) as timer:
+        with time_this(log=log, msg=msg, args=log_args) as timer:
             yield
         handler(timer.duration, *args, **kwargs)
 
     @contextmanager
-    def instrument_get(self, log: LsstLoggers | None = None, msg: str | None = None) -> Iterator[None]:
+    def instrument_get(
+        self,
+        log: LsstLoggers | None = None,
+        msg: str | None = None,
+        args: Iterable[Any] = (),
+    ) -> Iterator[None]:
         """Run code and increment get statistics.
 
         Parameters
@@ -129,12 +135,20 @@ class ButlerMetrics(BaseModel):
             Logger to use for any timing information.
         msg : `str` or `None`
             Any message to be included in log output.
+        args : `~collections.abc.Iterable` [`Any`]
+            Additional parameters passed to the log command that should be
+            written to ``msg``.
         """
         with self._timer(self.increment_get, log=log, msg=msg):
             yield
 
     @contextmanager
-    def instrument_put(self, log: LsstLoggers | None = None, msg: str | None = None) -> Iterator[None]:
+    def instrument_put(
+        self,
+        log: LsstLoggers | None = None,
+        msg: str | None = None,
+        args: Iterable[Any] = (),
+    ) -> Iterator[None]:
         """Run code and increment put statistics.
 
         Parameters
@@ -143,13 +157,20 @@ class ButlerMetrics(BaseModel):
             Logger to use for any timing information.
         msg : `str` or `None`
             Any message to be included in log output.
+        args : `~collections.abc.Iterable` [`Any`]
+            Additional parameters passed to the log command that should be
+            written to ``msg``.
         """
         with self._timer(self.increment_put, log=log, msg=msg):
             yield
 
     @contextmanager
     def instrument_ingest(
-        self, n_datasets: int, log: LsstLoggers | None = None, msg: str | None = None
+        self,
+        n_datasets: int,
+        log: LsstLoggers | None = None,
+        msg: str | None = None,
+        args: Iterable[Any] = (),
     ) -> Iterator[None]:
         """Run code and increment ingest statistics.
 
@@ -161,6 +182,9 @@ class ButlerMetrics(BaseModel):
             Logger to use for any timing information.
         msg : `str` or `None`
             Any message to be included in log output.
+        args : `~collections.abc.Iterable` [`Any`]
+            Additional parameters passed to the log command that should be
+            written to ``msg``.
         """
-        with self._timer(self.increment_ingest, n_datasets=n_datasets, log=log, msg=msg):
+        with self._timer(self.increment_ingest, n_datasets=n_datasets, log=log, msg=msg, log_args=args):
             yield

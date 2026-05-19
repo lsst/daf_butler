@@ -1741,7 +1741,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         with (
             self._metrics.instrument_ingest(
-                n_datasets, _LOG, msg=f"Ingesting zip file {zip_file} with {n_datasets} dataset{srefs}"
+                n_datasets,
+                _LOG,
+                msg="Ingesting zip file %s with %s dataset%s",
+                args=(zip_file, n_datasets, srefs),
             ),
             self.transaction(),
         ):
@@ -1860,7 +1863,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         with (
             self._metrics.instrument_ingest(
-                n_datasets, _LOG, msg=f"Ingesting {n_files} file{sfiles} with {n_datasets} dataset{srefs}"
+                n_datasets,
+                _LOG,
+                msg="Ingesting %s file%s with %s dataset%s",
+                args=(n_files, sfiles, n_datasets, srefs),
             ),
             self.transaction(),
         ):
