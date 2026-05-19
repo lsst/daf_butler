@@ -469,7 +469,7 @@ class PostgresqlDatabase(Database):
     ) -> sqlalchemy.ColumnElement[bool]:
         array_type = sqlalchemy.dialects.postgresql.ARRAY(column.type)
         return column == sqlalchemy.any_(
-            sqlalchemy.cast(sqlalchemy.bindparam(key=None, value=values, type_=array_type), array_type)
+            sqlalchemy.cast(sqlalchemy.literal(list(values), array_type), array_type)
         )
 
 
