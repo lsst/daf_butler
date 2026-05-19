@@ -1,0 +1,2 @@
+Fixed file templates so that characters that may confuse file systems are replaced by underscores.
+For example this include ``:` and ``<``.
