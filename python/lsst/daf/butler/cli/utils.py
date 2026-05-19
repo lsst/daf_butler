@@ -70,7 +70,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial, wraps
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import click
@@ -900,7 +900,8 @@ class MWOptionDecorator:
         """Get the name that will be passed to the command function for this
         option.
         """
-        return cast(str, self._name)
+        assert self._name is not None, "keep mypy happy"
+        return self._name
 
     def opts(self) -> list[str]:
         """Get the flags that will be used for this option on the command
@@ -1003,7 +1004,8 @@ class MWCommand(click.Command):
         captured_args = []
         for param in param_order:
             if isinstance(param, click.Option):
-                param_name = cast(str, param.name)
+                param_name = param.name
+                assert param_name is not None, "keep mypy happy"
                 if param.multiple:
                     val = opts[param_name][next_idx[param_name]]
                     next_idx[param_name] += 1
@@ -1021,7 +1023,8 @@ class MWCommand(click.Command):
                     captured_args.append(max(param.opts, key=len))
                     captured_args.append(val)
             elif isinstance(param, click.Argument):
-                param_name = cast(str, param.name)
+                param_name = param.name
+                assert param_name is not None, "keep mypy happy"
                 opt = opts[param_name]
                 if opt is not None and opt != _CLICK_UNSET_SENTINEL:
                     captured_args.append(opt)
@@ -1197,7 +1200,8 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
             # Remove leading dashes: they are not used for option names in the
             # yaml file.
             if option in [opt.lstrip("-") for opt in param.opts]:
-                return cast(str, param.name)
+                assert param.name is not None, "keep mypy happy"
+                return param.name
         raise RuntimeError(f"'{option}' is not a valid option for {ctx.info_name}")
 
     ctx.default_map = ctx.default_map or {}
