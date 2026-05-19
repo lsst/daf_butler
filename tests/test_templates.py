@@ -86,6 +86,7 @@ class TestFileTemplates(unittest.TestCase):
             "visit": 52,
             "physical_filter": "Most Amazing U Filter Ever",
             "day_obs": 20200101,
+            "group": "2025-08-07>08:25:27.100",
         }
 
     def assertTemplate(self, template, answer, ref):
@@ -161,6 +162,13 @@ class TestFileTemplates(unittest.TestCase):
             self.makeDatasetRef("calexp", run="run3", dataId=dataId),
         )
 
+        tmplstr = "{run}/{datasetType}/{group}"
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/2025-08-07_08_25_27_100",
+            self.makeDatasetRef("calexp"),
+        )
+
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("no fields at all")
 
@@ -183,7 +191,7 @@ class TestFileTemplates(unittest.TestCase):
             "run2/calexp/00052/Most_Amazing_U_Filter_Ever_20200101",
             self.makeDatasetRef("calexp"),
         )
-        tmplstr = "{run}/{datasetType}/{exposure|visit:05d}/{physical_filter|day_obs}_{group|exposure:?}"
+        tmplstr = "{run}/{datasetType}/{exposure|visit:05d}/{physical_filter|day_obs}_{tract|exposure:?}"
         self.assertTemplate(
             tmplstr,
             "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
