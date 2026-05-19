@@ -35,7 +35,7 @@ __all__ = ["PostgresqlDatabase"]
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from typing import Any
+from typing import Any, TypeVar
 
 import psycopg2
 import sqlalchemy
@@ -46,6 +46,8 @@ from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database, DatabaseMetadata
+
+_T = TypeVar("_T")
 
 
 class PostgresqlDatabase(Database):
@@ -461,6 +463,14 @@ class PostgresqlDatabase(Database):
 
         pattern = _escape(pattern)
         return expression.op("LIKE")(sqlalchemy.literal(pattern))
+
+    def make_in_array_constraint(
+        self, column: sqlalchemy.ColumnElement[_T], values: Iterable[_T]
+    ) -> sqlalchemy.ColumnElement[bool]:
+        array_type = sqlalchemy.dialects.postgresql.ARRAY(column.type)
+        return column == sqlalchemy.any_(
+            sqlalchemy.cast(sqlalchemy.literal(list(values), array_type), array_type)
+        )
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
