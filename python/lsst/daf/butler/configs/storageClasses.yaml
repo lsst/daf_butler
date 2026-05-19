@@ -527,6 +527,7 @@ storageClasses:
       summary_stats: ObservationSummaryStats
       aperture_corrections: StructuredDataDict
       detector: DetectorV2
+      photometric_scaling: ImageField
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   ColorImage:
@@ -537,6 +538,8 @@ storageClasses:
       projection: Projection
   ObservationSummaryStats:
     pytype: lsst.images.ObservationSummaryStats
+  ImageField:
+    pytype: lsst.images.fields.BaseField
   ExtendedPsfCandidates:
     pytype: lsst.pipe.tasks.extended_psf.ExtendedPsfCandidates
     parameters:
