@@ -99,12 +99,18 @@ VignettingCorrection: lsst.ts.observatory.control.utils.extras.vignetting_storag
 SSPAuxiliaryFile: lsst.pipe.tasks.sspAuxiliaryFile.SSPAuxiliaryFileFormatter
 VisitGeometry: lsst.daf.butler.formatters.json.JsonFormatter
 ProvenanceQuantumGraph: lsst.pipe.base.quantum_graph.formatter.ProvenanceFormatter
-Transform: lsst.images.json.formatters.GenericFormatter
-Projection: lsst.images.json.formatters.GenericFormatter
-ImageV2: lsst.images.fits.formatters.ImageFormatter
-MaskV2: lsst.images.fits.formatters.ImageFormatter
-MaskedImageV2: lsst.images.fits.formatters.MaskedImageFormatter
-VisitImage: lsst.images.fits.formatters.VisitImageFormatter
-ColorImage: lsst.images.fits.formatters.ImageFormatter
-ExtendedPsfCandidates: lsst.images.fits.formatters.GenericFormatter
-CellCoadd: lsst.images.fits.formatters.CellCoaddFormatter
+Transform:
+  formatter: lsst.images.formatters.GenericFormatter
+  parameters:
+    format: json
+Projection:
+  formatter: lsst.images.formatters.GenericFormatter
+  parameters:
+    format: json
+ImageV2: lsst.images.formatters.GenericFormatter
+MaskV2: lsst.images.formatters.GenericFormatter
+MaskedImageV2: lsst.images.formatters.GenericFormatter
+VisitImage: lsst.images.formatters.GenericFormatter
+ColorImage: lsst.images.formatters.GenericFormatter
+ExtendedPsfCandidates: lsst.images.formatters.GenericFormatter
+CellCoadd: lsst.images.formatters.GenericFormatter
