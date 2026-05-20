@@ -57,7 +57,8 @@ storageClasses:
       #
       # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
       - origin
-
+    converters:
+      lsst.images.Image: lsst.images.Image.to_legacy
   ImageF:
     inheritsFrom: Image
     pytype: lsst.afw.image.ImageF
@@ -83,6 +84,8 @@ storageClasses:
       #
       # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
       - origin
+    converters:
+      lsst.images.Mask: lsst.images.Mask.to_legacy
   MaskX:
     inheritsFrom: Mask
     pytype: lsst.afw.image.MaskX
@@ -101,6 +104,8 @@ storageClasses:
       image: Image
       mask: Mask
       variance: Image
+    converters:
+      lsst.images.MaskedImage: lsst.images.MaskedImage.to_legacy
   MaskedImageF:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageF
@@ -306,6 +311,11 @@ storageClasses:
       # with the on-disk image.
       - detector
 
+      # Whether to store the quantized pixels when decompressing so they can
+      # be written back out directly when written again.  This is only
+      # available when doing a storage class conversion to VisitImage on read.
+      - preserve_quantization
+
     components:
       image: Image
       mask: Mask
@@ -327,6 +337,8 @@ storageClasses:
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I
+    converters:
+      lsst.images.VisitImage: lsst.images.VisitImage.to_legacy
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
