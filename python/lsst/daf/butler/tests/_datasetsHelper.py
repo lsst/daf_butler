@@ -46,7 +46,6 @@ from lsst.resources import ResourcePath
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetId
-    from lsst.daf.butler.datastore.cache_manager import AbstractDatastoreCacheManager
 
 
 class DatasetTestHelper:
@@ -190,12 +189,11 @@ class BadWriteFormatter(YamlFormatter):
     def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         return NotImplemented
 
-    def write_direct(
+    def write_local_file(
         self,
         in_memory_dataset: Any,
         uri: ResourcePath,
-        cache_manager: AbstractDatastoreCacheManager | None = None,
-    ) -> bool:
+    ) -> None:
         """Write empty file and immediately fail.
 
         Parameters
@@ -204,8 +202,6 @@ class BadWriteFormatter(YamlFormatter):
             The Python object to serialize.
         uri : `lsst.resources.ResourcePath`
             The location to write the content.
-        cache_manager : `AbstractDatastoreCacheManager`
-            Cache manager. Unused.
 
         Raises
         ------
@@ -219,12 +215,10 @@ class BadWriteFormatter(YamlFormatter):
 class BadNoWriteFormatter(BadWriteFormatter):
     """A formatter that always fails without writing anything."""
 
-    def write_direct(
+    def to_bytes(
         self,
         in_memory_dataset: Any,
-        uri: ResourcePath,
-        cache_manager: AbstractDatastoreCacheManager | None = None,
-    ) -> bool:
+    ) -> bytes:
         raise RuntimeError("Did not writing anything at all")
 
 
