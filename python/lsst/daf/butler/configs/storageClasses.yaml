@@ -479,7 +479,7 @@ storageClasses:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
-      lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
+      lsst.afw.geom.SkyWcs: lsst.images.Projection.from_legacy
   ObservationInfo:
     pytype: astro_metadata_translator.ObservationInfo
     converters:
