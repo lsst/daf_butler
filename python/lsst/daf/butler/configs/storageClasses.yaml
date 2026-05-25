@@ -11,6 +11,8 @@ storageClasses:
     pytype: lsst.afw.table.io.Persistable
   Wcs:
     pytype: lsst.afw.geom.skyWcs.SkyWcs
+    converters:
+      lsst.images.Projection: lsst.images.Projection.to_legacy
   Psf:
     pytype: lsst.afw.detection.Psf
   CoaddInputs:
@@ -42,6 +44,8 @@ storageClasses:
       lsst.images.cameras.Detector: lsst.images.cameras.Detector.to_legacy
   Box2I:
     pytype: lsst.geom.Box2I
+    converters:
+      lsst.images.Box: lsst.images.Box.to_legacy
   Extent2I:
     pytype: lsst.geom.Extent2I
   Point2I:
