@@ -11,6 +11,8 @@ storageClasses:
     pytype: lsst.afw.table.io.Persistable
   Wcs:
     pytype: lsst.afw.geom.skyWcs.SkyWcs
+    converters:
+      lsst.images.Projection: lsst.images.Projection.to_legacy
   Psf:
     pytype: lsst.afw.detection.Psf
   CoaddInputs:
@@ -42,6 +44,8 @@ storageClasses:
       lsst.images.cameras.Detector: lsst.images.cameras.Detector.to_legacy
   Box2I:
     pytype: lsst.geom.Box2I
+    converters:
+      lsst.images.Box: lsst.images.Box.to_legacy
   Extent2I:
     pytype: lsst.geom.Extent2I
   Point2I:
@@ -338,6 +342,9 @@ storageClasses:
       dimensions: Extent2I
       xy0: Point2I
     converters:
+      # Order matters here: DifferenceImage is a subclass of VisitImage, so it
+      # needs to be tried first.
+      lsst.images.DifferenceImage: lsst.images.DifferenceImage.to_legacy
       lsst.images.VisitImage: lsst.images.VisitImage.to_legacy
   ExposureF:
     inheritsFrom: Exposure
@@ -479,7 +486,7 @@ storageClasses:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
-      lsst.afw.image.SkyWcs: lsst.images.Projection.from_legacy
+      lsst.afw.geom.SkyWcs: lsst.images.Projection.from_legacy
   ObservationInfo:
     pytype: astro_metadata_translator.ObservationInfo
     converters:
@@ -541,6 +548,11 @@ storageClasses:
       backgrounds: BackgroundMap
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
+  DifferenceImage:
+    inheritsFrom: VisitImage
+    pytype: lsst.images.DifferenceImage
+    converters:
+      lsst.afw.image.Exposure: lsst.images.DifferenceImage.from_legacy
   ColorImage:
     pytype: lsst.images.ColorImage
     parameters:
