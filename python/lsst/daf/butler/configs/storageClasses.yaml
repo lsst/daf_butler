@@ -580,6 +580,7 @@ storageClasses:
     pytype: lsst.images.cells.CellCoadd
     derivedComponents:
       psf: PointSpreadFunction
+      aperture_corrections: StructuredDataDict
       provenance: CellCoaddProvenance
       backgrounds: BackgroundMap
     converters:
