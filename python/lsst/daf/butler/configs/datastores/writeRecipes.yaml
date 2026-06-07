@@ -37,3 +37,18 @@ lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter:
   <<: *StandardFitsImageFormatterBase
 lsst.obs.base.formatters.fitsExposure.FitsMaskedImageFormatter:
   <<: *StandardFitsImageFormatterBase
+
+lsst.images.formatters.GenericFormatter:
+  lossy16:
+    image:
+      algorithm: RICE_1
+      quantization:
+        dither: SUBTRACTIVE_DITHER_2
+        level: 16.0
+    mask:
+      algorithm: GZIP_2
+    variance:
+      algorithm: RICE_1
+      quantization:
+        dither: SUBTRACTIVE_DITHER_2
+        level: 16.0
