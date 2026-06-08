@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
 
       - name: Docker buildx setup
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Run unit tests inside Docker
         uses: docker/build-push-action@v6
