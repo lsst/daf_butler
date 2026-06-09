@@ -12,7 +12,7 @@ storageClasses:
   Wcs:
     pytype: lsst.afw.geom.skyWcs.SkyWcs
     converters:
-      lsst.images.Projection: lsst.images.Projection.to_legacy
+      lsst.images.SkyProjection: lsst.images.SkyProjection.to_legacy
   Psf:
     pytype: lsst.afw.detection.Psf
   CoaddInputs:
@@ -483,13 +483,13 @@ storageClasses:
       lsst.geom.Box2I: lsst.images.Box.from_legacy
   Transform:
     pytype: lsst.images.Transform
-  Projection:
-    pytype: lsst.images.Projection
+  SkyProjection:
+    pytype: lsst.images.SkyProjection
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
-      lsst.afw.geom.SkyWcs: lsst.images.Projection.from_legacy
+      lsst.afw.geom.SkyWcs: lsst.images.SkyProjection.from_legacy
   ObservationInfo:
     pytype: astro_metadata_translator.ObservationInfo
     converters:
@@ -499,7 +499,7 @@ storageClasses:
     parameters:
       - bbox
     derivedComponents:
-      projection: Projection
+      sky_projection: SkyProjection
       bbox: BoxV2
     converters:
       lsst.afw.image.Image: lsst.images.Image.from_legacy
@@ -508,7 +508,7 @@ storageClasses:
     parameters:
       - bbox
     derivedComponents:
-      projection: Projection
+      sky_projection: SkyProjection
       bbox: BoxV2
     converters:
       lsst.afw.image.Mask: lsst.images.Mask.from_legacy
@@ -517,7 +517,7 @@ storageClasses:
     parameters:
       - bbox
     derivedComponents:
-      projection: Projection
+      sky_projection: SkyProjection
       bbox: BoxV2
       image: ImageV2
       mask: MaskV2
@@ -561,7 +561,7 @@ storageClasses:
     parameters:
       - bbox
     derivedComponents:
-      projection: Projection
+      sky_projection: SkyProjection
   ObservationSummaryStats:
     pytype: lsst.images.ObservationSummaryStats
   ImageField:
