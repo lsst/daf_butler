@@ -1,3 +1,32 @@
+Butler v30.0.8 (2026-06-09)
+===========================
+
+New Features
+------------
+
+- Added support for overriding dataset type names and storage classes in butler repository configuration. (`DM-54820 <https://rubinobs.atlassian.net/browse/DM-54820>`_)
+- Updated the default dimension universe to include solar-system dimensions, and ``dimensions.yaml`` version changed to 8. (`DM-54837 <https://rubinobs.atlassian.net/browse/DM-54837>`_)
+
+
+API Changes
+-----------
+
+- Added ``Butler.has_repo_config`` method that can be used to check if a directory URI is configured as a butler repository. (`DM-54728 <https://rubinobs.atlassian.net/browse/DM-54728>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed file templates so that characters that may confuse file systems are replaced by underscores.
+  For example this include ``:` and ``<``. (`DM-54979 <https://rubinobs.atlassian.net/browse/DM-54979>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added storage class and formatter declaration for `lsst.images.cells.CellCoadd`. (`DM-54225 <https://rubinobs.atlassian.net/browse/DM-54225>`_)
+
+
 Butler v30.0.6 (2026-04-06)
 ===========================
 
