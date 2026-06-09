@@ -103,7 +103,7 @@ Transform:
   formatter: lsst.images.formatters.GenericFormatter
   parameters:
     format: json
-Projection:
+SkyProjection:
   formatter: lsst.images.formatters.GenericFormatter
   parameters:
     format: json
