@@ -549,6 +549,7 @@ storageClasses:
       detector: DetectorV2
       photometric_scaling: ImageField
       backgrounds: BackgroundMap
+      masked_image: MaskedImageV2
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   DifferenceImage:
@@ -586,6 +587,7 @@ storageClasses:
       aperture_corrections: StructuredDataDict
       provenance: CellCoaddProvenance
       backgrounds: BackgroundMap
+      masked_image: MaskedImageV2
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
