@@ -516,12 +516,14 @@ storageClasses:
     pytype: lsst.images.MaskedImage
     parameters:
       - bbox
+      - components
     derivedComponents:
       sky_projection: SkyProjection
       bbox: BoxV2
       image: ImageV2
       mask: MaskV2
       variance: ImageV2
+      components: StructuredDataDict
     converters:
       lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
   PointSpreadFunction:
