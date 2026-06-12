@@ -533,6 +533,11 @@ storageClasses:
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
+  CellPointSpreadFunction:
+    inheritsFrom: PointSpreadFunction
+    pytype: lsst.images.cells.CellPointSpreadFunction
+    parameters:
+      - bbox
   DetectorV2:
     pytype: lsst.images.cameras.Detector
     converters:
@@ -585,7 +590,7 @@ storageClasses:
     inheritsFrom: MaskedImageV2
     pytype: lsst.images.cells.CellCoadd
     derivedComponents:
-      psf: PointSpreadFunction
+      psf: CellPointSpreadFunction
       aperture_corrections: StructuredDataDict
       provenance: CellCoaddProvenance
       backgrounds: BackgroundMap
