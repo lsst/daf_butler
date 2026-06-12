@@ -516,12 +516,14 @@ storageClasses:
     pytype: lsst.images.MaskedImage
     parameters:
       - bbox
+      - components
     derivedComponents:
       sky_projection: SkyProjection
       bbox: BoxV2
       image: ImageV2
       mask: MaskV2
       variance: ImageV2
+      components: StructuredDataDict
     converters:
       lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
   PointSpreadFunction:
@@ -531,6 +533,11 @@ storageClasses:
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
       lsst.afw.detection.Psf: lsst.images.psfs.PointSpreadFunction.from_legacy
+  CellPointSpreadFunction:
+    inheritsFrom: PointSpreadFunction
+    pytype: lsst.images.cells.CellPointSpreadFunction
+    parameters:
+      - bbox
   DetectorV2:
     pytype: lsst.images.cameras.Detector
     converters:
@@ -549,6 +556,7 @@ storageClasses:
       detector: DetectorV2
       photometric_scaling: ImageField
       backgrounds: BackgroundMap
+      masked_image: MaskedImageV2
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
   DifferenceImage:
@@ -582,10 +590,11 @@ storageClasses:
     inheritsFrom: MaskedImageV2
     pytype: lsst.images.cells.CellCoadd
     derivedComponents:
-      psf: PointSpreadFunction
+      psf: CellPointSpreadFunction
       aperture_corrections: StructuredDataDict
       provenance: CellCoaddProvenance
       backgrounds: BackgroundMap
+      masked_image: MaskedImageV2
     converters:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
