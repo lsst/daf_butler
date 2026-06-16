@@ -562,11 +562,15 @@ storageClasses:
       masked_image: MaskedImageV2
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
+  ConvolutionKernel:
+    pytype: lsst.images.convolution_kernels.ConvolutionKernel
   DifferenceImage:
     inheritsFrom: VisitImage
     pytype: lsst.images.DifferenceImage
     converters:
       lsst.afw.image.Exposure: lsst.images.DifferenceImage.from_legacy
+    derivedComponents:
+      kernel: ConvolutionKernel
   ColorImage:
     pytype: lsst.images.ColorImage
     parameters:
