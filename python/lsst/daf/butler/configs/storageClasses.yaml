@@ -571,6 +571,7 @@ storageClasses:
       lsst.afw.image.Exposure: lsst.images.DifferenceImage.from_legacy
     derivedComponents:
       kernel: ConvolutionKernel
+      templates: StructuredDataList
   ColorImage:
     pytype: lsst.images.ColorImage
     parameters:
