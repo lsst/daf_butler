@@ -352,7 +352,9 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray | np.ma.MaskedArray:
             has_mask = True
 
     if has_mask:
-        array = np.ma.mrecords.fromarrays(numpy_dict.values(), dtype=dtype)
+        import numpy.ma.mrecords as mrecords
+
+        array = mrecords.fromarrays(numpy_dict.values(), dtype=dtype)
     else:
         array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
     return array
@@ -402,7 +404,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                     # This is the fallback for unsigned ints in particular.
                     null_value = 0
 
-            col = np.ma.masked_array(
+            col = np.ma.MaskedArray(
                 data=arrow_table[name].fill_null(null_value).to_numpy(),
                 mask=arrow_table[name].is_null().to_numpy(),
                 fill_value=null_value,
