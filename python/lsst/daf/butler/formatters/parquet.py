@@ -351,10 +351,12 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray | np.ma.MaskedArray:
         if not has_mask and isinstance(col, np.ma.MaskedArray):
             has_mask = True
 
+    array: Any
+
     if has_mask:
         import numpy.ma.mrecords as mrecords
 
-        array = mrecords.fromarrays(numpy_dict.values(), dtype=dtype)
+        array = mrecords.fromarrays(list(numpy_dict.values()), dtype=dtype)
     else:
         array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
     return array
