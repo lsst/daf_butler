@@ -156,6 +156,7 @@ class ParquetFormatter(FormatterV2):
             return len(temp_table[schema.names[0]])
 
         par_columns = None
+        strip_astropy_meta_yaml = True
         if self.file_descriptor.parameters:
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
@@ -190,6 +191,11 @@ class ParquetFormatter(FormatterV2):
                         par_columns,
                     )
 
+            strip_astropy_meta_yaml = self.file_descriptor.parameters.pop(
+                "strip_astropy_meta_yaml",
+                True,
+            )
+
             if len(self.file_descriptor.parameters):
                 raise ValueError(
                     f"Unsupported parameters {self.file_descriptor.parameters} in ArrowTable read."
@@ -203,6 +209,15 @@ class ParquetFormatter(FormatterV2):
                 use_threads=False,
                 use_pandas_metadata=(b"pandas" in metadata),
             )
+
+        if strip_astropy_meta_yaml:
+            metadata = arrow_table.schema.metadata
+            # Only strip if (a) we have metadata; (b) it contains
+            # ``table_meta_yaml``; (c) it contains ``lsst::arrow::rowcount``
+            # to avoid stripping data from pure astropy tables (not written
+            # by the butler).
+            if metadata and metadata.pop(b"table_meta_yaml", None) and b"lsst::arrow::rowcount" in metadata:
+                arrow_table = arrow_table.replace_schema_metadata(metadata)
 
         return arrow_table
 
@@ -336,8 +351,12 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray | np.ma.MaskedArray:
         if not has_mask and isinstance(col, np.ma.MaskedArray):
             has_mask = True
 
+    array: Any
+
     if has_mask:
-        array = np.ma.mrecords.fromarrays(numpy_dict.values(), dtype=dtype)
+        import numpy.ma.mrecords as mrecords
+
+        array = mrecords.fromarrays(list(numpy_dict.values()), dtype=dtype)
     else:
         array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
     return array
@@ -387,7 +406,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                     # This is the fallback for unsigned ints in particular.
                     null_value = 0
 
-            col = np.ma.masked_array(
+            col = np.ma.MaskedArray(
                 data=arrow_table[name].fill_null(null_value).to_numpy(),
                 mask=arrow_table[name].is_null().to_numpy(),
                 fill_value=null_value,
@@ -1200,6 +1219,11 @@ def _apply_astropy_metadata(astropy_table: atable.Table, arrow_schema: pa.Schema
                 astropy_table[name].description = description
             if b"unit" in field_metadata and (unit := field_metadata[b"unit"].decode("UTF-8")) != "":
                 astropy_table[name].unit = unit
+
+        # Ensure that the special ASTROPY_PANDAS_INDEX_KEY is propagated to
+        # the table metadata.
+        if index_key := metadata.get(ASTROPY_PANDAS_INDEX_KEY.encode(), None):
+            astropy_table.meta[ASTROPY_PANDAS_INDEX_KEY] = index_key.decode("UTF-8")
 
 
 def _arrow_string_to_numpy_dtype(
