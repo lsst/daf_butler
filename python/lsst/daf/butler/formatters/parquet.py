@@ -760,7 +760,7 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
     return arrow_to_astropy(pandas_to_arrow(dataframe))
 
 
-def pandas_to_numpy(dataframe: pd.DataFrame) -> np.recarray:
+def pandas_to_numpy(dataframe: pd.DataFrame) -> np.ndarray | np.ma.MaskedArray:
     """Convert a pandas dataframe to a numpy recarray.
 
     Parameters
@@ -770,8 +770,10 @@ def pandas_to_numpy(dataframe: pd.DataFrame) -> np.recarray:
 
     Returns
     -------
-    numpy_thing : `numpy.recarray`
-        Converted numpy recarray.
+    array : `numpy.ndarray` or `numpy.ma.MaskedArray` (N,)
+        Numpy array table with N rows and the same column names
+        as the input dataframe. Will be masked records if any values
+        in the table are null.
     """
     # This conversion ensures strings are handled properly.
     return arrow_to_numpy(pandas_to_arrow(dataframe))
@@ -1627,9 +1629,9 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     return target_size // byte_width
 
 
-def _is_string(t):
+def _is_string(t: pa.DataType) -> bool:
     return pa.types.is_string(t) or pa.types.is_large_string(t) or pa.types.is_string_view(t)
 
 
-def _is_binary(t):
+def _is_binary(t: pa.DataType) -> bool:
     return pa.types.is_binary(t) or pa.types.is_large_binary(t) or pa.types.is_binary_view(t)
