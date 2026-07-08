@@ -161,10 +161,18 @@ class ParquetFormatter(FormatterV2):
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
                 has_pandas_multi_index = False
+                index_columns = []
                 if schema.metadata and b"pandas" in schema.metadata:
                     md = json.loads(schema.metadata[b"pandas"])
                     if len(md["column_indexes"]) > 1:
                         has_pandas_multi_index = True
+
+                    if isinstance(md["index_columns"][0], dict):
+                        # Pandas3
+                        index_columns = [col["name"] for col in md["index_columns"]]
+                    else:
+                        # Pandas2
+                        index_columns = md["index_columns"]
 
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
@@ -181,9 +189,13 @@ class ParquetFormatter(FormatterV2):
                                 found = True
                                 par_columns[file_column] = True
                         if not found:
-                            raise ValueError(
-                                f"Column {par_column} specified in parameters not available in parquet file."
-                            )
+                            if par_column not in index_columns:
+                                # Note that the pandas index column will always
+                                # be loaded.
+                                raise ValueError(
+                                    f"Column {par_column} specified in parameters not "
+                                    "available in parquet file."
+                                )
                     par_columns = list(par_columns.keys())
                 else:
                     par_columns = _standardize_multi_index_columns(
@@ -698,7 +710,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
         Converted arrow table.
     """
     try:
-        arrow_table = pa.Table.from_pandas(dataframe)
+        arrow_table = pa.Table.from_pandas(dataframe, preserve_index=True)
     except pa.ArrowInvalid as e:
         msg = "; ".join(e.args)
         msg += "; This is usually because the column is mixed type or has uneven length rows."
@@ -713,8 +725,9 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     # We loop through the arrow table columns because the datatypes have
     # been checked and converted from pandas objects.
     for name in arrow_table.column_names:
-        if not name.startswith("__") and arrow_table[name].type == pa.string():
-            if len(arrow_table[name]) > 0:
+        if not name.startswith("__") and _is_string(arrow_table[name].type):
+            col = arrow_table[name]
+            if len(col) > 0 and (col.length() > col.null_count):
                 strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
             else:
                 strlen = default_length
@@ -795,15 +808,27 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
     """
     import pandas as pd
 
+    index_columns = []
     if b"pandas" in schema.metadata:
         md = json.loads(schema.metadata[b"pandas"])
         indexes = md["column_indexes"]
         len_indexes = len(indexes)
+
+        if len_indexes > 0:
+            # Get index columns; pandas2 or pandas3 methods.
+            if isinstance(md["index_columns"][0], dict):
+                # Pandas3
+                index_columns = [col["name"] for col in md["index_columns"]]
+            else:
+                # Pandas2
+                index_columns = md["index_columns"]
     else:
         len_indexes = 0
 
     if len_indexes <= 1:
-        return pd.Index(name for name in schema.names if not name.startswith("__"))
+        columns = {name for name in schema.names if not name.startswith("__")}
+        columns = columns.union(set(index_columns))
+        return pd.Index(columns)
     else:
         raw_columns = _split_multi_index_column_names(len(indexes), schema.names)
         return pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
@@ -863,7 +888,7 @@ class DataFrameSchema:
         arrow_schema : `pyarrow.Schema`
             Converted pyarrow schema.
         """
-        arrow_table = pa.Table.from_pandas(self._schema)
+        arrow_table = pa.Table.from_pandas(self._schema, preserve_index=True)
 
         return arrow_table.schema
 
