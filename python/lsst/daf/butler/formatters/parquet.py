@@ -46,6 +46,7 @@ __all__ = (
     "numpy_to_astropy",
     "pandas_to_arrow",
     "pandas_to_astropy",
+    "pandas_to_numpy",
 )
 
 import collections.abc
@@ -757,6 +758,23 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
     return arrow_to_astropy(pandas_to_arrow(dataframe))
+
+
+def pandas_to_numpy(dataframe: pd.DataFrame) -> np.recarray:
+    """Convert a pandas dataframe to a numpy recarray.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
+
+    Returns
+    -------
+    numpy_thing : `numpy.recarray`
+        Converted numpy recarray.
+    """
+    # This conversion ensures strings are handled properly.
+    return arrow_to_numpy(pandas_to_arrow(dataframe))
 
 
 def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
