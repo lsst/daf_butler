@@ -168,12 +168,7 @@ class ParquetFormatter(FormatterV2):
                     if len(md["column_indexes"]) > 1:
                         has_pandas_multi_index = True
 
-                    if isinstance(md["index_columns"][0], dict):
-                        # Pandas3
-                        index_columns = [col["name"] for col in md["index_columns"]]
-                    else:
-                        # Pandas2
-                        index_columns = md["index_columns"]
+                    index_columns = _get_pandas_index_columns(md)
 
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
@@ -835,13 +830,7 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
         len_indexes = len(indexes)
 
         if len_indexes > 0:
-            # Get index columns; pandas2 or pandas3 methods.
-            if isinstance(md["index_columns"][0], dict):
-                # Pandas3
-                index_columns = [col["name"] for col in md["index_columns"]]
-            else:
-                # Pandas2
-                index_columns = md["index_columns"]
+            index_columns = _get_pandas_index_columns(md)
     else:
         len_indexes = 0
 
@@ -1634,4 +1623,21 @@ def _is_string(t: pa.DataType) -> bool:
 
 
 def _is_binary(t: pa.DataType) -> bool:
-    return pa.types.is_binary(t) or pa.types.is_large_binary(t) or pa.types.is_binary_view(t)
+    return (
+        pa.types.is_binary(t)
+        or pa.types.is_large_binary(t)
+        or pa.types.is_binary_view(t)
+        or pa.types.is_fixed_size_binary(t)
+    )
+
+
+def _get_pandas_index_columns(md: dict) -> list[str]:
+    if isinstance(md["index_columns"][0], dict):
+        # For parquet files written with pandas3 default parquet settings.
+        index_columns = [col["name"] for col in md["index_columns"]]
+    else:
+        # For parquet files written with pandas2 default parquet settings
+        # or this parquet writer.
+        index_columns = md["index_columns"]
+
+    return index_columns
