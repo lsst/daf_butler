@@ -210,7 +210,7 @@ storageClasses:
     pytype: numpy.ndarray
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy
-      pandas.core.frame.DataFrame: pandas.DataFrame.to_records
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_numpy
       astropy.table.Table: astropy.table.Table.as_array
       dict: lsst.daf.butler.formatters.parquet._numpy_dict_to_numpy
     delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
