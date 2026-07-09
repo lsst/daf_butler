@@ -1576,6 +1576,9 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     metadata = schema.metadata if schema.metadata is not None else {}
 
     for name in schema.names:
+        if name.startswith("__"):
+            continue
+
         t = schema.field(name).type
 
         if _is_string(t) or _is_binary(t):
@@ -1632,7 +1635,9 @@ def _is_binary(t: pa.DataType) -> bool:
 
 
 def _get_pandas_index_columns(md: dict) -> list[str]:
-    if isinstance(md["index_columns"][0], dict):
+    if len(md["index_columns"]) == 0:
+        index_columns = []
+    elif isinstance(md["index_columns"][0], dict):
         # For parquet files written with pandas3 default parquet settings.
         index_columns = [col["name"] for col in md["index_columns"]]
     else:
