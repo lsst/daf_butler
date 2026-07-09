@@ -46,6 +46,7 @@ __all__ = (
     "numpy_to_astropy",
     "pandas_to_arrow",
     "pandas_to_astropy",
+    "pandas_to_numpy",
 )
 
 import collections.abc
@@ -161,10 +162,13 @@ class ParquetFormatter(FormatterV2):
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
                 has_pandas_multi_index = False
+                index_columns = []
                 if schema.metadata and b"pandas" in schema.metadata:
                     md = json.loads(schema.metadata[b"pandas"])
                     if len(md["column_indexes"]) > 1:
                         has_pandas_multi_index = True
+
+                    index_columns = _get_pandas_index_columns(md)
 
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
@@ -181,9 +185,13 @@ class ParquetFormatter(FormatterV2):
                                 found = True
                                 par_columns[file_column] = True
                         if not found:
-                            raise ValueError(
-                                f"Column {par_column} specified in parameters not available in parquet file."
-                            )
+                            if par_column not in index_columns:
+                                # Note that the pandas index column will always
+                                # be loaded.
+                                raise ValueError(
+                                    f"Column {par_column} specified in parameters not "
+                                    "available in parquet file."
+                                )
                     par_columns = list(par_columns.keys())
                 else:
                     par_columns = _standardize_multi_index_columns(
@@ -400,7 +408,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                     null_value = -1
                 case t if t in (pa.bool_(),):
                     null_value = True
-                case t if t in (pa.string(), pa.binary()):
+                case t if _is_string(t) or _is_binary(t):
                     null_value = ""
                 case _:
                     # This is the fallback for unsigned ints in particular.
@@ -412,7 +420,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                 fill_value=null_value,
             )
 
-        if t in (pa.string(), pa.binary()):
+        if _is_string(t) or _is_binary(t):
             col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
         elif isinstance(t, pa.FixedSizeListType):
             if len(col) > 0:
@@ -698,7 +706,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
         Converted arrow table.
     """
     try:
-        arrow_table = pa.Table.from_pandas(dataframe)
+        arrow_table = pa.Table.from_pandas(dataframe, preserve_index=True)
     except pa.ArrowInvalid as e:
         msg = "; ".join(e.args)
         msg += "; This is usually because the column is mixed type or has uneven length rows."
@@ -713,8 +721,9 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     # We loop through the arrow table columns because the datatypes have
     # been checked and converted from pandas objects.
     for name in arrow_table.column_names:
-        if not name.startswith("__") and arrow_table[name].type == pa.string():
-            if len(arrow_table[name]) > 0:
+        if not name.startswith("__") and _is_string(arrow_table[name].type):
+            col = arrow_table[name]
+            if len(col) > 0 and (col.length() > col.null_count):
                 strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
             else:
                 strlen = default_length
@@ -744,6 +753,25 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
     return arrow_to_astropy(pandas_to_arrow(dataframe))
+
+
+def pandas_to_numpy(dataframe: pd.DataFrame) -> np.ndarray | np.ma.MaskedArray:
+    """Convert a pandas dataframe to a numpy recarray.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
+
+    Returns
+    -------
+    array : `numpy.ndarray` or `numpy.ma.MaskedArray` (N,)
+        Numpy array table with N rows and the same column names
+        as the input dataframe. Will be masked records if any values
+        in the table are null.
+    """
+    # This conversion ensures strings are handled properly.
+    return arrow_to_numpy(pandas_to_arrow(dataframe))
 
 
 def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -795,15 +823,21 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
     """
     import pandas as pd
 
+    index_columns = []
     if b"pandas" in schema.metadata:
         md = json.loads(schema.metadata[b"pandas"])
         indexes = md["column_indexes"]
         len_indexes = len(indexes)
+
+        if len_indexes > 0:
+            index_columns = _get_pandas_index_columns(md)
     else:
         len_indexes = 0
 
     if len_indexes <= 1:
-        return pd.Index(name for name in schema.names if not name.startswith("__"))
+        columns = {name for name in schema.names if not name.startswith("__")}
+        columns = columns.union(set(index_columns))
+        return pd.Index(columns)
     else:
         raw_columns = _split_multi_index_column_names(len(indexes), schema.names)
         return pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
@@ -863,7 +897,7 @@ class DataFrameSchema:
         arrow_schema : `pyarrow.Schema`
             Converted pyarrow schema.
         """
-        arrow_table = pa.Table.from_pandas(self._schema)
+        arrow_table = pa.Table.from_pandas(self._schema, preserve_index=True)
 
         return arrow_table.schema
 
@@ -1259,7 +1293,7 @@ def _arrow_string_to_numpy_dtype(
         lengths = [len(row) for row in numpy_column if row]
         strlen = max(lengths) if lengths else 0
 
-    dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
+    dtype = f"U{strlen}" if _is_string(schema.field(name).type) else f"|S{strlen}"
 
     return dtype
 
@@ -1363,7 +1397,7 @@ def _schema_to_dtype_list(schema: pa.Schema) -> list[tuple[str, tuple[Any] | str
         if isinstance(t, pa.FixedSizeListType):
             shape = _multidim_shape_from_metadata(metadata, t.list_size, name)
             dtype.append((name, (t.value_type.to_pandas_dtype(), shape)))
-        elif t not in (pa.string(), pa.binary()):
+        elif not (_is_string(t) or _is_binary(t)):
             dtype.append((name, t.to_pandas_dtype()))
         else:
             dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
@@ -1544,7 +1578,7 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     for name in schema.names:
         t = schema.field(name).type
 
-        if t in (pa.string(), pa.binary()):
+        if _is_string(t) or _is_binary(t):
             md_name = f"lsst::arrow::len::{name}"
 
             if (encoded := md_name.encode("UTF-8")) in metadata:
@@ -1582,3 +1616,28 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     byte_width = bit_width // 8
 
     return target_size // byte_width
+
+
+def _is_string(t: pa.DataType) -> bool:
+    return pa.types.is_string(t) or pa.types.is_large_string(t) or pa.types.is_string_view(t)
+
+
+def _is_binary(t: pa.DataType) -> bool:
+    return (
+        pa.types.is_binary(t)
+        or pa.types.is_large_binary(t)
+        or pa.types.is_binary_view(t)
+        or pa.types.is_fixed_size_binary(t)
+    )
+
+
+def _get_pandas_index_columns(md: dict) -> list[str]:
+    if isinstance(md["index_columns"][0], dict):
+        # For parquet files written with pandas3 default parquet settings.
+        index_columns = [col["name"] for col in md["index_columns"]]
+    else:
+        # For parquet files written with pandas2 default parquet settings
+        # or this parquet writer.
+        index_columns = md["index_columns"]
+
+    return index_columns
