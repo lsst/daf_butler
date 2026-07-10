@@ -383,7 +383,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
-        self.assertEqual(set(allColumns), set(columns2))
+        self.assertTrue(allColumns.equals(columns2))
         # Read the rowcount.
         rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
         self.assertEqual(rowcount, len(df1))
@@ -720,12 +720,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.assertEqual(len(schema.schema.names), len(schema2.schema.names))
         for name in schema.schema.names:
             self.assertIn(name, schema2.schema.names)
-            # It is not possible to properly track string columns via
-            # the schema consistently.
-            if schema.schema[name].type == np.dtype("O") or schema2.schema[name].type == np.dtype("O"):
-                continue
-            else:
-                self.assertEqual(schema2.schema[name].type, schema.schema[name].type)
+            self.assertEqual(schema2.schema[name].type, schema.schema[name].type)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteMultiIndexDataFrameReadAsNumpyTable(self):
@@ -1169,7 +1164,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         columns2 = self.butler.get(
             self.datasetType.componentTypeName("columns"), dataId={}, storageClass="DataFrameIndex"
         )
-        self.assertEqual(set(columns2.to_list()), set(columns.to_list()))
+        self.assertTrue(columns.equals(columns2))
 
         # Check reading the schema.
         schema = DataFrameSchema(tab2)
@@ -1530,7 +1525,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         columns2 = self.butler.get(
             self.datasetType.componentTypeName("columns"), dataId={}, storageClass="DataFrameIndex"
         )
-        self.assertEqual(set(columns2.to_list()), set(columns.to_list()))
+        self.assertTrue(columns.equals(columns2))
 
         # Check reading the schema.
         schema = DataFrameSchema(tab2)
