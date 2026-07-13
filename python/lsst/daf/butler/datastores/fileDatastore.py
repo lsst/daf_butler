@@ -546,12 +546,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         records_by_ref[ref.id].append(ref_record)
 
         # If there were any refs without datastore records, check opaque table.
-        records = self._table.fetch(dataset_id=[ref.id for ref in refs_with_no_records])
-
         # Uniqueness is dataset_id + component so can have multiple records
         # per ref.
-        for record in records:
-            records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
+        for batch in self._table.fetch_by_dataset_ids([ref.id for ref in refs_with_no_records]):
+            for record in batch:
+                records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
 
     def _refs_associated_with_artifacts(
@@ -3215,7 +3214,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # this zombie state indefinitely, until someone manually empties
         # the trash.
         found_ids = self._bridge.check(datasets)
-        return self._table.fetch_batches(dataset_id=found_ids)
+        return self._table.fetch_by_dataset_ids(found_ids)
 
     def export_table(self, datasets: Collection[DatasetId]) -> DatastoreRecordTable:
         # Docstring inherited from the base class.
