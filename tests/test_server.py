@@ -153,6 +153,42 @@ class ButlerClientServerTestCase(unittest.TestCase):
         with self.assertRaises(MissingDatasetTypeError):
             self.butler_without_error_propagation.get_dataset_type("not_bias")
 
+    def test_get_component_dataset_type(self):
+        """Test that retrieving a component dataset type does not require the
+        server to know the parent's storage class (DM-55497).
+
+        Component dataset type names must never be sent to the server, so
+        the component dataset type is constructed on the client from the
+        parent definition.
+        """
+        # Track the dataset type names requested from the server.
+        requested_paths: list[str] = []
+        original_get = self.butler._connection.get
+
+        def tracking_get(path, **kwargs):
+            requested_paths.append(path)
+            return original_get(path, **kwargs)
+
+        with patch.object(self.butler._connection, "get", side_effect=tracking_get):
+            component_type = self.butler.get_dataset_type("bias.image")
+
+        parent_type = self.butler.get_dataset_type("bias")
+        self.assertEqual(component_type, parent_type.makeComponentDatasetType("image"))
+        for path in requested_paths:
+            if path.startswith("dataset_type/"):
+                self.assertNotIn(".", path, f"Component dataset type name was sent to the server: {path!r}")
+
+        # A second call should be served from the client-side cache.
+        self.assertEqual(self.butler.get_dataset_type("bias.image"), component_type)
+
+        # An unknown component raises client-side.
+        with self.assertRaises(KeyError):
+            self.butler.get_dataset_type("bias.not_a_component")
+
+        # An unknown parent dataset type still raises the standard error.
+        with self.assertRaises(MissingDatasetTypeError):
+            self.butler_without_error_propagation.get_dataset_type("not_bias.image")
+
     def test_find_dataset(self):
         storage_class = self.storageClassFactory.getStorageClass("Exposure")
 

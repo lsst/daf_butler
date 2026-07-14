@@ -405,9 +405,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if (cached_value := cache.dataset_types.get(name)) is not None:
                 return cached_value
 
-        response = self._connection.get(f"dataset_type/{quote_path_variable(name)}")
+        # Only the parent dataset type name is sent to the server -- it may
+        # not have the storage class definitions needed to construct a
+        # component DatasetType, so the component dataset type is constructed
+        # here from the parent definition.
+        parent_name, component = split_dataset_type_name(name)
+        response = self._connection.get(f"dataset_type/{quote_path_variable(parent_name)}")
         model = parse_model(response, GetDatasetTypeResponseModel)
         value = DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
+        if component is not None:
+            value = value.makeComponentDatasetType(component)
         with self._cache.access() as cache:
             return cache.dataset_types.setdefault(name, value)
 
