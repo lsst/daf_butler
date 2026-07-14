@@ -29,8 +29,10 @@ from __future__ import annotations
 
 __all__ = (
     "apply_storage_class_override",
+    "get_component_override",
     "normalize_dataset_type_name",
     "simplify_dataId",
+    "split_dataset_type_name",
 )
 
 from pydantic import TypeAdapter
@@ -86,6 +88,51 @@ def normalize_dataset_type_name(datasetTypeOrName: DatasetType | str) -> Dataset
         parameter in many `Butler` methods.
     """
     return DatasetTypeName(get_dataset_type_name(datasetTypeOrName))
+
+
+def split_dataset_type_name(
+    datasetTypeOrName: DatasetType | str,
+) -> tuple[DatasetTypeName, str | None]:
+    """Split a dataset type parameter into a parent dataset type name and an
+    optional component name.
+
+    Component dataset type names must never be sent to the server -- the
+    server cannot construct a component `DatasetType` unless it has the
+    parent's storage class definition available, and storage classes are
+    often defined by science pipelines packages that are only installed on
+    the client.  Callers should request the parent dataset type from the
+    server and re-apply the component on the client side.
+
+    Parameters
+    ----------
+    datasetTypeOrName : `DatasetType` | `str`
+        A DatasetType, or the name of a DatasetType.
+
+    Returns
+    -------
+    parent_name : `DatasetTypeName`
+        Name of the parent dataset type, suitable for sending to the server.
+    component : `str` | `None`
+        Component name, or `None` if this is not a component dataset type.
+    """
+    parent_name, component = DatasetType.splitDatasetTypeName(get_dataset_type_name(datasetTypeOrName))
+    return DatasetTypeName(parent_name), component
+
+
+def get_component_override(datasetRefOrType: DatasetRef | DatasetType | str) -> str | None:
+    """Return the component name from a ref or dataset type provided by the
+    user, or `None` if it does not refer to a component.
+
+    Parameters
+    ----------
+    datasetRefOrType : `DatasetRef` | `DatasetType` | `str`
+        A DatasetRef, DatasetType, or name of a DatasetType.  This union is a
+        common parameter in many `Butler` methods.
+    """
+    if isinstance(datasetRefOrType, DatasetRef):
+        return datasetRefOrType.datasetType.component()
+    _, component = split_dataset_type_name(datasetRefOrType)
+    return component
 
 
 def simplify_dataId(dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
