@@ -149,8 +149,6 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
-    registry_schema_version : `VersionTuple` or `None`, optional
-        Version of registry schema.
     renames
         Mapping from a dataset type name in the database to an client-level
         override name.
@@ -161,6 +159,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         Mapping from the true (DB) name of a dataset type to an override
         storage class this client should use instead of the one in the
         database.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     _cache : `None`, optional
         For internal use only.
     """
