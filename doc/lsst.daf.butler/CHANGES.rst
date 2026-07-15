@@ -1,3 +1,19 @@
+Butler v30.0.9 (2026-07-14)
+===========================
+
+Performance Enhancement
+-----------------------
+
+- Parsing the full astropy metadata YAML is now skipped by default for Parquet reading, leading to huge performance gains in reading from very wide tables.
+  The old behavior can be obtained by setting the ``strip_astropy_meta_yaml`` parameter to `False`. (`DM-55297 <https://rubinobs.atlassian.net/browse/DM-55297>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed ``RemoteButler`` so that component dataset access no longer requires the Butler server to know the parent dataset type's storage class.
+  Previously ``butler.get("deep_coadd.sky_projection", dataId=...)`` failed with a server error if the storage class was defined by a science pipelines package not installed on the server, even though the equivalent ``butler.get(ref.makeComponentRef("sky_projection"))`` worked. (`DM-55497 <https://rubinobs.atlassian.net/browse/DM-55497>`_)
+
 Butler v30.0.8 (2026-06-09)
 ===========================
 
