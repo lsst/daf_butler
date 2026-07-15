@@ -153,6 +153,42 @@ class ButlerClientServerTestCase(unittest.TestCase):
         with self.assertRaises(MissingDatasetTypeError):
             self.butler_without_error_propagation.get_dataset_type("not_bias")
 
+    def test_get_component_dataset_type(self):
+        """Test that retrieving a component dataset type does not require the
+        server to know the parent's storage class (DM-55497).
+
+        Component dataset type names must never be sent to the server, so
+        the component dataset type is constructed on the client from the
+        parent definition.
+        """
+        # Track the dataset type names requested from the server.
+        requested_paths: list[str] = []
+        original_get = self.butler._connection.get
+
+        def tracking_get(path, **kwargs):
+            requested_paths.append(path)
+            return original_get(path, **kwargs)
+
+        with patch.object(self.butler._connection, "get", side_effect=tracking_get):
+            component_type = self.butler.get_dataset_type("bias.image")
+
+        parent_type = self.butler.get_dataset_type("bias")
+        self.assertEqual(component_type, parent_type.makeComponentDatasetType("image"))
+        for path in requested_paths:
+            if path.startswith("dataset_type/"):
+                self.assertNotIn(".", path, f"Component dataset type name was sent to the server: {path!r}")
+
+        # A second call should be served from the client-side cache.
+        self.assertEqual(self.butler.get_dataset_type("bias.image"), component_type)
+
+        # An unknown component raises client-side.
+        with self.assertRaises(KeyError):
+            self.butler.get_dataset_type("bias.not_a_component")
+
+        # An unknown parent dataset type still raises the standard error.
+        with self.assertRaises(MissingDatasetTypeError):
+            self.butler_without_error_propagation.get_dataset_type("not_bias.image")
+
     def test_find_dataset(self):
         storage_class = self.storageClassFactory.getStorageClass("Exposure")
 
@@ -337,6 +373,63 @@ class ButlerClientServerTestCase(unittest.TestCase):
             component_ref.datasetType, component_ref.dataId, collections=collections
         )
         self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+    def test_component_access_without_server_storage_class(self):
+        """Test that component dataset access via dataset type name does not
+        require the server to know the parent's storage class.
+
+        Storage classes for many dataset types are defined by science
+        pipelines packages that are only installed on the client, so all
+        component handling must occur on the client.
+        """
+        dataset_type = "test_metric_comp"
+        component_type = "test_metric_comp.summary"
+        data_id = {"instrument": "DummyCamComp", "visit": 423}
+        collections = "ingest/run"
+        parent_ref = self.butler.find_dataset(dataset_type, data_id, collections=collections)
+        component_ref = parent_ref.makeComponentRef("summary")
+
+        # Track the dataset type names sent to the server.  Component names
+        # must never be sent, because converting a component dataset type
+        # name to a DatasetType requires the server to instantiate the
+        # parent's storage class.
+        sent_dataset_types: list[str] = []
+        original_post = self.butler._connection.post
+
+        def tracking_post(path, model):
+            dataset_type_name = getattr(model, "dataset_type", None)
+            if dataset_type_name is not None:
+                sent_dataset_types.append(dataset_type_name)
+            return original_post(path, model)
+
+        with patch.object(self.butler._connection, "post", side_effect=tracking_post):
+            # get() with a component dataset type name.
+            data = self.butler.get(component_type, dataId=data_id, collections=collections)
+            self.assertEqual(data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+            # find_dataset() with a component dataset type name.
+            found = self.butler.find_dataset(component_type, data_id, collections=collections)
+            self.assertEqual(found, component_ref)
+            self.assertEqual(found.datasetType, component_ref.datasetType)
+
+            # getDeferred() with a component dataset type name.
+            deferred_data = self.butler.getDeferred(component_type, data_id, collections=collections).get()
+            self.assertEqual(deferred_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+            # getDeferred() with a component DatasetRef.
+            deferred_ref_data = self.butler.getDeferred(component_ref).get()
+            self.assertEqual(deferred_ref_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+            # An empty component name raises rather than silently returning
+            # the composite.
+            with self.assertRaises(KeyError):
+                self.butler.get(f"{dataset_type}.", dataId=data_id, collections=collections)
+            with self.assertRaises(KeyError):
+                self.butler.getDeferred(f"{dataset_type}.", data_id, collections=collections)
+
+        self.assertGreater(len(sent_dataset_types), 0)
+        for name in sent_dataset_types:
+            self.assertNotIn(".", name, f"Component dataset type name {name!r} was sent to the server")
 
     def test_getURIs_no_components(self):
         # This dataset does not have components, and should return one URI.

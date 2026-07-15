@@ -72,7 +72,13 @@ from ._get import convert_http_url_to_resource_path, get_dataset_as_python_objec
 from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 from ._query_driver import RemoteQueryDriver
 from ._query_results import convert_dataset_ref_results, read_query_results
-from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
+from ._ref_utils import (
+    apply_storage_class_override,
+    get_component_override,
+    normalize_dataset_type_name,
+    simplify_dataId,
+    split_dataset_type_name,
+)
 from ._registry import RemoteButlerRegistry
 from ._remote_butler_collections import RemoteButlerCollections
 from ._remote_file_transfer_source import RemoteFileTransferSource
@@ -263,7 +269,19 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         response = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
         # Check that artifact information is available.
         _to_file_payload(response)
-        ref = DatasetRef.from_simple(response.dataset_ref, universe=self.dimensions)
+        if isinstance(datasetRefOrType, DatasetRef):
+            # Use the ref provided by the caller, which may include component
+            # or storage class overrides that are not known to the server.
+            ref = datasetRefOrType
+        else:
+            ref = DatasetRef.from_simple(response.dataset_ref, universe=self.dimensions)
+            # The server returns the parent dataset type -- component dataset
+            # types are never sent to the server, because it may not have the
+            # storage class definitions needed to construct them.  Re-apply
+            # any component here.
+            component = get_component_override(datasetRefOrType)
+            if component is not None:
+                ref = ref.makeComponentRef(component)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def get(
@@ -283,13 +301,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
 
             ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
-            # If the caller provided a DatasetRef, they may have overridden the
-            # component on it.  We need to explicitly handle this because we
-            # did not send the DatasetType to the server in this case.
-            if isinstance(datasetRefOrType, DatasetRef):
-                componentOverride = datasetRefOrType.datasetType.component()
-                if componentOverride:
-                    ref = ref.makeComponentRef(componentOverride)
+            # The server returns the parent dataset type -- component dataset
+            # types are never sent to the server, because it may not have the
+            # storage class definitions needed to construct them.  Re-apply
+            # any component here.
+            componentOverride = get_component_override(datasetRefOrType)
+            if componentOverride is not None:
+                ref = ref.makeComponentRef(componentOverride)
             ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
             return self._get_dataset_as_python_object(ref, model, parameters)
@@ -326,8 +344,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 raise ValueError("DatasetRef given, cannot use dataId as well")
             return self._get_file_info_for_ref(datasetRefOrType)
         else:
+            # Only the parent dataset type is sent to the server -- it may
+            # not have the storage class definitions needed to construct a
+            # component DatasetType.  Callers are responsible for re-applying
+            # any component to the returned ref.
+            dataset_type_name, _ = split_dataset_type_name(datasetRefOrType)
             request = GetFileByDataIdRequestModel(
-                dataset_type=normalize_dataset_type_name(datasetRefOrType),
+                dataset_type=dataset_type_name,
                 collections=self._normalize_collections(collections),
                 data_id=simplify_dataId(dataId, kwargs),
                 default_data_id=self._serialize_default_data_id(),
@@ -382,9 +405,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if (cached_value := cache.dataset_types.get(name)) is not None:
                 return cached_value
 
-        response = self._connection.get(f"dataset_type/{quote_path_variable(name)}")
+        # Only the parent dataset type name is sent to the server -- it may
+        # not have the storage class definitions needed to construct a
+        # component DatasetType, so the component dataset type is constructed
+        # here from the parent definition.
+        parent_name, component = split_dataset_type_name(name)
+        response = self._connection.get(f"dataset_type/{quote_path_variable(parent_name)}")
         model = parse_model(response, GetDatasetTypeResponseModel)
         value = DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
+        if component is not None:
+            value = value.makeComponentDatasetType(component)
         with self._cache.access() as cache:
             return cache.dataset_types.setdefault(name, value)
 
@@ -433,8 +463,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # datastore_records is intentionally ignored.  It is an optimization
         # flag that only applies to DirectButler.
 
+        # Only the parent dataset type is sent to the server -- it may not
+        # have the storage class definitions needed to construct a component
+        # DatasetType.  The component is re-applied to the returned ref below.
+        dataset_type_name, component = split_dataset_type_name(dataset_type)
         query = FindDatasetRequestModel(
-            dataset_type=normalize_dataset_type_name(dataset_type),
+            dataset_type=dataset_type_name,
             data_id=simplify_dataId(data_id, kwargs),
             default_data_id=self._serialize_default_data_id(),
             collections=self._normalize_collections(collections),
@@ -451,6 +485,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         if isinstance(data_id, DataCoordinate) and data_id.hasRecords():
             ref = ref.expanded(data_id)
+        if component is not None:
+            ref = ref.makeComponentRef(component)
         return apply_storage_class_override(ref, dataset_type, storage_class)
 
     def _retrieve_artifacts(
