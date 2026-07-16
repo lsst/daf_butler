@@ -349,7 +349,7 @@ storageClasses:
       # needs to be tried first.
       lsst.images.DifferenceImage: lsst.images.DifferenceImage.to_legacy
       lsst.images.VisitImage: lsst.images.VisitImage.to_legacy
-      lsst.images.cells.CellCoadd: lsst.images.cells.CellCoadd.to_legacy_exposure
+      lsst.images.cells.CellCoadd: lsst.images.cells.CellCoadd.to_legacy
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
