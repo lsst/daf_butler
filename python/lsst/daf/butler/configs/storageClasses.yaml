@@ -444,7 +444,7 @@ storageClasses:
   MultipleCellCoadd:
     pytype: lsst.cell_coadds.MultipleCellCoadd
     converters:
-      lsst.images.cells.CellCoadd: lsst.images.cells.CellCoadd.to_legacy
+      lsst.images.cells.CellCoadd: lsst.images.cells.CellCoadd.to_legacy_cell_coadd
   NNModelPackagePayload:
     pytype: lsst.meas.transiNet.modelPackages.formatters.NNModelPackagePayload
   Timespan:
