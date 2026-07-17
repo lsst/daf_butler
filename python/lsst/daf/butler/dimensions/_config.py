@@ -183,11 +183,16 @@ class DimensionConfig(ConfigSubset):
         """
         return DimensionConfig(
             simple.model_dump(
+                # Force sets back to lists for storage in the config.
+                # The config does not do this sanitation itself and so
+                # without this the config can not be serialized to JSON
+                # form using the dump() method.
+                mode="json",
                 # Some of the fields in Pydantic model config have aliases
                 # (e.g. remapping 'class_' to 'class').  Pydantic ignores these
                 # in model_dump() by default, so we have to add by_alias to
                 # make sure that we end up with the right names in the dict.
-                by_alias=True
+                by_alias=True,
             )
         )
 
