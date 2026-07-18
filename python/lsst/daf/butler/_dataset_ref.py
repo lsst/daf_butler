@@ -828,6 +828,44 @@ class DatasetRef:
             datastore_records=datastore_records,
         )
 
+    def conform_to(self, universe: DimensionUniverse) -> DatasetRef:
+        """Rebuild this dataset ref in a different dimension universe.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Target dimension universe.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            This ref if its dataset type's dimensions already belong to
+            ``universe``, else an otherwise-identical ref whose dataset type
+            and data ID belong to ``universe``.  The data ID of a rebuilt ref
+            holds only the required dimension values; any implied values or
+            attached dimension records are dropped and must be recovered by
+            expanding the data ID against a data repository that uses the
+            target universe.
+
+        Raises
+        ------
+        InconsistentUniverseError
+            Raised if the dataset type cannot be rebuilt in the target
+            universe (see `DatasetType.conform_to`).
+        """
+        if self.datasetType.dimensions.universe is universe:
+            return self
+        datasetType = self.datasetType.conform_to(universe)
+        dataId = DataCoordinate.standardize(dict(self.dataId.required), dimensions=datasetType.dimensions)
+        return DatasetRef(
+            datasetType=datasetType,
+            dataId=dataId,
+            run=self.run,
+            id=self.id,
+            conform=False,
+            datastore_records=self._datastore_records,
+        )
+
     def is_compatible_with(self, other: DatasetRef) -> bool:
         """Determine if the given `DatasetRef` is compatible with this one.
 

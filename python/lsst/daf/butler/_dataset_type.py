@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
-from ._exceptions import UnknownComponentError
+from ._exceptions import InconsistentUniverseError, UnknownComponentError
 from ._storage_class import StorageClass, StorageClassFactory
 from .dimensions import DimensionGroup
 from .json import from_json_pydantic, to_json_pydantic
@@ -342,6 +342,60 @@ class DatasetType:
         other_sc = other.storageClass
 
         return self_sc.can_convert(other_sc)
+
+    def conform_to(self, universe: DimensionUniverse) -> DatasetType:
+        """Rebuild this dataset type in a different dimension universe.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Target dimension universe.
+
+        Returns
+        -------
+        dataset_type : `DatasetType`
+            This dataset type if its dimensions already belong to
+            ``universe``, else an otherwise-identical dataset type whose
+            dimensions belong to ``universe``.
+
+        Raises
+        ------
+        InconsistentUniverseError
+            Raised if the target universe has a different namespace, does not
+            contain all of this dataset type's dimensions, or conforms those
+            dimensions to a group with different names or a different split
+            between required and implied dimensions.
+        """
+        source_universe = self._dimensions.universe
+        if source_universe is universe:
+            return self
+        if source_universe.namespace != universe.namespace:
+            raise InconsistentUniverseError(
+                f"Dataset type {self._name!r} has universe {source_universe} with a different "
+                f"namespace than target universe {universe}."
+            )
+        try:
+            dimensions = universe.conform(self._dimensions.names)
+        except KeyError as exc:
+            raise InconsistentUniverseError(
+                f"Dimensions {self._dimensions} of dataset type {self._name!r} from universe "
+                f"{source_universe} do not all exist in target universe {universe}."
+            ) from exc
+        if dimensions.names != self._dimensions.names or set(dimensions.required) != set(
+            self._dimensions.required
+        ):
+            raise InconsistentUniverseError(
+                f"Dimensions {self._dimensions} of dataset type {self._name!r} from universe "
+                f"{source_universe} are different from the conforming set of target universe "
+                f"{universe} dimensions {dimensions}."
+            )
+        return DatasetType(
+            self._name,
+            dimensions,
+            self._storageClass or self._storageClassName,
+            parentStorageClass=self._parentStorageClass or self._parentStorageClassName,
+            isCalibration=self._isCalibration,
+        )
 
     def __hash__(self) -> int:
         """Hash DatasetType instance.
