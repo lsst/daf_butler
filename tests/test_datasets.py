@@ -1029,6 +1029,15 @@ class ConformToUniverseTestCase(unittest.TestCase):
                     config["elements", element, key] = value
         return DimensionUniverse(config)
 
+    def _load_old_universe(self, version: int) -> DimensionUniverse:
+        """Load a historical daf_butler universe from its frozen
+        configuration.
+        """
+        config = DimensionConfig(
+            f"resource://lsst.daf.butler/configs/old_dimensions/daf_butler_universe{version}.yaml"
+        )
+        return DimensionUniverse(config)
+
     def test_dataset_type_same_universe(self) -> None:
         """Test that conforming to the dataset type's own universe returns
         the same object.
@@ -1052,6 +1061,31 @@ class ConformToUniverseTestCase(unittest.TestCase):
         self.assertEqual(conformed.storageClass_name, dataset_type.storageClass_name)
         self.assertTrue(conformed.isCalibration())
         self.assertEqual(conformed, dataset_type)
+
+    def test_dataset_type_old_universe(self) -> None:
+        """Test conforming a dataset type from a real historical universe in
+        which the relevant dimension group is unchanged.
+        """
+        old = self._load_old_universe(7)
+        dataset_type = DatasetType("test", old.conform(["visit"]), self.storageClass)
+        conformed = dataset_type.conform_to(self.universe)
+        self.assertIs(conformed.dimensions.universe, self.universe)
+        self.assertEqual(conformed.dimensions.names, dataset_type.dimensions.names)
+        # And back again.
+        round_tripped = conformed.conform_to(old)
+        self.assertIs(round_tripped.dimensions.universe, old)
+        self.assertEqual(round_tripped, dataset_type)
+
+    def test_dataset_type_old_universe_incompatible(self) -> None:
+        """Test conforming a dataset type from a real historical universe in
+        which the relevant dimension group has since changed.
+        """
+        # In universe 2 a visit group did not include day_obs, so it conforms
+        # to a larger group in the current universe.
+        old = self._load_old_universe(2)
+        dataset_type = DatasetType("test", old.conform(["visit"]), self.storageClass)
+        with self.assertRaises(InconsistentUniverseError):
+            dataset_type.conform_to(self.universe)
 
     def test_dataset_type_component(self) -> None:
         """Test conforming a component dataset type."""
