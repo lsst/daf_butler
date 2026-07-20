@@ -1088,7 +1088,7 @@ class ConformToUniverseTestCase(unittest.TestCase):
         universe2 = self._load_old_universe(2)
         universe8 = self._load_old_universe(8)
         dataset_type = DatasetType("test", universe2.conform(["visit"]), self.storageClass)
-        with self.assertRaises(InconsistentUniverseError):
+        with self.assertRaisesRegex(InconsistentUniverseError, "different from the conforming set"):
             dataset_type.conform_to(universe8)
 
     def test_dataset_type_component(self) -> None:
@@ -1115,7 +1115,7 @@ class ConformToUniverseTestCase(unittest.TestCase):
         """
         other = self._make_universe(1001, subfilter=None)
         dataset_type = DatasetType("test", self.universe.conform(["subfilter"]), self.storageClass)
-        with self.assertRaises(InconsistentUniverseError):
+        with self.assertRaisesRegex(InconsistentUniverseError, "do not all exist"):
             dataset_type.conform_to(other)
 
     def test_dataset_type_changed_required(self) -> None:
@@ -1127,7 +1127,7 @@ class ConformToUniverseTestCase(unittest.TestCase):
         # implied.
         other = self._make_universe(1002, physical_filter={"requires": ["instrument", "band"], "implies": []})
         dataset_type = DatasetType("test", self.universe.conform(["physical_filter"]), self.storageClass)
-        with self.assertRaises(InconsistentUniverseError):
+        with self.assertRaisesRegex(InconsistentUniverseError, "different from the conforming set"):
             dataset_type.conform_to(other)
 
     def test_dataset_type_different_namespace(self) -> None:
@@ -1138,7 +1138,7 @@ class ConformToUniverseTestCase(unittest.TestCase):
         config["namespace"] = "test_conform"
         other = DimensionUniverse(config)
         dataset_type = DatasetType("test", self.universe.conform(["detector"]), self.storageClass)
-        with self.assertRaises(InconsistentUniverseError):
+        with self.assertRaisesRegex(InconsistentUniverseError, "different namespace"):
             dataset_type.conform_to(other)
 
     def test_dataset_ref(self) -> None:
