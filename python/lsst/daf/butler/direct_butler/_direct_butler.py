@@ -71,7 +71,6 @@ from .._exceptions import (
     DatasetNotFoundError,
     DimensionValueError,
     EmptyQueryResultError,
-    InconsistentUniverseError,
     ValidationError,
 )
 from .._file_dataset import FileDataset
@@ -2182,42 +2181,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         refs_by_type: defaultdict[DatasetType, list[DatasetRef]] = defaultdict(list)
         for source_type, refs in refs_by_source_type.items():
-            source_universe = source_type.dimensions.universe
-            if source_universe is self.dimensions:
-                target_type = source_type
-            else:
-                if source_universe.namespace != self.dimensions.namespace:
-                    raise InconsistentUniverseError(
-                        f"Source refs have universe {source_universe} with different namespace "
-                        f"than target universe {self.dimensions}."
-                    )
-
-                # Try to handle case of different universe versions. For now
-                # we can only do trivial check that dimension groups are
-                # identical.
-                try:
-                    target_dimensions = self.dimensions.conform(source_type.dimensions.names)
-                except Exception as exc:
-                    raise InconsistentUniverseError(
-                        f"Source dimensions {source_type.dimensions} are not compatible with "
-                        f"target universe dimensions {self.dimensions}."
-                    ) from exc
-                if target_dimensions != source_type.dimensions:
-                    raise InconsistentUniverseError(
-                        f"Source dimensions {source_type.dimensions} are different from a conforming "
-                        f"set of target universe dimensions {target_dimensions}."
-                    )
-
-                # Rebuild dataset type in new universe.
-                target_type = DatasetType(
-                    name=source_type.name,
-                    dimensions=target_dimensions,
-                    storageClass=source_type.storageClass,
-                    parentStorageClass=source_type.parentStorageClass,
-                    universe=self.dimensions,
-                    isCalibration=source_type.isCalibration(),
-                )
-            refs_by_type[target_type] = refs
+            refs_by_type[source_type.conform_to(self.dimensions)] = refs
 
         return refs_by_type
 

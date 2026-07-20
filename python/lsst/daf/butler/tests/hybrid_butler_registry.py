@@ -147,15 +147,11 @@ class HybridButlerRegistry(Registry):
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         # We need to make sure that dataset type universe is the same as
-        # direct registry universe.
+        # direct registry universe.  Only the remote universe is converted;
+        # anything else is passed through so that the direct registry can
+        # apply its strict universe check.
         if datasetType.dimensions.universe is self._remote.dimensions:
-            datasetType = DatasetType(
-                datasetType.name,
-                datasetType.dimensions.names,
-                datasetType.storageClass,
-                universe=self._direct.dimensions,
-                isCalibration=datasetType.isCalibration(),
-            )
+            datasetType = datasetType.conform_to(self._direct.dimensions)
         return self._direct.registerDatasetType(datasetType)
 
     def removeDatasetType(self, name: str | tuple[str, ...]) -> None:

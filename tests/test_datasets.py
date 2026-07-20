@@ -39,6 +39,7 @@ from lsst.daf.butler import (
     DimensionConfig,
     DimensionUniverse,
     FileDataset,
+    InconsistentUniverseError,
     SerializedDatasetRefContainerV1,
     StorageClass,
     StorageClassFactory,
@@ -1002,6 +1003,161 @@ class DatasetRefTestCase(unittest.TestCase):
         for prov_dict in test_dicts:
             with self.assertRaises(ValueError):
                 DatasetProvenance.strip_provenance_from_flat_dict(prov_dict)
+
+
+class ConformToUniverseTestCase(unittest.TestCase):
+    """Tests for DatasetType.conform_to and DatasetRef.conform_to."""
+
+    def setUp(self) -> None:
+        self.universe = DimensionUniverse()
+        self.storageClass = StorageClass("test_conform_StructuredData")
+
+    def _make_universe(
+        self, version_offset: int, **element_overrides: dict[str, object] | None
+    ) -> DimensionUniverse:
+        """Make a universe derived from the default one with a different
+        version and optional per-element configuration overrides.  An
+        override of `None` removes the element entirely.
+        """
+        config = DimensionConfig()
+        config["version"] = config["version"] + version_offset
+        for element, overrides in element_overrides.items():
+            if overrides is None:
+                del config["elements", element]
+            else:
+                for key, value in overrides.items():
+                    config["elements", element, key] = value
+        return DimensionUniverse(config)
+
+    def _load_old_universe(self, version: int) -> DimensionUniverse:
+        """Load a historical daf_butler universe from its frozen
+        configuration.
+        """
+        config = DimensionConfig(
+            f"resource://lsst.daf.butler/configs/old_dimensions/daf_butler_universe{version}.yaml"
+        )
+        return DimensionUniverse(config)
+
+    def test_dataset_type_same_universe(self) -> None:
+        """Test that conforming to the dataset type's own universe returns
+        the same object.
+        """
+        dataset_type = DatasetType(
+            "test", self.universe.conform(["detector"]), self.storageClass, isCalibration=True
+        )
+        self.assertIs(dataset_type.conform_to(self.universe), dataset_type)
+
+    def test_dataset_type_compatible_universe(self) -> None:
+        """Test conforming a dataset type to a different but compatible
+        universe.
+        """
+        other = self._make_universe(1000)
+        dataset_type = DatasetType(
+            "test", self.universe.conform(["detector"]), self.storageClass, isCalibration=True
+        )
+        conformed = dataset_type.conform_to(other)
+        self.assertIs(conformed.dimensions.universe, other)
+        self.assertEqual(conformed.dimensions.names, dataset_type.dimensions.names)
+        self.assertEqual(conformed.storageClass_name, dataset_type.storageClass_name)
+        self.assertTrue(conformed.isCalibration())
+        self.assertEqual(conformed, dataset_type)
+
+    def test_dataset_type_old_universe(self) -> None:
+        """Test conforming a dataset type between two real historical
+        universes in which the relevant dimension group is unchanged.
+        """
+        # Both universes are pinned so that this test is unaffected by what
+        # the default universe happens to be.
+        universe7 = self._load_old_universe(7)
+        universe8 = self._load_old_universe(8)
+        dataset_type = DatasetType("test", universe7.conform(["visit"]), self.storageClass)
+        conformed = dataset_type.conform_to(universe8)
+        self.assertIs(conformed.dimensions.universe, universe8)
+        self.assertEqual(conformed.dimensions.names, dataset_type.dimensions.names)
+        # And back again.
+        round_tripped = conformed.conform_to(universe7)
+        self.assertIs(round_tripped.dimensions.universe, universe7)
+        self.assertEqual(round_tripped, dataset_type)
+
+    def test_dataset_type_old_universe_incompatible(self) -> None:
+        """Test conforming a dataset type between two real historical
+        universes in which the relevant dimension group changed.
+        """
+        # In universe 2 a visit group did not include day_obs, so it conforms
+        # to a larger group in universe 8.
+        universe2 = self._load_old_universe(2)
+        universe8 = self._load_old_universe(8)
+        dataset_type = DatasetType("test", universe2.conform(["visit"]), self.storageClass)
+        with self.assertRaisesRegex(InconsistentUniverseError, "different from the conforming set"):
+            dataset_type.conform_to(universe8)
+
+    def test_dataset_type_component(self) -> None:
+        """Test conforming a component dataset type."""
+        component_storage_class = StorageClass("test_conform_Component")
+        parent_storage_class = StorageClass(
+            "test_conform_Parent",
+            components={"a": component_storage_class, "b": component_storage_class},
+        )
+        other = self._make_universe(1000)
+        dataset_type = DatasetType(
+            "test.a",
+            self.universe.conform(["detector"]),
+            component_storage_class,
+            parentStorageClass=parent_storage_class,
+        )
+        conformed = dataset_type.conform_to(other)
+        self.assertIs(conformed.dimensions.universe, other)
+        self.assertEqual(conformed, dataset_type)
+
+    def test_dataset_type_missing_dimension(self) -> None:
+        """Test that conforming to a universe that lacks one of the dataset
+        type's dimensions fails.
+        """
+        other = self._make_universe(1001, subfilter=None)
+        dataset_type = DatasetType("test", self.universe.conform(["subfilter"]), self.storageClass)
+        with self.assertRaisesRegex(InconsistentUniverseError, "do not all exist"):
+            dataset_type.conform_to(other)
+
+    def test_dataset_type_changed_required(self) -> None:
+        """Test that conforming to a universe in which the same dimension
+        names have a different required/implied split fails.
+        """
+        # In this universe a physical_filter group has the same dimension
+        # names as in the default universe, but band is required rather than
+        # implied.
+        other = self._make_universe(1002, physical_filter={"requires": ["instrument", "band"], "implies": []})
+        dataset_type = DatasetType("test", self.universe.conform(["physical_filter"]), self.storageClass)
+        with self.assertRaisesRegex(InconsistentUniverseError, "different from the conforming set"):
+            dataset_type.conform_to(other)
+
+    def test_dataset_type_different_namespace(self) -> None:
+        """Test that conforming to a universe with a different namespace
+        fails.
+        """
+        config = DimensionConfig()
+        config["namespace"] = "test_conform"
+        other = DimensionUniverse(config)
+        dataset_type = DatasetType("test", self.universe.conform(["detector"]), self.storageClass)
+        with self.assertRaisesRegex(InconsistentUniverseError, "different namespace"):
+            dataset_type.conform_to(other)
+
+    def test_dataset_ref(self) -> None:
+        """Test conforming a dataset ref to a different but compatible
+        universe.
+        """
+        other = self._make_universe(1000)
+        dataset_type = DatasetType("test", self.universe.conform(["physical_filter"]), self.storageClass)
+        data_id = DataCoordinate.standardize(
+            {"instrument": "DummyCam", "physical_filter": "d-r", "band": "r"}, universe=self.universe
+        )
+        self.assertTrue(data_id.hasFull())
+        ref = DatasetRef(dataset_type, data_id, run="somerun")
+        self.assertIs(ref.conform_to(self.universe), ref)
+        conformed = ref.conform_to(other)
+        self.assertIs(conformed.datasetType.dimensions.universe, other)
+        self.assertEqual(conformed.id, ref.id)
+        self.assertEqual(conformed.run, ref.run)
+        self.assertEqual(dict(conformed.dataId.required), dict(ref.dataId.required))
 
 
 class ZipIndexTestCase(unittest.TestCase):
