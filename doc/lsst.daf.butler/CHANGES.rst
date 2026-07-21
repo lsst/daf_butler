@@ -1,3 +1,20 @@
+Butler v30.0.10 (2026-07-20)
+============================
+
+New Features
+------------
+
+- Added ``DatasetType.conform_to`` and ``DatasetRef.conform_to`` for rebuilding a dataset type or ref in a different but compatible dimension universe.
+  Conforming requires that the universes share a namespace and that the dimension group has the same names and the same required/implied split in both universes; otherwise ``InconsistentUniverseError`` is raised. (`DM-55542 <https://rubinobs.atlassian.net/browse/DM-55542>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed ``DimensionConfig.from_simple`` so that the resulting configuration contains only JSON-compatible types.
+  Previously set-typed fields survived the Pydantic conversion, causing ``Config.dump(format="json")`` to fail with `TypeError`. (`DM-55542 <https://rubinobs.atlassian.net/browse/DM-55542>`_)
+
+
 Butler v30.0.9 (2026-07-14)
 ===========================
 
