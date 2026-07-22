@@ -698,6 +698,17 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     arrow_table : `pyarrow.Table`
         Converted arrow table.
     """
+    import pandas as pd
+
+    old_index = None
+
+    if isinstance(dataframe.index, pd.RangeIndex):
+        # Turn the RangeIndex into a regular index, or it won't serialize
+        # interoperably via arrow.
+        old_index = dataframe.index
+
+        dataframe.index = pd.Index(dataframe.index.to_numpy(), name=dataframe.index.name)
+
     try:
         arrow_table = pa.Table.from_pandas(dataframe)
     except pa.ArrowInvalid as e:
@@ -705,6 +716,9 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
         msg += "; This is usually because the column is mixed type or has uneven length rows."
         e.add_note(msg)
         raise
+    finally:
+        if old_index is not None:
+            dataframe.index = old_index
 
     # Update the metadata
     md = arrow_table.schema.metadata
@@ -855,7 +869,14 @@ class DataFrameSchema:
     """
 
     def __init__(self, dataframe: pd.DataFrame) -> None:
+        import pandas as pd
+
         self._schema = dataframe.loc[[False] * len(dataframe)]
+
+        if isinstance(self._schema.index, pd.RangeIndex):
+            # Turn the RangeIndex into a regular index or it won't
+            # give us all the columns via arrow.
+            self._schema.index = pd.Index(self._schema.index.to_numpy(), name=self._schema.index.name)
 
     @classmethod
     def from_arrow(cls, schema: pa.Schema) -> DataFrameSchema:

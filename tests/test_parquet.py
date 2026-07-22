@@ -489,6 +489,14 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         """
         df1, allColumns = _makeSingleIndexDataFrame()
 
+        if isinstance(df1.index, pd.RangeIndex):
+            # Turn the RangeIndex into a regular index or it won't
+            # give us all the column names. This is necessary for pandas v3.
+            # Unfortunately, parquet files serialized directly with
+            # pandas v3 will not report their index column names if
+            # they are sequential integers.
+            df1.index = pd.Index(df1.index.to_numpy(), name=df1.index.name)
+
         fname = os.path.join(self.root, "test_dataframe.parq")
         df1.to_parquet(fname)
 
