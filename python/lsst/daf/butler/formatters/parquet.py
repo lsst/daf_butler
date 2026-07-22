@@ -173,7 +173,7 @@ class ParquetFormatter(FormatterV2):
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
                     par_columns_in = list(dict.fromkeys(ensure_iterable(par_columns)))
-                    file_columns = [name for name in schema.names if not name.startswith("__")]
+                    file_columns = list(schema.names)
 
                     # Do case-sensitive glob-style matching, again ensuring
                     # uniqueness and ordering.
@@ -735,7 +735,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     # We loop through the arrow table columns because the datatypes have
     # been checked and converted from pandas objects.
     for name in arrow_table.column_names:
-        if not name.startswith("__") and _is_string(arrow_table[name].type):
+        if _is_string(arrow_table[name].type):
             col = arrow_table[name]
             if len(col) > 0 and (col.length() > col.null_count):
                 strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
@@ -849,7 +849,7 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
         len_indexes = 0
 
     if len_indexes <= 1:
-        columns = {name for name in schema.names if not name.startswith("__")}
+        columns = set(schema.names)
         columns = columns.union(set(index_columns))
         return pd.Index(columns)
     else:
