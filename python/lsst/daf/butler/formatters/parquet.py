@@ -173,7 +173,7 @@ class ParquetFormatter(FormatterV2):
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
                     par_columns_in = list(dict.fromkeys(ensure_iterable(par_columns)))
-                    file_columns = list(schema.names)
+                    file_columns = [name for name in schema.names if not name.startswith("__")]
 
                     # Do case-sensitive glob-style matching, again ensuring
                     # uniqueness and ordering.
