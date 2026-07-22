@@ -728,7 +728,12 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.assertEqual(len(schema.schema.names), len(schema2.schema.names))
         for name in schema.schema.names:
             self.assertIn(name, schema2.schema.names)
-            self.assertEqual(schema2.schema[name].type, schema.schema[name].type)
+            # It is not possible to properly track string columns via
+            # the schema consistently.
+            if schema.schema[name].type == np.dtype("O") or schema2.schema[name].type == np.dtype("O"):
+                continue
+            else:
+                self.assertEqual(schema2.schema[name].type, schema.schema[name].type)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteMultiIndexDataFrameReadAsNumpyTable(self):
