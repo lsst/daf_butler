@@ -162,13 +162,10 @@ class ParquetFormatter(FormatterV2):
             par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
                 has_pandas_multi_index = False
-                index_columns = []
                 if schema.metadata and b"pandas" in schema.metadata:
                     md = json.loads(schema.metadata[b"pandas"])
                     if len(md["column_indexes"]) > 1:
                         has_pandas_multi_index = True
-
-                    index_columns = _get_pandas_index_columns(md)
 
                 if not has_pandas_multi_index:
                     # Ensure uniqueness, keeping order.
@@ -185,13 +182,9 @@ class ParquetFormatter(FormatterV2):
                                 found = True
                                 par_columns[file_column] = True
                         if not found:
-                            if par_column not in index_columns:
-                                # Note that the pandas index column will always
-                                # be loaded.
-                                raise ValueError(
-                                    f"Column {par_column} specified in parameters not "
-                                    "available in parquet file."
-                                )
+                            raise ValueError(
+                                f"Column {par_column} specified in parameters not available in parquet file."
+                            )
                     par_columns = list(par_columns.keys())
                 else:
                     par_columns = _standardize_multi_index_columns(
@@ -837,21 +830,15 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
     """
     import pandas as pd
 
-    index_columns = []
     if b"pandas" in schema.metadata:
         md = json.loads(schema.metadata[b"pandas"])
         indexes = md["column_indexes"]
         len_indexes = len(indexes)
-
-        if len_indexes > 0:
-            index_columns = _get_pandas_index_columns(md)
     else:
         len_indexes = 0
 
     if len_indexes <= 1:
-        columns = set(schema.names)
-        columns = columns.union(set(index_columns))
-        return pd.Index(columns)
+        return pd.Index(name for name in schema.names if not name.startswith("__"))
     else:
         raw_columns = _split_multi_index_column_names(len(indexes), schema.names)
         return pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
@@ -1653,17 +1640,3 @@ def _is_binary(t: pa.DataType) -> bool:
         or pa.types.is_binary_view(t)
         or pa.types.is_fixed_size_binary(t)
     )
-
-
-def _get_pandas_index_columns(md: dict) -> list[str]:
-    if len(md["index_columns"]) == 0:
-        index_columns = []
-    elif isinstance(md["index_columns"][0], dict):
-        # For parquet files written with pandas3 default parquet settings.
-        index_columns = [col["name"] for col in md["index_columns"]]
-    else:
-        # For parquet files written with pandas2 default parquet settings
-        # or this parquet writer.
-        index_columns = md["index_columns"]
-
-    return index_columns
