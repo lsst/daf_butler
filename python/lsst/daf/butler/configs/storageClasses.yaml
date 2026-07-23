@@ -607,4 +607,4 @@ storageClasses:
       # This converter function doesn't actually work, because it takes an
       # extra argument.  But we need to declare it anyway to give the
       # legacy formatter an opportunity to do the conversion on read.
-      lsst.cell_coadds.MultipleCellCoadd: lsst.images.cells.CellCoadd.from_legacy
+      lsst.cell_coadds.MultipleCellCoadd: lsst.images.cells.CellCoadd.from_legacy_cell_coadd
