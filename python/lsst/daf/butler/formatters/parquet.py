@@ -702,7 +702,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
 
     old_index = None
 
-    if isinstance(dataframe.index, pd.RangeIndex):
+    if isinstance(dataframe.index, pd.RangeIndex) and dataframe.index.name is not None:
         # Turn the RangeIndex into a regular index, or it won't serialize
         # interoperably via arrow.
         old_index = dataframe.index
@@ -873,7 +873,7 @@ class DataFrameSchema:
 
         self._schema = dataframe.loc[[False] * len(dataframe)]
 
-        if isinstance(self._schema.index, pd.RangeIndex):
+        if isinstance(self._schema.index, pd.RangeIndex) and self._schema.index.name is not None:
             # Turn the RangeIndex into a regular index or it won't
             # give us all the columns via arrow.
             self._schema.index = pd.Index(self._schema.index.to_numpy(), name=self._schema.index.name)
