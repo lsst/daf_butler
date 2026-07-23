@@ -1583,6 +1583,9 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     metadata = schema.metadata if schema.metadata is not None else {}
 
     for name in schema.names:
+        if name.startswith("__"):
+            continue
+
         t = schema.field(name).type
 
         if _is_string(t) or _is_binary(t):
