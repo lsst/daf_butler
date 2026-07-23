@@ -713,14 +713,23 @@ class FormatterV2:
             else:
                 msg = ""
 
-            with uri.as_local() as local_uri:
+            # If the file is remote and destined for the cache, download it
+            # directly onto the cache file system. This makes the subsequent
+            # move into the cache an atomic rename rather than a
+            # cross-file-system copy, which is what happens when the default
+            # temporary directory and the cache directory are on different
+            # file systems.
+            should_cache = not uri.isLocal and cache_manager.should_be_cached(cache_ref)
+            download_dir = cache_manager.download_directory if should_cache else None
+
+            with uri.as_local(tmpdir=download_dir) as local_uri:
                 self._check_resource_size(self.file_descriptor.location.uri, expected_size, local_uri.size())
                 can_be_cached = False
                 if uri != local_uri:
                     # URI was remote and file was downloaded
                     cache_msg = ""
 
-                    if cache_manager.should_be_cached(cache_ref):
+                    if should_cache:
                         # In this scenario we want to ask if the downloaded
                         # file should be cached but we should not cache
                         # it until after we've used it (to ensure it can't
