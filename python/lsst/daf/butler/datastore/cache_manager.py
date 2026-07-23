@@ -324,6 +324,22 @@ class AbstractDatastoreCacheManager(ABC):
         """Return number of cached files tracked by registry."""
         return 0
 
+    @property
+    def download_directory(self) -> ResourcePath | None:
+        """Local directory into which a remote file destined for the cache
+        may be downloaded (`lsst.resources.ResourcePath` or `None`).
+
+        Notes
+        -----
+        Downloading a soon-to-be-cached remote file into this directory
+        guarantees that the file ends up on the same file system as the cache,
+        so that moving it into the cache is an atomic rename rather than a
+        cross-file-system copy. The base class implementation returns `None`
+        to indicate that no such directory is available and downloads should
+        use the default temporary location.
+        """
+        return None
+
     def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
         if not isinstance(config, DatastoreCacheManagerConfig):
             config = DatastoreCacheManagerConfig(config)
@@ -597,6 +613,17 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         should not be expired.
         """
         return self.cache_directory.join(self._temp_exemption_prefix)
+
+    @property
+    def download_directory(self) -> ResourcePath | None:
+        # Docstring inherited.
+        # Stage downloads in the exemption area: it lives on the same file
+        # system as the cache (so the move into the cache is a rename) and is
+        # ignored by the cache scanner, so a partially-downloaded file is never
+        # mistaken for a cache entry.
+        download_dir = self._temp_exempt_directory
+        download_dir.mkdir()
+        return download_dir
 
     @property
     def cache_size(self) -> int:
