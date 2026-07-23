@@ -1,2 +1,0 @@
-When reading a remote dataset that is destined for the local cache, the file is now downloaded directly onto the cache file system.
-Previously it was downloaded to the default temporary directory and then relocated into the cache, which required a full copy whenever the temporary directory and the cache were on different file systems.

@@ -7,6 +7,11 @@ New Features
 - Added ``DatasetType.conform_to`` and ``DatasetRef.conform_to`` for rebuilding a dataset type or ref in a different but compatible dimension universe.
   Conforming requires that the universes share a namespace and that the dimension group has the same names and the same required/implied split in both universes; otherwise ``InconsistentUniverseError`` is raised. (`DM-55542 <https://rubinobs.atlassian.net/browse/DM-55542>`_)
 
+Performance Enhancement
+-----------------------
+
+- When reading a remote dataset that is destined for the local cache, the file is now downloaded directly onto the cache file system.
+  Previously it was downloaded to the default temporary directory and then relocated into the cache, which required a full copy whenever the temporary directory and the cache were on different file systems. (`DM-55618 <https://rubinobs.atlassian.net/browse/DM-55618>`_)
 
 Bug Fixes
 ---------
