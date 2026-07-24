@@ -300,28 +300,34 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         with self._metrics.instrument_get(log=_LOG, msg="Retrieved remote dataset"):
             model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
 
-            ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
+            written_ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
             # The server returns the parent dataset type -- component dataset
             # types are never sent to the server, because it may not have the
             # storage class definitions needed to construct them.  Re-apply
             # any component here.
             componentOverride = get_component_override(datasetRefOrType)
             if componentOverride is not None:
-                ref = ref.makeComponentRef(componentOverride)
-            ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
+                written_ref = written_ref.makeComponentRef(componentOverride)
+            # The written ref carries the storage class the file was written
+            # with; the read ref carries any storage class override requested
+            # by the caller.  Keep them separate so the Formatter always sees
+            # the written ref (as it does with DirectButler).
+            read_ref = apply_storage_class_override(written_ref, datasetRefOrType, storageClass)
 
-            return self._get_dataset_as_python_object(ref, model, parameters)
+            return self._get_dataset_as_python_object(written_ref, read_ref, model, parameters)
 
     def _get_dataset_as_python_object(
         self,
-        ref: DatasetRef,
+        written_ref: DatasetRef,
+        read_ref: DatasetRef,
         model: GetFileResponseModel,
         parameters: dict[str, Any] | None,
     ) -> Any:
         # This thin wrapper method is here to provide a place to hook in a mock
         # mimicking DatastoreMock functionality for use in unit tests.
         return get_dataset_as_python_object(
-            ref,
+            written_ref,
+            read_ref,
             _to_file_payload(model),
             auth=self._connection.auth,
             parameters=parameters,

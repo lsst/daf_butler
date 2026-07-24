@@ -1016,12 +1016,13 @@ class RemoteSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
 
 
 def _mock_get_dataset_as_python_object(
-    ref: DatasetRef,
+    written_ref: DatasetRef,
+    read_ref: DatasetRef,
     model: Any,
     parameters: dict[str, Any] | None,
 ) -> Any:
     """Mimic the functionality of DatastoreMock's get() mock."""
-    return (ref.id, parameters)
+    return (read_ref.id, parameters)
 
 
 if __name__ == "__main__":
