@@ -32,7 +32,7 @@ from __future__ import annotations
 import os
 import unittest
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, InvalidQueryError
 from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 
@@ -53,6 +53,17 @@ class DirectButlerSQLiteTests(ButlerQueryTests, unittest.TestCase):
         for arg in args:
             self.load_data(butler, arg)
         return butler
+
+    def test_spatial_overlap_between_region_literals(self) -> None:
+        """Test a public query with two region literal operands."""
+        butler = self.make_butler("base.yaml")
+        htm7 = butler.dimensions.skypix_dimensions["htm7"]
+        region = htm7.pixelization.pixel(253954)
+
+        with butler.query() as query:
+            x = query.expression_factory
+            with self.assertRaisesRegex(InvalidQueryError, "requires at least one dimension region column"):
+                query.where(x.literal(region).overlaps(region))
 
 
 if __name__ == "__main__":

@@ -571,7 +571,12 @@ class Comparison(PredicateLeafBase):
                     pass
                 case ("<" | ">" | ">=" | "<=", "int" | "string" | "float" | "datetime"):
                     pass
-                case ("overlaps", "region" | "timespan"):
+                case ("overlaps", "region"):
+                    if not (self.a.is_column_reference or self.b.is_column_reference):
+                        raise InvalidQueryError(
+                            "Spatial overlap comparison requires at least one dimension region column."
+                        )
+                case ("overlaps", "timespan"):
                     pass
                 case ("glob", "string"):
                     pass
