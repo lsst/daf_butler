@@ -28,10 +28,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from contextlib import AbstractContextManager
 from typing import Protocol, TypeVar
 
+from fastapi import BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from lsst.daf.butler.remote_butler.server_models import (
@@ -112,9 +113,12 @@ async def execute_streaming_query(query: StreamingQuery, user: str | None) -> St
     await _query_limits.enforce_query_limits(user)
 
     output_generator = _stream_query_pages(query, user)
+    background_tasks = BackgroundTasks()
+    background_tasks.add_task(_close_query_stream, output_generator)
     return StreamingResponse(
         output_generator,
         media_type="application/jsonlines",
+        background=background_tasks,
         headers={
             # Instruct the Kubernetes ingress to not buffer the response,
             # so that keep-alives reach the client promptly.
@@ -123,7 +127,12 @@ async def execute_streaming_query(query: StreamingQuery, user: str | None) -> St
     )
 
 
-async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncIterator[str]:
+async def _close_query_stream(output_generator: AsyncGenerator[str, None]) -> None:
+    """Close a query stream after its streaming response has finished."""
+    await output_generator.aclose()
+
+
+async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncGenerator[str, None]:
     """Stream the query output with one page object per line, as
     newline-delimited JSON records in the "JSON Lines" format
     (https://jsonlines.org/).

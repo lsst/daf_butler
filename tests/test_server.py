@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+import contextlib
 import os.path
 import tempfile
 import threading
@@ -81,7 +82,7 @@ if butler_server_is_available:
     )
     from lsst.daf.butler.remote_butler.server._gafaelfawr import MockGafaelfawrGroupAuthorizer
     from lsst.daf.butler.remote_butler.server.handlers._utils import generate_file_download_uri
-    from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
+    from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel, QueryKeepAliveModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
 
@@ -786,6 +787,49 @@ def _timeout_twice():
         return DEFAULT
 
     return timeout
+
+
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
+class QueryStreamingTestCase(unittest.IsolatedAsyncioTestCase):
+    """Test streaming query response lifecycle details."""
+
+    async def test_disconnect_closes_query_stream(self) -> None:
+        """Test that a client disconnect closes the query stream."""
+        query_finished = asyncio.Event()
+        first_body_sent = asyncio.Event()
+        block_send = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        class TwoPageQuery:
+            def setup(self):
+                return contextlib.nullcontext(None)
+
+            def execute(self, context):
+                yield QueryKeepAliveModel()
+                yield QueryKeepAliveModel()
+                loop.call_soon_threadsafe(query_finished.set)
+
+        streaming = lsst.daf.butler.remote_butler.server.handlers._query_streaming
+        active_queries_before = streaming._query_limits._active_queries
+        response = await streaming.execute_streaming_query(TwoPageQuery(), "test-user")
+
+        async def receive():
+            await first_body_sent.wait()
+            await query_finished.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body" and message.get("more_body"):
+                first_body_sent.set()
+                await block_send.wait()
+
+        scope = {"type": "http", "asgi": {"spec_version": "2.3"}}
+        async with asyncio.timeout(5):
+            await response(scope, receive, send)
+
+        # Retain the response until after this assertion to ensure cleanup did
+        # not depend on garbage collection.
+        self.assertEqual(streaming._query_limits._active_queries, active_queries_before)
 
 
 @unittest.skipIf(not butler_server_is_available, butler_server_import_error)
