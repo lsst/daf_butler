@@ -219,6 +219,14 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         self.assertFalse(visitor.spatial_constraints)
         self.assertFalse(visitor.temporal_dimension_joins)
 
+    def test_invalid_spatial_overlap_operands(self) -> None:
+        """Test defensive validation of spatial overlap operands."""
+        pixelization = Mq3cPixelization(10)
+        region = qt.make_column_literal(pixelization.quad(12058870))
+        visitor = _RecordingOverlapsVisitor(self.universe.empty)
+        with self.assertRaisesRegex(InvalidQueryError, "requires at least one dimension region column"):
+            visitor.visit_spatial_overlap(region, region, PredicateVisitFlags(0))
+
     def test_one_spatial_family(self) -> None:
         """Test the overlaps visitor when there is one spatial family."""
         x = ExpressionFactory(self.universe)

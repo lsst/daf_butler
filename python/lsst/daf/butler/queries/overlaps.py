@@ -354,10 +354,16 @@ class OverlapsVisitor(SimplePredicateVisitor):
             case region_expression, tree.DimensionFieldReference(element=element):
                 pass
             case _:
-                raise AssertionError(f"Unexpected arguments for spatial overlap: {a}, {b}.")
+                raise InvalidQueryError(
+                    "Spatial overlap comparison requires at least one dimension region column; "
+                    f"got {a} and {b}."
+                )
         if region := region_expression.get_literal_value():
             return self.visit_spatial_constraint(element, region, flags)
-        raise AssertionError(f"Unexpected argument for spatial overlap: {region_expression}.")
+        raise InvalidQueryError(
+            f"Spatial overlap comparison requires its other operand to be a region literal; "
+            f"got {region_expression}."
+        )
 
     def visit_temporal_overlap(
         self,
