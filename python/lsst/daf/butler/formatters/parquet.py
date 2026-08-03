@@ -46,6 +46,7 @@ __all__ = (
     "numpy_to_astropy",
     "pandas_to_arrow",
     "pandas_to_astropy",
+    "pandas_to_numpy",
 )
 
 import collections.abc
@@ -400,7 +401,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                     null_value = -1
                 case t if t in (pa.bool_(),):
                     null_value = True
-                case t if t in (pa.string(), pa.binary()):
+                case t if _is_string(t) or _is_binary(t):
                     null_value = ""
                 case _:
                     # This is the fallback for unsigned ints in particular.
@@ -412,7 +413,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                 fill_value=null_value,
             )
 
-        if t in (pa.string(), pa.binary()):
+        if _is_string(t) or _is_binary(t):
             col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
         elif isinstance(t, pa.FixedSizeListType):
             if len(col) > 0:
@@ -697,6 +698,17 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     arrow_table : `pyarrow.Table`
         Converted arrow table.
     """
+    import pandas as pd
+
+    old_index = None
+
+    if isinstance(dataframe.index, pd.RangeIndex) and dataframe.index.name is not None:
+        # Turn the RangeIndex into a regular index, or it won't serialize
+        # interoperably via arrow.
+        old_index = dataframe.index
+
+        dataframe.index = pd.Index(dataframe.index.to_numpy(), name=dataframe.index.name)
+
     try:
         arrow_table = pa.Table.from_pandas(dataframe)
     except pa.ArrowInvalid as e:
@@ -704,6 +716,9 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
         msg += "; This is usually because the column is mixed type or has uneven length rows."
         e.add_note(msg)
         raise
+    finally:
+        if old_index is not None:
+            dataframe.index = old_index
 
     # Update the metadata
     md = arrow_table.schema.metadata
@@ -744,6 +759,25 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
     return arrow_to_astropy(pandas_to_arrow(dataframe))
+
+
+def pandas_to_numpy(dataframe: pd.DataFrame) -> np.ndarray | np.ma.MaskedArray:
+    """Convert a pandas dataframe to a numpy recarray.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
+
+    Returns
+    -------
+    array : `numpy.ndarray` or `numpy.ma.MaskedArray` (N,)
+        Numpy array table with N rows and the same column names
+        as the input dataframe. Will be masked records if any values
+        in the table are null.
+    """
+    # This conversion ensures strings are handled properly.
+    return arrow_to_numpy(pandas_to_arrow(dataframe))
 
 
 def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -835,7 +869,14 @@ class DataFrameSchema:
     """
 
     def __init__(self, dataframe: pd.DataFrame) -> None:
+        import pandas as pd
+
         self._schema = dataframe.loc[[False] * len(dataframe)]
+
+        if isinstance(self._schema.index, pd.RangeIndex) and self._schema.index.name is not None:
+            # Turn the RangeIndex into a regular index or it won't
+            # give us all the columns via arrow.
+            self._schema.index = pd.Index(self._schema.index.to_numpy(), name=self._schema.index.name)
 
     @classmethod
     def from_arrow(cls, schema: pa.Schema) -> DataFrameSchema:
@@ -1259,7 +1300,7 @@ def _arrow_string_to_numpy_dtype(
         lengths = [len(row) for row in numpy_column if row]
         strlen = max(lengths) if lengths else 0
 
-    dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
+    dtype = f"U{strlen}" if _is_string(schema.field(name).type) else f"|S{strlen}"
 
     return dtype
 
@@ -1363,7 +1404,7 @@ def _schema_to_dtype_list(schema: pa.Schema) -> list[tuple[str, tuple[Any] | str
         if isinstance(t, pa.FixedSizeListType):
             shape = _multidim_shape_from_metadata(metadata, t.list_size, name)
             dtype.append((name, (t.value_type.to_pandas_dtype(), shape)))
-        elif t not in (pa.string(), pa.binary()):
+        elif not (_is_string(t) or _is_binary(t)):
             dtype.append((name, t.to_pandas_dtype()))
         else:
             dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
@@ -1542,9 +1583,12 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     metadata = schema.metadata if schema.metadata is not None else {}
 
     for name in schema.names:
+        if name.startswith("__"):
+            continue
+
         t = schema.field(name).type
 
-        if t in (pa.string(), pa.binary()):
+        if _is_string(t) or _is_binary(t):
             md_name = f"lsst::arrow::len::{name}"
 
             if (encoded := md_name.encode("UTF-8")) in metadata:
@@ -1582,3 +1626,11 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     byte_width = bit_width // 8
 
     return target_size // byte_width
+
+
+def _is_string(t: pa.DataType) -> bool:
+    return pa.types.is_string(t) or pa.types.is_large_string(t) or pa.types.is_string_view(t)
+
+
+def _is_binary(t: pa.DataType) -> bool:
+    return pa.types.is_binary(t) or pa.types.is_large_binary(t) or pa.types.is_binary_view(t)
