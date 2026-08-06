@@ -1,0 +1,3 @@
+Now force the write storage class ref through to the formatter with RemoteButler.
+
+Previously DirectButler gave a write ref to the Formatter and RemoteButler passed in the read ref. Now they are consistent.

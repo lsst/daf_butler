@@ -313,8 +313,8 @@ class DatastoreRecordTable:
         datastore_name
             Datastore name to filter on.
 
-        Return
-        ------
+        Returns
+        -------
         table
             A copy of this table with only the rows that have a
             ``datastore_name`` column value matching the given value.
