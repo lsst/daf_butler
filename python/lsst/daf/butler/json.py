@@ -60,6 +60,8 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
 
     Parameters
     ----------
+    self : `SupportsSimple`
+        The object being serialized.
     minimal : `bool`
         Return minimal possible representation.
     """
@@ -107,6 +109,8 @@ def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
 
     Parameters
     ----------
+    self : `SupportsSimple`
+        The object being serialized.
     minimal : `bool`, optional
         Use minimal serialization. Requires Registry to convert
         back to a full type.
@@ -134,6 +138,8 @@ def from_json_generic(
 
     Parameters
     ----------
+    cls : `type` of `SupportsSimple`
+        The Python type being created.
     json_str : `str`
         Representation of the dimensions in JSON format as created
         by ``to_json()``.
