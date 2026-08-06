@@ -31,11 +31,11 @@ jobs:
       - name: Check requirements.txt for branches
         shell: bash
         run: |
-          FILE="requirements.txt requirements/main.in requirements/test.in"
+          FILES=(requirements.txt requirements/main.in requirements/test.in)
           MATCH=tickets/DM-
-          if grep -q $MATCH $FILE
+          if grep -q "$MATCH" "${FILES[@]}"
           then
-            echo "Ticket branches found in $FILE:"
-            grep -n $MATCH $FILE
+            echo "Ticket branches found in ${FILES[*]}:"
+            grep -n "$MATCH" "${FILES[@]}"
             exit 1
           fi
