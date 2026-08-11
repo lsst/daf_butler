@@ -62,6 +62,9 @@ class DeferredDatasetHandle:
         component : `str` or None
             If the deferred object is a component dataset type, this parameter
             may specify the name of the component to use in the get operation.
+            The component is looked up in the storage class given when this
+            object was created, if there was one, and not in the storage class
+            the dataset was written with.
         parameters : `dict` or None
             The parameters argument will be passed to the butler get method.
             It defaults to None. If the value is not None,  this dict will
@@ -73,7 +76,9 @@ class DeferredDatasetHandle:
             the dataset type definition for this dataset or the storage
             class specified when this object was created. Specifying a
             read `StorageClass` can force a different type to be returned.
-            This type must be compatible with the original type.
+            This type must be compatible with the original type. If
+            ``component`` is given this overrides the type of the component
+            rather than that of the composite.
 
         Returns
         -------
@@ -88,10 +93,26 @@ class DeferredDatasetHandle:
             mergedParameters = parameters
         else:
             mergedParameters = {}
-        if storageClass is None:
-            storageClass = self.storageClass
 
-        ref = self.ref.makeComponentRef(component) if component is not None else self.ref
+        if component is None:
+            # No component so apply the storage class override that was either
+            # given explicitly or provided to the constructor.
+            if storageClass is None:
+                storageClass = self.storageClass
+            return self.butler.get(self.ref, parameters=mergedParameters, storageClass=storageClass)
+
+        # We have a component request.
+        # The instance storageClass refers to the composite and so should
+        # not be applied to the component. If set we apply it to the
+        # requested ref before looking for components.
+        ref = self.ref
+        if self.storageClass is not None:
+            ref = ref.overrideStorageClass(self.storageClass)
+
+        # Now the component request goes through the overridden composite.
+        ref = ref.makeComponentRef(component)
+
+        # And run get with the override storage class if given.
         return self.butler.get(ref, parameters=mergedParameters, storageClass=storageClass)
 
     @property
