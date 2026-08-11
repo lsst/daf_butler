@@ -778,19 +778,21 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
-        # The storage class we want to use eventually
-        refStorageClass = ref.datasetType.storageClass
-
-        # For trusted mode need to reset storage class.
-        ref = self._cast_storage_class(ref)
+        # The ref as supplied describes what the caller wants back, including
+        # any component and read storage class override. Internally the
+        # composite as defined in the repository is used: that is what a get
+        # with no overrides would return and it is the ref given to the
+        # Formatter. Using the registry storage class also resets the storage
+        # class for trusted mode.
+        registry_ref = self._cast_storage_class(ref.makeCompositeRef() if ref.isComponent() else ref)
 
         # Get file metadata and internal metadata
-        fileLocations = self._get_dataset_locations_info(ref)
+        fileLocations = self._get_dataset_locations_info(registry_ref)
         if not fileLocations:
             if not self.trustGetRequest:
                 raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
             # Assume the dataset is where we think it should be
-            fileLocations = self._get_expected_dataset_locations_info(ref)
+            fileLocations = self._get_expected_dataset_locations_info(registry_ref)
 
         if len(fileLocations) > 1:
             # If trust is involved it is possible that there will be
@@ -808,8 +810,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         return generate_datastore_get_information(
             fileLocations,
-            readStorageClass=refStorageClass,
-            ref=ref,
+            registry_ref=registry_ref,
+            read_ref=ref,
             parameters=parameters,
         )
 

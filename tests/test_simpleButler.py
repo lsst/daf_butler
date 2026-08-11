@@ -1016,7 +1016,7 @@ class RemoteSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
 
 
 def _mock_get_dataset_as_python_object(
-    written_ref: DatasetRef,
+    registry_ref: DatasetRef,
     read_ref: DatasetRef,
     model: Any,
     parameters: dict[str, Any] | None,

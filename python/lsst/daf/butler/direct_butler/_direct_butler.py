@@ -419,30 +419,75 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Check that they are self-consistent
         if externalDatasetType is not None:
-            internalDatasetType = self.get_dataset_type(externalDatasetType.name)
-            if externalDatasetType != internalDatasetType:
-                # We can allow differences if they are compatible, depending
-                # on whether this is a get or a put. A get requires that
-                # the python type associated with the datastore can be
-                # converted to the user type. A put requires that the user
-                # supplied python type can be converted to the internal
-                # type expected by registry.
-                relevantDatasetType = internalDatasetType
-                if for_put:
-                    is_compatible = internalDatasetType.is_compatible_with(externalDatasetType)
-                else:
-                    is_compatible = externalDatasetType.is_compatible_with(internalDatasetType)
-                    relevantDatasetType = externalDatasetType
-                if not is_compatible:
-                    raise ValueError(
-                        f"Supplied dataset type ({externalDatasetType}) inconsistent with "
-                        f"registry definition ({internalDatasetType})"
-                    )
-                # Override the internal definition.
-                internalDatasetType = relevantDatasetType
+            registryDatasetType = self._get_registry_dataset_type(externalDatasetType)
+            if registryDatasetType is None:
+                # The caller has asked for a component that only their own
+                # storage class defines, so there is no registry definition to
+                # check against and their definition has to be used as given.
+                internalDatasetType = externalDatasetType
+            else:
+                internalDatasetType = registryDatasetType
+                if externalDatasetType != internalDatasetType:
+                    # We can allow differences if they are compatible,
+                    # depending on whether this is a get or a put. A get
+                    # requires that the python type associated with the
+                    # datastore can be converted to the user type. A put
+                    # requires that the user supplied python type can be
+                    # converted to the internal type expected by registry.
+                    relevantDatasetType = internalDatasetType
+                    if for_put:
+                        is_compatible = internalDatasetType.is_compatible_with(externalDatasetType)
+                    else:
+                        is_compatible = externalDatasetType.is_compatible_with(internalDatasetType)
+                        relevantDatasetType = externalDatasetType
+                    if not is_compatible:
+                        raise ValueError(
+                            f"Supplied dataset type ({externalDatasetType}) inconsistent with "
+                            f"registry definition ({internalDatasetType})"
+                        )
+                    # Override the internal definition.
+                    internalDatasetType = relevantDatasetType
 
         assert internalDatasetType is not None
         return internalDatasetType, dataId
+
+    def _get_registry_dataset_type(self, datasetType: DatasetType) -> DatasetType | None:
+        """Return the registry definition corresponding to the given dataset
+        type.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType`
+            Dataset type, possibly a component, supplied by the caller.
+
+        Returns
+        -------
+        registry_type : `DatasetType` or `None`
+            The registry definition of ``datasetType``, or `None` if the
+            registry has no definition for it.
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if the dataset type is not registered. For a component
+            dataset type this refers to the composite.
+
+        Notes
+        -----
+        Only composites are registered: a component dataset type is derived
+        from the storage class of its composite. A component that is defined
+        only by a read-time storage class override therefore has no registry
+        definition at all, even though its composite is registered, and `None`
+        is returned to say so rather than something that only resembles a
+        registry definition.
+        """
+        parent_name, component = DatasetType.splitDatasetTypeName(datasetType.name)
+        parent = self.get_dataset_type(parent_name)
+        if component is None:
+            return parent
+        if component in parent.storageClass.allComponents():
+            return parent.makeComponentDatasetType(component)
+        return None
 
     def _rewrite_data_id(
         self, dataId: DataId | None, datasetType: DatasetType, **kwargs: Any

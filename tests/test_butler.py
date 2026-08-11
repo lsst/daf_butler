@@ -110,6 +110,7 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
+from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import (
@@ -983,6 +984,47 @@ class ButlerTests(ButlerPutGetTests):
                 parameters={"xslice": slice(2, 4)},
             )
 
+    def testComponentFromOverriddenStorageClass(self) -> None:
+        """Test component get where the component is only defined by the
+        read storage class and not by the storage class used to write.
+        """
+        # StructuredDataNoComponents defines no components at all, whereas
+        # MetricsConversion (which it can be converted to) defines several.
+        write_sc = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        read_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
+        self.assertFalse(write_sc.allComponents())
+        self.assertIn("summary", read_sc.allComponents())
+
+        butler, datasetType = self.create_butler(self.default_run, write_sc, "unstructured")
+
+        metric = makeExampleMetrics()
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        ref = butler.put(metric, datasetType, dataId)
+
+        # The composite conversion on its own must work.
+        self.assertIs(type(butler.get(ref, storageClass=read_sc)), read_sc.pytype)
+
+        # A component of the converted composite, requested via a ref.
+        component_ref = ref.overrideStorageClass(read_sc).makeComponentRef("summary")
+        self.assertEqual(butler.get(component_ref), metric.summary)
+
+        # The same component, requested via a deferred handle that was given
+        # the storage class override up front.
+        deferred = butler.getDeferred(ref, storageClass=read_sc)
+        self.assertEqual(deferred.get(component="summary"), metric.summary)
+
+        # A component whose storage class is also overridden, on top of the
+        # storage class the read composite declares for it.
+        converted = butler.get(component_ref, storageClass="DictConvertibleModel")
+        self.assertIsInstance(converted, DictConvertibleModel)
+        self.assertEqual(converted.content, metric.summary)
+
+        # The handle storage class applies to the composite and so selects the
+        # component, while the one given to get() applies to the component.
+        converted = deferred.get(component="summary", storageClass="DictConvertibleModel")
+        self.assertIsInstance(converted, DictConvertibleModel)
+        self.assertEqual(converted.content, metric.summary)
+
     def testPytypePutCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
         # Store some data with the normal example storage class.
@@ -1808,6 +1850,41 @@ class FileDatastoreButlerTests(ButlerTests):
     """
 
     trustModeSupported = True
+
+    def testComponentFromOverriddenStorageClassWarns(self) -> None:
+        """Test that getting a component that only the read storage class
+        defines warns, since the whole dataset has to be retrieved and
+        converted before the component can be extracted.
+        """
+        write_sc = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        read_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
+        butler, datasetType = self.create_butler(self.default_run, write_sc, "unstructured")
+        metric = makeExampleMetrics()
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        ref = butler.put(metric, datasetType, dataId)
+        component_ref = ref.overrideStorageClass(read_sc).makeComponentRef("summary")
+
+        logger = "lsst.daf.butler.datastores.file_datastore.get"
+        with self.assertLogs(logger, level="WARNING") as cm:
+            self.assertEqual(butler.get(component_ref), metric.summary)
+        message = "\n".join(cm.output)
+        # The message must name the component, the storage class that lacks it
+        # along with the components it does have, and the storage class the
+        # dataset has to be converted to.
+        self.assertIn("summary", message)
+        self.assertIn(write_sc.name, message)
+        self.assertIn("components it does define: none", message)
+        self.assertIn(read_sc.name, message)
+        self.assertIn("less efficient", message)
+
+        # Reading a component that the write storage class does define must not
+        # warn.
+        composite_type = self.addDatasetType(
+            "composite", datasetType.dimensions, "StructuredData", butler.registry
+        )
+        composite_ref = butler.put(metric, composite_type, dataId)
+        with self.assertNoLogs(logger, level="WARNING"):
+            self.assertEqual(butler.get(composite_ref.makeComponentRef("summary")), metric.summary)
 
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
         """Check if file exists at a given path (relative to root).
@@ -2677,6 +2754,12 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
         # This test relies on manipulating files out-of-band, which is
         # impossible for this configuration because of the InMemoryDatastore in
         # the ChainedDatastore.
+        pass
+
+    def testComponentFromOverriddenStorageClassWarns(self) -> None:
+        # The InMemoryDatastore in the ChainedDatastore satisfies the get, so
+        # the FileDatastore warning about having to read the whole dataset to
+        # extract the component is never issued.
         pass
 
 

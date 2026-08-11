@@ -82,15 +82,94 @@ class DatastoreFileGetInformation:
     """The component to be retrieved (can be `None`)."""
 
     readStorageClass: StorageClass
-    """The `StorageClass` of the dataset being read."""
+    """The `StorageClass` that the `Formatter` will return."""
+
+    componentStorageClass: StorageClass | None = None
+    """The `StorageClass` of the component to extract from the object returned
+    by the `Formatter`, or `None` if the `Formatter` returns the requested
+    object directly.
+
+    This is only set when the requested component is defined by the read
+    `StorageClass` but not by the `StorageClass` the file was written with.
+    The `Formatter` then knows nothing of the component, so the composite is
+    read and converted first (to ``readStorageClass``) and the component is
+    extracted from the converted form.
+    """
+
+
+def _describe_components(storageClass: StorageClass) -> str:
+    """Return a description of the components a `StorageClass` recognizes,
+    suitable for inclusion in a log message.
+
+    Parameters
+    ----------
+    storageClass : `StorageClass`
+        Storage class to describe.
+
+    Returns
+    -------
+    description : `str`
+        Comma-separated list of component names, or ``"none"``.
+    """
+    return ", ".join(sorted(storageClass.allComponents())) or "none"
+
+
+def _warn_about_converted_component_read(
+    registry_ref: DatasetRef,
+    component: str,
+    writeStorageClass: StorageClass,
+    parentReadStorageClass: StorageClass,
+) -> None:
+    """Warn that a component request needs the whole dataset to be read.
+
+    Parameters
+    ----------
+    registry_ref : `DatasetRef`
+        The dataset as defined in the repository, used to identify the dataset
+        in the message.
+    component : `str`
+        Name of the component that was requested.
+    writeStorageClass : `StorageClass`
+        The `StorageClass` the dataset was written with, which does not define
+        ``component``.
+    parentReadStorageClass : `StorageClass`
+        The `StorageClass` the composite has to be converted to in order to
+        obtain ``component``.
+    """
+    message = (
+        "Component %r was requested from dataset %s but storage class %s, which the dataset was "
+        "written with, does not define it (components it does define: %s). The entire dataset must "
+        "therefore be retrieved and converted to storage class %s before %r can be extracted from "
+        "the result. This is slower than reading the component on its own: the storage class "
+        "override has made this a less efficient request."
+    )
+    args: list[Any] = [
+        component,
+        registry_ref,
+        writeStorageClass.name,
+        _describe_components(writeStorageClass),
+        parentReadStorageClass.name,
+        component,
+    ]
+    registryStorageClass = registry_ref.datasetType.storageClass
+    if registryStorageClass != writeStorageClass:
+        # The dataset type definition has changed since the dataset was
+        # written, so the caller may be surprised that the component they were
+        # offered is not available from the file itself.
+        message += (
+            " The dataset type is now defined with storage class %s (components: %s), which is why "
+            "the component appeared to be available."
+        )
+        args += [registryStorageClass.name, _describe_components(registryStorageClass)]
+    log.warning(message, *args)
 
 
 def generate_datastore_get_information(
     fileLocations: list[DatasetLocationInformation],
     *,
-    ref: DatasetRef,
+    registry_ref: DatasetRef,
+    read_ref: DatasetRef,
     parameters: Mapping[str, Any] | None,
-    readStorageClass: StorageClass | None = None,
 ) -> list[DatastoreFileGetInformation]:
     """Process parameters and instantiate formatters for in preparation for
     retrieving an artifact and converting it to a Python object.
@@ -100,24 +179,38 @@ def generate_datastore_get_information(
     fileLocations : `list` [`DatasetLocationInformation`]
         List of file locations for this artifact and their associated datastore
         records.
-    ref : `DatasetRef`
-        The registry information associated with this artifact.
+    registry_ref : `DatasetRef`
+        The registry information associated with this artifact, using the
+        dataset type definition from the repository and never naming a
+        component.  This is the ref given to the `Formatter`.
+    read_ref : `DatasetRef`
+        The dataset the caller asked for.  Its `StorageClass` is the one to
+        return and its component (if any) is the component to extract.  This
+        differs from ``registry_ref`` when a read-time `StorageClass` override
+        has been requested or a component has been requested.
     parameters : `~collections.abc.Mapping` [`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters.
-    readStorageClass : `StorageClass` | `None`, optional
-        The StorageClass to use when ultimately returning the resulting object
-        from the get.  Defaults to the `StorageClass` specified by ``ref``.
 
     Returns
     -------
     getInfo : `list` [`DatastoreFileGetInformation`]
         The parameters needed to retrieve each file.
+
+    Notes
+    -----
+    The `StorageClass` that each file was written with is taken from the
+    datastore records in ``fileLocations`` and can differ from the one in
+    ``registry_ref`` if the dataset type definition has been changed since the
+    dataset was written.
     """
-    if readStorageClass is None:
-        readStorageClass = ref.datasetType.storageClass
+    readStorageClass = read_ref.datasetType.storageClass
 
     # Is this a component request?
-    refComponent = ref.datasetType.component()
+    refComponent = read_ref.datasetType.component()
+
+    # The storage class of the composite that the caller wants to read. This
+    # differs from the write storage class when there is an override.
+    parentReadStorageClass = read_ref.datasetType.parentStorageClass
 
     disassembled = len(fileLocations) > 1
     fileGetInfo = []
@@ -125,11 +218,27 @@ def generate_datastore_get_information(
         # The storage class used to write the file
         writeStorageClass = storedFileInfo.storageClass
         thisReadStorageClass = readStorageClass
+        componentStorageClass = None
 
         # If this has been disassembled we need read to match the write
         # except for if a component has specified an override.
         if disassembled and storedFileInfo.component != refComponent:
             thisReadStorageClass = writeStorageClass
+        elif (
+            refComponent is not None
+            and storedFileInfo.component is None
+            and parentReadStorageClass is not None
+            and refComponent not in writeStorageClass.allComponents()
+        ):
+            # The component only exists in the storage class the caller is
+            # converting to, so the formatter can not extract it. Read the
+            # whole composite as the converted type instead and extract the
+            # component from that.
+            componentStorageClass = readStorageClass
+            thisReadStorageClass = parentReadStorageClass
+            _warn_about_converted_component_read(
+                registry_ref, refComponent, writeStorageClass, parentReadStorageClass
+            )
 
         formatter = get_instance_of(
             storedFileInfo.formatter,
@@ -140,8 +249,8 @@ def generate_datastore_get_information(
                 parameters=parameters,
                 component=storedFileInfo.component,
             ),
-            dataId=ref.dataId,
-            ref=ref,
+            dataId=registry_ref.dataId,
+            ref=registry_ref,
         )
 
         formatterParams, notFormatterParams = formatter.segregate_parameters()
@@ -164,6 +273,7 @@ def generate_datastore_get_information(
                 formatterParams,
                 component,
                 thisReadStorageClass,
+                componentStorageClass,
             )
         )
 
@@ -439,5 +549,18 @@ def get_dataset_as_python_object_from_get_info(
             # of the parameters is not clear. For now validate against
             # the composite storage class
             getInfo.formatter.file_descriptor.storageClass.validateParameters(parameters)
+
+        if getInfo.componentStorageClass is not None:
+            # The formatter knows nothing of this component because it is
+            # defined by the read storage class and not by the storage class
+            # the file was written with. Read the whole composite, letting the
+            # formatter convert it to the requested composite type, and then
+            # extract the component from the result.
+            if refComponent is None:
+                raise RuntimeError("Internal error in datastore: component can not be None here")
+            compositeRef = ref.makeCompositeRef()
+            composite = _read_artifact_into_memory(getInfo, compositeRef, cache_manager, isComponent=False)
+            delegate = compositeRef.datasetType.storageClass.delegate()
+            return getInfo.componentStorageClass.coerce_type(delegate.getComponent(composite, refComponent))
 
         return _read_artifact_into_memory(getInfo, ref, cache_manager, isComponent=isComponent)

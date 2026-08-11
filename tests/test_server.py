@@ -48,6 +48,7 @@ from lsst.daf.butler import (
     MissingDatasetTypeError,
     NoDefaultCollectionError,
     StorageClassFactory,
+    UnknownComponentError,
 )
 from lsst.daf.butler.datastore import DatasetRefURIs
 from lsst.daf.butler.registry import RegistryDefaults
@@ -375,14 +376,14 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
-    def test_get_formatter_receives_written_ref(self):
-        """The Formatter must always be given the written `DatasetRef`, so its
-        storage class matches the one the file was written with, regardless of
-        any read-time storage class override.
+    def test_get_formatter_receives_registry_ref(self):
+        """The Formatter must always be given the `DatasetRef` as defined in
+        the repository, so its storage class is unaffected by any read-time
+        storage class override.
 
         Formatters should read the write storage class from the
         `FileDescriptor`, but some read it from the ref, so `RemoteButler` must
-        hand the Formatter the same written ref that `DirectButler` does.
+        hand the Formatter the same ref that `DirectButler` does.
         """
         remote_get = lsst.daf.butler.remote_butler._get
 
@@ -397,17 +398,19 @@ class ButlerClientServerTestCase(unittest.TestCase):
         captured: dict[str, object] = {}
         original = remote_get.generate_datastore_get_information
 
-        def capturing(fileLocations, *, ref, parameters, readStorageClass=None):
-            captured["ref_storage_class"] = ref.datasetType.storageClass
-            captured["read_storage_class"] = readStorageClass
-            return original(fileLocations, ref=ref, parameters=parameters, readStorageClass=readStorageClass)
+        def capturing(fileLocations, *, registry_ref, read_ref, parameters):
+            captured["registry_storage_class"] = registry_ref.datasetType.storageClass
+            captured["read_storage_class"] = read_ref.datasetType.storageClass
+            return original(
+                fileLocations, registry_ref=registry_ref, read_ref=read_ref, parameters=parameters
+            )
 
         with patch.object(remote_get, "generate_datastore_get_information", side_effect=capturing):
             self.butler.get(ref, storageClass=override)
 
-        # The ref given to the Formatter must carry the write storage class,
-        # and the override must instead travel via readStorageClass.
-        self.assertEqual(captured["ref_storage_class"], write_storage_class)
+        # The ref given to the Formatter must carry the storage class from the
+        # repository, and the override must instead travel via the read ref.
+        self.assertEqual(captured["registry_storage_class"], write_storage_class)
         self.assertEqual(captured["read_storage_class"], override)
 
     def test_component_access_without_server_storage_class(self):
@@ -721,6 +724,215 @@ class ButlerClientServerTestCase(unittest.TestCase):
             data_coordinates = [DataCoordinate.standardize(data_id, visit=x) for x in range(100_001)]
             with self.assertRaisesRegex(InvalidQueryError, "data coordinate rows"):
                 list(query.join_data_coordinates(data_coordinates).datasets(ref.datasetType, ref.run))
+
+
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
+class ButlerClientServerParityTestCase(unittest.TestCase):
+    """Test that `RemoteButler` and `DirectButler` agree for every combination
+    of component request and storage class override.
+
+    This uses its own server instance because
+    `ButlerClientServerTestCase` mocks the `DirectButler` datastore, which
+    would leave nothing to compare the `RemoteButler` results against.
+    """
+
+    COMPONENT = "summary"
+
+    COMPOSITE_STORAGE_CLASS = "MetricsConversion"
+    """Read storage class for the composite.  Defines the same components as
+    ``StructuredData`` but with a different Python type.
+    """
+
+    COMPONENT_STORAGE_CLASS = "DictConvertibleModel"
+    """Read storage class for the component itself."""
+
+    DATA_ID = {"instrument": "DummyCamComp", "visit": 423}
+    COLLECTIONS = "ingest/run"
+
+    @classmethod
+    def setUpClass(cls):
+        server_instance = cls.enterClassContext(create_test_server(TESTDIR))
+        cls.direct_butler = server_instance.direct_butler
+        cls.remote_butler = server_instance.remote_butler
+        cls.storageClassFactory = StorageClassFactory()
+        repo = MetricTestRepo.create_from_butler(
+            server_instance.direct_butler, server_instance.config_file_path
+        )
+        # One dataset whose write storage class defines the component that will
+        # be requested, and one whose write storage class defines no components
+        # at all so that the component can only come from the read override.
+        cls.refs = {}
+        for name, storage_class in (
+            ("parity_with_components", "StructuredData"),
+            ("parity_no_components", "StructuredDataNoComponents"),
+        ):
+            dataset_type = addDatasetType(repo.butler, name, {"instrument", "visit"}, storage_class)
+            cls.refs[name] = repo.addDataset(cls.DATA_ID, datasetType=dataset_type)
+
+    def butlers(self):
+        """Iterate over the butlers that must behave identically.
+
+        Yields
+        ------
+        name : `str`
+            Name of the butler, for use in subtest labels.
+        butler : `Butler`
+            The butler itself.
+        """
+        yield "direct", self.direct_butler
+        yield "remote", self.remote_butler
+
+    def test_composite_parity(self):
+        """Both butlers must return the same composite, with and without a read
+        storage class override.
+        """
+        composite_pytype = self.storageClassFactory.getStorageClass(self.COMPOSITE_STORAGE_CLASS).pytype
+        for name, ref in self.refs.items():
+            write_pytype = ref.datasetType.storageClass.pytype
+            override_ref = ref.overrideStorageClass(self.COMPOSITE_STORAGE_CLASS)
+            cases = {
+                "get(ref)": (lambda b, r=ref: b.get(r), write_pytype),
+                "get(name, dataId)": (
+                    lambda b, n=name: b.get(n, self.DATA_ID, collections=self.COLLECTIONS),
+                    write_pytype,
+                ),
+                "get(ref, storageClass)": (
+                    lambda b, r=ref: b.get(r, storageClass=self.COMPOSITE_STORAGE_CLASS),
+                    composite_pytype,
+                ),
+                "get(override_ref)": (lambda b, r=override_ref: b.get(r), composite_pytype),
+                "getDeferred(ref).get()": (lambda b, r=ref: b.getDeferred(r).get(), write_pytype),
+                "getDeferred(ref, storageClass).get()": (
+                    lambda b, r=ref: b.getDeferred(r, storageClass=self.COMPOSITE_STORAGE_CLASS).get(),
+                    composite_pytype,
+                ),
+            }
+            for label, (call, pytype) in cases.items():
+                for butler_name, butler in self.butlers():
+                    with self.subTest(dataset=name, case=label, butler=butler_name):
+                        value = call(butler)
+                        self.assertIsInstance(value, pytype)
+                        self.assertEqual(value.summary, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+    def test_component_parity(self):
+        """Both butlers must return the same component, whether it is defined
+        by the storage class used to write or only by the read override.
+        """
+        summary = MetricTestRepo.METRICS_EXAMPLE_SUMMARY
+        converted = DictConvertibleModel.from_dict(summary)
+        for name, ref in self.refs.items():
+            override_ref = ref.overrideStorageClass(self.COMPOSITE_STORAGE_CLASS)
+            component_ref = override_ref.makeComponentRef(self.COMPONENT)
+            cases = {
+                # A component of the overridden composite, requested by ref, by
+                # dataset type, and via a deferred handle.  The component
+                # dataset type carries the composite override in its
+                # parentStorageClass, so unlike a component dataset type *name*
+                # it can express both overrides at once.
+                "get(component_ref)": (lambda b, r=component_ref: b.get(r), summary),
+                "get(component_ref, storageClass)": (
+                    lambda b, r=component_ref: b.get(r, storageClass=self.COMPONENT_STORAGE_CLASS),
+                    converted,
+                ),
+                "get(component_datasetType, dataId)": (
+                    lambda b, r=component_ref: b.get(
+                        r.datasetType, self.DATA_ID, collections=self.COLLECTIONS
+                    ),
+                    summary,
+                ),
+                "getDeferred(component_ref).get()": (
+                    lambda b, r=component_ref: b.getDeferred(r).get(),
+                    summary,
+                ),
+                # The handle storage class applies to the composite and so
+                # selects the component, while the one given to get() applies
+                # to the component itself.
+                "getDeferred(ref, storageClass).get(component)": (
+                    lambda b, r=ref: b.getDeferred(r, storageClass=self.COMPOSITE_STORAGE_CLASS).get(
+                        component=self.COMPONENT
+                    ),
+                    summary,
+                ),
+                "getDeferred(ref, storageClass).get(component, storageClass)": (
+                    lambda b, r=ref: b.getDeferred(r, storageClass=self.COMPOSITE_STORAGE_CLASS).get(
+                        component=self.COMPONENT, storageClass=self.COMPONENT_STORAGE_CLASS
+                    ),
+                    converted,
+                ),
+            }
+            if self.COMPONENT in ref.datasetType.storageClass.allComponents():
+                # The write storage class knows the component, so the plain
+                # forms that carry no override also work.
+                cases["get('name.component', dataId)"] = (
+                    lambda b, n=name: b.get(
+                        f"{n}.{self.COMPONENT}", self.DATA_ID, collections=self.COLLECTIONS
+                    ),
+                    summary,
+                )
+                cases["get('name.component', dataId, storageClass)"] = (
+                    lambda b, n=name: b.get(
+                        f"{n}.{self.COMPONENT}",
+                        self.DATA_ID,
+                        collections=self.COLLECTIONS,
+                        storageClass=self.COMPONENT_STORAGE_CLASS,
+                    ),
+                    converted,
+                )
+                cases["getDeferred(ref).get(component)"] = (
+                    lambda b, r=ref: b.getDeferred(r).get(component=self.COMPONENT),
+                    summary,
+                )
+                cases["getDeferred('name.component', dataId).get()"] = (
+                    lambda b, n=name: b.getDeferred(
+                        f"{n}.{self.COMPONENT}", self.DATA_ID, collections=self.COLLECTIONS
+                    ).get(),
+                    summary,
+                )
+            for label, (call, expected) in cases.items():
+                for butler_name, butler in self.butlers():
+                    with self.subTest(dataset=name, case=label, butler=butler_name):
+                        self.assertEqual(call(butler), expected)
+
+    def test_unconveyable_component_override_parity(self):
+        """Both butlers must raise for a component that only the read storage
+        class defines when the request cannot convey the composite override.
+
+        A component dataset type *name* has nowhere to record a storage class
+        override for the composite, and the ``storageClass`` argument applies
+        to the component, so there is no way to say which composite storage
+        class defines the component.  Raising is the only correct answer; a
+        `DatasetRef` or `DatasetType` must be used instead.
+        """
+        name = "parity_no_components"
+        ref = self.refs[name]
+        self.assertNotIn(self.COMPONENT, ref.datasetType.storageClass.allComponents())
+        component_type = f"{name}.{self.COMPONENT}"
+        cases = {
+            "get('name.component', dataId)": lambda b: b.get(
+                component_type, self.DATA_ID, collections=self.COLLECTIONS
+            ),
+            "get('name.component', dataId, storageClass)": lambda b: b.get(
+                component_type,
+                self.DATA_ID,
+                collections=self.COLLECTIONS,
+                storageClass=self.COMPONENT_STORAGE_CLASS,
+            ),
+            "getDeferred('name.component', dataId)": lambda b: b.getDeferred(
+                component_type, self.DATA_ID, collections=self.COLLECTIONS
+            ),
+            "getDeferred('name.component', dataId, storageClass)": lambda b: b.getDeferred(
+                component_type,
+                self.DATA_ID,
+                collections=self.COLLECTIONS,
+                storageClass=self.COMPONENT_STORAGE_CLASS,
+            ),
+            "getDeferred(ref).get(component)": lambda b: b.getDeferred(ref).get(component=self.COMPONENT),
+        }
+        for label, call in cases.items():
+            for butler_name, butler in self.butlers():
+                with self.subTest(case=label, butler=butler_name):
+                    with self.assertRaises(UnknownComponentError):
+                        call(butler)
 
 
 @unittest.skipIf(not butler_server_is_available, butler_server_import_error)

@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = (
     "apply_storage_class_override",
     "get_component_override",
+    "make_read_ref",
     "normalize_dataset_type_name",
     "simplify_dataId",
     "split_dataset_type_name",
@@ -75,6 +76,61 @@ def apply_storage_class_override(
         return ref.overrideStorageClass(dataset_type.storageClass)
 
     return ref
+
+
+def make_read_ref(
+    registry_ref: DatasetRef,
+    original_dataset_ref_or_type: DatasetRef | DatasetType | str,
+    explicit_storage_class: StorageClass | str | None,
+) -> DatasetRef:
+    """Return the ref describing the dataset the caller asked for.
+
+    Parameters
+    ----------
+    registry_ref : `DatasetRef`
+        The parent (composite) ref returned by the server, carrying the
+        `StorageClass` from the dataset type definition in the repository.
+        Component dataset types are never sent to the server, so any component
+        has to be re-applied here.
+    original_dataset_ref_or_type : `DatasetRef` | `DatasetType` | `str`
+        The ref or type that was input to the search, which may name a
+        component and may override the storage class.
+    explicit_storage_class : `StorageClass` | `str` | `None`
+        A storage class that the user explicitly requested as an override.
+
+    Returns
+    -------
+    read_ref : `DatasetRef`
+        The ref describing the component and `StorageClass` that the caller
+        wants returned.
+
+    Notes
+    -----
+    A read `StorageClass` override can define components that the repository
+    definition does not, so the component is derived from the overridden
+    composite rather than from ``registry_ref`` itself.
+    """
+    component = get_component_override(original_dataset_ref_or_type)
+    if component is None:
+        return apply_storage_class_override(
+            registry_ref, original_dataset_ref_or_type, explicit_storage_class
+        )
+
+    # Apply any composite storage class override before deriving the component
+    # from it.
+    read_ref = registry_ref
+    dataset_type = _extract_dataset_type(original_dataset_ref_or_type)
+    if dataset_type is not None:
+        if dataset_type.parentStorageClass is not None:
+            read_ref = read_ref.overrideStorageClass(dataset_type.parentStorageClass)
+        read_ref = read_ref.makeComponentRef(component).overrideStorageClass(dataset_type.storageClass)
+    else:
+        # Only a dataset type name was given, so there is no override.
+        read_ref = read_ref.makeComponentRef(component)
+    if explicit_storage_class is not None:
+        read_ref = read_ref.overrideStorageClass(explicit_storage_class)
+
+    return read_ref
 
 
 def normalize_dataset_type_name(datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
