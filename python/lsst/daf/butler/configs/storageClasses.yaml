@@ -15,6 +15,9 @@ storageClasses:
       lsst.images.SkyProjection: lsst.images.SkyProjection.to_legacy
   Psf:
     pytype: lsst.afw.detection.Psf
+    converters:
+      lsst.images.cells.CellPointSpreadFunction: lsst.images.cells.CellPointSpreadFunction.to_legacy
+      lsst.images.psfs.PointSpreadFunction: lsst.images.psfs.PointSpreadFunction.to_legacy
   CoaddInputs:
     pytype: lsst.afw.image.CoaddInputs
   VisitInfo:
