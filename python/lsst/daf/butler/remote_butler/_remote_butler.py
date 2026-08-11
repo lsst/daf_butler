@@ -75,6 +75,7 @@ from ._query_results import convert_dataset_ref_results, read_query_results
 from ._ref_utils import (
     apply_storage_class_override,
     get_component_override,
+    make_read_ref,
     normalize_dataset_type_name,
     simplify_dataId,
     split_dataset_type_name,
@@ -300,25 +301,27 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         with self._metrics.instrument_get(log=_LOG, msg="Retrieved remote dataset"):
             model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
 
-            written_ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
-            # The server returns the parent dataset type -- component dataset
-            # types are never sent to the server, because it may not have the
-            # storage class definitions needed to construct them.  Re-apply
-            # any component here.
-            componentOverride = get_component_override(datasetRefOrType)
-            if componentOverride is not None:
-                written_ref = written_ref.makeComponentRef(componentOverride)
-            # The written ref carries the storage class the file was written
-            # with; the read ref carries any storage class override requested
-            # by the caller.  Keep them separate so the Formatter always sees
-            # the written ref (as it does with DirectButler).
-            read_ref = apply_storage_class_override(written_ref, datasetRefOrType, storageClass)
+            # The server is the source of truth for the dataset type definition
+            # in the repository, so this ref describes what a `get` with no
+            # overrides would return.  The server returns the parent dataset
+            # type -- component dataset types are never sent to the server,
+            # because it may not have the storage class definitions needed to
+            # construct them.
+            registry_ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
 
-            return self._get_dataset_as_python_object(written_ref, read_ref, model, parameters)
+            # Any component requested by the caller, along with any storage
+            # class override, is carried by the read ref.  Keep the two
+            # separate so that the Formatter always sees the repository
+            # definition (as it does with DirectButler).  The storage class the
+            # file was actually written with comes from the datastore records
+            # in the payload, not from either ref.
+            read_ref = make_read_ref(registry_ref, datasetRefOrType, storageClass)
+
+            return self._get_dataset_as_python_object(registry_ref, read_ref, model, parameters)
 
     def _get_dataset_as_python_object(
         self,
-        written_ref: DatasetRef,
+        registry_ref: DatasetRef,
         read_ref: DatasetRef,
         model: GetFileResponseModel,
         parameters: dict[str, Any] | None,
@@ -326,7 +329,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # This thin wrapper method is here to provide a place to hook in a mock
         # mimicking DatastoreMock functionality for use in unit tests.
         return get_dataset_as_python_object(
-            written_ref,
+            registry_ref,
             read_ref,
             _to_file_payload(model),
             auth=self._connection.auth,

@@ -20,7 +20,7 @@ from .server_models import FileAuthenticationMode, FileInfoPayload, FileInfoReco
 
 
 def get_dataset_as_python_object(
-    written_ref: DatasetRef,
+    registry_ref: DatasetRef,
     read_ref: DatasetRef,
     payload: FileInfoPayload,
     *,
@@ -32,19 +32,15 @@ def get_dataset_as_python_object(
 
     Parameters
     ----------
-    written_ref : `DatasetRef`
-        Metadata about this artifact using the `StorageClass` that the file
-        was written with.  This is the ref given to the `Formatter`, so that
-        it always sees the write `StorageClass` regardless of any read-time
-        override, matching the behavior of `DirectButler`.
+    registry_ref : `DatasetRef`
+        Metadata about this artifact using the dataset type definition from
+        the repository, as returned by the server.  This is the ref given to
+        the `Formatter`, so that it never sees a read-time override, matching
+        the behavior of `DirectButler`.  It is never a component.
     read_ref : `DatasetRef`
         Metadata about this artifact using the `StorageClass` that the caller
-        wants returned.  This differs from ``written_ref`` only in its
-        `StorageClass` when a read-time override has been requested.  The two
-        refs always share the same dataset type name, so they either both
-        refer to a component or both refer to a composite; any component
-        override requested by the caller is applied before the read
-        `StorageClass` override is derived.
+        wants returned, and naming the component (if any) that they asked
+        for.
     payload : `FileInfoPayload`
         Pre-processed information about each file associated with this
         artifact.
@@ -64,13 +60,14 @@ def get_dataset_as_python_object(
     """
     fileLocations = [_to_dataset_location_information(file_info, auth) for file_info in payload.file_info]
 
-    # The Formatter is constructed with the written ref, while the read
-    # StorageClass override travels separately.  DirectButler does the same in
+    # The Formatter is constructed with the repository definition of the
+    # dataset, while the component and read StorageClass requested by the
+    # caller travel separately.  DirectButler does the same in
     # ``FileDatastore._prepare_for_direct_get``.
     datastore_file_info = generate_datastore_get_information(
         fileLocations,
-        ref=written_ref,
-        readStorageClass=read_ref.datasetType.storageClass,
+        registry_ref=registry_ref,
+        read_ref=read_ref,
         parameters=parameters,
     )
     if cache_manager is None:

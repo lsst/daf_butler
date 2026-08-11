@@ -375,14 +375,14 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
-    def test_get_formatter_receives_written_ref(self):
-        """The Formatter must always be given the written `DatasetRef`, so its
-        storage class matches the one the file was written with, regardless of
-        any read-time storage class override.
+    def test_get_formatter_receives_registry_ref(self):
+        """The Formatter must always be given the `DatasetRef` as defined in
+        the repository, so its storage class is unaffected by any read-time
+        storage class override.
 
         Formatters should read the write storage class from the
         `FileDescriptor`, but some read it from the ref, so `RemoteButler` must
-        hand the Formatter the same written ref that `DirectButler` does.
+        hand the Formatter the same ref that `DirectButler` does.
         """
         remote_get = lsst.daf.butler.remote_butler._get
 
@@ -397,17 +397,19 @@ class ButlerClientServerTestCase(unittest.TestCase):
         captured: dict[str, object] = {}
         original = remote_get.generate_datastore_get_information
 
-        def capturing(fileLocations, *, ref, parameters, readStorageClass=None):
-            captured["ref_storage_class"] = ref.datasetType.storageClass
-            captured["read_storage_class"] = readStorageClass
-            return original(fileLocations, ref=ref, parameters=parameters, readStorageClass=readStorageClass)
+        def capturing(fileLocations, *, registry_ref, read_ref, parameters):
+            captured["registry_storage_class"] = registry_ref.datasetType.storageClass
+            captured["read_storage_class"] = read_ref.datasetType.storageClass
+            return original(
+                fileLocations, registry_ref=registry_ref, read_ref=read_ref, parameters=parameters
+            )
 
         with patch.object(remote_get, "generate_datastore_get_information", side_effect=capturing):
             self.butler.get(ref, storageClass=override)
 
-        # The ref given to the Formatter must carry the write storage class,
-        # and the override must instead travel via readStorageClass.
-        self.assertEqual(captured["ref_storage_class"], write_storage_class)
+        # The ref given to the Formatter must carry the storage class from the
+        # repository, and the override must instead travel via the read ref.
+        self.assertEqual(captured["registry_storage_class"], write_storage_class)
         self.assertEqual(captured["read_storage_class"], override)
 
     def test_component_access_without_server_storage_class(self):
