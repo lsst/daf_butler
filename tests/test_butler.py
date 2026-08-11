@@ -1851,6 +1851,41 @@ class FileDatastoreButlerTests(ButlerTests):
 
     trustModeSupported = True
 
+    def testComponentFromOverriddenStorageClassWarns(self) -> None:
+        """Test that getting a component that only the read storage class
+        defines warns, since the whole dataset has to be retrieved and
+        converted before the component can be extracted.
+        """
+        write_sc = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        read_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
+        butler, datasetType = self.create_butler(self.default_run, write_sc, "unstructured")
+        metric = makeExampleMetrics()
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        ref = butler.put(metric, datasetType, dataId)
+        component_ref = ref.overrideStorageClass(read_sc).makeComponentRef("summary")
+
+        logger = "lsst.daf.butler.datastores.file_datastore.get"
+        with self.assertLogs(logger, level="WARNING") as cm:
+            self.assertEqual(butler.get(component_ref), metric.summary)
+        message = "\n".join(cm.output)
+        # The message must name the component, the storage class that lacks it
+        # along with the components it does have, and the storage class the
+        # dataset has to be converted to.
+        self.assertIn("summary", message)
+        self.assertIn(write_sc.name, message)
+        self.assertIn("components it does define: none", message)
+        self.assertIn(read_sc.name, message)
+        self.assertIn("less efficient", message)
+
+        # Reading a component that the write storage class does define must not
+        # warn.
+        composite_type = self.addDatasetType(
+            "composite", datasetType.dimensions, "StructuredData", butler.registry
+        )
+        composite_ref = butler.put(metric, composite_type, dataId)
+        with self.assertNoLogs(logger, level="WARNING"):
+            self.assertEqual(butler.get(composite_ref.makeComponentRef("summary")), metric.summary)
+
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
         """Check if file exists at a given path (relative to root).
 
@@ -2719,6 +2754,12 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
         # This test relies on manipulating files out-of-band, which is
         # impossible for this configuration because of the InMemoryDatastore in
         # the ChainedDatastore.
+        pass
+
+    def testComponentFromOverriddenStorageClassWarns(self) -> None:
+        # The InMemoryDatastore in the ChainedDatastore satisfies the get, so
+        # the FileDatastore warning about having to read the whole dataset to
+        # extract the component is never issued.
         pass
 
 

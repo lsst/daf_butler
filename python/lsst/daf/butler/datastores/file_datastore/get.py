@@ -97,6 +97,73 @@ class DatastoreFileGetInformation:
     """
 
 
+def _describe_components(storageClass: StorageClass) -> str:
+    """Return a description of the components a `StorageClass` recognizes,
+    suitable for inclusion in a log message.
+
+    Parameters
+    ----------
+    storageClass : `StorageClass`
+        Storage class to describe.
+
+    Returns
+    -------
+    description : `str`
+        Comma-separated list of component names, or ``"none"``.
+    """
+    return ", ".join(sorted(storageClass.allComponents())) or "none"
+
+
+def _warn_about_converted_component_read(
+    registry_ref: DatasetRef,
+    component: str,
+    writeStorageClass: StorageClass,
+    parentReadStorageClass: StorageClass,
+) -> None:
+    """Warn that a component request needs the whole dataset to be read.
+
+    Parameters
+    ----------
+    registry_ref : `DatasetRef`
+        The dataset as defined in the repository, used to identify the dataset
+        in the message.
+    component : `str`
+        Name of the component that was requested.
+    writeStorageClass : `StorageClass`
+        The `StorageClass` the dataset was written with, which does not define
+        ``component``.
+    parentReadStorageClass : `StorageClass`
+        The `StorageClass` the composite has to be converted to in order to
+        obtain ``component``.
+    """
+    message = (
+        "Component %r was requested from dataset %s but storage class %s, which the dataset was "
+        "written with, does not define it (components it does define: %s). The entire dataset must "
+        "therefore be retrieved and converted to storage class %s before %r can be extracted from "
+        "the result. This is slower than reading the component on its own: the storage class "
+        "override has made this a less efficient request."
+    )
+    args: list[Any] = [
+        component,
+        registry_ref,
+        writeStorageClass.name,
+        _describe_components(writeStorageClass),
+        parentReadStorageClass.name,
+        component,
+    ]
+    registryStorageClass = registry_ref.datasetType.storageClass
+    if registryStorageClass != writeStorageClass:
+        # The dataset type definition has changed since the dataset was
+        # written, so the caller may be surprised that the component they were
+        # offered is not available from the file itself.
+        message += (
+            " The dataset type is now defined with storage class %s (components: %s), which is why "
+            "the component appeared to be available."
+        )
+        args += [registryStorageClass.name, _describe_components(registryStorageClass)]
+    log.warning(message, *args)
+
+
 def generate_datastore_get_information(
     fileLocations: list[DatasetLocationInformation],
     *,
@@ -169,6 +236,9 @@ def generate_datastore_get_information(
             # component from that.
             componentStorageClass = readStorageClass
             thisReadStorageClass = parentReadStorageClass
+            _warn_about_converted_component_read(
+                registry_ref, refComponent, writeStorageClass, parentReadStorageClass
+            )
 
         formatter = get_instance_of(
             storedFileInfo.formatter,
