@@ -435,6 +435,8 @@ storageClasses:
     parameters:
       - blend_id
     delegate: lsst.meas.extensions.scarlet.io.ScarletModelDelegate
+    converters:
+      lsst.meas.extensions.scarlet.io.LsstScarletModelData: lsst.meas.extensions.scarlet.io.LsstScarletModelData.to_scarlet_model_data
   LsstScarletModelData:
     pytype: lsst.meas.extensions.scarlet.io.LsstScarletModelData
     converters:
