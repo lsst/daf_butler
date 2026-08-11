@@ -363,7 +363,17 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             # In-memory datastore must have stored the dataset as a single
             # object in the write storage class. We therefore use that
             # storage class delegate to obtain the component.
-            inMemoryDataset = writeStorageClass.delegate().getComponent(inMemoryDataset, component)
+            compositeStorageClass = writeStorageClass
+            if component not in writeStorageClass.allComponents():
+                # The component is defined by the storage class the caller is
+                # converting to rather than the one used to write, so the
+                # composite has to be converted before the component can be
+                # extracted from it.
+                parentStorageClass = ref.datasetType.parentStorageClass
+                if parentStorageClass is not None:
+                    compositeStorageClass = parentStorageClass
+                    inMemoryDataset = parentStorageClass.coerce_type(inMemoryDataset)
+            inMemoryDataset = compositeStorageClass.delegate().getComponent(inMemoryDataset, component)
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.
