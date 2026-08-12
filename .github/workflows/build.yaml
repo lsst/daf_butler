@@ -58,6 +58,15 @@ jobs:
         run: |
           uv pip install --system -r requirements.txt
 
+      # Arrow is an optional dependency of daf_butler, imported lazily.  It has
+      # no wheels for the unreleased interpreters and cannot practically be
+      # built from source, so it is left out there and the tests that need it
+      # skip themselves.
+      - name: Install pyarrow
+        if: ${{ !startsWith(matrix.python-version, '3.15') }}
+        run: |
+          uv pip install --system pyarrow
+
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages
         run: |

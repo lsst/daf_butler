@@ -88,6 +88,13 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name
 
+try:
+    import pyarrow
+except ImportError:
+    pyarrow = None
+
+requires_arrow = unittest.skipIf(pyarrow is None, "pyarrow is not available")
+
 TESTDIR = os.path.dirname(__file__)
 
 
@@ -1001,6 +1008,7 @@ class DatastoreTests(DatastoreTestsBase):
         data = datastore2.get(refs[2])
         self.assertIsNotNone(data)
 
+    @requires_arrow
     def testExportImportTable(self) -> None:
         datastore, refs = self._populate_export_datastore("test_datastore")
         table = datastore.export_table([ref.id for ref in refs])
@@ -2329,6 +2337,7 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
 class TestDatastoreRecordTable(unittest.TestCase):
     """Test DatastoreRecordTable and StoredFileInfoTable."""
 
+    @requires_arrow
     def test_empty_datastore_records_table(self) -> None:
         file_info_table = StoredFileInfoTable.from_records([])
         self.assertEqual(0, len(file_info_table))
@@ -2342,6 +2351,7 @@ class TestDatastoreRecordTable(unittest.TestCase):
         # Doesn't throw because there is no mismatch in datastore names.
         DatastoreRecordTable.create_empty().validate_datastore_names("arbitrary_name")
 
+    @requires_arrow
     def test_stored_file_info_table_records(self) -> None:
         uuid1 = uuid.UUID("019e1892-7b9b-736d-8248-0e031723646c")
         uuid2 = uuid.UUID("019e1895-9ec3-7431-bed9-8ae60096103f")
