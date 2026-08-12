@@ -63,7 +63,9 @@ RUN ./install-dependency-packages.sh
 
 # Create a virtual environment and install Python libraries.  These are
 # installed separately from the daf_butler source code to improve caching.
-ARG NEEDED_EXTRAS="--extra postgres --extra server"
+# The server always wants the Arrow storage classes, so the "arrow" extra is
+# requested explicitly.
+ARG NEEDED_EXTRAS="--extra postgres --extra server --extra arrow"
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \

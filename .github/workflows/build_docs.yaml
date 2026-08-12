@@ -30,7 +30,7 @@ jobs:
         run: sudo apt-get install graphviz
 
       - name: Build and install
-        run: uv sync --locked --extra postgres --group doc
+        run: uv sync --locked --extra postgres --extra arrow --group doc
 
       - name: Build documentation
         working-directory: ./doc

@@ -29,9 +29,14 @@ import copy
 import json
 import unittest
 
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pydantic
+
+try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+except ImportError:
+    pa = None
+    pq = None
 
 from lsst.daf.butler import (
     DataCoordinate,
@@ -43,8 +48,12 @@ from lsst.daf.butler import (
     SerializableDimensionData,
     SerializedKeyValueDimensionRecord,
 )
-from lsst.daf.butler.arrow_utils import TimespanArrowType
 from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
+
+if pa is not None:
+    from lsst.daf.butler.arrow_utils import TimespanArrowType
+
+requires_arrow = unittest.skipIf(pa is None, "pyarrow is not available")
 
 DIMENSION_DATA_FILES = [
     "resource://lsst.daf.butler/tests/registry_data/base.yaml",
@@ -72,6 +81,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual(a, b)  # only checks data ID equality
         self.assertCountEqual(list(a), list(b))
 
+    @requires_arrow
     def test_record_table_schema_visit(self):
         """Test that the Arrow schema for 'visit' has the right types,
         including dictionary encoding.
@@ -83,6 +93,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual(schema.field("name").type, pa.string())
         self.assertEqual(schema.field("observation_reason").type, pa.dictionary(pa.int32(), pa.string()))
 
+    @requires_arrow
     def test_record_table_schema_skymap(self):
         """Test that the Arrow schema for 'skymap' has the right types,
         including dictionary encoding.
@@ -91,6 +102,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual(schema.field("name").type, pa.string())
         self.assertEqual(schema.field("hash").type, pa.binary())
 
+    @requires_arrow
     def test_empty_record_table_visit(self):
         """Test methods on a table that was initialized with no records.
 
@@ -115,6 +127,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
             table.to_arrow().schema, DimensionRecordTable.make_arrow_schema(self.universe["visit"])
         )
 
+    @requires_arrow
     def test_empty_record_table_skymap(self):
         """Test methods on a table that was initialized with no records.
 
@@ -135,6 +148,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
             table.to_arrow().schema, DimensionRecordTable.make_arrow_schema(self.universe["skymap"])
         )
 
+    @requires_arrow
     def test_full_record_table_visit(self):
         """Test methods on a table that was initialized with an iterable.
 
@@ -165,6 +179,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         table.extend(self.records["visit"])
         self.assertCountEqual(table, self.records["visit"] + self.records["visit"])
 
+    @requires_arrow
     def test_full_record_table_skymap(self):
         """Test methods on a table that was initialized with an iterable.
 
@@ -181,6 +196,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         table.extend(self.records["skymap"])
         self.assertCountEqual(table, self.records["skymap"] + self.records["skymap"])
 
+    @requires_arrow
     def test_record_table_parquet_visit(self):
         """Test round-tripping a dimension record table through Parquet.
 
@@ -202,6 +218,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertListEqual([x.timespan for x in table1], [x.timespan for x in table2])
         self.assertListEqual([x.timespan for x in original_records], [x.timespan for x in table2])
 
+    @requires_arrow
     def test_record_table_parquet_skymap(self):
         """Test round-tripping a dimension record table through Parquet.
 
@@ -216,6 +233,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         )
         self.assertEqual(list(table1), list(table2))
 
+    @requires_arrow
     def test_record_chunk_init(self):
         """Test constructing a DimensionRecordTable from an iterable in chunks.
 
@@ -227,6 +245,7 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         self.assertEqual([len(batch) for batch in table1.to_arrow().to_batches()], [5, 5, 2])
         self.assertEqual(list(table1), list(self.records["patch"]))
 
+    @requires_arrow
     def test_arrow_timespan_nulls(self):
         """Test that null values for Timespan can be round-tripped through
         arrow.

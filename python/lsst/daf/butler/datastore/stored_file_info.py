@@ -35,8 +35,6 @@ from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-import pyarrow.compute as pc
 import pydantic
 
 from lsst.resources import ResourcePath
@@ -46,9 +44,10 @@ from lsst.utils.introspection import get_full_type_name
 from .._formatter import Formatter, FormatterParameter, FormatterV2
 from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
-from ..arrow_utils import ArrowTableUtils
 
 if TYPE_CHECKING:
+    import pyarrow as pa
+
     from .._dataset_ref import DatasetRef
 
 # String to use when a Python None is encountered
@@ -476,6 +475,10 @@ class StoredFileInfoTable:
         -----
         This is a tabular version of ``StoredFileInfo.from_record()``.
         """
+        import pyarrow as pa
+
+        from ..arrow_utils import ArrowTableUtils
+
         records = [{**row, "dataset_id": row["dataset_id"].bytes} for row in records]
         table = pa.Table.from_pylist(records, schema=StoredFileInfoTable.make_arrow_schema())
 
@@ -502,6 +505,8 @@ class StoredFileInfoTable:
             List of dictionaries suitable for insertion into datastore records
             table.
         """
+        from ..arrow_utils import ArrowTableUtils
+
         # Undo the transformations done in ``from_records`` to get the database
         # representation for component and file_size.
         table = self._table
@@ -513,6 +518,8 @@ class StoredFileInfoTable:
     @staticmethod
     def make_arrow_schema() -> pa.Schema:
         """Return the `pyarrow.Schema` for the arrow table."""
+        import pyarrow as pa
+
         string_dict = pa.dictionary(pa.int32(), pa.string())
         return pa.schema(
             [
@@ -531,11 +538,17 @@ class StoredFileInfoTable:
 
 
 def _replace_null_placeholder_with_null(array: pa.Array) -> pa.Array:
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
     mask = pc.equal(array, NULLSTR)
     return pc.if_else(mask, pa.scalar(None), array)
 
 
 def _replace_negative_with_null(array: pa.Array) -> pa.Array:
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
     mask = pc.less(array, 0)
     return pc.if_else(mask, pa.scalar(None), array)
 
