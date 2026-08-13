@@ -230,6 +230,6 @@ async def _dequeue_query_pages_with_keepalive(
                 message = await queue.get()
                 if message is None:
                     return
-                yield message
+            yield message
         except TimeoutError:
             yield QueryKeepAliveModel()
