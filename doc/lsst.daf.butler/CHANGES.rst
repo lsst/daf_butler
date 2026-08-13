@@ -1,3 +1,34 @@
+Butler v30.0.11 (2026-08-13)
+============================
+
+New Features
+------------
+
+- Updated parquet code to support both pandas2 and pandas3. (`DM-55436 <https://rubinobs.atlassian.net/browse/DM-55436>`_)
+
+
+Bug Fixes
+---------
+
+- Forced the write storage class ref through to the formatter with ``RemoteButler``.
+
+  Previously ``DirectButler`` gave a write ref to the formatter and ``RemoteButler`` passed in the read ref. Now they are consistent. (`DM-55626 <https://rubinobs.atlassian.net/browse/DM-55626>`_)
+- Fixed component ``get`` when a read storage class override defines components that the storage class used to write the dataset does not.
+
+  Previously the requested component was always resolved against the write storage class, so a call such as ``butler.getDeferred(ref, storageClass="Exposure").get(component="photoCalib")`` failed with ``UnknownComponentError`` when the dataset had been written with a storage class that has no ``photoCalib`` component.
+  When the component only exists in the read storage class the composite is read and converted first and the component is then extracted from the converted object.
+  This is slower than reading a component directly, so a warning is now issued naming the components that the storage class used to write the dataset does define.
+  ``InMemoryDatastore`` now does the same conversion before extracting the component. (`DM-55708 <https://rubinobs.atlassian.net/browse/DM-55708>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Added a downgrading storage class converter for scarlet models.
+
+  This should allow repositories that have the old storage class registered to be used when running new pipelines, at the cost of dropping some information on write. (`DM-55656 <https://rubinobs.atlassian.net/browse/DM-55656>`_)
+
+
 Butler v30.0.10 (2026-07-20)
 ============================
 
