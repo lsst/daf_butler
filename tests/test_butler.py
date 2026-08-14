@@ -3302,7 +3302,13 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
         self.source_butler.registry.registerDatasetType(datasetType)
 
         metrics = makeExampleMetrics()
-        with ResourcePath.temporary_uri(suffix=".json") as temp:
+        # Ingest from a URI that reports itself as not local, so that the test
+        # distinguishes "the absolute URI was preserved" from "a local path
+        # happened to work".
+        source_dir = os.path.join(self.root, "source data")
+        os.makedirs(source_dir)
+        with ResourcePath.temporary_uri(prefix=make_remote_test_uri(source_dir), suffix=".json") as temp:
+            self.assertFalse(temp.isLocal)
             dataId = DataCoordinate.make_empty(self.source_butler.dimensions)
             source_refs = [DatasetRef(datasetType, dataId, run=run)]
             temp.write(json.dumps(metrics.exportAsDict()).encode())
