@@ -1,0 +1,3 @@
+datastore: !include remoteTestDatastore.yaml
+storageClasses: !include storageClasses.yaml
+cls: lsst.daf.butler.direct_butler.DirectButler

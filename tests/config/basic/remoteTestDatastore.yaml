@@ -1,0 +1,15 @@
+datastore:
+  cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+  # Placeholder root. Test classes override this with a real temporary
+  # directory wrapped in the remote-test scheme.
+  root: remote-test://localhost/butlerRoot
+  templates: !include templates.yaml
+  formatters: !include formatters.yaml
+  composites: !include composites.yaml
+  cached:
+    default: true
+    expiry:
+      mode: files
+      threshold: 1
+    cacheable:
+      StructuredDataDictYaml: true
