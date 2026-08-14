@@ -32,8 +32,6 @@ Tests in this module are disabled unless pandas and pyarrow are importable.
 
 import datetime
 import os
-import posixpath
-import shutil
 import unittest
 import uuid
 
@@ -56,27 +54,9 @@ except ImportError:
     pd = None
 
 try:
-    import boto3
-    import botocore
-
-    from lsst.resources.s3utils import clean_test_environment_for_s3
-
-    try:
-        from moto import mock_aws  # v5
-    except ImportError:
-        from moto import mock_s3 as mock_aws
-except ImportError:
-    boto3 = None
-
-try:
     import fsspec
 except ImportError:
     fsspec = None
-
-try:
-    import s3fs
-except ImportError:
-    s3fs = None
 
 
 from lsst.daf.butler import (
@@ -89,7 +69,6 @@ from lsst.daf.butler import (
     StorageClassConfig,
     StorageClassFactory,
 )
-from lsst.resources import ResourcePath
 
 try:
     from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
@@ -128,6 +107,7 @@ except ImportError:
     atable = None
     np = None
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.resources.tests import make_remote_test_uri
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -2310,57 +2290,33 @@ class InMemoryArrowSchemaDelegateTestCase(ParquetFormatterArrowSchemaTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
 
-@unittest.skipUnless(pa is not None, "Cannot test S3 without pyarrow.")
-@unittest.skipUnless(boto3 is not None, "Cannot test S3 without boto3.")
-@unittest.skipUnless(fsspec is not None, "Cannot test S3 without fsspec.")
-@unittest.skipUnless(s3fs is not None, "Cannot test S3 without s3fs.")
-class ParquetFormatterArrowTableS3TestCase(unittest.TestCase):
-    """Tests for arrow table/parquet with S3."""
+@unittest.skipUnless(pa is not None, "Cannot test remote datastore without pyarrow.")
+@unittest.skipUnless(fsspec is not None, "Cannot test remote datastore without fsspec.")
+class ParquetFormatterArrowTableRemoteTestCase(unittest.TestCase):
+    """Tests for arrow table/parquet with a datastore that reports itself as
+    not local.
+    """
 
     # Code is adapted from test_butler.py
-    configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
-    fullConfigKey = None
-    validationCanFail = True
-
-    bucketName = "anybucketname"
-
-    root = "butlerRoot/"
-
-    datastoreStr = [f"datastore={root}"]
-
-    datastoreName = ["FileDatastore@s3://{bucketName}/{root}"]
-
-    registryStr = "/gen3.sqlite3"
-
-    mock_aws = mock_aws()
+    configFile = os.path.join(TESTDIR, "config/basic/butler-remotetest-store.yaml")
 
     def setUp(self):
-        self.root = makeTestTempDir(TESTDIR)
-
         config = Config(self.configFile)
-        uri = ResourcePath(config[".datastore.datastore.root"])
-        self.bucketName = uri.netloc
 
-        # Enable S3 mocking of tests.
-        self.enterContext(clean_test_environment_for_s3())
-        self.mock_aws.start()
+        self.root = makeTestTempDir(TESTDIR)
+        # The space in the directory name is deliberate, to exercise URI
+        # percent-encoding.
+        root_path = os.path.join(self.root, "butler root")
+        os.makedirs(root_path)
+        rooturi = make_remote_test_uri(root_path)
+        config.update({"datastore": {"datastore": {"root": str(rooturi)}}})
 
-        rooturi = f"s3://{self.bucketName}/{self.root}"
-        config.update({"datastore": {"datastore": {"root": rooturi}}})
-
-        # need local folder to store registry database
+        # The registry database has to live on a real local file system.
         self.reg_dir = makeTestTempDir(TESTDIR)
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
-        # MOTO needs to know that we expect Bucket bucketname to exist
-        # (this used to be the class attribute bucketName)
-        s3 = boto3.resource("s3")
-        s3.create_bucket(Bucket=self.bucketName)
-
-        self.datastoreStr = [f"datastore='{rooturi}'"]
-        self.datastoreName = [f"FileDatastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
+        self.tmpConfigFile = str(rooturi.join("butler.yaml", forceDirectory=False))
 
         self.butler = Butler(self.tmpConfigFile, writeable=True, run="test_run")
         self.enterContext(self.butler)
@@ -2373,30 +2329,10 @@ class ParquetFormatterArrowTableS3TestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(self.datasetType)
 
     def tearDown(self):
-        s3 = boto3.resource("s3")
-        bucket = s3.Bucket(self.bucketName)
-        try:
-            bucket.objects.all().delete()
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                # the key was not reachable - pass
-                pass
-            else:
-                raise
+        removeTestTempDir(self.reg_dir)
+        removeTestTempDir(self.root)
 
-        bucket = s3.Bucket(self.bucketName)
-        bucket.delete()
-
-        # Stop the S3 mock.
-        self.mock_aws.stop()
-
-        if self.reg_dir is not None and os.path.exists(self.reg_dir):
-            shutil.rmtree(self.reg_dir, ignore_errors=True)
-
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
-
-    def testArrowTableS3(self):
+    def testArrowTableRemote(self):
         tab1 = _makeSimpleArrowTable(include_multidim=True, include_masked=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
