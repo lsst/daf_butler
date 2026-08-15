@@ -34,11 +34,8 @@ import logging
 import os
 import pathlib
 import pickle
-import posixpath
-import random
 import re
 import shutil
-import string
 import tempfile
 import unittest
 import unittest.mock
@@ -47,24 +44,6 @@ import warnings
 import weakref
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
-
-try:
-    import boto3
-    import botocore
-
-    from lsst.resources.s3utils import clean_test_environment_for_s3
-
-    try:
-        from moto import mock_aws  # v5
-    except ImportError:
-        from moto import mock_s3 as mock_aws
-except ImportError:
-    boto3 = None
-
-    def mock_aws(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-untyped-def]
-        """No-op decorator in case moto mock_aws can not be imported."""
-        return None
-
 
 import astropy.time
 from sqlalchemy.exc import IntegrityError
@@ -123,6 +102,7 @@ from lsst.daf.butler.tests.utils import (
 )
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
+from lsst.resources.tests import make_remote_test_uri
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
@@ -2857,103 +2837,42 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
         Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
 
-@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
-class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """S3Datastore specialization of a butler; an S3 storage Datastore +
-    a local in-memory SqlRegistry.
+class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
+    """Specialization of a butler using a datastore root that reports itself
+    as not local; a remote file datastore + a local SqlRegistry.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
+    configFile = os.path.join(TESTDIR, "config/basic/butler-remotetest-store.yaml")
     fullConfigKey = None
     validationCanFail = True
-
-    bucketName = "anybucketname"
-    """Name of the Bucket that will be used in the tests. The name is read from
-    the config file used with the tests during set-up.
-    """
-
-    root = "butlerRoot/"
-    """Root repository directory expected to be used in case useTempRoot=False.
-    Otherwise the root is set to a 20 characters long randomly generated string
-    during set-up.
-    """
-
-    datastoreStr = [f"datastore={root}"]
-    """Contains all expected root locations in a format expected to be
-    returned by Butler stringification.
-    """
-
-    datastoreName = ["FileDatastore@s3://{bucketName}/{root}"]
-    """The expected format of the S3 Datastore string."""
 
     registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
 
-    mock_aws = mock_aws()
-    """The mocked s3 interface from moto."""
-
-    def genRoot(self) -> str:
-        """Return a random string of len 20 to serve as a root
-        name for the temporary bucket repo.
-
-        This is equivalent to tempfile.mkdtemp as this is what self.root
-        becomes when useTempRoot is True.
-        """
-        rndstr = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-        return rndstr + "/"
-
     def setUp(self) -> None:
         config = Config(self.configFile)
-        uri = ResourcePath(config[".datastore.datastore.root"])
-        self.bucketName = uri.netloc
 
-        # Enable S3 mocking of tests.
-        self.enterContext(clean_test_environment_for_s3())
-        self.mock_aws.start()
+        self.root = makeTestTempDir(TESTDIR)
+        # The space in the directory name is deliberate. It ensures the URI
+        # has to be percent-encoded correctly on the way in and decoded on
+        # the way out.
+        root_path = os.path.join(self.root, "butler root")
+        os.makedirs(root_path)
+        rooturi = make_remote_test_uri(root_path)
+        config.update({"datastore": {"datastore": {"root": str(rooturi)}}})
 
-        if self.useTempRoot:
-            self.root = self.genRoot()
-        rooturi = f"s3://{self.bucketName}/{self.root}"
-        config.update({"datastore": {"datastore": {"root": rooturi}}})
-
-        # need local folder to store registry database
+        # The registry database has to live on a real local file system.
         self.reg_dir = makeTestTempDir(TESTDIR)
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
-
-        # MOTO needs to know that we expect Bucket bucketname to exist
-        # (this used to be the class attribute bucketName)
-        s3 = boto3.resource("s3")
-        s3.create_bucket(Bucket=self.bucketName)
 
         self.datastoreStr = [f"datastore='{rooturi}'"]
         self.datastoreName = [f"FileDatastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
+        self.tmpConfigFile = str(rooturi.join("butler.yaml", forceDirectory=False))
 
     def tearDown(self) -> None:
-        s3 = boto3.resource("s3")
-        bucket = s3.Bucket(self.bucketName)
-        try:
-            bucket.objects.all().delete()
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                # the key was not reachable - pass
-                pass
-            else:
-                raise
-
-        bucket = s3.Bucket(self.bucketName)
-        bucket.delete()
-
-        # Stop the S3 mock.
-        self.mock_aws.stop()
-
-        if self.reg_dir is not None and os.path.exists(self.reg_dir):
-            shutil.rmtree(self.reg_dir, ignore_errors=True)
-
-        if self.useTempRoot and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
-
+        removeTestTempDir(self.reg_dir)
+        # The base class removes self.root, which contains the datastore.
         super().tearDown()
 
 
@@ -3383,7 +3302,13 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
         self.source_butler.registry.registerDatasetType(datasetType)
 
         metrics = makeExampleMetrics()
-        with ResourcePath.temporary_uri(suffix=".json") as temp:
+        # Ingest from a URI that reports itself as not local, so that the test
+        # distinguishes "the absolute URI was preserved" from "a local path
+        # happened to work".
+        source_dir = os.path.join(self.root, "source data")
+        os.makedirs(source_dir)
+        with ResourcePath.temporary_uri(prefix=make_remote_test_uri(source_dir), suffix=".json") as temp:
+            self.assertFalse(temp.isLocal)
             dataId = DataCoordinate.make_empty(self.source_butler.dimensions)
             source_refs = [DatasetRef(datasetType, dataId, run=run)]
             temp.write(json.dumps(metrics.exportAsDict()).encode())
