@@ -37,8 +37,6 @@ from collections.abc import Iterable, Mapping
 from functools import cache
 from typing import TYPE_CHECKING, TypeAlias
 
-import pyarrow as pa
-import pyarrow.compute as pc
 import pydantic
 
 from .._dataset_ref import DatasetId
@@ -47,6 +45,8 @@ from ..persistence_context import PersistenceContextVars
 from .stored_file_info import StoredDatastoreItemInfo, StoredFileInfoTable
 
 if TYPE_CHECKING:
+    import pyarrow as pa
+
     from ..registry import Registry
 
 # Pydantic requires the possible value types to be explicitly enumerated in
@@ -319,6 +319,8 @@ class DatastoreRecordTable:
             A copy of this table with only the rows that have a
             ``datastore_name`` column value matching the given value.
         """
+        import pyarrow.compute as pc
+
         return DatastoreRecordTable(self._table.filter(pc.field("datastore_name") == datastore_name))
 
     def validate_datastore_names(self, names: Iterable[str]) -> None:
@@ -336,6 +338,9 @@ class DatastoreRecordTable:
             If any of the ``datastore_name`` column entries has a value not in
             the given list.
         """
+        import pyarrow as pa
+        import pyarrow.compute as pc
+
         column = self._table.column("datastore_name")
         if len(column) == 0:
             return
@@ -365,6 +370,8 @@ class DatastoreRecordTable:
         table
             New ``DatastoreRecordTable`` instance.
         """
+        import pyarrow as pa
+
         column_type = DatastoreRecordTable.make_arrow_schema().field("datastore_name").type
         datastore_name_column = pa.repeat(pa.scalar(datastore_name, type=column_type), len(table))
         return DatastoreRecordTable(
@@ -390,6 +397,8 @@ class DatastoreRecordTable:
     @staticmethod
     def make_arrow_schema() -> pa.Schema:
         """Return the `pyarrow.Schema` for the arrow table."""
+        import pyarrow as pa
+
         return StoredFileInfoTable.make_arrow_schema().insert(
             0, pa.field("datastore_name", pa.dictionary(pa.int8(), pa.string()))
         )
@@ -410,6 +419,8 @@ class DatastoreRecordTable:
             ``DatastoreRecordTable`` containing all the rows from all of the
             given tables.
         """
+        import pyarrow as pa
+
         arrow_tables = [t._table for t in tables]
         if len(arrow_tables) == 0:
             return DatastoreRecordTable.create_empty()
@@ -425,6 +436,8 @@ class DatastoreRecordTable:
         table
             New ``DatastoreRecordTable`` instance with no rows.
         """
+        import pyarrow as pa
+
         return DatastoreRecordTable(pa.Table.from_pylist([], schema=DatastoreRecordTable.make_arrow_schema()))
 
     def __len__(self) -> int:

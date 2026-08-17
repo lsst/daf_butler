@@ -12,8 +12,13 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     strategy:
+      # Do not let a failure in one Python version cancel the others.
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15-dev", "3.15t-dev"]
+    # Not all binary dependencies (notably pyarrow) publish wheels for the
+    # unreleased interpreters yet, so failures there must not block a PR.
+    continue-on-error: ${{ endsWith(matrix.python-version, '-dev') }}
 
     steps:
       - uses: actions/checkout@v7
@@ -21,70 +26,62 @@ jobs:
           # Need to clone everything for the git tags.
           fetch-depth: 0
 
-      - uses: conda-incubator/setup-miniconda@v4
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-          channels: conda-forge,defaults
-          channel-priority: strict
-          show-channel-urls: true
+          allow-prereleases: true
 
       - name: Update pip/wheel infrastructure
-        shell: bash -l {0}
         run: |
-          conda install -y -q pip wheel
-
-      - name: Install sqlite
-        shell: bash -l {0}
-        run: |
-          conda install -y -q sqlite
+          python -m pip install --upgrade pip uv
+          uv pip install --system wheel
 
       # Postgres-14 is already installed from official postgres repo, but we
       # also need pgsphere which is not installed. The repo is not in the list,
-      # so we need to re-add it first.
+      # so we need to re-add it first. libpq-dev provides the pg_config and
+      # headers needed to build psycopg2 from source on interpreters that do
+      # not yet have binary wheels.
       - name: Install postgresql (server)
         run: |
           sudo sh -c \
             'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
           sudo apt-get update
-          sudo apt-get install postgresql-14 postgresql-14-pgsphere
-
-      - name: Install postgresql Python packages
-        shell: bash -l {0}
-        run: |
-          conda install -y -q psycopg2
+          sudo apt-get install postgresql-14 postgresql-14-pgsphere libpq-dev
 
       - name: Install cryptography package for moto
-        shell: bash -l {0}
         run: |
-          conda install -y -q cryptography
+          uv pip install --system cryptography
 
       - name: Install dependencies
-        shell: bash -l {0}
         run: |
-          pip install uv
-          uv pip install -r requirements.txt
+          uv pip install --system -r requirements.txt
+
+      # Arrow is an optional dependency of daf_butler, imported lazily.  It has
+      # no wheels for the unreleased interpreters and cannot practically be
+      # built from source, so it is left out there and the tests that need it
+      # skip themselves.
+      - name: Install pyarrow
+        if: ${{ !startsWith(matrix.python-version, '3.15') }}
+        run: |
+          uv pip install --system pyarrow
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages
-        shell: bash -l {0}
         run: |
-          conda install -y -q \
-            pytest pytest-xdist pytest-cov
+          uv pip install --system pytest pytest-xdist pytest-cov
 
       - name: List installed packages
-        shell: bash -l {0}
         run: |
-          conda list
-          pip list -v
+          python -c 'import sqlite3; print("sqlite", sqlite3.sqlite_version)'
+          uv pip list -v
 
       - name: Build and install
-        shell: bash -l {0}
         run: |
-          uv pip install -v --no-deps -e .
+          uv pip install --system -v --no-deps -e .
 
       - name: Run tests
-        shell: bash -l {0}
         env:
           SQLALCHEMY_WARN_20: 1
         run: |

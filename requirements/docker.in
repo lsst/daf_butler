@@ -7,6 +7,10 @@ lsst-sphgeom
 lsst-utils
 lsst-resources[https,s3]
 
+# Arrow is an optional dependency of daf_butler but the server image always
+# wants it, so request it explicitly.
+pyarrow
+
 # Server-only dependencies
 uvicorn
 sentry-sdk[fastapi, sqlalchemy]

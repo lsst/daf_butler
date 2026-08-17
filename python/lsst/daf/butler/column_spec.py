@@ -58,16 +58,16 @@ from typing import (
 )
 
 import astropy.time
-import pyarrow as pa
 import pydantic
 
 from lsst.sphgeom import Region
 
-from . import arrow_utils, ddl
+from . import ddl
 from ._timespan import Timespan
 from .pydantic_utils import SerializableBytesHex, SerializableRegion, SerializableTime
 
 if TYPE_CHECKING:
+    from . import arrow_utils
     from .name_shrinker import NameShrinker
 
 ColumnType: TypeAlias = Literal[
@@ -296,6 +296,10 @@ class IntColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        import pyarrow as pa
+
+        from . import arrow_utils
+
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
     def _get_base_annotated_type(self) -> Any:
@@ -320,6 +324,10 @@ class StringColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        import pyarrow as pa
+
+        from . import arrow_utils
+
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
     def _get_base_annotated_type(self) -> Any:
@@ -344,6 +352,10 @@ class HashColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        import pyarrow as pa
+
+        from . import arrow_utils
+
         return arrow_utils.ToArrow.for_primitive(
             self.name,
             # The size for Arrow binary columns is a fixed size, not a maximum
@@ -367,6 +379,10 @@ class FloatColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        import pyarrow as pa
+
+        from . import arrow_utils
+
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
@@ -385,6 +401,10 @@ class BoolColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        import pyarrow as pa
+
+        from . import arrow_utils
+
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
     def _get_base_annotated_type(self) -> Any:
@@ -402,6 +422,8 @@ class UUIDColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        from . import arrow_utils
+
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
 
@@ -425,6 +447,8 @@ class RegionColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        from . import arrow_utils
+
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
@@ -445,6 +469,8 @@ class TimespanColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        from . import arrow_utils
+
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
     def _get_base_annotated_type(self) -> Any:
@@ -464,6 +490,8 @@ class DateTimeColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        from . import arrow_utils
+
         assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
 
