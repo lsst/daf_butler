@@ -51,7 +51,10 @@ remote = [
 ]
 server = [
     "fastapi",
-    "safir >= 3.4.0"
+    "lsst-resources[https,s3]",
+    "safir >= 3.4.0",
+    "sentry-sdk[fastapi,sqlalchemy]>=2.68.0",
+    "uvicorn>=0.52.4",
 ]
 test = [
     "pytest >= 3.2",

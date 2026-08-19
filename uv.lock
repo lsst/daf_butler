@@ -1849,8 +1849,11 @@ s3 = [
 ]
 server = [
     { name = "fastapi" },
+    { name = "lsst-resources", extra = ["https", "s3"] },
     { name = "safir", version = "4.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "safir", version = "15.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "sentry-sdk", extra = ["fastapi", "sqlalchemy"] },
+    { name = "uvicorn" },
 ]
 test = [
     { name = "matplotlib" },
@@ -1891,6 +1894,7 @@ requires-dist = [
     { name = "lsst-resources", extras = ["gs"], marker = "extra == 'gs'", git = "https://github.com/lsst/resources?branch=main" },
     { name = "lsst-resources", extras = ["https"], marker = "extra == 'https'", git = "https://github.com/lsst/resources?branch=main" },
     { name = "lsst-resources", extras = ["https"], marker = "extra == 'remote'", git = "https://github.com/lsst/resources?branch=main" },
+    { name = "lsst-resources", extras = ["https", "s3"], marker = "extra == 'server'", git = "https://github.com/lsst/resources?branch=main" },
     { name = "lsst-resources", extras = ["s3"], marker = "extra == 's3'", git = "https://github.com/lsst/resources?branch=main" },
     { name = "lsst-sphgeom" },
     { name = "lsst-utils", git = "https://github.com/lsst/utils?branch=main" },
@@ -1904,7 +1908,9 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=3.2" },
     { name = "pyyaml", specifier = ">=5.1" },
     { name = "safir", marker = "extra == 'server'", specifier = ">=3.4.0" },
+    { name = "sentry-sdk", extras = ["fastapi", "sqlalchemy"], marker = "extra == 'server'", specifier = ">=2.68.0" },
     { name = "sqlalchemy", specifier = ">=1.4" },
+    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.52.4" },
 ]
 provides-extras = ["postgres", "remote", "server", "test", "s3", "https", "gs"]
 
@@ -3730,6 +3736,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7d/9b/e2421d08956d0bc4691d995393d835e563886bff499d8fb10fdefae85a8d/sentry_sdk-2.68.0-py3-none-any.whl", hash = "sha256:538e56c2d03679d42f7c0cb5f1af73a7a510b00abc7e296c13ac49b107b713a4", size = 518670, upload-time = "2026-08-13T09:06:19.735Z" },
 ]
 
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
+]
+sqlalchemy = [
+    { name = "sqlalchemy" },
+]
+
 [[package]]
 name = "six"
 version = "1.17.0"
@@ -4355,6 +4369,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", size = 433602, upload-time = "2026-05-07T16:13:18.596Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
+]
+
+[[package]]
+name = "uvicorn"
+version = "0.52.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "h11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f2/0f/3f86e61397dd33bf2ccf28188c40db6a740658aeebbbf6e7dbc101a1f487/uvicorn-0.52.4.tar.gz", hash = "sha256:73acfee47a0b133c5de13d219492d62d8a31e935f4fe6e41a232451a15379f86", size = 100627, upload-time = "2026-08-19T06:27:41.821Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/79/4a20b54ab0491485ccd8c077db2d39187c7f12b3e15485d38a7be37c81b4/uvicorn-0.52.4-py3-none-any.whl", hash = "sha256:f86e41a149d7d05a9969337e3946a9c171c06a5d42680896daaba624aeac8da1", size = 79871, upload-time = "2026-08-19T06:27:40.36Z" },
 ]
 
 [[package]]
