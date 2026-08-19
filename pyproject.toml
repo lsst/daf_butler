@@ -270,6 +270,9 @@ doc = [
     "lsst-sphinxutils",
     "sphinx-click>=6.2.0",
 ]
+dockertest = [
+    "testcontainers"
+]
 
 [tool.uv.sources]
 lsst-resources = { git = "https://github.com/lsst/resources", branch = "main" }
