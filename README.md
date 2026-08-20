@@ -23,3 +23,32 @@ Recipients may choose which of these licenses to use; please see the files gpl-3
 From version 18 of arrow we have seen significant memory leaks when accessing parquet files using the default memory allocator.
 If you see such leaks the workaround is to set the `ARROW_DEFAULT_MEMORY_POOL` environment variable to `jemalloc` following the advice from [apache/arrow#45882](https://github.com/apache/arrow/issues/45882).
 For EUPS users this variable is automatically set.
+
+## Managing dependencies
+
+This package uses [uv](https://docs.astral.sh/uv/) to manage the versions of libraries used for CI, Docker builds, and local development.
+
+### Upgrading the versions of libraries
+
+Run the following command to refresh `uv.lock` with the latest available
+versions of all libraries:
+```
+uv lock --upgrade
+```
+
+### Temporarily pinning another LSST package to a development branch
+If you are working on a PR that requires unreleased changes from another
+LSST repository, you can temporarily pin the new version by running:
+```
+uv add lsst-resources --branch tickets/DM-xxxxx
+```
+
+After the other library's development branch has been merged, reset the
+branch to main:
+```
+uv add lsst-resources --branch main
+```
+
+Both of these commands implicitly regenerate the lockfile to pull in the
+latest Git commit for the library.  If necessary, that can be done manually by
+running `uv lock --upgrade`.
