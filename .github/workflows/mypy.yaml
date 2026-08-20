@@ -7,8 +7,20 @@ on:
   pull_request:
 
 jobs:
-  call-workflow:
-    uses: lsst/rubin_workflows/.github/workflows/mypy.yaml@main
-    with:
-      # https://github.com/python/mypy/issues/17002
-      mypy_package: mypy!=1.9.0
+  mypy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Need to clone everything for the git tags.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+
+      - name: Run mypy
+        run: uv run --locked --all-extras mypy
