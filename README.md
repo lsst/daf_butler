@@ -37,18 +37,29 @@ uv lock --upgrade
 ```
 
 ### Temporarily pinning another LSST package to a development branch
-If you are working on a PR that requires unreleased changes from another
-LSST repository, you can temporarily pin the new version by running:
+If you are working on a PR that requires unreleased changes from another LSST
+repository, you can temporarily pin the new version by opening `pyproject.toml`
+and finding the library in the `override-dependencies` declaration under
+`tool.uv`.  Replace `main` with the ticket branch, e.g.:
 ```
-uv add lsst-resources --branch tickets/DM-xxxxx
+override-dependencies = [
+    "lsst-utils @ git+https://github.com/lsst/utils@tickets/DM-xxxxx",
+    ...
+]
 ```
+
+Then run:
+```
+uv lock --upgrade-package <package name>
+```
+to pull in the updated version for testing, where `<package name>` is
+`lsst-utils` or whatever package you are overriding.
+ (You can also just do `uv lock --upgrade` if you don't mind upgrading all the
+ other libraries at the same time.)
+
+You will need to re-do this lock update any time you change the code, so that
+it resolves to the new version.
 
 After the other library's development branch has been merged, reset the
-branch to main:
-```
-uv add lsst-resources --branch main
-```
-
-Both of these commands implicitly regenerate the lockfile to pull in the
-latest Git commit for the library.  If necessary, that can be done manually by
-running `uv lock --upgrade`.
+branch to main in `pyproject.toml` and run the lock update again to pull in
+the released version.
