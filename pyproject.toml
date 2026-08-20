@@ -271,17 +271,24 @@ dev = [
 ]
 doc = [
     "documenteer[guide]>2.0,<3.0",
-    "lsst-sphinxutils",
+    "lsst-sphinxutils @ git+https://github.com/lsst/sphinxutils@main",
     "sphinx-click>=6.2.0",
 ]
 dockertest = [
     "testcontainers"
 ]
 
-[tool.uv.sources]
-lsst-resources = { git = "https://github.com/lsst/resources", branch = "main" }
-lsst-utils = { git = "https://github.com/lsst/utils", branch = "main" }
-lsst-sphinxutils = { git = "https://github.com/lsst/sphinxutils", rev = "main" }
+[tool.uv]
+# override-dependencies is here to specify the versions of these libraries to
+# use when doing daf_butler development, but not for downstream consumers.
+# This is not using [tool.uv.sources] as you normally would because that breaks
+# downstream packages trying to install LSST packages using
+# `uv pip install -r requirements.txt`, due to a bug in uv
+# https://github.com/astral-sh/uv/issues/11452
+override-dependencies = [
+    "lsst-utils @ git+https://github.com/lsst/utils@main",
+    "lsst-resources[https,s3] @ git+https://github.com/lsst/resources@main",
+]
 
 [tool.uv.dependency-groups]
 # Documenteer needs Python 3.12 or higher, but Butler itself still
