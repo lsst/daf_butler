@@ -1,4 +1,0 @@
--c docker.txt
--r test.in
-
-pytest
