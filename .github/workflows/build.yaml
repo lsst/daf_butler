@@ -13,7 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        variant: [
+          {"python-version": "3.11", "pinned": true},
+          {"python-version": "3.12", "pinned": true},
+          {"python-version": "3.13", "pinned": true},
+          {"python-version": "3.14", "pinned": true},
+          {"python-version": "3.14", "pinned": false},
+        ]
 
     steps:
       - uses: actions/checkout@v7
@@ -25,7 +31,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.12.5"
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.variant.python-version }}
           enable-cache: true
 
       # Postgres-14 is already installed from official postgres repo, but we
@@ -39,15 +45,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install postgresql-14 postgresql-14-pgsphere
 
+      # Usually it makes sense to use library versions from the lockfile, so
+      # you are testing the PR against a known-good build.  However,
+      # we also add a non-required test against the latest version of libraries
+      # so we get early warning if there are problems.
+      - name: Upgrade all dependencies in lockfile
+        run: uv lock --upgrade
+        if: matrix.variant.pinned == false
+
       - name: Build and install
-        shell: bash -l {0}
-        run: |
-          uv sync --locked --all-extras --dev
+        run: uv sync --locked --all-extras --dev
 
       - name: List installed packages
-        shell: bash -l {0}
-        run: |
-          uv tree
+        run: uv tree
 
       - name: Run tests
         shell: bash -l {0}
