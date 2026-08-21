@@ -108,6 +108,48 @@ def _mergeInto(d: Any, u: Mapping[str, Any]) -> Any:
     return d
 
 
+# Types that are common in configurations and are never mappings. Checking
+# membership here is much cheaper than an abstract base class check, and these
+# account for the overwhelming majority of configuration values.
+_NON_MAPPING_TYPES = frozenset({str, int, float, bool, type(None), list, tuple})
+
+
+def _copyMapping(u: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a copy of a mapping, recursing into nested mappings.
+
+    Parameters
+    ----------
+    u : `~collections.abc.Mapping`
+        Mapping to copy.
+
+    Returns
+    -------
+    copied : `dict`
+        A new `dict`. Nested mappings, including `Config` instances, are
+        copied into plain dictionaries. All other values, including lists, are
+        stored by reference.
+
+    Notes
+    -----
+    This is equivalent to merging into an empty mapping but skips the
+    look-up and type check of the target that a merge needs, and avoids an
+    abstract base class check for the value types that dominate real
+    configurations.
+    """
+    copied: dict[str, Any] = {}
+    for k, v in u.items():
+        t = type(v)
+        if t is dict:
+            copied[k] = _copyMapping(v)
+        elif t in _NON_MAPPING_TYPES:
+            copied[k] = v
+        elif isinstance(v, Mapping):
+            copied[k] = _copyMapping(v)
+        else:
+            copied[k] = v
+    return copied
+
+
 def _checkNextItem(k: str | int, d: Any, create: bool, must_be_dict: bool) -> tuple[Any, bool]:
     """See if k is in d and if it is return the new child."""
     nextVal = None
@@ -298,15 +340,16 @@ class Config(MutableMapping):
             return
 
         if isinstance(other, Config):
-            # Deep copy might be more efficient but if someone has overridden
-            # a config entry to store a complex object then deep copy may
-            # fail. Safer to use update().
-            self.update(other._data)
+            # Copying rather than deep copying, because a config entry may
+            # hold an object that cannot be deep copied. Nested mappings are
+            # copied; everything else is stored by reference, which is the
+            # same behaviour a merge into an empty config would give.
+            self._data = _copyMapping(other._data)
             self.configFile = other.configFile
         elif isinstance(other, dict | Mapping):
             # In most cases we have a dict, and it's more efficient
             # to check for a dict instance before checking the generic mapping.
-            self.update(other)
+            self._data = _copyMapping(other)
         elif isinstance(other, str | ResourcePath | Path):
             # if other is a string, assume it is a file path/URI
             self.__initFromUri(other)
