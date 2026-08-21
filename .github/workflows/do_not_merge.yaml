@@ -32,10 +32,11 @@ jobs:
         shell: bash
         run: |
           FILES=(pyproject.toml uv.lock)
-          MATCH=tickets/DM-
-          if grep -q "$MATCH" "${FILES[@]}"
+          # The slash can be URI-encoded in uv lock files.
+          MATCH="tickets(/|%2F)DM"
+          if grep -q -E "$MATCH" "${FILES[@]}"
           then
             echo "Ticket branches found in ${FILES[*]}:"
-            grep -n "$MATCH" "${FILES[@]}"
+            grep -n -E "$MATCH" "${FILES[@]}"
             exit 1
           fi
