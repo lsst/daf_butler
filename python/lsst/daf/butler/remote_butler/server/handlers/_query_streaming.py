@@ -28,10 +28,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import AbstractContextManager
 from typing import Protocol, TypeVar
 
+from anyio import BrokenResourceError, EndOfStream, create_memory_object_stream, from_thread, to_thread
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from fastapi.responses import StreamingResponse
 
 from lsst.daf.butler.remote_butler.server_models import (
@@ -123,7 +125,7 @@ async def execute_streaming_query(query: StreamingQuery, user: str | None) -> St
     )
 
 
-async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncIterator[str]:
+async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncGenerator[str]:
     """Stream the query output with one page object per line, as
     newline-delimited JSON records in the "JSON Lines" format
     (https://jsonlines.org/).
@@ -132,93 +134,54 @@ async def _stream_query_pages(query: StreamingQuery, user: str | None) -> AsyncI
     sends a keep-alive message to prevent clients from timing out.
     """
     async with _query_limits.track_query(user):
-        # `None` signals that there is no more data to send.
-        queue = asyncio.Queue[QueryExecuteResultData | None](1)
+        send_stream, receive_stream = create_memory_object_stream[QueryExecuteResultData](1)
         # Run a background task to read from the DB and insert the result
         # pages into a queue.
-        task = asyncio.create_task(_enqueue_query_pages(queue, query))
+        task = asyncio.create_task(to_thread.run_sync(_execute_query_sync, query, send_stream))
         try:
-            # Read the result pages from the queue and send them to the client,
-            # inserting a keep-alive message every 15 seconds if we are waiting
-            # a long time for the database.
-            async for message in _dequeue_query_pages_with_keepalive(queue):
-                yield message.model_dump_json() + "\n"
+            # Read the result pages from the queue and send them to the
+            # client, inserting a keep-alive message every 15 seconds if we
+            # are waiting a long time for the database.
+            async with receive_stream:
+                async for message in _dequeue_query_pages_with_keepalive(receive_stream):
+                    yield message.model_dump_json() + "\n"
         except GeneratorExit:
             # FastAPI calls aclose() to inject GeneratorExit if the caller
             # disconnects.
             pass
-        except asyncio.QueueShutDown:  # type: ignore[attr-defined]
-            # If an exception occurs in _enqueue_query_pages,
-            # it will trigger queue shutdown to kick us out of the
-            # iterator.
-            pass
         finally:
-            queue.shutdown()  # type: ignore[attr-defined]
             await task
-
-
-async def _enqueue_query_pages(
-    queue: asyncio.Queue[QueryExecuteResultData | None], query: StreamingQuery
-) -> None:
-    """Set up a QueryDriver to run the query, and copy the results into a
-    queue.  Send `None` to the queue when there is no more data to read.
-    """
-    loop = asyncio.get_event_loop()
-
-    def result_callback(page: QueryExecuteResultData) -> None:
-        asyncio.run_coroutine_threadsafe(queue.put(page), loop).result()
-
-    done_event = asyncio.Event()
-
-    def done_callback() -> None:
-        loop.call_soon_threadsafe(done_event.set)
-
-    try:
-        await asyncio.to_thread(_execute_query_sync, query, result_callback, done_callback)
-        # Signal that there is no more data to read.
-        await queue.put(None)
-    except asyncio.QueueShutDown:  # type: ignore[attr-defined]
-        # The caller will trigger queue shutdown if it is cancelled.
-        pass
-    finally:
-        # Abort the database thread if cancellation or some other error occurs.
-        queue.shutdown()  # type: ignore[attr-defined]
-        # Wait for the thread to complete -- we don't want to release the
-        # user's query limit until their query is actually done.
-        # This is most relevant if they cancel a query that has a long startup
-        # time (due to a bad ORDER BY clause or similar.)
-        #
-        # From the `await asyncio.to_thread` above, the thread is usually
-        # finished before we get here -- but the `await` exits immediately
-        # when cancellation occurs, without waiting for the thread.
-        await done_event.wait()
 
 
 def _execute_query_sync(
     query: StreamingQuery,
-    result_callback: Callable[[QueryExecuteResultData], None],
-    done_callback: Callable[[], None],
+    send_stream: MemoryObjectSendStream[QueryExecuteResultData],
 ) -> None:
+    """Set up a QueryDriver to run the query, and copy the results into a
+    queue.
+    """
     # Postgres cursors are not thread safe.  Cursor setup/usage/teardown needs
     # to run in a single thread to ensure that cursors are always closed, and
     # that the closing doesn't happen until after we are done using the cursor.
     try:
         with query.setup() as ctx:
             for page in query.execute(ctx):
-                result_callback(page)
+                from_thread.run(send_stream.send, page)
+    except BrokenResourceError:
+        # The caller will close its receive stream on cancellation, triggering
+        # this exception on our next attempt to send to the stream.
+        pass
     except ButlerUserError as e:
         # If a user-facing error occurs, serialize it and send it to the
         # client.
-        result_callback(QueryErrorResultModel(error=serialize_butler_user_error(e)))
-    except asyncio.QueueShutDown:  # type: ignore[attr-defined]
-        # The caller will trigger queue shutdown if it is cancelled.
-        pass
+        from_thread.run(send_stream.send, QueryErrorResultModel(error=serialize_butler_user_error(e)))
     finally:
-        done_callback()
+        # Signal to the caller that there is no more data to read.
+        from_thread.run_sync(send_stream.close)
 
 
 async def _dequeue_query_pages_with_keepalive(
-    queue: asyncio.Queue[QueryExecuteResultData | None],
+    queue: MemoryObjectReceiveStream[QueryExecuteResultData],
 ) -> AsyncIterator[QueryExecuteResultData]:
     """Read and return messages from the given queue until the end-of-stream
     message `None` is reached.  If the producer is taking a long time, returns
@@ -227,9 +190,10 @@ async def _dequeue_query_pages_with_keepalive(
     while True:
         try:
             async with _timeout(15):
-                message = await queue.get()
-                if message is None:
+                try:
+                    message = await queue.receive()
+                except EndOfStream:
                     return
-                yield message
+            yield message
         except TimeoutError:
             yield QueryKeepAliveModel()
