@@ -41,10 +41,12 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.resources.file import FileResourcePath
 
 from .. import Butler, Config
+from ..repo_relocation import BUTLER_ROOT_TAG
 
-_CONFIG_PATH_ENV = "DAF_BUTLER_CONFIG_PATH"
-
-_templates: dict[str, tuple[str, Config]] = {}
+# Whole-configuration hash -> path to a pristine copy of butler.yaml.
+_configs: dict[str, str] = {}
+# Registry-and-dimensions hash -> path to a pristine copy of the database.
+_databases: dict[str, str] = {}
 _tmpdirs: list[str] = []
 _stats: Counter[str] = Counter()
 
@@ -55,11 +57,23 @@ def template_cache_stats() -> dict[str, int]:
     Returns
     -------
     stats : `dict` [`str`, `int`]
-        Keys are ``templates`` (repositories actually built), ``served``
-        (requests satisfied by copying a template), and ``bypassed``
-        (requests that went straight to `lsst.daf.butler.Butler.makeRepo`).
+        Keys are ``templates`` (databases actually built), ``served``
+        (requests handled by this helper), ``bypassed`` (requests that
+        went straight to `lsst.daf.butler.Butler.makeRepo`), and
+        ``reused_database`` (requests whose database was copied from an
+        earlier identical one).
     """
-    return {key: _stats[key] for key in ("templates", "served", "bypassed")}
+    return {
+        key: _stats[key]
+        for key in (
+            "served",
+            "bypassed",
+            "config_templates",
+            "reused_config",
+            "templates",
+            "reused_database",
+        )
+    }
 
 
 def clear_repo_template_cache() -> None:
@@ -67,51 +81,12 @@ def clear_repo_template_cache() -> None:
     for directory in _tmpdirs:
         shutil.rmtree(directory, ignore_errors=True)
     _tmpdirs.clear()
-    _templates.clear()
+    _configs.clear()
+    _databases.clear()
     _stats.clear()
 
 
 atexit.register(clear_repo_template_cache)
-
-
-def _cache_key(
-    config: Config | str | None,
-    dimensionConfig: Config | str | None,
-    forceConfigRoot: bool,
-) -> str | None:
-    """Return a stable key for this configuration, or `None` if unkeyable.
-
-    Parameters
-    ----------
-    config : `lsst.daf.butler.Config` or `str` or `None`
-        Repository configuration.
-    dimensionConfig : `lsst.daf.butler.Config` or `str` or `None`
-        Dimension universe configuration.
-    forceConfigRoot : `bool`
-        Whether root-dependent options are overridden.
-
-    Returns
-    -------
-    key : `str` or `None`
-        A hash of everything that affects the created repository, or `None`
-        if the inputs cannot be rendered deterministically.
-    """
-    try:
-        rendered = json.dumps(
-            [
-                config.toDict() if isinstance(config, Config) else config,
-                dimensionConfig.toDict() if isinstance(dimensionConfig, Config) else dimensionConfig,
-                forceConfigRoot,
-                os.environ.get(_CONFIG_PATH_ENV),
-            ],
-            sort_keys=True,
-            default=str,
-        )
-    except (TypeError, ValueError):
-        # A configuration that cannot be rendered deterministically must not
-        # be cached, because two requests cannot be proven equivalent.
-        return None
-    return hashlib.sha256(rendered.encode()).hexdigest()
 
 
 def _is_cacheable_registry(config: Config | str | None) -> bool:
@@ -204,18 +179,16 @@ def make_repo_for_test(
     # wrong question to ask here.
     copyable = isinstance(resource, FileResourcePath)
 
-    key: str | None = None
-    if (
+    usable = (
         copyable
         and _is_cacheable_registry(config)
         and outfile is None
         and not standalone
         and not overwrite
         and not searchPaths
-    ):
-        key = _cache_key(config, dimensionConfig, forceConfigRoot)
+    )
 
-    if key is None:
+    if not usable:
         _stats["bypassed"] += 1
         return Butler.makeRepo(
             root,
@@ -228,23 +201,173 @@ def make_repo_for_test(
             overwrite=overwrite,
         )
 
-    if key not in _templates:
+    # Phase one: the repository directory and its butler.yaml. This depends on
+    # the whole configuration, so it is cached on a hash of all of it. The
+    # written file is root-independent because paths are stored against the
+    # repository root tag, so a copy is valid anywhere.
+    written, root_uri = _make_butler_config(root, config, forceConfigRoot, resource)
+
+    # Phase two: the database. Only the registry and dimension configurations
+    # affect its contents, so it is cached on those alone and copied into
+    # place.
+    db_key = _database_key(written, dimensionConfig)
+    db_path = _sqlite_path(written, root_uri)
+    if db_key is None or db_path is None:
+        _stats["served"] += 1
+        Butler._make_repo_registry(written, dimensionConfig=dimensionConfig, root_uri=root_uri)
+        return written
+
+    cached = _databases.get(db_key)
+    if cached is None:
         _stats["templates"] += 1
-        holder = tempfile.mkdtemp(prefix="butler-repo-template-")
+        Butler._make_repo_registry(written, dimensionConfig=dimensionConfig, root_uri=root_uri)
+        holder = tempfile.mkdtemp(prefix="butler-registry-template-")
         _tmpdirs.append(holder)
-        template_root = os.path.join(holder, "repo")
-        template_config = Butler.makeRepo(
-            template_root,
-            config=config,
-            dimensionConfig=dimensionConfig,
-            forceConfigRoot=forceConfigRoot,
-        )
-        _templates[key] = (template_root, template_config)
+        cached = os.path.join(holder, "gen3.sqlite3")
+        shutil.copyfile(db_path, cached)
+        _databases[db_key] = cached
+    else:
+        _stats["reused_database"] += 1
+        shutil.copyfile(cached, db_path)
 
     _stats["served"] += 1
-    template_root, _ = _templates[key]
-    destination = resource.ospath
-    shutil.copytree(template_root, destination, dirs_exist_ok=True)
-    # Read the config back from the copy so the caller sees its own root
-    # rather than the template's.
-    return Config(os.path.join(destination, "butler.yaml"))
+    return written
+
+
+def _make_butler_config(
+    root: ResourcePathExpression,
+    config: Config | str | None,
+    forceConfigRoot: bool,
+    resource: ResourcePath,
+) -> tuple[Config, ResourcePath]:
+    """Write the repository's ``butler.yaml``, reusing an identical one.
+
+    Parameters
+    ----------
+    root : `lsst.resources.ResourcePathExpression`
+        Path to the root location of the new repository.
+    config : `lsst.daf.butler.Config` or `str` or `None`
+        Repository configuration.
+    forceConfigRoot : `bool`
+        Whether root-dependent options are overridden.
+    resource : `lsst.resources.ResourcePath`
+        ``root`` resolved to a directory resource.
+
+    Returns
+    -------
+    written : `lsst.daf.butler.Config`
+        The configuration written to the repository.
+    root_uri : `lsst.resources.ResourcePath`
+        The root of the new repository.
+    """
+    key = _config_key(config, forceConfigRoot)
+    cached = _configs.get(key) if key is not None else None
+    if cached is None:
+        written, root_uri = Butler._make_repo_butler_config(
+            root, config=config, forceConfigRoot=forceConfigRoot
+        )
+        if key is not None:
+            _stats["config_templates"] += 1
+            holder = tempfile.mkdtemp(prefix="butler-config-template-")
+            _tmpdirs.append(holder)
+            path = os.path.join(holder, "butler.yaml")
+            shutil.copyfile(os.path.join(root_uri.ospath, "butler.yaml"), path)
+            _configs[key] = path
+        return written, root_uri
+
+    _stats["reused_config"] += 1
+    root_uri = ResourcePath(root, forceDirectory=True)
+    root_uri.mkdir()
+    destination = os.path.join(root_uri.ospath, "butler.yaml")
+    shutil.copyfile(cached, destination)
+    return Config(destination), root_uri
+
+
+def _config_key(config: Config | str | None, forceConfigRoot: bool) -> str | None:
+    """Return a key covering everything that affects ``butler.yaml``.
+
+    Parameters
+    ----------
+    config : `lsst.daf.butler.Config` or `str` or `None`
+        Repository configuration.
+    forceConfigRoot : `bool`
+        Whether root-dependent options are overridden.
+
+    Returns
+    -------
+    key : `str` or `None`
+        A hash of the inputs, or `None` if they cannot be rendered
+        deterministically.
+    """
+    try:
+        rendered = json.dumps(
+            [
+                config.toDict() if isinstance(config, Config) else config,
+                forceConfigRoot,
+                os.environ.get("DAF_BUTLER_CONFIG_PATH"),
+            ],
+            sort_keys=True,
+            default=str,
+        )
+    except (TypeError, ValueError):
+        return None
+    return hashlib.sha256(rendered.encode()).hexdigest()
+
+
+def _database_key(written: Config, dimensionConfig: Config | str | None) -> str | None:
+    """Return a key covering everything that affects the database contents.
+
+    Parameters
+    ----------
+    written : `lsst.daf.butler.Config`
+        The repository configuration that was written to ``butler.yaml``.
+    dimensionConfig : `lsst.daf.butler.Config` or `str` or `None`
+        Dimension universe configuration.
+
+    Returns
+    -------
+    key : `str` or `None`
+        A hash of the registry and dimension configurations, or `None` if
+        they cannot be rendered deterministically.
+
+    Notes
+    -----
+    Datastore configuration, storage classes and other sections do not reach
+    the database, so they are deliberately excluded. The ``db`` entry is also
+    excluded because it only names the file's location, which differs between
+    repositories that are otherwise identical.
+    """
+    try:
+        registry = dict(written["registry"].toDict())
+        registry.pop("db", None)
+        dimensions = dimensionConfig.toDict() if isinstance(dimensionConfig, Config) else dimensionConfig
+        rendered = json.dumps([registry, dimensions], sort_keys=True, default=str)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return hashlib.sha256(rendered.encode()).hexdigest()
+
+
+def _sqlite_path(written: Config, root_uri: ResourcePath) -> str | None:
+    """Return the local path of the repository's SQLite file, if it has one.
+
+    Parameters
+    ----------
+    written : `lsst.daf.butler.Config`
+        The repository configuration that was written to ``butler.yaml``.
+    root_uri : `lsst.resources.ResourcePath`
+        Root of the repository, substituted for the repository root tag.
+
+    Returns
+    -------
+    path : `str` or `None`
+        Path to the SQLite file, or `None` if the registry is not a SQLite
+        file inside the repository.
+    """
+    db = written.get(("registry", "db"))
+    if db is None or not str(db).startswith("sqlite:///"):
+        return None
+    location = str(db)[len("sqlite:///") :]
+    if not location or location == ":memory:":
+        return None
+    location = location.replace(BUTLER_ROOT_TAG, root_uri.ospath.rstrip("/"))
+    return location

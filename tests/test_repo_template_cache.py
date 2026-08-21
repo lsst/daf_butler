@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 import unittest
-import unittest.mock
 
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler.tests._repo_template_cache import (
@@ -89,19 +88,38 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
         b1.registry.registerRun("only_in_first")
         self.assertNotIn("only_in_first", set(b2.registry.queryCollections()))
 
-    def test_different_config_builds_a_second_template(self) -> None:
-        """A differing configuration must not reuse the first template."""
+    def test_datastore_config_shares_one_database(self) -> None:
+        """Datastore settings do not reach the database, so it is reused."""
         other = self._config()
+        other["datastore", "cls"] = "lsst.daf.butler.datastores.fileDatastore.FileDatastore"
         other["datastore", "checksum"] = False
         make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
         make_repo_for_test(os.path.join(self.root, "two"), config=other, forceConfigRoot=False)
-        self.assertEqual(template_cache_stats()["templates"], 2)
+        stats = template_cache_stats()
+        self.assertEqual(stats["templates"], 1)
+        self.assertEqual(stats["reused_database"], 1)
 
-    def test_config_path_env_var_is_part_of_the_key(self) -> None:
-        """DAF_BUTLER_CONFIG_PATH changes the assembled config, so it keys."""
+    def test_each_repo_gets_its_own_butler_yaml(self) -> None:
+        """Sharing a database must not share the rest of the configuration."""
+        other = self._config()
+        other["datastore", "cls"] = "lsst.daf.butler.datastores.fileDatastore.FileDatastore"
+        first = os.path.join(self.root, "one")
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(second, config=other, forceConfigRoot=False)
+        self.assertIn("inMemoryDatastore", Config(os.path.join(first, "butler.yaml"))["datastore", "cls"])
+        self.assertIn("fileDatastore", Config(os.path.join(second, "butler.yaml"))["datastore", "cls"])
+
+    def test_different_dimensions_build_a_second_database(self) -> None:
+        """The dimension universe does reach the database, so it keys."""
+        path = os.path.join(TESTDIR, "config", "dimensions", "dimensions1.yaml")
         make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CONFIG_PATH": self.root}):
-            make_repo_for_test(os.path.join(self.root, "two"), config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(
+            os.path.join(self.root, "two"),
+            config=self._config(),
+            dimensionConfig=path,
+            forceConfigRoot=False,
+        )
         self.assertEqual(template_cache_stats()["templates"], 2)
 
     def test_outfile_bypasses_the_cache(self) -> None:
