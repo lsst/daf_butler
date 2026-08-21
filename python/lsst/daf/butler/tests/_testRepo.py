@@ -55,6 +55,8 @@ from lsst.daf.butler import (
     StorageClass,
 )
 
+from ._repo_template_cache import make_repo_for_test
+
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetId
 
@@ -117,7 +119,7 @@ def makeTestRepo(
     # Disable config root by default so that our registry override will
     # not be ignored.
     # newConfig guards against location-related keywords like outfile
-    newConfig = Butler.makeRepo(root, config=defaults, forceConfigRoot=False, **kwargs)
+    newConfig = make_repo_for_test(root, config=defaults, forceConfigRoot=False, **kwargs)
     butler = Butler.from_config(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.dimensions)
     for dimension, records in dimensionRecords.items():
