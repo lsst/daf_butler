@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 import unittest
-import unittest.mock
 
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler.tests._repo_template_cache import (
@@ -66,8 +65,8 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
         make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
         make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
         stats = template_cache_stats()
-        self.assertEqual(stats["templates"], 1)
-        self.assertEqual(stats["served"], 2)
+        self.assertEqual(stats.templates, 1)
+        self.assertEqual(stats.served, 2)
 
     def test_returned_config_points_at_the_caller_root(self) -> None:
         """The returned Config must describe the copy, not the template."""
@@ -89,20 +88,80 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
         b1.registry.registerRun("only_in_first")
         self.assertNotIn("only_in_first", set(b2.registry.queryCollections()))
 
-    def test_different_config_builds_a_second_template(self) -> None:
-        """A differing configuration must not reuse the first template."""
+    def test_datastore_config_shares_one_database(self) -> None:
+        """Datastore settings do not reach the database, so it is reused."""
         other = self._config()
+        other["datastore", "cls"] = "lsst.daf.butler.datastores.fileDatastore.FileDatastore"
         other["datastore", "checksum"] = False
         make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
         make_repo_for_test(os.path.join(self.root, "two"), config=other, forceConfigRoot=False)
-        self.assertEqual(template_cache_stats()["templates"], 2)
+        stats = template_cache_stats()
+        self.assertEqual(stats.templates, 1)
+        self.assertEqual(stats.reused_database, 1)
 
-    def test_config_path_env_var_is_part_of_the_key(self) -> None:
-        """DAF_BUTLER_CONFIG_PATH changes the assembled config, so it keys."""
+    def test_each_repo_gets_its_own_butler_yaml(self) -> None:
+        """Sharing a database must not share the rest of the configuration."""
+        other = self._config()
+        other["datastore", "cls"] = "lsst.daf.butler.datastores.fileDatastore.FileDatastore"
+        first = os.path.join(self.root, "one")
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(second, config=other, forceConfigRoot=False)
+        self.assertIn("inMemoryDatastore", Config(os.path.join(first, "butler.yaml"))["datastore", "cls"])
+        self.assertIn("fileDatastore", Config(os.path.join(second, "butler.yaml"))["datastore", "cls"])
+
+    def test_obscore_config_survives_a_cache_hit(self) -> None:
+        """Obscore settings are stripped from ``butler.yaml`` and kept in the
+        registry, so a copy cannot recover them from the file.
+        """
+        config = self._config()
+        config["registry", "managers", "obscore"] = {
+            "cls": "lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager",
+            "config": Config(os.path.join(TESTDIR, "config", "basic", "obscore.yaml")).toDict(),
+        }
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(os.path.join(self.root, "one"), config=config, forceConfigRoot=False)
+        returned = make_repo_for_test(second, config=config, forceConfigRoot=False)
+        self.assertEqual(template_cache_stats().reused_config, 1)
+        obscore_config = ("registry", "managers", "obscore", "config")
+        self.assertNotIn(obscore_config, Config(os.path.join(second, "butler.yaml")))
+        self.assertIn(obscore_config, returned)
+        with Butler.from_config(second, writeable=True) as butler:
+            self.assertIsNotNone(butler._registry.obsCoreTableManager)
+
+    def test_existing_config_is_not_overwritten(self) -> None:
+        """A copy must refuse an occupied root, as makeRepo does."""
+        second = os.path.join(self.root, "two")
         make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CONFIG_PATH": self.root}):
-            make_repo_for_test(os.path.join(self.root, "two"), config=self._config(), forceConfigRoot=False)
-        self.assertEqual(template_cache_stats()["templates"], 2)
+        make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
+        self.assertEqual(template_cache_stats().reused_config, 1)
+        with self.assertRaises(FileExistsError):
+            make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
+
+    def test_rewritten_config_file_is_not_reused(self) -> None:
+        """A configuration named by path is identified by its contents."""
+        path = os.path.join(self.root, "repo.yaml")
+        self._config().dumpToUri(path)
+        make_repo_for_test(os.path.join(self.root, "one"), config=path, forceConfigRoot=False)
+        changed = self._config()
+        changed["datastore", "cls"] = "lsst.daf.butler.datastores.fileDatastore.FileDatastore"
+        changed.dumpToUri(path, overwrite=True)
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(second, config=path, forceConfigRoot=False)
+        self.assertIn("fileDatastore", Config(os.path.join(second, "butler.yaml"))["datastore", "cls"])
+        self.assertEqual(template_cache_stats().reused_config, 0)
+
+    def test_different_dimensions_build_a_second_database(self) -> None:
+        """The dimension universe does reach the database, so it keys."""
+        path = os.path.join(TESTDIR, "config", "dimensions", "dimensions1.yaml")
+        make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(
+            os.path.join(self.root, "two"),
+            config=self._config(),
+            dimensionConfig=path,
+            forceConfigRoot=False,
+        )
+        self.assertEqual(template_cache_stats().templates, 2)
 
     def test_outfile_bypasses_the_cache(self) -> None:
         """Outfile writes the config elsewhere, so it cannot be cached."""
@@ -113,7 +172,7 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
             forceConfigRoot=False,
             outfile=os.path.join(self.root, "out.yaml"),
         )
-        self.assertEqual(template_cache_stats()["bypassed"], 1)
+        self.assertEqual(template_cache_stats().bypassed, 1)
 
     def test_non_sqlite_registry_bypasses_the_cache(self) -> None:
         """A client/server registry lives outside the copied directory."""
@@ -126,14 +185,14 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
             # retaining a single-use template.
             make_repo_for_test(os.path.join(self.root, "pg"), config=config, forceConfigRoot=False)
         stats = template_cache_stats()
-        self.assertEqual(stats["bypassed"], 1)
-        self.assertEqual(stats["templates"], 0)
+        self.assertEqual(stats.bypassed, 1)
+        self.assertEqual(stats.templates, 0)
 
     def test_standalone_and_overwrite_bypass_the_cache(self) -> None:
         """Standalone and overwrite change what makeRepo writes."""
         make_repo_for_test(os.path.join(self.root, "a"), config=self._config(), standalone=True)
         make_repo_for_test(os.path.join(self.root, "b"), config=self._config(), overwrite=True)
-        self.assertEqual(template_cache_stats()["bypassed"], 2)
+        self.assertEqual(template_cache_stats().bypassed, 2)
 
 
 if __name__ == "__main__":
