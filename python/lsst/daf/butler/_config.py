@@ -72,12 +72,37 @@ else:
 def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
         raise RuntimeError(f"Only call update with Mapping, not {type(d)}")
+    return _mergeInto(d, u)
+
+
+def _mergeInto(d: Any, u: Mapping[str, Any]) -> Any:
+    """Merge ``u`` into ``d`` recursively.
+
+    Parameters
+    ----------
+    d : `~collections.abc.MutableMapping`
+        Mapping to update in place.
+    u : `~collections.abc.Mapping`
+        Mapping supplying the new values.
+
+    Returns
+    -------
+    d : `~collections.abc.MutableMapping`
+        The updated mapping.
+
+    Notes
+    -----
+    Configuration values are almost always plain dictionaries read from YAML,
+    so an exact `dict` check is tried before the abstract base class check.
+    The abstract check is several times more expensive and this runs once per
+    node of every subtree that is merged.
+    """
     for k, v in u.items():
-        if isinstance(v, Mapping):
-            lhs = d.get(k, {})
-            if not isinstance(lhs, Mapping):
+        if type(v) is dict or isinstance(v, Mapping):
+            lhs = d.get(k)
+            if type(lhs) is not dict and not isinstance(lhs, MutableMapping):
                 lhs = {}
-            d[k] = _doUpdate(lhs, v)
+            d[k] = _mergeInto(lhs, v)
         else:
             d[k] = v
     return d
