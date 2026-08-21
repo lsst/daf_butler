@@ -13,7 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        variant: [
+          {"python-version": "3.11", "pinned": true},
+          {"python-version": "3.12", "pinned": true},
+          {"python-version": "3.13", "pinned": true},
+          {"python-version": "3.14", "pinned": true},
+          {"python-version": "3.14", "pinned": false},
+        ]
 
     steps:
       - uses: actions/checkout@v7
@@ -21,22 +27,12 @@ jobs:
           # Need to clone everything for the git tags.
           fetch-depth: 0
 
-      - uses: conda-incubator/setup-miniconda@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-          channels: conda-forge,defaults
-          channel-priority: strict
-          show-channel-urls: true
-
-      - name: Update pip/wheel infrastructure
-        shell: bash -l {0}
-        run: |
-          conda install -y -q pip wheel
-
-      - name: Install sqlite
-        shell: bash -l {0}
-        run: |
-          conda install -y -q sqlite
+          version: "0.12.5"
+          python-version: ${{ matrix.variant.python-version }}
+          enable-cache: true
 
       # Postgres-14 is already installed from official postgres repo, but we
       # also need pgsphere which is not installed. The repo is not in the list,
@@ -49,46 +45,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install postgresql-14 postgresql-14-pgsphere
 
-      - name: Install postgresql Python packages
-        shell: bash -l {0}
-        run: |
-          conda install -y -q psycopg2
-
-      - name: Install cryptography package for moto
-        shell: bash -l {0}
-        run: |
-          conda install -y -q cryptography
-
-      - name: Install dependencies
-        shell: bash -l {0}
-        run: |
-          pip install uv
-          uv pip install -r requirements.txt
-
-      # We have two cores so we can speed up the testing with xdist
-      - name: Install pytest packages
-        shell: bash -l {0}
-        run: |
-          conda install -y -q \
-            pytest pytest-xdist pytest-cov
-
-      - name: List installed packages
-        shell: bash -l {0}
-        run: |
-          conda list
-          pip list -v
+      # Usually it makes sense to use library versions from the lockfile, so
+      # you are testing the PR against a known-good build.  However,
+      # we also add a non-required test against the latest version of libraries
+      # so we get early warning if there are problems.
+      - name: Upgrade all dependencies in lockfile
+        run: uv lock --upgrade
+        if: matrix.variant.pinned == false
 
       - name: Build and install
-        shell: bash -l {0}
-        run: |
-          uv pip install -v --no-deps -e .
+        run: uv sync --locked --all-extras --dev
+
+      - name: List installed packages
+        run: uv tree
 
       - name: Run tests
         shell: bash -l {0}
         env:
           SQLALCHEMY_WARN_20: 1
         run: |
-          pytest -Wd -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
+          uv run pytest -Wd -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v7
