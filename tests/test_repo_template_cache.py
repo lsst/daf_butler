@@ -1,0 +1,126 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This software is dual licensed under the GNU General Public License and also
+# under a 3-clause BSD license. Recipients may choose which of these licenses
+# to use; please see the files gpl-3.0.txt and/or bsd_license.txt,
+# respectively.  If you choose the GPL option then the following text applies
+# (but note that there is still no warranty even if you opt for BSD instead):
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+import os
+import unittest
+import unittest.mock
+
+from lsst.daf.butler import Butler, Config
+from lsst.daf.butler.tests._repo_template_cache import (
+    clear_repo_template_cache,
+    make_repo_for_test,
+    template_cache_stats,
+)
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+class RepoTemplateCacheTestCase(unittest.TestCase):
+    """Tests for the test repository template cache."""
+
+    def setUp(self) -> None:
+        self.root = makeTestTempDir(TESTDIR)
+        clear_repo_template_cache()
+
+    def tearDown(self) -> None:
+        removeTestTempDir(self.root)
+        clear_repo_template_cache()
+
+    def _config(self) -> Config:
+        config = Config()
+        config["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
+        config["registry", "db"] = "sqlite:///<butlerRoot>/gen3.sqlite3"
+        return config
+
+    def test_second_call_is_served_from_cache(self) -> None:
+        """An identical configuration builds one template and copies it."""
+        first = os.path.join(self.root, "one")
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
+        stats = template_cache_stats()
+        self.assertEqual(stats["templates"], 1)
+        self.assertEqual(stats["served"], 2)
+
+    def test_returned_config_points_at_the_caller_root(self) -> None:
+        """The returned Config must describe the copy, not the template."""
+        first = os.path.join(self.root, "one")
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
+        returned = make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
+        butler = Butler.from_config(returned, writeable=True)
+        self.assertIn(second, str(butler._registry._db.filename))
+
+    def test_copied_repo_is_usable_and_independent(self) -> None:
+        """Two repos from one template do not share state."""
+        first = os.path.join(self.root, "one")
+        second = os.path.join(self.root, "two")
+        make_repo_for_test(first, config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(second, config=self._config(), forceConfigRoot=False)
+        b1 = Butler.from_config(first, writeable=True, run="r1")
+        b2 = Butler.from_config(second, writeable=True, run="r2")
+        b1.registry.registerRun("only_in_first")
+        self.assertNotIn("only_in_first", set(b2.registry.queryCollections()))
+
+    def test_different_config_builds_a_second_template(self) -> None:
+        """A differing configuration must not reuse the first template."""
+        other = self._config()
+        other["datastore", "checksum"] = False
+        make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(os.path.join(self.root, "two"), config=other, forceConfigRoot=False)
+        self.assertEqual(template_cache_stats()["templates"], 2)
+
+    def test_config_path_env_var_is_part_of_the_key(self) -> None:
+        """DAF_BUTLER_CONFIG_PATH changes the assembled config, so it keys."""
+        make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CONFIG_PATH": self.root}):
+            make_repo_for_test(os.path.join(self.root, "two"), config=self._config(), forceConfigRoot=False)
+        self.assertEqual(template_cache_stats()["templates"], 2)
+
+    def test_outfile_bypasses_the_cache(self) -> None:
+        """Outfile writes the config elsewhere, so it cannot be cached."""
+        make_repo_for_test(os.path.join(self.root, "one"), config=self._config(), forceConfigRoot=False)
+        make_repo_for_test(
+            os.path.join(self.root, "two"),
+            config=self._config(),
+            forceConfigRoot=False,
+            outfile=os.path.join(self.root, "out.yaml"),
+        )
+        self.assertEqual(template_cache_stats()["bypassed"], 1)
+
+    def test_standalone_and_overwrite_bypass_the_cache(self) -> None:
+        """Standalone and overwrite change what makeRepo writes."""
+        make_repo_for_test(os.path.join(self.root, "a"), config=self._config(), standalone=True)
+        make_repo_for_test(os.path.join(self.root, "b"), config=self._config(), overwrite=True)
+        self.assertEqual(template_cache_stats()["bypassed"], 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
