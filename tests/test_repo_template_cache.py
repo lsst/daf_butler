@@ -115,6 +115,20 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
         )
         self.assertEqual(template_cache_stats()["bypassed"], 1)
 
+    def test_non_sqlite_registry_bypasses_the_cache(self) -> None:
+        """A client/server registry lives outside the copied directory."""
+        config = self._config()
+        config["registry", "db"] = "postgresql://example.invalid/butler"
+        config["registry", "namespace"] = "namespace_deadbeef"
+        with self.assertRaises(Exception):
+            # The database does not exist, so creation fails. What matters is
+            # that the attempt bypassed the cache rather than building and
+            # retaining a single-use template.
+            make_repo_for_test(os.path.join(self.root, "pg"), config=config, forceConfigRoot=False)
+        stats = template_cache_stats()
+        self.assertEqual(stats["bypassed"], 1)
+        self.assertEqual(stats["templates"], 0)
+
     def test_standalone_and_overwrite_bypass_the_cache(self) -> None:
         """Standalone and overwrite change what makeRepo writes."""
         make_repo_for_test(os.path.join(self.root, "a"), config=self._config(), standalone=True)
