@@ -34,6 +34,7 @@ import numpy
 from astropy.table import Table
 
 from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -44,7 +45,7 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root)
+        make_repo_for_test(self.root)
         ints = [1, 2, 3]
         names = ["one", "two", "three"]
         transcendentals = [3.14, 2.718, 0.643]
