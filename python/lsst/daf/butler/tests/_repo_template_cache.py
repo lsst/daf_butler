@@ -114,6 +114,40 @@ def _cache_key(
     return hashlib.sha256(rendered.encode()).hexdigest()
 
 
+def _is_cacheable_registry(config: Config | str | None) -> bool:
+    """Return whether this repository's registry can be served from a copy.
+
+    Parameters
+    ----------
+    config : `lsst.daf.butler.Config` or `str` or `None`
+        Repository configuration, or `None` to accept the defaults.
+
+    Returns
+    -------
+    cacheable : `bool`
+        `True` if the registry lives in a SQLite file inside the repository,
+        which is the only case a directory copy can reproduce.
+
+    Notes
+    -----
+    A client/server database such as PostgreSQL keeps its contents outside the
+    repository directory, so copying the directory does not copy the registry.
+    Such repositories also carry a per-repository ``namespace``, which makes
+    every configuration unique and every cache lookup a miss. Caching them
+    would build a template that is used exactly once and then retained, which
+    is strictly more work than creating the repository directly.
+    """
+    if config is None:
+        # The default registry is SQLite inside the repository.
+        return True
+    if not isinstance(config, Config):
+        config = Config(config)
+    db = config.get(("registry", "db"))
+    if db is None:
+        return True
+    return str(db).startswith("sqlite")
+
+
 def make_repo_for_test(
     root: ResourcePathExpression,
     config: Config | str | None = None,
@@ -171,7 +205,14 @@ def make_repo_for_test(
     copyable = isinstance(resource, FileResourcePath)
 
     key: str | None = None
-    if copyable and outfile is None and not standalone and not overwrite and not searchPaths:
+    if (
+        copyable
+        and _is_cacheable_registry(config)
+        and outfile is None
+        and not standalone
+        and not overwrite
+        and not searchPaths
+    ):
         key = _cache_key(config, dimensionConfig, forceConfigRoot)
 
     if key is None:
