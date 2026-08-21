@@ -471,6 +471,65 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         construct the repository should also be used to construct any Butlers
         to avoid configuration inconsistencies.
         """
+        config, root_uri = Butler._make_repo_butler_config(
+            root,
+            config=config,
+            standalone=standalone,
+            searchPaths=searchPaths,
+            forceConfigRoot=forceConfigRoot,
+            outfile=outfile,
+            overwrite=overwrite,
+        )
+        Butler._make_repo_registry(config, dimensionConfig=dimensionConfig, root_uri=root_uri)
+        return config
+
+    @staticmethod
+    def _make_repo_butler_config(
+        root: ResourcePathExpression,
+        config: Config | str | None = None,
+        standalone: bool = False,
+        searchPaths: list[str] | None = None,
+        forceConfigRoot: bool = True,
+        outfile: ResourcePathExpression | None = None,
+        overwrite: bool = False,
+    ) -> tuple[Config, ResourcePath]:
+        """Create the repository directory and write its configuration.
+
+        This is the first half of `makeRepo`; it does everything except
+        creating the registry database.
+
+        Parameters
+        ----------
+        root : `lsst.resources.ResourcePathExpression`
+            Path or URI to the root location of the new repository.
+        config : `Config` or `str`, optional
+            Configuration to write to the repository.
+        standalone : `bool`, optional
+            If `True`, write all expanded defaults.
+        searchPaths : `list` of `str`, optional
+            Directory paths to search when calculating the full configuration.
+        forceConfigRoot : `bool`, optional
+            If `False`, any values present in ``config`` that would normally be
+            reset are not overridden.
+        outfile : `lsst.resources.ResourcePathExpression`, optional
+            If not-`None`, write the configuration here instead of into the
+            repository.
+        overwrite : `bool`, optional
+            If `False` an existing config file will cause an exception.
+
+        Returns
+        -------
+        config : `Config`
+            The configuration that was written.
+        root_uri : `lsst.resources.ResourcePath`
+            The root of the new repository.
+
+        Raises
+        ------
+        ValueError
+            Raised if a `ButlerConfig` or `ConfigSubset` is passed instead of a
+            regular `Config`.
+        """
         if isinstance(config, ButlerConfig | ConfigSubset):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
@@ -547,17 +606,37 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         else:
             config.dumpToUri(configURI, overwrite=overwrite)
 
-        # Create Registry and populate tables
-        registryConfig = RegistryConfig(config.get("registry"))
-        dimensionConfig = DimensionConfig(dimensionConfig)
-        registry = _RegistryFactory(registryConfig).create_from_config(
-            dimensionConfig=dimensionConfig, butlerRoot=root_uri
-        )
-        registry.close()
-
         _LOG.verbose("Wrote new Butler configuration file to %s", configURI)
 
-        return config
+        return config, root_uri
+
+    @staticmethod
+    def _make_repo_registry(
+        config: Config,
+        dimensionConfig: Config | str | None = None,
+        root_uri: ResourcePath | None = None,
+    ) -> None:
+        """Create the registry database for a new repository.
+
+        This is the second half of `makeRepo`; it assumes the repository
+        directory and its configuration already exist.
+
+        Parameters
+        ----------
+        config : `Config`
+            The repository configuration, as returned by
+            `_make_repo_butler_config`.
+        dimensionConfig : `Config` or `str`, optional
+            Configuration for dimensions, used to initialize the database.
+        root_uri : `lsst.resources.ResourcePath`, optional
+            Root of the repository, used to resolve a relative database
+            location.
+        """
+        registryConfig = RegistryConfig(config.get("registry"))
+        registry = _RegistryFactory(registryConfig).create_from_config(
+            dimensionConfig=DimensionConfig(dimensionConfig), butlerRoot=root_uri
+        )
+        registry.close()
 
     @classmethod
     def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:

@@ -42,6 +42,7 @@ from lsst.daf.butler.logging import (
     JsonLogFormatter,
     _ButlerLogRecordsModelV1,
 )
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -52,7 +53,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root)
+        make_repo_for_test(self.root)
 
         self.run = "testrun"
         self.butler = Butler.from_config(self.root, run=self.run)

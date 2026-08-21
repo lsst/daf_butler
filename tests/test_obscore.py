@@ -53,6 +53,7 @@ from lsst.daf.butler.registry.obscore import (
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
@@ -655,7 +656,7 @@ class TestMissingObscoreConfig(unittest.TestCase):
         config = self.make_butler_config("lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager")
 
         with self.assertWarnsRegex(UserWarning, "configuration is missing"):
-            Butler.makeRepo(self.root, config)
+            make_repo_for_test(self.root, config)
 
         # Now instanciate Butler from the same repo.
         Butler.from_config(self.root)
@@ -669,7 +670,7 @@ class TestMissingObscoreConfig(unittest.TestCase):
         )
 
         with self.assertWarnsRegex(UserWarning, "configuration is missing"):
-            Butler.makeRepo(self.root, config)
+            make_repo_for_test(self.root, config)
 
         # Now instanciate Butler from the same repo.
         Butler.from_config(self.root)

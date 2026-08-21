@@ -89,6 +89,7 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
@@ -633,7 +634,7 @@ class ButlerTests(ButlerPutGetTests):
     def setUp(self) -> None:
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root, config=Config(self.configFile))
+        make_repo_for_test(self.root, config=Config(self.configFile))
         self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
 
     def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
@@ -1081,7 +1082,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.ingest_zip(zip, transfer="copy", skip_existing=True)
 
             # Create an entirely new local file butler in this temp directory.
-            new_butler_cfg = Butler.makeRepo(tmpdir)
+            new_butler_cfg = make_repo_for_test(tmpdir)
             new_butler = Butler.from_config(new_butler_cfg, writeable=True)
             self.enterContext(new_butler)
 
@@ -1462,13 +1463,13 @@ class ButlerTests(ButlerPutGetTests):
         root2 = tempfile.mkdtemp(dir=self.root)
 
         self.assertFalse(Butler.has_repo_config(root1))
-        butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
+        butlerConfig = make_repo_for_test(root1, config=Config(self.configFile))
         self.assertTrue(Butler.has_repo_config(root1))
         limited = Config(self.configFile)
         butler1 = Butler.from_config(butlerConfig)
         self.enterContext(butler1)
         assert isinstance(butler1, DirectButler), "Expect DirectButler in configuration"
-        butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
+        butlerConfig = make_repo_for_test(root2, standalone=True, config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
         butler2 = Butler.from_config(butlerConfig)
         self.enterContext(butler2)
@@ -1495,7 +1496,7 @@ class ButlerTests(ButlerPutGetTests):
             Butler.from_config(butlerConfig)
 
         with self.assertRaises(FileExistsError):
-            Butler.makeRepo(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
+            make_repo_for_test(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
 
     def testStringification(self) -> None:
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
@@ -2015,7 +2016,9 @@ class FileDatastoreButlerTests(ButlerTests):
             self.assertTrue(os.path.exists(exportFile))
             with safeTestTempDir(TESTDIR) as importDir:
                 # We always want this to be a local posix butler
-                Butler.makeRepo(importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml")))
+                make_repo_for_test(
+                    importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml"))
+                )
                 # Calling script.butlerImport tests the implementation of the
                 # butler command line interface "import" subcommand. Functions
                 # in the script folder are generally considered protected and
@@ -2538,7 +2541,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Test writing outputs to a FileDatastore.
         with tempfile.TemporaryDirectory() as tempdir:
-            target_repo_config = Butler.makeRepo(tempdir)
+            target_repo_config = make_repo_for_test(tempdir)
             refs = [repo.ref1, repo.ref2]
             datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
             self.assertEqual(len(datasets), 2)
@@ -2590,7 +2593,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
                       root: <butlerRoot>/FileDatastore_1
             """
             )
-            target_repo_config = Butler.makeRepo(tempdir, config)
+            target_repo_config = make_repo_for_test(tempdir, config)
             refs = [repo.ref1, repo.ref2, other_ref]
             datasets = transfer_datasets_to_datastore(source_butler, ButlerConfig(target_repo_config), refs)
             self.assertEqual(len(datasets), 3)
@@ -2756,7 +2759,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
 
         # Make a new repository in one place
         self.dir1 = os.path.join(self.root, "dir1")
-        Butler.makeRepo(self.dir1, config=Config(self.configFile))
+        make_repo_for_test(self.dir1, config=Config(self.configFile))
 
         # Move the yaml file to a different place and add a "root"
         self.dir2 = os.path.join(self.root, "dir2")
@@ -2786,7 +2789,7 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
-        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
+        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
     def tearDown(self) -> None:
         if os.path.exists(self.root2):
@@ -2815,7 +2818,7 @@ class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = self.root2
-        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
+        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
     def testConfigExistence(self) -> None:
         # Append the yaml file else Config constructor does not know the file
@@ -2834,7 +2837,7 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = ResourcePath(os.path.join(self.root2, "something.yaml")).geturl()
-        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
+        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
 
 class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -2867,7 +2870,7 @@ class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestC
 
         self.datastoreStr = [f"datastore='{rooturi}'"]
         self.datastoreName = [f"FileDatastore@{rooturi}"]
-        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
+        make_repo_for_test(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = str(rooturi.join("butler.yaml", forceDirectory=False))
 
     def tearDown(self) -> None:
@@ -2907,7 +2910,7 @@ class DatastoreTransfers(TestCaseMixin):
         config = Config(config_file if config_file is not None else self.configFile)
         config["registry", "managers", "datasets"] = manager
         butler = Butler.from_config(
-            Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True
+            make_repo_for_test(f"{self.root}/butler{label}", config=config), writeable=True
         )
         self.enterContext(butler)
         return butler
@@ -3430,9 +3433,9 @@ class TransferDatasetsInPlace(unittest.TestCase):
         ):
             config = Config(configFile)
             config["datastore", "datastore", "name"] = "file_datastore"
-            Butler.makeRepo(datastore_root, config=config)
+            make_repo_for_test(datastore_root, config=config)
             config["datastore", "datastore", "root"] = datastore_root
-            Butler.makeRepo(other_repo_root, config, forceConfigRoot=False)
+            make_repo_for_test(other_repo_root, config, forceConfigRoot=False)
             with (
                 Butler(datastore_root, writeable=True) as source_butler,
                 Butler(other_repo_root, writeable=True) as target_butler,
@@ -3452,8 +3455,8 @@ class TransferDatasetsInPlace(unittest.TestCase):
             config["datastore", "datastore", "datastores", 1, "datastore", "root"] = (
                 f"{datastore_root}/butler_test_repository2"
             )
-            Butler.makeRepo(datastore_root, config=config, forceConfigRoot=False)
-            Butler.makeRepo(other_repo_root, config=config, forceConfigRoot=False)
+            make_repo_for_test(datastore_root, config=config, forceConfigRoot=False)
+            make_repo_for_test(other_repo_root, config=config, forceConfigRoot=False)
             with (
                 Butler(datastore_root, writeable=True) as source_butler,
                 Butler(other_repo_root, writeable=True) as target_butler,
@@ -3523,7 +3526,7 @@ class NullDatastoreTestCase(unittest.TestCase):
     def setUp(self) -> None:
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root, config=Config(self.configFile))
+        make_repo_for_test(self.root, config=Config(self.configFile))
 
     def tearDown(self) -> None:
         removeTestTempDir(self.root)

@@ -72,15 +72,82 @@ else:
 def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
         raise RuntimeError(f"Only call update with Mapping, not {type(d)}")
+    return _mergeInto(d, u)
+
+
+def _mergeInto(d: Any, u: Mapping[str, Any]) -> Any:
+    """Merge ``u`` into ``d`` recursively.
+
+    Parameters
+    ----------
+    d : `~collections.abc.MutableMapping`
+        Mapping to update in place.
+    u : `~collections.abc.Mapping`
+        Mapping supplying the new values.
+
+    Returns
+    -------
+    d : `~collections.abc.MutableMapping`
+        The updated mapping.
+
+    Notes
+    -----
+    Configuration values are almost always plain dictionaries read from YAML,
+    so an exact `dict` check is tried before the abstract base class check.
+    The abstract check is several times more expensive and this runs once per
+    node of every subtree that is merged.
+    """
     for k, v in u.items():
-        if isinstance(v, Mapping):
-            lhs = d.get(k, {})
-            if not isinstance(lhs, Mapping):
+        if type(v) is dict or isinstance(v, Mapping):
+            lhs = d.get(k)
+            if type(lhs) is not dict and not isinstance(lhs, MutableMapping):
                 lhs = {}
-            d[k] = _doUpdate(lhs, v)
+            d[k] = _mergeInto(lhs, v)
         else:
             d[k] = v
     return d
+
+
+# Types that are common in configurations and are never mappings. Checking
+# membership here is much cheaper than an abstract base class check, and these
+# account for the overwhelming majority of configuration values.
+_NON_MAPPING_TYPES = frozenset({str, int, float, bool, type(None), list, tuple})
+
+
+def _copyMapping(u: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a copy of a mapping, recursing into nested mappings.
+
+    Parameters
+    ----------
+    u : `~collections.abc.Mapping`
+        Mapping to copy.
+
+    Returns
+    -------
+    copied : `dict`
+        A new `dict`. Nested mappings, including `Config` instances, are
+        copied into plain dictionaries. All other values, including lists, are
+        stored by reference.
+
+    Notes
+    -----
+    This is equivalent to merging into an empty mapping but skips the
+    look-up and type check of the target that a merge needs, and avoids an
+    abstract base class check for the value types that dominate real
+    configurations.
+    """
+    copied: dict[str, Any] = {}
+    for k, v in u.items():
+        t = type(v)
+        if t is dict:
+            copied[k] = _copyMapping(v)
+        elif t in _NON_MAPPING_TYPES:
+            copied[k] = v
+        elif isinstance(v, Mapping):
+            copied[k] = _copyMapping(v)
+        else:
+            copied[k] = v
+    return copied
 
 
 def _checkNextItem(k: str | int, d: Any, create: bool, must_be_dict: bool) -> tuple[Any, bool]:
@@ -273,15 +340,16 @@ class Config(MutableMapping):
             return
 
         if isinstance(other, Config):
-            # Deep copy might be more efficient but if someone has overridden
-            # a config entry to store a complex object then deep copy may
-            # fail. Safer to use update().
-            self.update(other._data)
+            # Copying rather than deep copying, because a config entry may
+            # hold an object that cannot be deep copied. Nested mappings are
+            # copied; everything else is stored by reference, which is the
+            # same behaviour a merge into an empty config would give.
+            self._data = _copyMapping(other._data)
             self.configFile = other.configFile
         elif isinstance(other, dict | Mapping):
             # In most cases we have a dict, and it's more efficient
             # to check for a dict instance before checking the generic mapping.
-            self.update(other)
+            self._data = _copyMapping(other)
         elif isinstance(other, str | ResourcePath | Path):
             # if other is a string, assume it is a file path/URI
             self.__initFromUri(other)

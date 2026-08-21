@@ -106,6 +106,7 @@ except ImportError:
     pd = None
     atable = None
     np = None
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 from lsst.resources.tests import make_remote_test_uri
 
@@ -341,7 +342,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         config = Config(self.configFile)
         self.run = "test_run"
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
+            make_repo_for_test(self.root, config=config), writeable=True, run=self.run
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -959,7 +960,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         config = Config(self.configFile)
         self.run = "test_run"
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
+            make_repo_for_test(self.root, config=config), writeable=True, run=self.run
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -1355,7 +1356,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+            make_repo_for_test(self.root, config=config), writeable=True, run="test_run"
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -1655,7 +1656,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+            make_repo_for_test(self.root, config=config), writeable=True, run="test_run"
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -1969,7 +1970,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+            make_repo_for_test(self.root, config=config), writeable=True, run="test_run"
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -2131,7 +2132,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.butler = Butler.from_config(
-            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+            make_repo_for_test(self.root, config=config), writeable=True, run="test_run"
         )
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about
@@ -2315,7 +2316,7 @@ class ParquetFormatterArrowTableRemoteTestCase(unittest.TestCase):
         self.reg_dir = makeTestTempDir(TESTDIR)
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
-        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
+        make_repo_for_test(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = str(rooturi.join("butler.yaml", forceDirectory=False))
 
         self.butler = Butler(self.tmpConfigFile, writeable=True, run="test_run")

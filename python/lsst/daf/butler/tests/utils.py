@@ -50,6 +50,7 @@ from ..dimensions import DimensionConfig
 from ..direct_butler import DirectButler
 from ..registry.sql_registry import RegistryConfig, SqlRegistry
 from ..tests import MetricsExample, addDatasetType
+from ._repo_template_cache import make_repo_for_test
 
 if TYPE_CHECKING:
     import unittest
@@ -301,7 +302,7 @@ class MetricTestRepo:
         storageClassName: str | None = None,
     ) -> None:
         self.root = root
-        butlerConfigFile = Butler.makeRepo(
+        butlerConfigFile = make_repo_for_test(
             self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot
         )
         butler = Butler.from_config(butlerConfigFile, run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
