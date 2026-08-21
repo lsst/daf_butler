@@ -654,6 +654,8 @@ class TestMissingObscoreConfig(unittest.TestCase):
         """Test setup when obscore key defines manager class."""
         config = self.make_butler_config("lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager")
 
+        # The warning is emitted while the configuration is written, so this
+        # must not go through the caching helper.
         with self.assertWarnsRegex(UserWarning, "configuration is missing"):
             Butler.makeRepo(self.root, config)
 

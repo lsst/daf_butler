@@ -31,6 +31,7 @@ import os
 import unittest
 
 from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 from lsst.utils.packages import Packages
 
@@ -43,7 +44,7 @@ class PackagesFormatterTestCase(unittest.TestCase):
     def setUp(self):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root)
+        make_repo_for_test(self.root)
         self.butler = Butler.from_config(self.root, run="test_run")
         self.enterContext(self.butler)
         # No dimensions in dataset type so we don't have to worry about

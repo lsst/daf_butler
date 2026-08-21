@@ -30,6 +30,7 @@ import unittest
 
 from lsst.daf.butler import Butler, Config, DatasetRef, DatasetType, MissingDatasetTypeError
 from lsst.daf.butler.registry import ConflictingDefinitionError
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.utils import safeTestTempDir
 
@@ -66,7 +67,7 @@ class RegistryDatasetTypeOverridesTestCase(unittest.TestCase):
             }
         }
         repo_dir = self.enterContext(safeTestTempDir(TESTDIR))
-        self.base_config = Butler.makeRepo(root=repo_dir, config=config)
+        self.base_config = make_repo_for_test(root=repo_dir, config=config)
         self.base_butler = self.enterContext(Butler.from_config(self.base_config, writeable=True))
 
     def test_rename(self) -> None:
