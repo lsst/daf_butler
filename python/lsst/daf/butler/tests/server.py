@@ -23,6 +23,7 @@ from lsst.resources import ResourcePath
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
 from ..direct_butler import DirectButler
+from ._repo_template_cache import make_repo_for_test
 from .hybrid_butler import HybridButler
 from .postgresql import TemporaryPostgresInstance
 from .server_utils import add_auth_header_check_middleware
@@ -114,7 +115,7 @@ def create_test_server(
                 postgres.patch_butler_config(config)
 
             with TemporaryDirectory() as root, mock_config(server_config) as server_config:
-                Butler.makeRepo(root, config=config, forceConfigRoot=False)
+                make_repo_for_test(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
 
                 server_config.repositories = {

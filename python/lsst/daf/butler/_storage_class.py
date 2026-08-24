@@ -32,14 +32,17 @@ from __future__ import annotations
 __all__ = ("StorageClass", "StorageClassConfig", "StorageClassFactory")
 
 import builtins
+import hashlib
 import itertools
 import logging
+import os
 from collections import ChainMap
 from collections.abc import Callable, Collection, Mapping, Sequence, Set
 from threading import RLock
 from typing import Any
 
 import pydantic
+import pydantic_core
 
 from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
@@ -57,6 +60,69 @@ class StorageClassConfig(ConfigSubset):
 
     component = "storageClasses"
     defaultConfigFile = "storageClasses.yaml"
+
+
+# Cache of storage class definitions that have already been derived from a
+# given configuration, keyed by a hash of that configuration. Deriving them is
+# far more expensive than recognizing that we have seen the same definitions
+# before, and identical definitions are derived repeatedly because every
+# Butler applies the same defaults.
+#
+# Sharing instances is safe because a `StorageClass` describes a definition
+# rather than holding state: the only mutation it undergoes is memoization of
+# the Python type and of the converters whose types cannot be imported, both
+# of which are determined by the definition itself. The factory is a singleton
+# and already shares instances between every use of a given definition.
+_derived_cache: dict[str, dict[str, StorageClass]] = {}
+
+# The environment variable that alters which default configuration files are
+# found, and therefore what a given input configuration expands to.
+_CONFIG_PATH_ENV = "DAF_BUTLER_CONFIG_PATH"
+
+
+def _derived_cache_key(config: StorageClassConfig | Config | str) -> str | None:
+    """Return a key identifying the definitions this configuration produces.
+
+    Parameters
+    ----------
+    config : `StorageClassConfig`, `Config` or `str`
+        Storage class configuration, as passed to
+        `StorageClassFactory.addFromConfig`.
+
+    Returns
+    -------
+    key : `str` or `None`
+        A hash of the storage class definitions in ``config`` together with
+        the environment that determines which defaults are applied, or `None`
+        if a key cannot be derived cheaply.
+
+    Notes
+    -----
+    The key is computed from the supplied configuration without expanding it,
+    because expanding it is the cost this is trying to avoid.
+
+    Serialization does not sort keys, so two configurations holding the same
+    definitions in a different order produce different keys. That costs a
+    cache miss and the definitions are then derived as usual, which is
+    correct but slower; it never produces a wrong answer.
+    """
+    if isinstance(config, StorageClassConfig):
+        # Already a subset, so the data are the definitions themselves.
+        raw: Any = config._data
+    elif isinstance(config, Config):
+        # A configuration that may carry overrides under the component key.
+        # Its absence is meaningful: it means the defaults apply unmodified.
+        raw = config._data.get(StorageClassConfig.component, {})
+    else:
+        # A file path or URI would have to be read to be hashed, so leave it
+        # to the uncached path.
+        return None
+
+    try:
+        rendered = pydantic_core.to_json([raw, os.environ.get(_CONFIG_PATH_ENV)], fallback=str)
+    except (TypeError, ValueError):
+        return None
+    return hashlib.sha256(rendered).hexdigest()
 
 
 class _StorageClassModel(pydantic.BaseModel):
@@ -666,7 +732,20 @@ StorageClasses
         config : `StorageClassConfig`, `Config` or `str`
             Storage class configuration. Can contain a ``storageClasses``
             key if part of a global configuration.
+
+        Notes
+        -----
+        Definitions derived from a configuration that has been seen before are
+        reused. Registration itself, including the check that an existing
+        definition is compatible, is always performed.
         """
+        cache_key = _derived_cache_key(config)
+        if cache_key is not None and (derived := _derived_cache.get(cache_key)) is not None:
+            with self._lock:
+                for storageClass in derived.values():
+                    self.registerStorageClass(storageClass)
+            return
+
         sconfig = StorageClassConfig(config)
 
         # Since we can not assume that we will get definitions of
@@ -729,8 +808,16 @@ StorageClasses
         log.debug("Adding definitions from config %s", ", ".join(files))
 
         with self._lock:
-            for name in list(sconfig.keys()):
+            # Processing consumes entries from sconfig, so record the names
+            # first in order to collect the results afterwards.
+            names = list(sconfig.keys())
+            for name in names:
                 processStorageClass(name, sconfig, context)
+
+            if cache_key is not None:
+                _derived_cache[cache_key] = {
+                    name: self._storageClasses[name] for name in names if name in self._storageClasses
+                }
 
     def getStorageClass(self, storageClassName: str) -> StorageClass:
         """Get a StorageClass instance associated with the supplied name.

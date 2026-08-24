@@ -38,6 +38,7 @@ from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.script import queryCollections
 from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
 
 
@@ -151,7 +152,7 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
         run = "ingest/run"
         tag = "tag"
         with self.runner.isolated_filesystem():
-            butlerCfg = Butler.makeRepo("here")
+            butlerCfg = make_repo_for_test("here")
             # the purpose of this call is to create some collections
             butler = Butler.from_config(butlerCfg, run=run, collections=[tag], writeable=True)
             self.enterContext(butler)
@@ -194,7 +195,7 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
     def testChained(self):
         with self.runner.isolated_filesystem():
             # Create a butler and add some chained collections:
-            butlerCfg = Butler.makeRepo("here")
+            butlerCfg = make_repo_for_test("here")
 
             butler1 = Butler.from_config(butlerCfg, writeable=True)
             self.enterContext(butler1)

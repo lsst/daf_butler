@@ -35,6 +35,7 @@ from numpy import array
 
 from lsst.daf.butler import Butler, DatasetType, script
 from lsst.daf.butler.direct_butler import DirectButler
+from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -61,7 +62,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.repo = Butler.makeRepo(self.root)
+        self.repo = make_repo_for_test(self.root)
 
     def tearDown(self):
         removeTestTempDir(self.root)
