@@ -110,6 +110,41 @@ class RepoTemplateCacheTestCase(unittest.TestCase):
         self.assertIn("inMemoryDatastore", Config(os.path.join(first, "butler.yaml"))["datastore", "cls"])
         self.assertIn("fileDatastore", Config(os.path.join(second, "butler.yaml"))["datastore", "cls"])
 
+    def _files_under(self, directory: str) -> set[str]:
+        """Return every file below a directory, relative to it."""
+        found = set()
+        for dirpath, _, filenames in os.walk(directory):
+            for filename in filenames:
+                found.add(os.path.relpath(os.path.join(dirpath, filename), directory))
+        return found
+
+    def test_root_with_uri_metacharacters(self) -> None:
+        """A root holding `?` or `#` must land where makeRepo puts it.
+
+        Such a root is mangled during creation, because the tag replacement
+        drops a URI fragment and the database connection string is then parsed
+        as a URI. The helper has to follow that resolution rather than
+        predict a path of its own.
+        """
+        helper_parent = os.path.join(self.root, "helper")
+        direct_parent = os.path.join(self.root, "direct")
+        subdir = "sub?#dir"
+        make_repo_for_test(os.path.join(helper_parent, subdir), config=self._config(), forceConfigRoot=False)
+        Butler.makeRepo(os.path.join(direct_parent, subdir), config=self._config(), forceConfigRoot=False)
+        self.assertEqual(self._files_under(helper_parent), self._files_under(direct_parent))
+
+        # Producing the right files is not enough on its own, because failing
+        # to locate the database would also leave the repository correct but
+        # uncached. A second such root has to reuse the first one's database,
+        # which it can only do if the location was resolved rather than
+        # guessed.
+        second_parent = os.path.join(self.root, "second")
+        make_repo_for_test(os.path.join(second_parent, subdir), config=self._config(), forceConfigRoot=False)
+        stats = template_cache_stats()
+        self.assertEqual(stats.templates, 1)
+        self.assertEqual(stats.reused_database, 1)
+        self.assertEqual(self._files_under(second_parent), self._files_under(direct_parent))
+
     def test_obscore_config_survives_a_cache_hit(self) -> None:
         """Obscore settings are stripped from ``butler.yaml`` and kept in the
         registry, so a copy cannot recover them from the file.

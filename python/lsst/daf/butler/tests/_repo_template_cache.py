@@ -41,6 +41,7 @@ import json
 import os
 import shutil
 import tempfile
+import urllib.parse
 from typing import Any
 
 import pydantic
@@ -50,7 +51,7 @@ from lsst.resources.file import FileResourcePath
 
 from .. import Butler, Config
 from ..dimensions import DimensionConfig
-from ..repo_relocation import BUTLER_ROOT_TAG
+from ..repo_relocation import replaceRoot
 
 # The environment variable that alters which default configuration files are
 # found, and therefore what a given input configuration expands to.
@@ -273,6 +274,13 @@ def make_repo_for_test(
     if cached_db is None:
         _stats.templates += 1
         Butler._make_repo_registry(written, dimensionConfig=dimensionConfig, root_uri=root_uri)
+        if not os.path.exists(db_path):
+            # Registry creation put the database somewhere other than where
+            # this helper expects it, so there is nothing safe to retain. The
+            # repository itself is complete, so report it as served and leave
+            # the database uncached rather than failing.
+            _stats.served += 1
+            return written
         holder = tempfile.mkdtemp(prefix="butler-registry-template-")
         _tmpdirs.append(holder)
         cached_db = os.path.join(holder, os.path.basename(db_path))
@@ -467,12 +475,29 @@ def _sqlite_path(written: Config, root_uri: ResourcePath) -> str | None:
     path : `str` or `None`
         Path to the SQLite file, or `None` if the registry is not a SQLite
         file inside the repository.
+
+    Notes
+    -----
+    The location is derived the way the registry derives it, in two steps:
+    `lsst.daf.butler.repo_relocation.replaceRoot` substitutes the repository
+    root, then the result is parsed as a URI, which is what
+    ``SqliteDatabase.makeEngine`` does to find the file it opens.
+
+    Reconstructing the path instead of following those two steps gives the
+    wrong answer whenever the root holds a URI metacharacter, because
+    ``replaceRoot`` substitutes a root whose ``#`` fragment has already been
+    dropped and the parse then discards everything from a ``?`` onwards. Such
+    a root is mangled by repository creation itself, and this helper has to
+    land on the same mangled path rather than on the one the caller asked for.
     """
     db = written.get(("registry", "db"))
-    if db is None or not str(db).startswith("sqlite:///"):
+    if db is None:
         return None
-    location = str(db)[len("sqlite:///") :]
+    resolved = replaceRoot(str(db), root_uri)
+    parsed = urllib.parse.urlparse(resolved)
+    if parsed.scheme != "sqlite" or not parsed.path.startswith("/"):
+        return None
+    location = parsed.path[1:]
     if not location or location == ":memory:":
         return None
-    location = location.replace(BUTLER_ROOT_TAG, root_uri.ospath.rstrip("/"))
     return location
