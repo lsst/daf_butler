@@ -23,3 +23,43 @@ Recipients may choose which of these licenses to use; please see the files gpl-3
 From version 18 of arrow we have seen significant memory leaks when accessing parquet files using the default memory allocator.
 If you see such leaks the workaround is to set the `ARROW_DEFAULT_MEMORY_POOL` environment variable to `jemalloc` following the advice from [apache/arrow#45882](https://github.com/apache/arrow/issues/45882).
 For EUPS users this variable is automatically set.
+
+## Managing dependencies
+
+This package uses [uv](https://docs.astral.sh/uv/) to manage the versions of libraries used for CI, Docker builds, and local development.
+
+### Upgrading the versions of libraries
+
+Run the following command to refresh `uv.lock` with the latest available
+versions of all libraries:
+```
+uv lock --upgrade
+```
+
+### Temporarily pinning another LSST package to a development branch
+If you are working on a PR that requires unreleased changes from another LSST
+repository, you can temporarily pin the new version by opening `pyproject.toml`
+and finding the library in the `override-dependencies` declaration under
+`tool.uv`.  Replace `main` with the ticket branch, e.g.:
+```
+override-dependencies = [
+    "lsst-utils @ git+https://github.com/lsst/utils@tickets/DM-xxxxx",
+    ...
+]
+```
+
+Then run:
+```
+uv lock --upgrade-package <package name>
+```
+to pull in the updated version for testing, where `<package name>` is
+`lsst-utils` or whatever package you are overriding.
+ (You can also just do `uv lock --upgrade` if you don't mind upgrading all the
+ other libraries at the same time.)
+
+You will need to re-do this lock update any time you change the code, so that
+it resolves to the new version.
+
+After the other library's development branch has been merged, reset the
+branch to main in `pyproject.toml` and run the lock update again to pull in
+the released version.

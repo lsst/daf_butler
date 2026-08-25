@@ -44,57 +44,60 @@
 #   - Runs a non-root user.
 #   - Sets up the entrypoint and port.
 
-FROM python:3.13.12-slim-trixie AS base-image
+FROM python:3.14.7-slim-trixie AS base-image
 
 # Update system packages
 COPY server/scripts/install-base-packages.sh .
 RUN ./install-base-packages.sh && rm ./install-base-packages.sh
 
 FROM base-image AS dependencies-image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_NO_DEV=1
+ENV UV_PYTHON_DOWNLOADS=0
 
 # Install system packages only needed for building dependencies.
 COPY server/scripts/install-dependency-packages.sh .
 RUN ./install-dependency-packages.sh
 
-# Create a Python virtual environment
-ENV VIRTUAL_ENV=/opt/venv
-RUN python -m venv $VIRTUAL_ENV
-# Make sure we use the virtualenv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-# Put the latest pip and setuptools in the virtualenv
-RUN pip install --upgrade --no-cache-dir pip setuptools wheel uv
+# Create a virtual environment and install Python libraries.  These are
+# installed separately from the daf_butler source code to improve caching.
+ARG NEEDED_EXTRAS="--extra postgres --extra server"
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project ${NEEDED_EXTRAS}
 
-# Install the app's Python runtime dependencies
-COPY requirements/docker.txt ./docker-requirements.txt
-RUN uv pip install --no-cache-dir -r docker-requirements.txt
-
-# Install dependencies only required by unit tests in a separate image for better caching
-FROM dependencies-image AS test-dependencies-image
-RUN apt-get update
-RUN apt-get install -y --no-install-recommends postgresql postgresql-pgsphere
-COPY requirements/docker-test.txt ./docker-test-requirements.txt
-RUN uv pip install --no-cache-dir -r docker-test-requirements.txt
+# Install daf_butler source code into the venv.
+FROM dependencies-image AS install-image
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable ${NEEDED_EXTRAS}
 
 # Run unit tests
-FROM test-dependencies-image AS unit-test
-RUN useradd --create-home testuser
-COPY . /workdir
-WORKDIR /workdir
-RUN pip install --no-cache-dir --no-deps .
+FROM dependencies-image AS unit-test
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends postgresql postgresql-pgsphere
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --dev ${NEEDED_EXTRAS}
+
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --dev ${NEEDED_EXTRAS}
+
 # The postgres tests refuse to run as root
+RUN useradd --create-home testuser
 USER testuser
 # For some reason Butler unit tests create temporary files in the source code tree
 # unless you explicitly specify otherwise.
-RUN TMPDIR=/tmp DAF_BUTLER_TEST_TMP=/tmp pytest -x
-
-FROM dependencies-image AS install-image
-
-# Use the virtualenv
-ENV PATH="/opt/venv/bin:$PATH"
-
-COPY . /workdir
-WORKDIR /workdir
-RUN pip install --no-cache-dir --no-deps .
+ENV TMPDIR=/tmp
+ENV DAF_BUTLER_TEST_TMP=/tmp
+ENV PATH="/app/.venv/bin:$PATH"
+RUN pytest -x
 
 FROM base-image AS runtime-image
 
@@ -102,10 +105,10 @@ FROM base-image AS runtime-image
 RUN useradd --create-home appuser
 
 # Copy the virtualenv
-COPY --from=install-image /opt/venv /opt/venv
+COPY --from=install-image /app/.venv /app/.venv
 
 # Make sure we use the virtualenv
-ENV PATH="/opt/venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Switch to the non-root user.
 USER appuser
