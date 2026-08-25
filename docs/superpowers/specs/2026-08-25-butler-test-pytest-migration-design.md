@@ -388,8 +388,10 @@ right one.
 These two files run 271 subtest executions, and coverage contexts under
 `subTest` attribute to the parent test rather than to the subtest.
 
-The eight `subTest` sites are therefore converted to `parametrize` in the first
-commit of the series, before the baseline is taken.
+The six convertible `subTest` sites are therefore converted to `parametrize` in
+the first commit of the series, before the baseline is taken.
+The remaining two are loops within a single test and never formed separate
+contexts, so they need no treatment.
 The global gate is unaffected either way; this is only about attribution
 granularity for the `marginal` query.
 
@@ -454,7 +456,7 @@ Counted across both files:
 | --- | --- | --- |
 | `self.assert*` | bare `assert` | 814, automated |
 | `self.assertRaises` | `pytest.raises` | 140, of which 137 automated |
-| `self.subTest` | `@pytest.mark.parametrize` | 8 |
+| `self.subTest` | `@pytest.mark.parametrize` | 6 of 8; 2 stay loops |
 | `self.assertLogs` | `caplog` | 10 |
 | `enterContext` | fixtures with `yield` | 25 |
 | `setUp`, `tearDown` | fixtures with `yield` | per class |
@@ -473,8 +475,21 @@ estimating:
 - **No `assertWarns`, no `assertAlmostEqual`, no `addCleanup` in either file.**
 
 `pytest-subtests` is deliberately not adopted.
-All eight sites express better as `parametrize`, which yields independent test
-IDs and lets xdist distribute them.
+
+Six of the eight sites express better as `parametrize`, which yields independent
+test IDs and lets xdist distribute them.
+The two that do not are loops over data produced at runtime:
+`tests/test_butler.py:322` sits inside `runPutGetTest`, a helper called by many
+tests rather than a test itself, and `tests/test_butler.py:2039` iterates over
+datasets the test has just created.
+Neither has a parameter list that exists at collection time.
+Both keep their loop and drop the `subTest` wrapper, with the iteration identity
+moved into the assertion message.
+
+This costs per-iteration isolation in those two loops: the first failure now
+ends the loop instead of reporting every failing case.
+That is accepted, because both loops are inside a single test either way, so
+neither was contributing separable coverage contexts to begin with.
 
 ### The ruff ratchet
 
@@ -575,7 +590,7 @@ It is pasted into the ticket and deleted in the closing commit.
 | A test silently starts skipping | Skip count is checked separately, since the line diff may not reveal it |
 | The gate is invalidated by library edits | No library changes on this branch; genuine fixes go on separate tickets |
 | The conversion itself loses a test | Convert and deduplicate are separate passes; after the conversion pass, test count must be unchanged |
-| Subtest contexts hide marginal coverage | The eight `subTest` sites are converted to `parametrize` before the baseline is taken |
+| Subtest contexts hide marginal coverage | The six convertible `subTest` sites are converted to `parametrize` before the baseline is taken; the other two are loops inside a single test |
 | The diff is unreviewable | The mapping file makes every removal auditable against coverage evidence |
 | Duplication regrows later | Multiplication is opt-in and visible in the diff, rather than implicit in a base class |
 | The postgres axis is dropped too aggressively | Postgres exercises different SQL; its marginal set is expected to be non-empty, and drops are refused where it is |
