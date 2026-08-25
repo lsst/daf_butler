@@ -17,7 +17,9 @@
 - **Green at every commit.** Every task ends with a passing run of the files it touched.
 - **No `unittest` in produced files.** Every file a task creates must pass `rg -c "unittest|self\.assert" <file>` with no matches. `parametrize` silently breaks on `unittest.TestCase` methods — it collects one case and raises `TypeError: missing 1 required positional argument` — so a leftover `TestCase` base is not cosmetic, it disables parametrization.
 - **Ruff and mypy clean.** The repo has a pre-commit hook that runs `ruff check` and `ruff format`; it will reject a commit and modify files. Re-`git add` and re-commit when it does.
-- **Test environment.** Always `env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run ...`. A configured EUPS stack otherwise shadows the venv and collection dies on `dlopen ... libsphgeom.dylib`. Build once with `uv sync --locked --all-extras --dev`.
+- **Test environment.** Always `env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev ...`. Both parts are load-bearing:
+  - Clearing `PYTHONPATH`/`DYLD_LIBRARY_PATH` stops a configured EUPS stack shadowing the venv; without it collection dies on `dlopen ... libsphgeom.dylib`.
+  - `--all-extras --dev` on **every** `uv run`, not just the initial `uv sync`. A bare `uv run` re-syncs the environment to the default dependency groups and silently *uninstalls* the extras, taking `fastapi` with it. The symptom is not an error but 231 spurious test errors and a much larger skip count — a baseline taken that way understates covered lines and makes the gate trivially passable. This was hit for real on the first baseline attempt.
 - **Line length 110**, `target-version = "py311"`, numpydoc docstring convention. American English in prose. One sentence per line in Markdown.
 - **Coverage measured set:** `lsst.daf.butler` excluding `lsst/daf/butler/tests/` and `lsst/daf/butler/registry/tests/`.
 - **Baseline commit:** `ae3f97620`. Baseline runtime for the two files in scope: 535 passed, 10 skipped, 10 xfailed, 271 subtests, 86.16s.
@@ -54,7 +56,7 @@
 - Create: `tests/_migration/README.md`
 
 **Interfaces:**
-- Produces: `coverage_tool.py` with three subcommands, invoked as `uv run python tests/_migration/coverage_tool.py <subcommand> ...`:
+- Produces: `coverage_tool.py` with three subcommands, invoked as `uv run --all-extras --dev python tests/_migration/coverage_tool.py <subcommand> ...`:
   - `marginal <coverage-db> <context-pattern>` — prints the count of lines and arcs covered only by contexts matching the SQL `LIKE` pattern, then the first 50 of each as `path:line` / `path:from->to`.
   - `gate <baseline-db> <new-db>` — prints counts and exits non-zero if any line or arc covered in baseline is uncovered in new.
   - `summary <coverage-db> <out.json>` — writes per-file covered line and arc counts.
@@ -168,10 +170,10 @@ if __name__ == "__main__":
 Do not spend twenty minutes on the full run only to find a schema mistake.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore.py \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal .coverage "DatastoreCacheTestCase"
 ```
 
@@ -182,7 +184,7 @@ Expected: a non-zero context count and non-zero covered-line count. If it prints
 This takes several minutes. `-p no:randomly` matters: a stable order makes context names reproducible.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-baseline.txt 2>&1
 tail -3 /tmp/dm55822-baseline.txt
@@ -196,7 +198,7 @@ The database is **not** committed; it is large and binary. Record the absolute p
 - [ ] **Step 4: Generate the committed tripwire**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   summary ~/dm55822/baseline.coverage tests/_migration/baseline_summary.json
 ```
 
@@ -476,9 +478,9 @@ def test_directory() -> str:
 - [ ] **Step 6: Verify the plugin loads and nothing else changed**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -p no:randomly \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -p no:randomly \
   --fixtures 2>&1 | grep -E "^(butler|registry_backend|datastore_type|butler_client|repo_layout|butler_config|butler_harness|test_directory)"
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_butler.py tests/test_datastore.py -q -p no:randomly 2>&1 | tail -2
 ```
 
@@ -487,8 +489,8 @@ Expected: every fixture listed; counts identical to the baseline recorded in the
 - [ ] **Step 7: Verify ruff and mypy are clean on the new module**
 
 ```bash
-env -u PYTHONPATH uv run ruff check python/lsst/daf/butler/tests/fixtures.py tests/conftest.py
-env -u PYTHONPATH uv run mypy python/lsst/daf/butler/tests/fixtures.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check python/lsst/daf/butler/tests/fixtures.py tests/conftest.py
+env -u PYTHONPATH uv run --all-extras --dev mypy python/lsst/daf/butler/tests/fixtures.py
 ```
 
 - [ ] **Step 8: Commit**
@@ -548,7 +550,7 @@ Under `[tool.ruff.lint.per-file-ignores]`, after the existing `parserYacc.py` en
 - [ ] **Step 3: Verify the ratchet holds**
 
 ```bash
-env -u PYTHONPATH uv run ruff check tests/ python/lsst/daf/butler/tests/fixtures.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check tests/ python/lsst/daf/butler/tests/fixtures.py
 ```
 
 Expected: clean. If a file reports `PT` errors, its entry is missing or misspelled.
@@ -558,7 +560,7 @@ Expected: clean. If a file reports `PT` errors, its entry is missing or misspell
 `RUF100` is in `extend-select` and warns about unused suppressions. A `per-file-ignores` entry for a file with no `PT` violations is not a `noqa` and does not trigger it, but confirm:
 
 ```bash
-env -u PYTHONPATH uv run ruff check --select RUF100 tests/
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select RUF100 tests/
 ```
 
 Expected: clean.
@@ -584,7 +586,7 @@ Add `pytest-timeout>=2.3.0` to the `dev` dependency group, then `uv lock` and re
 `xfail_strict = true` turns an unexpectedly-passing xfail into a failure. There are 10 xfails in the two files in scope and more elsewhere.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -q -p no:randomly 2>&1 | tail -3
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -q -p no:randomly 2>&1 | tail -3
 ```
 
 Expected: no `XPASS(strict)` failures. If any appear, that xfail was passing all along — record it in `tests/_migration/mapping.md` as a finding for a separate ticket and mark it `@pytest.mark.xfail(strict=False)` with a comment rather than fixing it here, since fixing it would be a library change.
@@ -629,7 +631,7 @@ sed -n '1677,2161p' tests/test_datastore.py > /tmp/cache_body.py
 Assemble `tests/test_datastore_cache.py` with the licence header from `tests/test_datastore.py:1-30`, the imports it needs, and that body. Then:
 
 ```bash
-env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_datastore_cache.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select PT --fix --unsafe-fixes tests/test_datastore_cache.py
 ```
 
 Expected: most `PT009`/`PT027` fixed automatically, a handful of `PT011`/`PT012` left.
@@ -692,7 +694,7 @@ def _make_cache_manager(config_str: str, universe: DimensionUniverse) -> Datasto
 - [ ] **Step 5: Fix the remaining PT011 and PT012**
 
 ```bash
-env -u PYTHONPATH uv run ruff check --select PT tests/test_datastore_cache.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select PT tests/test_datastore_cache.py
 ```
 
 For each `PT011`, add `match=` with a distinctive fragment of the real message. Get the message by running the test with the `raises` removed if you cannot tell from the source. For each `PT012`, move the statements that are not expected to raise out of the `with` block.
@@ -704,9 +706,9 @@ Remove `tests/test_datastore.py:1677-2161`, and remove any imports it alone used
 - [ ] **Step 7: Run both files and check the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_datastore.py tests/test_datastore_cache.py -q -p no:randomly 2>&1 | tail -3
-env -u PYTHONPATH uv run ruff check tests/test_datastore_cache.py tests/test_datastore.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check tests/test_datastore_cache.py tests/test_datastore.py
 ```
 
 Expected: the same total as before this task. `DatastoreCacheTestCase` had 10 tests; `tests/test_datastore_cache.py` must have exactly 10.
@@ -736,7 +738,7 @@ Each task follows the same shape. The verification that matters is per-task: the
 **Before starting Task 5, record the reference count:**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
 ```
 
@@ -768,7 +770,7 @@ Assemble the new file with the licence header from `tests/test_butler.py:1-30`, 
 - [ ] **Step 2: Run the autofix**
 
 ```bash
-env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_butler_null_datastore.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select PT --fix --unsafe-fixes tests/test_butler_null_datastore.py
 ```
 
 - [ ] **Step 3: Convert `setUp` to a fixture and the methods to functions**
@@ -778,7 +780,7 @@ Follow the conventions from Task 4: `setUp` becomes a function-scoped fixture re
 - [ ] **Step 4: Fix any remaining PT011 and PT012**
 
 ```bash
-env -u PYTHONPATH uv run ruff check tests/test_butler_null_datastore.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check tests/test_butler_null_datastore.py
 ```
 
 - [ ] **Step 5: Delete the class from `tests/test_butler.py` and drop dead imports**
@@ -786,9 +788,9 @@ env -u PYTHONPATH uv run ruff check tests/test_butler_null_datastore.py
 - [ ] **Step 6: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 Expected: collected count equals the Task 5 reference count exactly; zero failures.
@@ -819,7 +821,7 @@ Test count conserved at 2."
 
 ```bash
 sed -n '2884,3515p' tests/test_butler.py > /tmp/transfers_body.py
-env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_butler_transfers.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select PT --fix --unsafe-fixes tests/test_butler_transfers.py
 ```
 
 - [ ] **Step 2: Turn the four concrete classes into two axis parametrizations**
@@ -853,9 +855,9 @@ Its two tests build their own butlers from `butler.yaml` and `butler-chained-pos
 - [ ] **Step 6: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 Expected: equals the Task 5 reference count; zero failures.
@@ -911,9 +913,9 @@ Note that `ButlerExplicitRootTestCase` sets `fullConfigKey = None` and `datastor
 - [ ] **Step 5: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 - [ ] **Step 6: Record mappings and commit**
@@ -987,9 +989,9 @@ dataset. That is accepted: the loop is inside a single test either way.
 - [ ] **Step 5: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 - [ ] **Step 6: Record mappings and commit**
@@ -1030,9 +1032,9 @@ Two files now need it. Move it, and add `BUTLER_TESTS_AXES` alongside for the wi
 - [ ] **Step 5: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 - [ ] **Step 6: Record mappings and commit**
@@ -1072,9 +1074,9 @@ Moves the axis lists to conftest now that a second file needs them."
 Note that this task *reduces* the collected count by two, because two `pass` overrides that pytest counted as tests are now excluded axis values instead. That is the one legitimate count change in Tasks 5 to 12. Record the new reference count and the reason in `tests/_migration/mapping.md` as `dropped: empty override, InMemoryDatastore cannot ingest`.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 - [ ] **Step 5: Record mappings and commit**
@@ -1141,9 +1143,9 @@ Keep the surrounding loop, the `counter`, and the distinct `this_run` per iterat
 - [ ] **Step 6: Verify the count is conserved**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
 - [ ] **Step 7: Record mappings and commit**
@@ -1198,10 +1200,10 @@ Remove `"tests/test_butler.py" = ["PT"],` from `per-file-ignores`.
 - [ ] **Step 5: Verify the count against the Task 10 reference**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
-env -u PYTHONPATH uv run ruff check tests/
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH uv run --all-extras --dev ruff check tests/
 rg -n "unittest|self\.assert" tests/test_butler_*.py
 ```
 
@@ -1212,7 +1214,7 @@ If `rg` matches, a class kept its `TestCase` base. Any `parametrize` on it is si
 - [ ] **Step 6: Run the whole suite**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -q -p no:randomly 2>&1 | tail -3
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -q -p no:randomly 2>&1 | tail -3
 ```
 
 - [ ] **Step 7: Record mappings and commit**
@@ -1235,7 +1237,7 @@ Same shape as Tasks 5 to 12. `DatastoreCacheTestCase` already moved in Task 4.
 **Before starting Task 13, record the reference count:**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
 ```
 
@@ -1256,7 +1258,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
 
 ```bash
 sed -n '2217,$p' tests/test_datastore.py > /tmp/records_body.py
-env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_datastore_records.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check --select PT --fix --unsafe-fixes tests/test_datastore_records.py
 ```
 
 - [ ] **Step 2: Convert to module-level functions with fixtures**
@@ -1266,9 +1268,9 @@ env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_
 - [ ] **Step 4: Verify the count is conserved and commit**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
 git add tests/test_datastore_records.py tests/test_datastore.py tests/_migration/mapping.md pyproject.toml
 git commit -m "Split datastore record tests into their own pytest-native file"
 ```
@@ -1295,7 +1297,7 @@ git commit -m "Split datastore record tests into their own pytest-native file"
 - [ ] **Step 4: Verify the count is conserved and commit**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
 git add tests/test_datastore_null.py tests/test_datastore.py tests/_migration/mapping.md pyproject.toml
 git commit -m "Split null datastore tests into their own pytest-native file"
@@ -1357,9 +1359,9 @@ Record the before and after in `tests/_migration/mapping.md`, and confirm the
 rise equals the number of tuples in the two lists.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
 git add tests/test_datastore_constraints.py tests/test_datastore.py tests/_migration/mapping.md pyproject.toml
 git commit -m "Split datastore constraint tests
 
@@ -1469,9 +1471,9 @@ equals 7 + 2 + 6 + 2 = 17 per datastore profile that runs them, minus the
 `testIngestNoTransfer` cases that now skip.
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
 git add tests/test_datastore_file.py tests/test_datastore.py tests/_migration/mapping.md pyproject.toml
 git commit -m "Split core datastore tests
 
@@ -1508,13 +1510,13 @@ be collecting one case where it should collect many.
 - [ ] **Step 2: Run the full suite**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -q -p no:randomly -rs 2>&1 | tail -5
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -q -p no:randomly -rs 2>&1 | tail -5
 ```
 
 - [ ] **Step 3: Take the post-conversion coverage run**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-postconvert.txt 2>&1
 cp .coverage ~/dm55822/postconvert.coverage
@@ -1523,7 +1525,7 @@ cp .coverage ~/dm55822/postconvert.coverage
 - [ ] **Step 4: Run the gate — this is the checkpoint the two-pass design exists for**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/postconvert.coverage
 ```
 
@@ -1534,13 +1536,13 @@ If anything is lost, **stop**. A conversion-pass loss means a test was dropped o
 - [ ] **Step 5: Check the skip count**
 
 ```bash
-grep -cE "^SKIPPED" /tmp/dm55822-baseline.txt /tmp/dm55822-postconvert.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-baseline.txt /tmp/dm55822-postconvert.txt
 ```
 
-Expected: the post-conversion count is the baseline count **plus** the `testIngestNoTransfer` delta. That test's loop over `(None, "auto")` currently uses a silent `continue` when a datastore supports `auto` but cannot transfer in place; parametrizing it turns each skipped iteration into a visible `pytest.skip`. Confirm the rise equals exactly the number of datastore profiles that hit that branch, and that every added skip names that reason:
+Expected: the post-conversion count is the baseline count **plus** the `testIngestNoTransfer` delta. That test's loop over `(None, "auto")` currently uses a silent `continue` when a datastore supports `auto` but cannot transfer in place; parametrizing it turns each skipped iteration into a visible `pytest.skip`. Confirm the rise equals exactly the number of datastore profiles that hit that branch, and that every added skip names that reason. With `-rs`, pytest aggregates skips as `SKIPPED [N] <location>: <reason>`, so read the bracketed `N`, not the line count:
 
 ```bash
-grep -E "^SKIPPED" /tmp/dm55822-postconvert.txt | grep -c "cannot transfer in place"
+grep -E "^SKIPPED" /tmp/dm55822-postconvert.txt | grep "cannot transfer in place"
 ```
 
 Any other increase is a test that silently stopped running — investigate before proceeding.
@@ -1577,7 +1579,7 @@ Every task here has the same three-part shape: query the marginal coverage, redu
 - [ ] **Step 1: Query the marginal coverage**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "cloned"
 ```
 
@@ -1592,13 +1594,13 @@ Record the actual numbers in `tests/_migration/mapping.md` for every execution r
 - [ ] **Step 4: Prove nothing was lost**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-dedup19.txt 2>&1
 cp .coverage ~/dm55822/dedup19.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/dedup19.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-dedup19.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-dedup19.txt
 ```
 
 Expected: `lost 0`, and the skip count not above the baseline.
@@ -1629,7 +1631,7 @@ reports zero lost lines and zero lost arcs."
 - [ ] **Step 1: Query the marginal coverage**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "explicit_root"
 ```
 
@@ -1638,13 +1640,13 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_t
 - [ ] **Step 3: Prove nothing was lost**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-dedup20.txt 2>&1
 cp .coverage ~/dm55822/dedup20.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/dedup20.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-dedup20.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-dedup20.txt
 ```
 
 - [ ] **Step 4: Commit, quoting the evidence**
@@ -1675,9 +1677,9 @@ and zero lost arcs."
 - [ ] **Step 1: Query both**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "chained"
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "outfile_"
 ```
 
@@ -1686,13 +1688,13 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_t
 - [ ] **Step 3: Prove nothing was lost**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-dedup21.txt 2>&1
 cp .coverage ~/dm55822/dedup21.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/dedup21.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-dedup21.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-dedup21.txt
 ```
 
 Expected: `lost 0`, and the skip count not above the baseline.
@@ -1724,7 +1726,7 @@ reports zero lost lines and zero lost arcs."
 - [ ] **Step 1: Find the real test ids before guessing at patterns**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore_file.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_datastore_file.py \
   tests/test_datastore_constraints.py -p no:randomly --collect-only -q 2>&1 | head -40
 ```
 
@@ -1733,11 +1735,11 @@ The profile parametrization from Tasks 15 and 16 chooses the id text. Use what i
 - [ ] **Step 2: Query all three axes**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "trash"
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "nochecksum"
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "chained-constraint"
 ```
 
@@ -1748,13 +1750,13 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_t
 - [ ] **Step 4: Prove nothing was lost**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-dedup22.txt 2>&1
 cp .coverage ~/dm55822/dedup22.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/dedup22.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-dedup22.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-dedup22.txt
 ```
 
 Expected: `lost 0`, and the skip count not above the baseline.
@@ -1786,9 +1788,9 @@ The largest and the riskiest: `ButlerServerPostgresTests` (34 executions, 11.50s
 - [ ] **Step 1: Query each axis separately**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "postgres"
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "server"
 ```
 
@@ -1797,7 +1799,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_t
 The claim being tested is not "postgres is redundant" or "server is redundant" but "postgres *and* server together add nothing over each separately". Query the intersection by pattern:
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   marginal ~/dm55822/postconvert.coverage "postgres-server"
 ```
 
@@ -1814,13 +1816,13 @@ Every remaining test on those axes gets `@pytest.mark.postgres` or `@pytest.mark
 - [ ] **Step 5: Prove nothing was lost**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-dedup23.txt 2>&1
 cp .coverage ~/dm55822/dedup23.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/dedup23.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-dedup23.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-dedup23.txt
 ```
 
 Expected: `lost 0`, and the skip count not above the baseline.
@@ -1828,7 +1830,7 @@ Expected: `lost 0`, and the skip count not above the baseline.
 - [ ] **Step 6: Verify the markers work**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py tests/test_datastore*.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py tests/test_datastore*.py \
   -q -p no:randomly -m "not postgres and not server" 2>&1 | tail -2
 ```
 
@@ -1862,13 +1864,13 @@ reports zero lost lines and zero lost arcs."
 - [ ] **Step 1: Run the final gate**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ \
   -p no:randomly --cov=lsst.daf.butler --cov-branch --cov-context=test \
   --cov-report= -q -rs > /tmp/dm55822-final.txt 2>&1
 cp .coverage ~/dm55822/final.coverage
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_tool.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev python tests/_migration/coverage_tool.py \
   gate ~/dm55822/baseline.coverage ~/dm55822/final.coverage
-grep -cE "^SKIPPED" /tmp/dm55822-baseline.txt /tmp/dm55822-final.txt
+grep -oE "[0-9]+ skipped" /tmp/dm55822-baseline.txt /tmp/dm55822-final.txt
 tail -3 /tmp/dm55822-final.txt
 ```
 
@@ -1877,7 +1879,7 @@ Expected: `lost 0` for lines and arcs; final skip count not above baseline.
 - [ ] **Step 2: Measure the result honestly**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_butler*.py tests/test_datastore*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
@@ -1913,9 +1915,9 @@ git rm -r tests/_migration/
 - [ ] **Step 6: Final verification**
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -q -p no:randomly 2>&1 | tail -3
-env -u PYTHONPATH uv run ruff check .
-env -u PYTHONPATH uv run mypy python/lsst/daf/butler/tests/fixtures.py
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -q -p no:randomly 2>&1 | tail -3
+env -u PYTHONPATH uv run --all-extras --dev ruff check .
+env -u PYTHONPATH uv run --all-extras --dev mypy python/lsst/daf/butler/tests/fixtures.py
 rg -n "unittest|self\.assert" tests/test_butler_*.py tests/test_datastore_*.py tests/conftest.py
 git status --short
 ```
@@ -1925,9 +1927,9 @@ Expected: suite green, ruff clean, mypy clean, the `rg` finds nothing, and the w
 Also confirm the run without a fixed order and under xdist, since CI uses both:
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_butler*.py tests/test_datastore*.py -q 2>&1 | tail -2
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_butler*.py tests/test_datastore*.py -q -n 3 2>&1 | tail -2
 ```
 
