@@ -621,7 +621,7 @@ ones that hang and a hung xdist worker consumes the whole job budget."
 
 ## Task 4: Pattern setter — `tests/test_datastore_cache.py`
 
-`DatastoreCacheTestCase` is 485 lines, 10 tests, 2.11s, self-contained, and has no backend axis. It establishes the conventions in a commit that is cheap to review before the large files.
+`DatastoreCacheTestCase` is 485 lines, **15 tests** (the "10" in the durations table was an artefact of `--durations` hiding sub-threshold entries), 2.11s, self-contained, and has no backend axis. It establishes the conventions in a commit that is cheap to review before the large files.
 
 **Files:**
 - Create: `tests/test_datastore_cache.py`
@@ -722,7 +722,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
 env -u PYTHONPATH uv run --all-extras --dev ruff check tests/test_datastore_cache.py tests/test_datastore.py
 ```
 
-Expected: the same total as before this task. `DatastoreCacheTestCase` had 10 tests; `tests/test_datastore_cache.py` must have exactly 10.
+Expected: the same total as before this task. `DatastoreCacheTestCase` has 15 tests; `tests/test_datastore_cache.py` must have exactly 15, and `tests/test_datastore*.py` together must still collect 194.
 
 - [ ] **Step 8: Record the 10 mappings and commit**
 
@@ -1958,6 +1958,27 @@ is deleted; the test mapping is recorded on the ticket."
 ---
 
 ## Notes for the executor
+
+**`textwrap.dedent` silently no-ops on tests containing YAML config strings.**
+Those strings start at column 0 inside the triple quotes, so the common leading
+prefix across the block is empty and `dedent` returns the text unchanged. The
+symptom is not an error: the methods stay indented, remain nested in the class,
+and pytest simply collects fewer tests than expected — in the pattern-setter it
+silently dropped 5 of 15. Use a dedent that tracks triple-quote state and strips
+the indent only from lines outside string literals, and assert that no
+`    def test_` survives the transform.
+
+**Converting methods to functions newly requires docstrings.** The repo ignores
+`D102`, missing docstring in a public *method*, in both ruff and pydocstyle, so
+test methods never needed one. `D103` for *functions* is not ignored, so every
+converted test does. That was 10 of 15 in the pattern-setter. See the open
+question in `tests/_migration/README.md` before the large splits.
+
+**Run ruff only on a file you have finished assembling.** A failed assertion in
+an assembly script leaves a half-built file on disk, and `ruff --fix` will
+happily "fix" it, making the next diff hard to read. Rebuild from source rather
+than patching a partly-transformed file.
+
 
 **When the gate fails.** Do not adjust the tool to make it pass. A non-empty lost set means a real code path stopped being exercised. Find the test that covered it in the baseline database:
 

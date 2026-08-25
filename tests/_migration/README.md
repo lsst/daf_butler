@@ -109,3 +109,19 @@ setup errors, and the resulting baseline understates covered lines — which mak
 the gate easier to pass rather than harder, so it fails safe in the wrong
 direction. The first baseline attempt on this branch was discarded for exactly
 this reason: 1392 passed, 472 skipped, **231 errors**.
+
+## Open question: docstrings on converted tests
+
+The repo ignores `D102`, missing docstring in a public *method*, in both the
+ruff `ignore` list and pydocstyle `add-ignore`. Test methods therefore never
+needed a docstring.
+
+`D103`, the equivalent for a public *function*, is **not** ignored. Converting a
+test method to a module-level function therefore makes a docstring mandatory.
+In `tests/test_datastore_cache.py` that meant writing 10 of them for 15 tests.
+
+They are short and genuinely useful, so the pattern-setter writes them. But the
+two large files hold several hundred tests between them, so the alternative is
+worth a decision before the bulk conversion: add `"tests/*" = ["D103"]` to
+`per-file-ignores`, mirroring the existing `D102` stance rather than diverging
+from it.
