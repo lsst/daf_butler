@@ -85,6 +85,9 @@ lacked `fastapi` and `testing.postgresql`.
 - Replace the subclass lattice with explicit, independently selectable fixture
   axes, so that multiplication is opt-in and visible in the diff.
 - Convert both files to native pytest.
+  No `unittest` survives in either: no `TestCase`, no `assertX`, no `setUp`.
+  This is an acceptance criterion rather than a preference, because a leftover
+  `TestCase` base silently disables `parametrize` on that class.
 - Prove that library code coverage does not decrease, at line and branch
   granularity.
 
@@ -388,10 +391,23 @@ right one.
 These two files run 271 subtest executions, and coverage contexts under
 `subTest` attribute to the parent test rather than to the subtest.
 
-The six convertible `subTest` sites are therefore converted to `parametrize` in
-the first commit of the series, before the baseline is taken.
-The remaining two are loops within a single test and never formed separate
-contexts, so they need no treatment.
+This does not, however, require converting them before the baseline, and cannot.
+
+`pytest.mark.parametrize` does not work on a `unittest.TestCase` method: it
+collects a single case and fails with `TypeError: missing 1 required positional
+argument`.
+All six convertible sites live in mixins that combine into `TestCase`
+subclasses, so they can only be converted once those classes are gone.
+
+The ordering turns out not to matter.
+Every marginal-coverage query runs against the **post-conversion** database, by
+which point every test is a plain function and each case is its own context.
+The baseline database feeds only the gate, which compares global covered line
+and arc sets — a quantity subtests do not affect.
+
+The six sites are therefore converted as part of the split that removes their
+`TestCase` base, and the remaining two, being loops within a single test, need
+no treatment at all.
 The global gate is unaffected either way; this is only about attribution
 granularity for the `marginal` query.
 
@@ -530,39 +546,36 @@ It is measurably slower and is needed only for the migration measurement runs.
 
 One ticket branch, a commit series, green at every step.
 
-1. **Convert the eight `subTest` sites to `parametrize`**, in place.
-   No splits, no deletions.
-   This precedes the baseline so that marginal attribution is per-case.
-2. **Baseline.**
+1. **Baseline.**
    `tests/_migration/coverage_tool.py`, the instrumented run,
    `baseline_summary.json`, and an empty mapping file.
-3. **Fixture module and conftest.**
+2. **Fixture module and conftest.**
    `python/lsst/daf/butler/tests/fixtures.py` and `tests/conftest.py` with
    `pytest_plugins`.
    Nothing consumes them yet; the suite stays green.
-4. **Ruff `PT` ratchet** and the `pyproject.toml` configuration above.
-5. **Pattern setter: `test_datastore_cache.py`.**
+3. **Ruff `PT` ratchet** and the `pyproject.toml` configuration above.
+4. **Pattern setter: `test_datastore_cache.py`.**
    485 lines, 10 tests, no backend axis, self-contained.
    It establishes the conventions in a commit that is cheap to review, before
    the large files.
-6. **Split and convert `tests/test_butler.py`**, one commit per resulting file.
-7. **Split and convert `tests/test_datastore.py`**, one commit per resulting
+5. **Split and convert `tests/test_butler.py`**, one commit per resulting file.
+6. **Split and convert `tests/test_datastore.py`**, one commit per resulting
    file.
-8. **Deduplicate**, one commit per axis, each commit message citing the
+7. **Deduplicate**, one commit per axis, each commit message citing the
    `marginal` output that justifies it.
-9. **Close out.**
+8. **Close out.**
    Gate run, mapping file complete, `tests/_migration/` deleted, configuration
    finalized.
 
 ### Convert first, deduplicate second
 
-Steps 6 and 7 preserve every test execution.
-Step 8 performs every deletion.
+Steps 5 and 6 preserve every test execution.
+Step 7 performs every deletion.
 
-This buys a property worth the extra commits: at the end of step 7 the gate must
+This buys a property worth the extra commits: at the end of step 6 the gate must
 show an empty diff **and** an unchanged test count, which proves the conversion
 was faithful on its own terms.
-Every deletion then lands in step 8, isolated, one axis per commit, each
+Every deletion then lands in step 7, isolated, one axis per commit, each
 traceable to its evidence.
 If the gate fails, the two-pass shape says immediately whether the fault is in
 the conversion or in a deletion.
@@ -590,7 +603,7 @@ It is pasted into the ticket and deleted in the closing commit.
 | A test silently starts skipping | Skip count is checked separately, since the line diff may not reveal it |
 | The gate is invalidated by library edits | No library changes on this branch; genuine fixes go on separate tickets |
 | The conversion itself loses a test | Convert and deduplicate are separate passes; after the conversion pass, test count must be unchanged |
-| Subtest contexts hide marginal coverage | The six convertible `subTest` sites are converted to `parametrize` before the baseline is taken; the other two are loops inside a single test |
+| Subtest contexts hide marginal coverage | Marginal queries run against the post-conversion database, where every case is its own context; the baseline feeds only the gate, which subtests do not affect |
 | The diff is unreviewable | The mapping file makes every removal auditable against coverage evidence |
 | Duplication regrows later | Multiplication is opt-in and visible in the diff, rather than implicit in a base class |
 | The postgres axis is dropped too aggressively | Postgres exercises different SQL; its marginal set is expected to be non-empty, and drops are refused where it is |

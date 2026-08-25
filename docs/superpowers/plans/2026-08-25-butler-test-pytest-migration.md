@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the `unittest` subclass lattice in `tests/test_butler.py` and `tests/test_datastore.py` with native pytest fixture axes, and delete the duplicate test executions the lattice produces, without losing any library coverage.
+**Goal:** Replace the `unittest` subclass lattice in `tests/test_butler.py` and `tests/test_datastore.py` with native pytest fixture axes, and delete the duplicate test executions the lattice produces, without losing any library coverage. The end state contains **no `unittest` at all** in the files these tasks produce — no `TestCase`, no `assertX`, no `setUp`. That is a hard acceptance criterion, checked in Tasks 12, 17 and 23, not merely a stylistic preference.
 
 **Architecture:** Four independently selectable fixture axes (registry backend, datastore type, butler client, repo layout) replace roughly fourteen concrete `TestCase` subclasses. Each axis fixture defaults to one value, so a test written plainly runs once and multiplication is opt-in and visible in the diff. Conversion and deduplication are two separate passes: after the conversion pass the test count must be unchanged, which proves the conversion was faithful on its own terms; every deletion then lands in the deduplication pass, one axis per commit, each justified by a marginal-coverage query.
 
@@ -15,6 +15,7 @@
 - **Ticket branch:** `tickets/DM-55822`. Never push to a remote.
 - **No library changes.** Nothing under `python/lsst/daf/butler/` may change except the new `python/lsst/daf/butler/tests/fixtures.py`. Source line numbers must stay stable or the coverage gate is meaningless. Any genuine bug found goes on a separate ticket, recorded in `tests/_migration/mapping.md` and not fixed here.
 - **Green at every commit.** Every task ends with a passing run of the files it touched.
+- **No `unittest` in produced files.** Every file a task creates must pass `rg -c "unittest|self\.assert" <file>` with no matches. `parametrize` silently breaks on `unittest.TestCase` methods — it collects one case and raises `TypeError: missing 1 required positional argument` — so a leftover `TestCase` base is not cosmetic, it disables parametrization.
 - **Ruff and mypy clean.** The repo has a pre-commit hook that runs `ruff check` and `ruff format`; it will reject a commit and modify files. Re-`git add` and re-commit when it does.
 - **Test environment.** Always `env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run ...`. A configured EUPS stack otherwise shadows the venv and collection dies on `dlopen ... libsphgeom.dylib`. Build once with `uv sync --locked --all-extras --dev`.
 - **Line length 110**, `target-version = "py311"`, numpydoc docstring convention. American English in prose. One sentence per line in Markdown.
@@ -44,158 +45,7 @@
 
 ---
 
-## Task 1: Convert the six convertible subTest sites to parametrize
-
-Coverage contexts under `subTest` attribute to the parent test, which would blur the `marginal` query that justifies every later deletion. This must land before the baseline in Task 2.
-
-Two of the eight sites are **not** convertible and must be left as loops with the wrapper dropped: `tests/test_butler.py:322` is inside `runPutGetTest`, a helper called by many tests rather than a test itself, and `tests/test_butler.py:2039` iterates over datasets the test just created. Neither has a parameter list at collection time.
-
-**Files:**
-- Modify: `tests/test_datastore.py:522`, `:778`, `:857`, `:1432`, `:1520`, `:1627`
-- Modify: `tests/test_butler.py:322`, `:2039`
-
-**Interfaces:**
-- Produces: nothing consumed by later tasks. This is a standalone in-place refactor.
-
-- [ ] **Step 1: Record the pre-change test count**
-
-```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
-  tests/test_butler.py tests/test_datastore.py -q -p no:randomly 2>&1 | tail -2
-```
-
-Write the exact line down. Expected: `535 passed, 10 skipped, 10 xfailed, 271 subtests passed`.
-
-- [ ] **Step 2: Convert `tests/test_datastore.py:857` (`testIngestTransfer`)**
-
-This is the cleanest site — a loop over a literal tuple. Do it first to establish the shape.
-
-Before:
-
-```python
-def testIngestTransfer(self) -> None:
-    """Test ingesting existing files after transferring them."""
-    for mode in ("copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"):
-        with self.subTest(mode=mode):
-            ...
-```
-
-After:
-
-```python
-@pytest.mark.parametrize(
-    "mode", ["copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"]
-)
-def testIngestTransfer(self, mode: str) -> None:
-    """Test ingesting existing files after transferring them."""
-    ...
-```
-
-Dedent the body by two levels. `pytest.mark.parametrize` works on `unittest.TestCase` methods for plain (non-fixture) arguments, which is what this is.
-
-- [ ] **Step 3: Run that one test to verify it passes and now reports seven cases**
-
-```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
-  tests/test_datastore.py -p no:randomly -k testIngestTransfer -v 2>&1 | tail -20
-```
-
-Expected: seven `PASSED` lines per concrete datastore class, with ids like `testIngestTransfer[copy]`, instead of one line each.
-
-- [ ] **Step 4: Convert `tests/test_datastore.py:1432` (loop over two formatters)**
-
-```python
-@pytest.mark.parametrize("formatter", [BadWriteFormatter, BadNoWriteFormatter])
-def <existing name>(self, formatter: type[Formatter]) -> None:
-    ...
-```
-
-Remove the `with self.subTest(formatter=str(formatter)):` line and dedent.
-
-- [ ] **Step 5: Convert `tests/test_datastore.py:522`**
-
-The loop is `for i, sc in enumerate(storageClasses):` where `storageClasses` is built in the test body from a literal tuple of names. Lift the name tuple to a module-level constant and parametrize over `(index, name)` so the `metric_comp_{i}` dataset-type naming is preserved:
-
-```python
-_COMPOSITE_STORAGE_CLASS_NAMES = (
-    "StructuredComposite",
-    "StructuredCompositeTestA",
-    "StructuredCompositeTestB",
-    "StructuredCompositeReadComp",
-    "StructuredData",  # No disassembly
-    "StructuredCompositeReadCompNoDisassembly",
-)
-
-
-@pytest.mark.parametrize(
-    ("i", "sc_name"), list(enumerate(_COMPOSITE_STORAGE_CLASS_NAMES))
-)
-def <existing name>(self, i: int, sc_name: str) -> None:
-    sc = self.storageClassFactory.getStorageClass(sc_name)
-    ...
-```
-
-Keep the distinct `metric_comp_{i}` dataset type name. The existing comment explains why it exists — file clashes between cases — and that reason survives parametrization.
-
-- [ ] **Step 6: Convert `tests/test_datastore.py:1520` and `:1627`**
-
-Both loop over a zip of dataset-type names and storage classes built in the test body. Lift each list to a module-level constant of `(name, storage_class_name)` tuples and parametrize over it. Keep the `testfile_j if sc.name.endswith("Json") else testfile_y` selection inside the body — it depends on fixture state, not on the parameter list.
-
-- [ ] **Step 7: Convert `tests/test_datastore.py:778` (`testIngestNoTransfer`)**
-
-This one has a guard on instance state, so the `continue` becomes a `skip`:
-
-```python
-@pytest.mark.parametrize("mode", [None, "auto"])
-def testIngestNoTransfer(self, mode: str | None) -> None:
-    """Test ingesting existing files with no transfer."""
-    # Some datastores have auto but can't do in place transfer.
-    if mode == "auto" and "auto" in self.ingestTransferModes and not self.canIngestNoTransferAuto:
-        pytest.skip("Datastore supports auto but cannot transfer in place.")
-    ...
-```
-
-Note this converts a silent `continue` into a visible skip, so the suite's skip count rises here. Record the delta — Task 2's baseline is taken **after** this change, so the gate's skip check compares against the new number, not the old one.
-
-- [ ] **Step 8: Drop the wrapper at the two non-convertible sites**
-
-At `tests/test_butler.py:322`, delete the `with self.subTest(args=repr(args)):` line, dedent the body, and carry the identity into the assertions that follow, for example:
-
-```python
-assert isinstance(ref, DatasetRef), f"put with args {args!r}"
-```
-
-Keep the surrounding loop, the `counter`, and the distinct `this_run` per iteration — the comment there explains that distinct run collections exist to stop cascading failures, and that reason is now the *only* thing preventing a cascade.
-
-Do the same at `tests/test_butler.py:2039`, carrying `repr(ref)` into the assertion messages.
-
-- [ ] **Step 9: Run both files in full**
-
-```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
-  tests/test_butler.py tests/test_datastore.py -q -p no:randomly 2>&1 | tail -3
-```
-
-Expected: passed count has *risen* (each converted subtest is now its own test), `subtests passed` has fallen to only what the two remaining loops contribute, failures zero. Record the new counts — they are the reference for Task 2.
-
-- [ ] **Step 10: Commit**
-
-```bash
-git add tests/test_butler.py tests/test_datastore.py
-git commit -m "Convert subTest sites to parametrize before coverage baseline
-
-Coverage contexts under subTest attribute to the parent test, which would
-blur the marginal-coverage query that justifies each later deletion.
-
-Six of the eight sites convert. The two in test_butler.py do not: one is
-inside the runPutGetTest helper rather than a test, the other loops over
-datasets created at runtime. Both keep their loop and drop the wrapper,
-moving the iteration identity into the assertion messages."
-```
-
----
-
-## Task 2: Coverage tooling and the instrumented baseline
+## Task 1: Coverage tooling and the instrumented baseline
 
 **Files:**
 - Create: `tests/_migration/coverage_tool.py`
@@ -352,7 +202,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run python tests/_migration/coverage_t
 
 - [ ] **Step 5: Write `tests/_migration/README.md` and the empty mapping file**
 
-`README.md` records: the baseline commit (`ae3f97620` plus Task 1), the absolute path of the out-of-repository database, the baseline pass/skip/xfail counts from Step 3, and the three tool invocations. State plainly that the whole directory is deleted before merge.
+`README.md` records: the baseline commit (`ae3f97620`, unmodified — this is the first task that changes anything), the absolute path of the out-of-repository database, the baseline pass/skip/xfail counts from Step 3, and the three tool invocations. State plainly that the whole directory is deleted before merge.
 
 `mapping.md` starts as a table header:
 
@@ -377,7 +227,7 @@ right one."
 
 ---
 
-## Task 3: The fixture module and conftest
+## Task 2: The fixture module and conftest
 
 Nothing consumes these yet. The suite must stay green, which at this point means unchanged.
 
@@ -632,7 +482,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
   tests/test_butler.py tests/test_datastore.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-Expected: every fixture listed; counts identical to Task 1 Step 9.
+Expected: every fixture listed; counts identical to the baseline recorded in the Global Constraints, since nothing has changed the tests yet.
 
 - [ ] **Step 7: Verify ruff and mypy are clean on the new module**
 
@@ -660,13 +510,13 @@ Nothing consumes these yet."
 
 ---
 
-## Task 4: Ruff PT ratchet and pytest configuration
+## Task 3: Ruff PT ratchet and pytest configuration
 
 **Files:**
 - Modify: `pyproject.toml`
 
 **Interfaces:**
-- Produces: `PT` enforced on `tests/conftest.py` and every file created from Task 5 onward; suppressed on the 71 files not yet converted.
+- Produces: `PT` enforced on `tests/conftest.py` and every file created from Task 4 onward; suppressed on the 71 files not yet converted.
 
 - [ ] **Step 1: Generate the per-file-ignores list**
 
@@ -674,7 +524,7 @@ Nothing consumes these yet."
 ls tests/test_*.py | sed 's|.*|"&" = ["PT"],|' | sort
 ```
 
-That is 73 entries. Remove `tests/test_butler.py` and `tests/test_datastore.py` from the output only when those files are deleted in Tasks 13 and 18 — until then they are still unconverted and need the entry.
+That is 73 entries. Remove `tests/test_butler.py` and `tests/test_datastore.py` from the output only when those files are deleted in Tasks 12 and 17 — until then they are still unconverted and need the entry.
 
 - [ ] **Step 2: Add `PT` to select and paste the ignores**
 
@@ -684,7 +534,7 @@ In `[tool.ruff.lint] select`, after `"RUF022",  # sort __all__`, add:
     "PT",  # flake8-pytest-style
 ```
 
-Add nothing to `ignore`. `PT011` and `PT012` are fixed rather than suppressed; see Task 5 onward.
+Add nothing to `ignore`. `PT011` and `PT012` are fixed rather than suppressed; see Task 4 onward.
 
 Under `[tool.ruff.lint.per-file-ignores]`, after the existing `parserYacc.py` entry, add a commented block:
 
@@ -756,7 +606,7 @@ ones that hang and a hung xdist worker consumes the whole job budget."
 
 ---
 
-## Task 5: Pattern setter — `tests/test_datastore_cache.py`
+## Task 4: Pattern setter — `tests/test_datastore_cache.py`
 
 `DatastoreCacheTestCase` is 485 lines, 10 tests, 2.11s, self-contained, and has no backend axis. It establishes the conventions in a commit that is cheap to review before the large files.
 
@@ -877,13 +727,13 @@ Test count is conserved at 10."
 
 ---
 
-## Tasks 6 to 13: Split and convert `tests/test_butler.py`
+## Tasks 5 to 12: Split and convert `tests/test_butler.py`
 
-**These tasks preserve every test execution.** No class is deleted, no axis is dropped. `ButlerExplicitRootTestCase` and friends become explicit `parametrize` decorators that produce the *same number of cases* they produce today. Deduplication is Task 19 onward.
+**These tasks preserve every test execution.** No class is deleted, no axis is dropped. `ButlerExplicitRootTestCase` and friends become explicit `parametrize` decorators that produce the *same number of cases* they produce today. Deduplication is Task 18 onward.
 
 Each task follows the same shape. The verification that matters is per-task: the number of collected tests across the whole of the original file plus its extracted parts must not change.
 
-**Before starting Task 6, record the reference count:**
+**Before starting Task 5, record the reference count:**
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler.py \
@@ -894,7 +744,7 @@ Every task from 6 to 13 re-runs the equivalent count across `tests/test_butler*.
 
 ---
 
-### Task 6: `tests/test_butler_null_datastore.py`
+### Task 5: `tests/test_butler_null_datastore.py`
 
 Start with the smallest, to shake out the harness before the large files.
 
@@ -923,7 +773,7 @@ env -u PYTHONPATH uv run ruff check --select PT --fix --unsafe-fixes tests/test_
 
 - [ ] **Step 3: Convert `setUp` to a fixture and the methods to functions**
 
-Follow the conventions from Task 5: `setUp` becomes a function-scoped fixture returning a small dataclass or a single object; each `def testX(self)` becomes a module-level `def test_x(<fixtures>)`.
+Follow the conventions from Task 4: `setUp` becomes a function-scoped fixture returning a small dataclass or a single object; each `def testX(self)` becomes a module-level `def test_x(<fixtures>)`.
 
 - [ ] **Step 4: Fix any remaining PT011 and PT012**
 
@@ -941,7 +791,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-Expected: collected count equals the Task 6 reference count exactly; zero failures.
+Expected: collected count equals the Task 5 reference count exactly; zero failures.
 
 - [ ] **Step 7: Record mappings and commit**
 
@@ -954,7 +804,7 @@ Test count conserved at 2."
 
 ---
 
-### Task 7: `tests/test_butler_transfers.py`
+### Task 6: `tests/test_butler_transfers.py`
 
 **Files:**
 - Create: `tests/test_butler_transfers.py`
@@ -984,7 +834,7 @@ def test_transfer_uuid_to_uuid(butler_harness: ButlerHarness) -> None:
 
 `ButlerServerDatastoreTransfers` contributes one test, `test_transfers_from_remote_to_direct`, which gets `@pytest.mark.parametrize("butler_client", ["server"], indirect=True)` and `@pytest.mark.server`.
 
-Do **not** reduce `["posix", "chained"]` to `["posix"]` here. That is Task 21, and it needs coverage evidence.
+Do **not** reduce `["posix", "chained"]` to `["posix"]` here. That is Task 20, and it needs coverage evidence.
 
 - [ ] **Step 3: Do not confuse the two `create_butler` methods**
 
@@ -1008,7 +858,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-Expected: equals the Task 6 reference count; zero failures.
+Expected: equals the Task 5 reference count; zero failures.
 
 - [ ] **Step 7: Record mappings and commit**
 
@@ -1023,7 +873,7 @@ commit. Test count conserved at 31."
 
 ---
 
-### Task 8: `tests/test_butler_config_repo.py`
+### Task 7: `tests/test_butler_config_repo.py`
 
 **Files:**
 - Create: `tests/test_butler_config_repo.py`
@@ -1052,7 +902,7 @@ That still produces 3 x 2 = 6 executions where the classes produced 12 (3 classe
 
 Its `setUp` writes the repo into `dir1`, moves the config to `dir2/butler2.yaml` with an explicit `root` key, and deletes the original. That logic moves into `butler_config` under `repo_layout == "explicit_root"`.
 
-`testFileLocations` becomes a single parametrized test. The other 39 inherited tests get, **for now**, `@pytest.mark.parametrize("repo_layout", ["in_repo", "explicit_root"], indirect=True)` so the execution count is preserved. Task 20 removes the `explicit_root` value from the ones with no marginal coverage.
+`testFileLocations` becomes a single parametrized test. The other 39 inherited tests get, **for now**, `@pytest.mark.parametrize("repo_layout", ["in_repo", "explicit_root"], indirect=True)` so the execution count is preserved. Task 19 removes the `explicit_root` value from the ones with no marginal coverage.
 
 Note that `ButlerExplicitRootTestCase` sets `fullConfigKey = None` and `datastoreStr = ["dir1"]`, overriding the posix profile. Add an override mechanism to `butler_config`: when `repo_layout == "explicit_root"`, replace the profile with `dataclasses.replace(profile, full_config_key=None, datastore_str=["dir1"])`.
 
@@ -1079,7 +929,7 @@ produced as subclasses."
 
 ---
 
-### Task 9: `tests/test_butler_import_export.py`
+### Task 8: `tests/test_butler_import_export.py`
 
 **Files:**
 - Create: `tests/test_butler_import_export.py`
@@ -1112,15 +962,29 @@ def test_import_export(butler_harness: ButlerHarness) -> None:
     ...
 ```
 
-Define that list once as a module constant, `FILE_DATASTORE_AXES`, and reference it, so Task 19 onward changes one place.
+Define that list once as a module constant, `FILE_DATASTORE_AXES`, and reference it, so Task 18 onward changes one place.
 
 `ChainedDatastoreButlerTestCase` overrides `testPruneDatasets` to a no-op because out-of-band file manipulation is impossible with an InMemoryDatastore in the chain. Reproduce that by excluding `chained` from that one function's list, with the original comment carried over.
 
 `testExportTransferCopy` is posix-only today. Give it no parametrize at all, so it uses the defaults.
 
-- [ ] **Step 3: Fix remaining PT011 and PT012, then delete from the original**
+- [ ] **Step 3: Drop the subTest wrapper in `testImportExport`**
 
-- [ ] **Step 4: Verify the count is conserved**
+At `tests/test_butler.py:2039` the loop iterates over `datasets`, which the test
+has just created, so there is no parameter list at collection time and this
+cannot become `parametrize`. Delete the `with self.subTest(ref=repr(ref)):`
+line, dedent the body, and carry the identity into the assertions:
+
+```python
+assert butler.exists(ref), f"dataset {ref!r} missing after import"
+```
+
+The first failure now ends the loop rather than reporting every failing
+dataset. That is accepted: the loop is inside a single test either way.
+
+- [ ] **Step 4: Fix remaining PT011 and PT012, then delete from the original**
+
+- [ ] **Step 5: Verify the count is conserved**
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
@@ -1128,7 +992,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-- [ ] **Step 5: Record mappings and commit**
+- [ ] **Step 6: Record mappings and commit**
 
 ```bash
 git add tests/test_butler_import_export.py tests/test_butler.py tests/_migration/mapping.md pyproject.toml
@@ -1140,7 +1004,7 @@ FileDatastoreButlerTests currently produces by inheritance."
 
 ---
 
-### Task 10: `tests/test_butler_collections.py`
+### Task 9: `tests/test_butler_collections.py`
 
 **Files:**
 - Create: `tests/test_butler_collections.py`
@@ -1182,7 +1046,7 @@ Moves the axis lists to conftest now that a second file needs them."
 
 ---
 
-### Task 11: `tests/test_butler_ingest.py`
+### Task 10: `tests/test_butler_ingest.py`
 
 **Files:**
 - Create: `tests/test_butler_ingest.py`
@@ -1205,7 +1069,7 @@ Moves the axis lists to conftest now that a second file needs them."
 
 - [ ] **Step 4: Verify the count is conserved**
 
-Note that this task *reduces* the collected count by two, because two `pass` overrides that pytest counted as tests are now excluded axis values instead. That is the one legitimate count change in Tasks 6 to 13. Record the new reference count and the reason in `tests/_migration/mapping.md` as `dropped: empty override, InMemoryDatastore cannot ingest`.
+Note that this task *reduces* the collected count by two, because two `pass` overrides that pytest counted as tests are now excluded axis values instead. That is the one legitimate count change in Tasks 5 to 12. Record the new reference count and the reason in `tests/_migration/mapping.md` as `dropped: empty override, InMemoryDatastore cannot ingest`.
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
@@ -1225,7 +1089,7 @@ rather than no-op test methods, which reduces the collected count by two."
 
 ---
 
-### Task 12: `tests/test_butler_put_get.py`
+### Task 11: `tests/test_butler_put_get.py`
 
 The largest extraction. `ButlerPutGetTests` is lines 166-621 and holds `runPutGetTest`, the helper most other tests call.
 
@@ -1236,7 +1100,7 @@ The largest extraction. `ButlerPutGetTests` is lines 166-621 and holds `runPutGe
 
 **Interfaces:**
 - Consumes: `butler_harness`, `BUTLER_TESTS_AXES`.
-- Produces: `run_put_get_test(harness, storage_class, dataset_type_name, ...)` as a module-level helper, imported by Tasks 9, 10 and 13's files if they need it. Check which do before writing the signature.
+- Produces: `run_put_get_test(harness, storage_class, dataset_type_name, ...)` as a module-level helper, imported by Tasks 8, 10 and 13's files if they need it. Check which do before writing the signature.
 
 - [ ] **Step 1: Find every caller of `runPutGetTest` before moving it**
 
@@ -1262,7 +1126,13 @@ def run_put_get_test(
     ...
 ```
 
-Its internal loop over `((ref,), (datasetTypeName, dataId), (datasetType, dataId))` keeps the `subTest`-free shape from Task 1.
+Its internal loop over `((ref,), (datasetTypeName, dataId), (datasetType, dataId))` loops over data built inside the helper, so it cannot be parametrized. Drop the `with self.subTest(args=repr(args)):` wrapper at `tests/test_butler.py:322`, dedent the body, and carry the identity into the assertions:
+
+```python
+assert isinstance(ref, DatasetRef), f"put with args {args!r}"
+```
+
+Keep the surrounding loop, the `counter`, and the distinct `this_run` per iteration. The comment there explains that distinct run collections exist to stop cascading failures, and with `subTest` gone that is now the only thing preventing a cascade.
 
 - [ ] **Step 4: Convert `assertGetComponents` to a module-level helper the same way**
 
@@ -1288,9 +1158,9 @@ a TestCase, which is what lets the remaining files stop inheriting."
 
 ---
 
-### Task 13: `tests/test_butler_lifecycle.py` and deleting `tests/test_butler.py`
+### Task 12: `tests/test_butler_lifecycle.py` and deleting `tests/test_butler.py`
 
-Whatever remains after Tasks 6 to 12 goes here, and the original file disappears.
+Whatever remains after Tasks 5 to 11 goes here, and the original file disappears.
 
 **Files:**
 - Create: `tests/test_butler_lifecycle.py`
@@ -1325,16 +1195,19 @@ git rm tests/test_butler.py
 
 Remove `"tests/test_butler.py" = ["PT"],` from `per-file-ignores`.
 
-- [ ] **Step 5: Verify the count against the Task 11 reference**
+- [ ] **Step 5: Verify the count against the Task 10 reference**
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 env -u PYTHONPATH uv run ruff check tests/
+rg -n "unittest|self\.assert" tests/test_butler_*.py
 ```
 
-Expected: equal to the Task 11 reference count (the original minus the two InMemory ingest no-ops); zero failures; ruff clean.
+Expected: equal to the Task 10 reference count (the original minus the two InMemory ingest no-ops); zero failures; ruff clean; and the `rg` finds **nothing**.
+
+If `rg` matches, a class kept its `TestCase` base. Any `parametrize` on it is silently collecting one case instead of many, so the count check above may be passing for the wrong reason. Fix it before committing.
 
 - [ ] **Step 6: Run the whole suite**
 
@@ -1355,11 +1228,11 @@ with the two InMemory ingest no-ops the only removals."
 
 ---
 
-## Tasks 14 to 18: Split and convert `tests/test_datastore.py`
+## Tasks 13 to 17: Split and convert `tests/test_datastore.py`
 
-Same shape as Tasks 6 to 13. `DatastoreCacheTestCase` already moved in Task 5.
+Same shape as Tasks 5 to 12. `DatastoreCacheTestCase` already moved in Task 4.
 
-**Before starting Task 14, record the reference count:**
+**Before starting Task 13, record the reference count:**
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
@@ -1368,7 +1241,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
 
 ---
 
-### Task 14: `tests/test_datastore_records.py`
+### Task 13: `tests/test_datastore_records.py`
 
 **Files:**
 - Create: `tests/test_datastore_records.py`
@@ -1402,7 +1275,7 @@ git commit -m "Split datastore record tests into their own pytest-native file"
 
 ---
 
-### Task 15: `tests/test_datastore_null.py`
+### Task 14: `tests/test_datastore_null.py`
 
 **Files:**
 - Create: `tests/test_datastore_null.py`
@@ -1430,7 +1303,7 @@ git commit -m "Split null datastore tests into their own pytest-native file"
 
 ---
 
-### Task 16: `tests/test_datastore_constraints.py`
+### Task 15: `tests/test_datastore_constraints.py`
 
 **Files:**
 - Create: `tests/test_datastore_constraints.py`
@@ -1449,9 +1322,39 @@ The five concrete classes are `PosixDatastoreConstraintsTestCase`, `InMemoryData
 
 `ChainedDatastorePerStoreConstraintsTests` (1584-1676) is structurally different — it asserts per-datastore behavior within one chain. Keep it as its own set of functions.
 
-- [ ] **Step 3: Fix remaining PT011 and PT012, then delete from the original**
+- [ ] **Step 3: Convert the two subTest sites now that the classes are gone**
 
-- [ ] **Step 4: Verify the count is conserved and commit**
+`parametrize` does not work on `unittest.TestCase` methods — it collects one
+case and fails with `TypeError: missing 1 required positional argument`. That is
+why this could not be done earlier. Now that these are module-level functions,
+it works.
+
+`tests/test_datastore.py:1520` and `:1627` both loop over a zip of dataset-type
+names and storage classes built in the test body. Lift each to a module-level
+list of `(dataset_type_name, storage_class_name)` tuples and parametrize:
+
+```python
+_CONSTRAINT_CASES = [
+    ("metric", "StructuredDataJson"),
+    # ... the exact pairs from the original zip, in order
+]
+
+
+@pytest.mark.parametrize(("dataset_type_name", "sc_name"), _CONSTRAINT_CASES)
+def test_constraints(dataset_type_name: str, sc_name: str, ...) -> None:
+    ...
+```
+
+Keep the `testfile_j if sc.name.endswith("Json") else testfile_y` selection in
+the body — it depends on fixture state, not on the parameter list.
+
+- [ ] **Step 4: Fix remaining PT011 and PT012, then delete from the original**
+
+- [ ] **Step 5: Verify the count is conserved and commit**
+
+The collected count **rises** here: each former subtest is now its own test.
+Record the before and after in `tests/_migration/mapping.md`, and confirm the
+rise equals the number of tuples in the two lists.
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
@@ -1466,7 +1369,7 @@ The five concrete constraint classes become one parametrization over
 
 ---
 
-### Task 17: `tests/test_datastore_file.py`
+### Task 16: `tests/test_datastore_file.py`
 
 The bulk: `DatastoreTestsBase` (122-150), `DatastoreTests` (151-1152) and the six concrete classes.
 
@@ -1496,11 +1399,74 @@ This mirrors `DatastoreProfile` in `fixtures.py` but is local to this file, beca
 
 - [ ] **Step 4: Reproduce every current combination**
 
-`TrashDatastoreTestCase` and `PosixDatastoreNoChecksumsTestCase` both subclass `PosixDatastoreTestCase`, so each currently reruns all 29 of its tests. Reproduce that with a three-value profile parametrization for now. Task 22 reduces it.
+`TrashDatastoreTestCase` and `PosixDatastoreNoChecksumsTestCase` both subclass `PosixDatastoreTestCase`, so each currently reruns all 29 of its tests. Reproduce that with a three-value profile parametrization for now. Task 21 reduces it.
 
-- [ ] **Step 5: Fix remaining PT011 and PT012, then delete from the original**
+- [ ] **Step 5: Convert the four subTest sites now that the classes are gone**
 
-- [ ] **Step 6: Verify the count is conserved and commit**
+`parametrize` does not work on `unittest.TestCase` methods, which is why this
+could not be done before the split. These are now module-level functions.
+
+`tests/test_datastore.py:857` (`testIngestTransfer`) is the cleanest — a loop
+over a literal tuple:
+
+```python
+@pytest.mark.parametrize(
+    "mode", ["copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"]
+)
+def test_ingest_transfer(mode: str, ...) -> None:
+    ...
+```
+
+`:778` (`testIngestNoTransfer`) has a guard on profile state, so its `continue`
+becomes a visible skip:
+
+```python
+@pytest.mark.parametrize("mode", [None, "auto"])
+def test_ingest_no_transfer(mode: str | None, datastore_profile, ...) -> None:
+    if mode == "auto" and "auto" in datastore_profile.ingest_transfer_modes \
+            and not datastore_profile.can_ingest_no_transfer_auto:
+        pytest.skip("Datastore supports auto but cannot transfer in place.")
+    ...
+```
+
+This is the one place the suite's skip count legitimately rises. Task 17 Step 5
+checks that rise explicitly, so use exactly this skip message.
+
+`:522` loops over composite storage classes built from a literal name tuple.
+Lift the tuple to a module constant and parametrize over `(index, name)`,
+keeping the distinct `metric_comp_{i}` dataset type name — the original comment
+explains it exists to stop file clashes between cases, and that reason survives:
+
+```python
+_COMPOSITE_STORAGE_CLASS_NAMES = (
+    "StructuredComposite",
+    "StructuredCompositeTestA",
+    "StructuredCompositeTestB",
+    "StructuredCompositeReadComp",
+    "StructuredData",  # No disassembly
+    "StructuredCompositeReadCompNoDisassembly",
+)
+
+
+@pytest.mark.parametrize(("i", "sc_name"), list(enumerate(_COMPOSITE_STORAGE_CLASS_NAMES)))
+def test_composites(i: int, sc_name: str, ...) -> None:
+    ...
+```
+
+`:1432` loops over two formatters:
+
+```python
+@pytest.mark.parametrize("formatter", [BadWriteFormatter, BadNoWriteFormatter])
+```
+
+- [ ] **Step 6: Fix remaining PT011 and PT012, then delete from the original**
+
+- [ ] **Step 7: Verify the count is conserved and commit**
+
+The collected count **rises** here as former subtests become their own tests.
+Record before and after in `tests/_migration/mapping.md` and confirm the rise
+equals 7 + 2 + 6 + 2 = 17 per datastore profile that runs them, minus the
+`testIngestNoTransfer` cases that now skip.
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore*.py \
@@ -1515,7 +1481,7 @@ still producing every execution. Deduplication is a later commit."
 
 ---
 
-### Task 18: Delete `tests/test_datastore.py` and run the conversion gate
+### Task 17: Delete `tests/test_datastore.py` and run the conversion gate
 
 **Files:**
 - Delete: `tests/test_datastore.py`
@@ -1530,9 +1496,14 @@ still producing every execution. Deduplication is a later commit."
 ```bash
 rg -n "^class |^def test" tests/test_datastore.py
 git rm tests/test_datastore.py
+rg -n "unittest|self\.assert" tests/test_datastore_*.py
 ```
 
 Remove `"tests/test_datastore.py" = ["PT"],` from `per-file-ignores`.
+
+The `rg` must find nothing. A surviving `TestCase` base silently disables every
+`parametrize` on that class, so the axis reproduction from Tasks 15 and 16 would
+be collecting one case where it should collect many.
 
 - [ ] **Step 2: Run the full suite**
 
@@ -1566,7 +1537,13 @@ If anything is lost, **stop**. A conversion-pass loss means a test was dropped o
 grep -cE "^SKIPPED" /tmp/dm55822-baseline.txt /tmp/dm55822-postconvert.txt
 ```
 
-Expected: the post-conversion count is equal to the baseline. It may legitimately be higher only by the `testIngestNoTransfer` conversion from Task 1, which is already in the baseline — so equal is the expectation here.
+Expected: the post-conversion count is the baseline count **plus** the `testIngestNoTransfer` delta. That test's loop over `(None, "auto")` currently uses a silent `continue` when a datastore supports `auto` but cannot transfer in place; parametrizing it turns each skipped iteration into a visible `pytest.skip`. Confirm the rise equals exactly the number of datastore profiles that hit that branch, and that every added skip names that reason:
+
+```bash
+grep -E "^SKIPPED" /tmp/dm55822-postconvert.txt | grep -c "cannot transfer in place"
+```
+
+Any other increase is a test that silently stopped running — investigate before proceeding.
 
 - [ ] **Step 6: Commit**
 
@@ -1581,7 +1558,7 @@ subclass lattices produced is still produced. Deduplication follows."
 
 ---
 
-## Tasks 19 to 23: Deduplicate, one axis per commit
+## Tasks 18 to 22: Deduplicate, one axis per commit
 
 Every task here has the same three-part shape: query the marginal coverage, reduce the parametrize list to what the query justifies, and prove nothing was lost. Each commit message must quote the numbers.
 
@@ -1589,7 +1566,7 @@ Every task here has the same three-part shape: query the marginal coverage, redu
 
 ---
 
-### Task 19: The cloned-butler axis
+### Task 18: The cloned-butler axis
 
 `ClonedSqliteButlerTestCase` (22 executions, 1.29s) and `ClonedPostgresPosixDatastoreButlerTestCase` (34 executions, 9.37s) exist to check that `Butler.clone()` does not break anything.
 
@@ -1641,7 +1618,7 @@ reports zero lost lines and zero lost arcs."
 
 ---
 
-### Task 20: The explicit-root repo layout
+### Task 19: The explicit-root repo layout
 
 `ButlerExplicitRootTestCase` reruns 40 tests to check that a config in one directory can refer to a root in another.
 
@@ -1687,7 +1664,7 @@ and zero lost arcs."
 
 ---
 
-### Task 21: The chained-datastore transfer axis and the outfile layouts
+### Task 20: The chained-datastore transfer axis and the outfile layouts
 
 `ChainedDatastoreTransfers` (14 executions, 3.76s) reruns `PosixDatastoreTransfers`; `ButlerMakeRepoOutfileDirTestCase` and `...UriTestCase` (8 executions) rerun `ButlerMakeRepoOutfileTestCase`.
 
@@ -1736,7 +1713,7 @@ reports zero lost lines and zero lost arcs."
 
 ---
 
-### Task 22: The datastore trash, no-checksum and chained-constraint axes
+### Task 21: The datastore trash, no-checksum and chained-constraint axes
 
 `TrashDatastoreTestCase` and `PosixDatastoreNoChecksumsTestCase` each rerun all 29 tests of `PosixDatastoreTestCase`. `ChainedDatastoreConstraintsTestCase` and `ChainedDatastoreConstraintsNativeTestCase` (4 executions between them) rerun `PosixDatastoreConstraintsTestCase`.
 
@@ -1751,7 +1728,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/test_datastore_file.p
   tests/test_datastore_constraints.py -p no:randomly --collect-only -q 2>&1 | head -40
 ```
 
-The profile parametrization from Tasks 16 and 17 chooses the id text. Use what it actually produces in the queries below rather than the illustrative strings.
+The profile parametrization from Tasks 15 and 16 chooses the id text. Use what it actually produces in the queries below rather than the illustrative strings.
 
 - [ ] **Step 2: Query all three axes**
 
@@ -1798,9 +1775,9 @@ reports zero lost lines and zero lost arcs."
 
 ---
 
-### Task 23: The postgres and server axes
+### Task 22: The postgres and server axes
 
-The largest and the riskiest: `ButlerServerPostgresTests` (34 executions, 11.50s) and `ClonedPostgresPosixDatastoreButlerTestCase` (34, 9.37s, if Task 19 did not already remove it). Postgres exercises genuinely different SQL, so expect a non-empty marginal set and expect to keep several opt-ins.
+The largest and the riskiest: `ButlerServerPostgresTests` (34 executions, 11.50s) and `ClonedPostgresPosixDatastoreButlerTestCase` (34, 9.37s, if Task 18 did not already remove it). Postgres exercises genuinely different SQL, so expect a non-empty marginal set and expect to keep several opt-ins.
 
 **Files:**
 - Modify: `tests/conftest.py` and the `tests/test_butler_*.py` files carrying `postgres` or `server`
@@ -1875,7 +1852,7 @@ reports zero lost lines and zero lost arcs."
 
 ---
 
-## Task 24: Close out
+## Task 23: Close out
 
 **Files:**
 - Delete: `tests/_migration/`
@@ -1939,10 +1916,20 @@ git rm -r tests/_migration/
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest tests/ -q -p no:randomly 2>&1 | tail -3
 env -u PYTHONPATH uv run ruff check .
 env -u PYTHONPATH uv run mypy python/lsst/daf/butler/tests/fixtures.py
+rg -n "unittest|self\.assert" tests/test_butler_*.py tests/test_datastore_*.py tests/conftest.py
 git status --short
 ```
 
-Expected: suite green, ruff clean, mypy clean, working tree clean apart from the staged deletions.
+Expected: suite green, ruff clean, mypy clean, the `rg` finds nothing, and the working tree is clean apart from the staged deletions.
+
+Also confirm the run without a fixed order and under xdist, since CI uses both:
+
+```bash
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+  tests/test_butler*.py tests/test_datastore*.py -q 2>&1 | tail -2
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run pytest \
+  tests/test_butler*.py tests/test_datastore*.py -q -n 3 2>&1 | tail -2
+```
 
 - [ ] **Step 7: Commit**
 
