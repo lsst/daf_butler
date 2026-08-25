@@ -35,6 +35,32 @@ import pytest
 
 pytest_plugins = ["lsst.daf.butler.tests.fixtures"]
 
+DEFAULT_TIMEOUT = 300
+"""Seconds after which a single test is considered hung."""
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Apply a default per-test timeout when pytest-timeout is installed.
+
+    pytest-timeout is an optional development convenience rather than a test
+    dependency: the postgres and server tests are the ones that hang, and a
+    hung xdist worker otherwise consumes the whole job's budget.
+
+    It is deliberately not configured through ``[tool.pytest.ini_options]``.
+    A ``timeout`` key there raises ``PytestConfigWarning: Unknown config
+    option`` on every run in an environment without the plugin, and becomes a
+    hard error under ``--strict-config``. Environments that do not ship it,
+    including the conda stack the Jenkins build validates against, simply run
+    without timeouts.
+
+    Parameters
+    ----------
+    config : `pytest.Config`
+        Active pytest configuration.
+    """
+    if config.pluginmanager.hasplugin("timeout") and getattr(config.option, "timeout", None) is None:
+        config.option.timeout = DEFAULT_TIMEOUT
+
 
 @pytest.fixture(scope="session")
 def test_directory() -> str:

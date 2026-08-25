@@ -522,10 +522,10 @@ Nothing consumes these yet."
 - [ ] **Step 1: Generate the per-file-ignores list**
 
 ```bash
-ls tests/test_*.py | sed 's|.*|"&" = ["PT"],|' | sort
+ls tests/test_*.py | sed 's|.*|"&" = ["PT"]|' | sort
 ```
 
-That is 73 entries. Remove `tests/test_butler.py` and `tests/test_datastore.py` from the output only when those files are deleted in Tasks 12 and 17 — until then they are still unconverted and need the entry.
+That is 73 entries. Note there is **no trailing comma and no indentation** — these are TOML table keys, not list items, and a trailing comma makes `pyproject.toml` unparseable. Remove `tests/test_butler.py` and `tests/test_datastore.py` from the output only when those files are deleted in Tasks 12 and 17 — until then they are still unconverted and need the entry.
 
 - [ ] **Step 2: Add `PT` to select and paste the ignores**
 
@@ -570,15 +570,27 @@ Under `[tool.pytest.ini_options]`, keeping the existing `addopts`:
 
 ```toml
 xfail_strict = true
-timeout = 300
 markers = [
     "postgres: test requires a postgres server",
-    "server: test requires the butler server (fastapi)",
-    "slow: test is slow enough to skip during local iteration",
+    "server: test requires the butler server (needs the 'server' extra)",
+    "slow: test is slow enough to be worth skipping during local iteration",
 ]
 ```
 
-Add `pytest-timeout>=2.3.0` to the `dev` dependency group, then `uv lock` and re-`uv sync --locked --all-extras --dev`.
+**`timeout` must not go in `[tool.pytest.ini_options]`.** pytest-timeout is not in the conda environment the Jenkins build validates against, and a `timeout` key with no plugin installed emits `PytestConfigWarning: Unknown config option: timeout` on *every* run, becoming a hard error under `--strict-config`. Verified by measurement.
+
+Instead it is applied from `tests/conftest.py`, only when the plugin is present:
+
+```python
+DEFAULT_TIMEOUT = 300
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    if config.pluginmanager.hasplugin("timeout") and getattr(config.option, "timeout", None) is None:
+        config.option.timeout = DEFAULT_TIMEOUT
+```
+
+`pytest-timeout>=2.3.0` goes in the `dev` dependency group, which is a uv-only concern, then `uv lock` and re-`uv sync --locked --all-extras --dev`. Environments without it, the conda stack included, simply run without timeouts.
 
 - [ ] **Step 6: Verify `xfail_strict` does not break the existing xfails**
 
