@@ -53,10 +53,10 @@ from __future__ import annotations
 __all__ = [
     "DATASTORE_PROFILES",
     "ButlerHarness",
+    "ButlerRepo",
     "ClonedButlerHarness",
     "DatastoreProfile",
     "ServerButlerHarness",
-    "TestRepo",
     "add_dataset_type",
 ]
 
@@ -181,8 +181,12 @@ def add_dataset_type(
 
 
 @dataclasses.dataclass
-class TestRepo:
-    """A Butler repository built for one test, and where its pieces live."""
+class ButlerRepo:
+    """A Butler repository built for one test, and where its pieces live.
+
+    Not named ``TestRepo``: pytest tries to collect anything named ``Test*`` as
+    a test class and warns that it cannot, because this has a constructor.
+    """
 
     config_file: str
     """Path or URI of the config a Butler should be opened from."""
@@ -217,7 +221,7 @@ def _apply_registry_backend(config: Config, registry_backend: str, request: pyte
         raise ValueError(f"Unknown registry backend {registry_backend!r}")
 
 
-def _make_remote_test_repo(root: str, config: Config) -> TestRepo:
+def _make_remote_test_repo(root: str, config: Config) -> ButlerRepo:
     """Build a repository whose datastore root reports itself as not local."""
     from lsst.resources.tests import make_remote_test_uri
 
@@ -240,10 +244,10 @@ def _make_remote_test_repo(root: str, config: Config) -> TestRepo:
     )
     make_repo_for_test(rooturi, config=config, forceConfigRoot=False)
     config_file = str(rooturi.join("butler.yaml", forceDirectory=False))
-    return TestRepo(config_file=config_file, root=root, profile=profile)
+    return ButlerRepo(config_file=config_file, root=root, profile=profile)
 
 
-def _make_explicit_root_repo(root: str, config: Config, profile: DatastoreProfile) -> TestRepo:
+def _make_explicit_root_repo(root: str, config: Config, profile: DatastoreProfile) -> ButlerRepo:
     """Build a repository whose config lives outside the repository root."""
     dir1 = os.path.join(root, "dir1")
     make_repo_for_test(dir1, config=config)
@@ -260,12 +264,12 @@ def _make_explicit_root_repo(root: str, config: Config, profile: DatastoreProfil
     # This layout deliberately does not use butler.yaml as the config name, so
     # the makeRepo check does not apply, and the datastore is under dir1.
     effective = dataclasses.replace(profile, full_config_key=None, datastore_str=["dir1"])
-    return TestRepo(config_file=config_file2, root=root, profile=effective, dir1=dir1, dir2=dir2)
+    return ButlerRepo(config_file=config_file2, root=root, profile=effective, dir1=dir1, dir2=dir2)
 
 
 def _make_outfile_repo(
     root: str, root2: str, config: Config, profile: DatastoreProfile, layout: str
-) -> TestRepo:
+) -> ButlerRepo:
     """Build a repository whose config was written outside it by makeRepo."""
     match layout:
         case "outfile":
@@ -277,7 +281,7 @@ def _make_outfile_repo(
         case _:
             raise ValueError(f"Unknown outfile layout {layout!r}")
     make_repo_for_test(root, config=config, outfile=outfile)
-    return TestRepo(config_file=outfile, root=root, profile=profile, dir2=root2)
+    return ButlerRepo(config_file=outfile, root=root, profile=profile, dir2=root2)
 
 
 class ButlerHarness:
@@ -285,7 +289,7 @@ class ButlerHarness:
 
     Parameters
     ----------
-    repo : `TestRepo`
+    repo : `ButlerRepo`
         The repository this harness opens Butlers against.
     storage_class_factory : `StorageClassFactory`
         Factory holding the test storage class definitions.
@@ -303,7 +307,7 @@ class ButlerHarness:
 
     def __init__(
         self,
-        repo: TestRepo,
+        repo: ButlerRepo,
         storage_class_factory: StorageClassFactory,
         exit_stack: contextlib.ExitStack,
         default_run: str,
@@ -574,7 +578,7 @@ def butler_repo(
     registry_backend: str,
     datastore_type: str,
     repo_layout: str,
-) -> Iterator[TestRepo]:  # numpydoc ignore=PR01
+) -> Iterator[ButlerRepo]:  # numpydoc ignore=PR01
     """Build a Butler repository for the requested axis combination."""
     profile = DATASTORE_PROFILES[datastore_type]
     config = _make_config(test_directory, profile)
@@ -589,7 +593,7 @@ def butler_repo(
             yield _make_remote_test_repo(root, config)
         elif repo_layout == "in_repo":
             make_repo_for_test(root, config=config)
-            yield TestRepo(config_file=os.path.join(root, "butler.yaml"), root=root, profile=profile)
+            yield ButlerRepo(config_file=os.path.join(root, "butler.yaml"), root=root, profile=profile)
         elif repo_layout == "explicit_root":
             yield _make_explicit_root_repo(root, config, profile)
         else:
@@ -605,7 +609,7 @@ def butler_repo(
 def butler_harness(
     request: pytest.FixtureRequest,
     test_directory: str,
-    butler_repo: TestRepo,
+    butler_repo: ButlerRepo,
     butler_client: str,
     registry_backend: str,
     storage_class_factory: StorageClassFactory,

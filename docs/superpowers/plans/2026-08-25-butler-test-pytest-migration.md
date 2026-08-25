@@ -243,10 +243,10 @@ Nothing consumes these yet. The suite must stay green, which at this point means
   - `DATASTORE_PROFILES: dict[str, DatastoreProfile]` keyed by `"posix"`, `"in_memory"`, `"chained"`, `"remote_test"`.
   - `ButlerHarness` with attributes `butler`, `profile`, `config_file: str`, `root: str`, `default_run: str`, `storage_class_factory: StorageClassFactory`, `registry_str: str`, `prediction_supported: bool`, `trust_mode_supported: bool`; and methods `create_empty_butler(run=None, writeable=None, metrics=None, cleanup=True) -> Butler`, `create_butler(run, storage_class, dataset_type_name, metrics=None) -> tuple[Butler, DatasetType]`, `are_uris_equivalent(uri1, uri2) -> bool`, `remove_dataset_out_of_band(butler, ref) -> None`.
   - `ClonedButlerHarness(ButlerHarness)` and `ServerButlerHarness(ButlerHarness)`.
-  - `TestRepo` — dataclass with `config_file: str`, `root: str`, `profile: DatastoreProfile`, `dir1: str | None`, `dir2: str | None`. Some layouts override the profile (`explicit_root` clears `full_config_key`; `remote_test` computes `datastore_str`/`datastore_name` from the generated URI), so **always read the profile off the repo or harness, never out of `DATASTORE_PROFILES` directly**.
+  - `ButlerRepo` — dataclass with `config_file: str`, `root: str`, `profile: DatastoreProfile`, `dir1: str | None`, `dir2: str | None`. Some layouts override the profile (`explicit_root` clears `full_config_key`; `remote_test` computes `datastore_str`/`datastore_name` from the generated URI), so **always read the profile off the repo or harness, never out of `DATASTORE_PROFILES` directly**.
   - `add_dataset_type(dataset_type_name, dimensions, storage_class, registry) -> DatasetType` — was `ButlerPutGetTests.addDatasetType`.
   - `DEFAULT_RUN` — the `ingésτ😺` run name, was `ButlerPutGetTests.default_run`.
-  - Fixtures: `registry_backend`, `datastore_type`, `butler_client`, `repo_layout` (all `str`, all overridable by indirect parametrize), `storage_class_factory` (session), `postgres_instance` (session), `butler_repo` (`TestRepo` — **not** `butler_config`; it must carry the layout dirs and the effective profile, which a bare path cannot), `butler_harness` (`ButlerHarness`), `butler` (`Butler`, an empty Butler opened on `DEFAULT_RUN`), and `test_directory` (`str`, supplied by `tests/conftest.py`).
+  - Fixtures: `registry_backend`, `datastore_type`, `butler_client`, `repo_layout` (all `str`, all overridable by indirect parametrize), `storage_class_factory` (session), `postgres_instance` (session), `butler_repo` (`ButlerRepo` — **not** `butler_config`; it must carry the layout dirs and the effective profile, which a bare path cannot), `butler_harness` (`ButlerHarness`), `butler` (`Butler`, an empty Butler opened on `DEFAULT_RUN`), and `test_directory` (`str`, supplied by `tests/conftest.py`).
 
 - [ ] **Step 1: Write the profile table**
 
@@ -427,7 +427,7 @@ def postgres_instance() -> Iterator[TemporaryPostgresInstance]:
 
 
 @pytest.fixture
-def butler_repo(request, test_directory, registry_backend, datastore_type, repo_layout) -> Iterator[TestRepo]:
+def butler_repo(request, test_directory, registry_backend, datastore_type, repo_layout) -> Iterator[ButlerRepo]:
     """Build a repo for the requested axis combination and clean it up."""
     ...
 
@@ -759,14 +759,23 @@ Test count is conserved at 10."
 
 Each task follows the same shape. The verification that matters is per-task: the number of collected tests across the whole of the original file plus its extracted parts must not change.
 
-**Before starting Task 5, record the reference count:**
+**The reference count is 361**, measured on `tests/test_butler.py` at the start of Task 5.
+
+Every task from 5 to 12 re-runs the count and compares against it:
 
 ```bash
-env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler.py \
+env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
   -p no:randomly --collect-only -q 2>&1 | tail -1
 ```
 
-Every task from 6 to 13 re-runs the equivalent count across `tests/test_butler*.py` and compares against it.
+**That glob reports 363, not 361.** `tests/test_butler_factory.py` is a pre-existing file unrelated to this migration and contributes a constant 2.
+
+| Measurement | Expected |
+| --- | --- |
+| `tests/test_butler*.py` collected | **363** |
+| of which migration tests | **361** |
+
+Task 10 is the one deliberate exception, dropping 2 for the InMemory ingest no-ops; from there the numbers become 361 and 359.
 
 ---
 
@@ -781,7 +790,7 @@ Start with the smallest, to shake out the harness before the large files.
 
 **Interfaces:**
 - Consumes: nothing from `fixtures.py` — this class builds its own butler with a null datastore.
-- Produces: 2 tests.
+- Produces: 1 test. (An earlier draft said 2; that came from a `--durations` table, which lists setup and call separately.)
 
 - [ ] **Step 1: Extract the class body**
 
@@ -817,7 +826,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/te
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-Expected: collected count equals the Task 5 reference count exactly; zero failures.
+Expected: 363 collected (361 migration tests plus `test_butler_factory.py`'s 2); zero failures.
 
 - [ ] **Step 7: Record mappings and commit**
 
@@ -884,7 +893,7 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/te
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py -q -p no:randomly 2>&1 | tail -2
 ```
 
-Expected: equals the Task 5 reference count; zero failures.
+Expected: 363 collected (361 plus `test_butler_factory.py`'s 2); zero failures.
 
 - [ ] **Step 7: Record mappings and commit**
 

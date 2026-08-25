@@ -33,6 +33,8 @@ This file explains why each removal was safe.
 | `DatastoreCacheTestCase.assertCache` | now module-level `_assert_cache(cache_manager, cache)` |
 | `DatastoreCacheTestCase.assertExpiration` | now module-level `_assert_expiration(cache_manager, cache, n_datasets, n_retained)` |
 | `DatastoreCacheTestCase.setUpClass` storage classes | now the `cache_storage_class_factory` fixture, named distinctly from the plugin's `storage_class_factory` because it loads `storageClasses.yaml` rather than the Butler configs |
+| `NullDatastoreTestCase.setUpClass`/`setUp`/`tearDown` | replaced wholesale by the plugin's `butler_repo` and `storage_class_factory` fixtures; the class built exactly the default axis combination (sqlite, posix, in_repo) by hand |
+| `fixtures.TestRepo` | renamed `fixtures.ButlerRepo`. pytest tries to collect anything named `Test*` as a test class and warns that it cannot because the dataclass has a constructor. The warning appeared in every file importing it. |
 | `DatastoreCacheTestCase.setUp`/`tearDown` | now the `cache` fixture returning a `CacheFixtures` dataclass; `tempfile.mkdtemp()` plus manual `shutil.rmtree` replaced by `tmp_path` |
 | `PostgresPosixDatastoreButlerTestCase.setUp` temp yaml | the original wrote the postgres-patched config to a `NamedTemporaryFile` and re-read it, because `setUp` could only communicate through `self.configFile`. The fixture passes the patched `Config` to `make_repo_for_test` directly, which is equivalent and leaves no temp file behind. |
 
@@ -62,3 +64,4 @@ This file explains why each removal was safe.
 | `tests/test_datastore.py::DatastoreCacheTestCase::testCacheExpirySize` | `tests/test_datastore_cache.py::test_cache_expiry_size` |
 | `tests/test_datastore.py::DatastoreCacheTestCase::testDisabledCache` | `tests/test_datastore_cache.py::test_disabled_cache` |
 | `tests/test_datastore.py::DatastoreCacheTestCase::testCacheExpiryAge` | `tests/test_datastore_cache.py::test_cache_expiry_age` |
+| `tests/test_butler.py::NullDatastoreTestCase::test_fallback` | `tests/test_butler_null_datastore.py::test_fallback` |
