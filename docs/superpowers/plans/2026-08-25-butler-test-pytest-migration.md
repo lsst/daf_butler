@@ -546,13 +546,26 @@ Under `[tool.ruff.lint.per-file-ignores]`, after the existing `parserYacc.py` en
 ...
 ```
 
-- [ ] **Step 3: Verify the ratchet holds**
+- [ ] **Step 3: Verify the ratchet holds — over the WHOLE repository**
 
 ```bash
-env -u PYTHONPATH uv run --all-extras --dev ruff check tests/ python/lsst/daf/butler/tests/fixtures.py
+env -u PYTHONPATH uv run --all-extras --dev ruff check .
 ```
 
 Expected: clean. If a file reports `PT` errors, its entry is missing or misspelled.
+
+Check the whole repository, not just `tests/`. `PT` is a test-style ruleset, and
+putting it in `select` applies it to the library tree too, where it produces 893
+findings: `PT018` on ordinary library assertions, and `PT009`/`PT027` on the
+shipped test suites in `registry/tests/` and `tests/butler_queries.py`. Hence
+`"python/**" = ["PT"]` in `per-file-ignores`; those suites get their own ratchet
+entries when their ticket converts them.
+
+`tests_integration/` also needs an entry. pytest skips it via `addopts`, but ruff
+does not.
+
+The pre-commit hook checks only *staged* files, so it will not catch this. It
+passed for two commits while a repository-wide `ruff check` was failing.
 
 - [ ] **Step 4: Verify RUF100 does not fire on the ratchet**
 
