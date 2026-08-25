@@ -217,10 +217,23 @@ extend-select = [
 # parserYacc docstrings can not be fixed. Docstrings are used to define grammar.
 "python/lsst/daf/butler/queries/expressions/parser/parserYacc.py" = ["D401", "D403"]
 
+# flake8-pytest-style is a test-style ruleset and is scoped to tests/ only.
+# Applying it to the library tree produces 893 findings: PT018 fires on ordinary
+# library assertions, and PT009/PT027 fire on the shipped test suites in
+# registry/tests/ and tests/butler_queries.py, which are converted by their own
+# later tickets and get their own ratchet entries then.
+"python/**" = ["PT"]
+
+# Test functions do not need docstrings, matching the project's existing stance
+# on D102 for test methods. Converting a test method to a module-level function
+# would otherwise make a docstring mandatory where it previously was not.
+"tests/*" = ["D103"]
+
 # DM-55822 ratchet: test files not yet migrated to native pytest. Delete an
 # entry when its file is converted; when this list is empty, delete the block.
 # A file with no entry must be free of flake8-pytest-style violations, which
 # is what stops the unittest idioms creeping back into converted files.
+"tests_integration/test_docker_container.py" = ["PT"]
 "tests/test_astropyTableFormatter.py" = ["PT"]
 "tests/test_authentication.py" = ["PT"]
 "tests/test_butler_factory.py" = ["PT"]

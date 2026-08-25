@@ -1968,11 +1968,12 @@ silently dropped 5 of 15. Use a dedent that tracks triple-quote state and strips
 the indent only from lines outside string literals, and assert that no
 `    def test_` survives the transform.
 
-**Converting methods to functions newly requires docstrings.** The repo ignores
-`D102`, missing docstring in a public *method*, in both ruff and pydocstyle, so
-test methods never needed one. `D103` for *functions* is not ignored, so every
-converted test does. That was 10 of 15 in the pattern-setter. See the open
-question in `tests/_migration/README.md` before the large splits.
+**Docstrings on converted tests: `D103` is ignored under `tests/`.** The repo
+ignores `D102`, missing docstring in a public *method*, so test methods never
+needed one; without an equivalent entry, converting a test to a function would
+newly require one. `"tests/*" = ["D103"]` is in `per-file-ignores`, matching the
+project's existing stance. Write a docstring where a test's intent is not
+obvious from its name, not as a matter of routine. `D101` and `PT` still apply.
 
 **Run ruff only on a file you have finished assembling.** A failed assertion in
 an assembly script leaves a half-built file on disk, and `ruff --fix` will

@@ -110,7 +110,7 @@ the gate easier to pass rather than harder, so it fails safe in the wrong
 direction. The first baseline attempt on this branch was discarded for exactly
 this reason: 1392 passed, 472 skipped, **231 errors**.
 
-## Open question: docstrings on converted tests
+## Decided: docstrings on converted tests
 
 The repo ignores `D102`, missing docstring in a public *method*, in both the
 ruff `ignore` list and pydocstyle `add-ignore`. Test methods therefore never
@@ -120,8 +120,14 @@ needed a docstring.
 test method to a module-level function therefore makes a docstring mandatory.
 In `tests/test_datastore_cache.py` that meant writing 10 of them for 15 tests.
 
-They are short and genuinely useful, so the pattern-setter writes them. But the
-two large files hold several hundred tests between them, so the alternative is
-worth a decision before the bulk conversion: add `"tests/*" = ["D103"]` to
-`per-file-ignores`, mirroring the existing `D102` stance rather than diverging
-from it.
+**Decision: `"tests/*" = ["D103"]` is added to `per-file-ignores`.** The project
+has already decided that methods do not need docstrings; a test does not acquire
+that requirement merely by ceasing to be a method. Several hundred formulaic
+docstrings restating the function name would be noise, not information.
+
+Docstrings are still written where a test's intent is not obvious from its name.
+The ten already written for `tests/test_datastore_cache.py` are accurate and are
+kept.
+
+`D101` still applies to classes, and `PT` is unaffected, so the ratchet that
+stops unittest idioms returning is untouched.
