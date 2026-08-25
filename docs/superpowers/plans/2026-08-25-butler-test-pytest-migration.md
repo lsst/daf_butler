@@ -243,7 +243,10 @@ Nothing consumes these yet. The suite must stay green, which at this point means
   - `DATASTORE_PROFILES: dict[str, DatastoreProfile]` keyed by `"posix"`, `"in_memory"`, `"chained"`, `"remote_test"`.
   - `ButlerHarness` with attributes `butler`, `profile`, `config_file: str`, `root: str`, `default_run: str`, `storage_class_factory: StorageClassFactory`, `registry_str: str`, `prediction_supported: bool`, `trust_mode_supported: bool`; and methods `create_empty_butler(run=None, writeable=None, metrics=None, cleanup=True) -> Butler`, `create_butler(run, storage_class, dataset_type_name, metrics=None) -> tuple[Butler, DatasetType]`, `are_uris_equivalent(uri1, uri2) -> bool`, `remove_dataset_out_of_band(butler, ref) -> None`.
   - `ClonedButlerHarness(ButlerHarness)` and `ServerButlerHarness(ButlerHarness)`.
-  - Fixtures: `registry_backend`, `datastore_type`, `butler_client`, `repo_layout` (all `str`, all overridable by indirect parametrize), `storage_class_factory` (session), `postgres_instance` (session), `butler_config` (`str`, the config path), `butler_harness` (`ButlerHarness`), `butler` (`Butler`, shorthand for `butler_harness.butler`), and `test_directory` (`str`, supplied by `tests/conftest.py`).
+  - `TestRepo` — dataclass with `config_file: str`, `root: str`, `profile: DatastoreProfile`, `dir1: str | None`, `dir2: str | None`. Some layouts override the profile (`explicit_root` clears `full_config_key`; `remote_test` computes `datastore_str`/`datastore_name` from the generated URI), so **always read the profile off the repo or harness, never out of `DATASTORE_PROFILES` directly**.
+  - `add_dataset_type(dataset_type_name, dimensions, storage_class, registry) -> DatasetType` — was `ButlerPutGetTests.addDatasetType`.
+  - `DEFAULT_RUN` — the `ingésτ😺` run name, was `ButlerPutGetTests.default_run`.
+  - Fixtures: `registry_backend`, `datastore_type`, `butler_client`, `repo_layout` (all `str`, all overridable by indirect parametrize), `storage_class_factory` (session), `postgres_instance` (session), `butler_repo` (`TestRepo` — **not** `butler_config`; it must carry the layout dirs and the effective profile, which a bare path cannot), `butler_harness` (`ButlerHarness`), `butler` (`Butler`, an empty Butler opened on `DEFAULT_RUN`), and `test_directory` (`str`, supplied by `tests/conftest.py`).
 
 - [ ] **Step 1: Write the profile table**
 
@@ -424,34 +427,30 @@ def postgres_instance() -> Iterator[TemporaryPostgresInstance]:
 
 
 @pytest.fixture
-def butler_config(request, test_directory, registry_backend, datastore_type, repo_layout, tmp_path) -> str:
-    """Build a repo and return the path of its config file."""
-    # Dispatch on (registry_backend, datastore_type, repo_layout), porting
-    # verbatim from these setUp methods in tests/test_butler.py:
-    #   sqlite  + any    + in_repo       -> ButlerTests.setUp,            :634-638
-    #   postgres+ posix  + in_repo       -> PostgresPosix...setUp,        :2656-2666
-    #   sqlite  + remote_test + in_repo  -> RemoteTestDatastore...setUp,  :2859-2879
-    #   sqlite  + posix  + explicit_root -> ButlerExplicitRoot...setUp,   :2759-2775
-    #   sqlite  + posix  + outfile       -> ButlerMakeRepoOutfile...setUp,:2789-2796
-    #   sqlite  + posix  + outfile_dir   -> ...OutfileDir...setUp,        :2818-2830
-    #   sqlite  + posix  + outfile_uri   -> ...OutfileUri...setUp,        :2837-2843
+def butler_repo(request, test_directory, registry_backend, datastore_type, repo_layout) -> Iterator[TestRepo]:
+    """Build a repo for the requested axis combination and clean it up."""
     ...
 
 
 @pytest.fixture
-def butler_harness(request, test_directory, butler_config, butler_client, datastore_type,
-                   storage_class_factory) -> Iterator[ButlerHarness]:
+def butler_harness(request, test_directory, butler_repo, butler_client,
+                   registry_backend, storage_class_factory) -> Iterator[ButlerHarness]:
     """Open a Butler of the requested client kind and yield its harness."""
     ...
 
 
 @pytest.fixture
 def butler(butler_harness: ButlerHarness) -> Butler:
-    """The Butler under test, for the many tests that need nothing else."""
-    return butler_harness.butler
+    """Return the Butler under test, for tests that need nothing else."""
+    return butler_harness.create_empty_butler(run=butler_harness.default_run)
 ```
 
-`postgres_instance` must only be requested when `registry_backend == "postgres"`, so `butler_config` resolves it lazily with `request.getfixturevalue("postgres_instance")` rather than declaring it as a parameter. Declaring it would start a postgres server for every sqlite test.
+**This task is implemented; read `python/lsst/daf/butler/tests/fixtures.py` rather than this sketch.** The repo construction is split into `_make_remote_test_repo`, `_make_explicit_root_repo` and `_make_outfile_repo`, each porting the `setUp` named in its docstring.
+
+Two constraints that are load-bearing and easy to undo by accident:
+
+- `postgres_instance` and `create_test_server` are resolved with `request.getfixturevalue(...)` and a function-local import, never as fixture parameters or module-level imports. Declaring `postgres_instance` as a parameter would start a postgres server for every sqlite test, and `server.py` imports `fastapi` at module level, so an eager import breaks collection in any environment without it.
+- Some layouts override the profile: `explicit_root` clears `full_config_key` and sets `datastore_str=["dir1"]`, and `remote_test` computes both from the generated URI. Always read the profile off `butler_repo.profile` or `butler_harness.profile`, never out of `DATASTORE_PROFILES`.
 
 The server client needs `create_test_server(test_directory, postgres=...)`, so `butler_harness` likewise resolves `postgres_instance` lazily when `butler_client == "server"` and `registry_backend == "postgres"`.
 
@@ -479,7 +478,7 @@ def test_directory() -> str:
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/ -p no:randomly \
-  --fixtures 2>&1 | grep -E "^(butler|registry_backend|datastore_type|butler_client|repo_layout|butler_config|butler_harness|test_directory)"
+  --fixtures 2>&1 | grep -E "^(butler|registry_backend|datastore_type|butler_client|repo_layout|butler_repo|butler_harness|test_directory|storage_class_factory|postgres_instance)\b"
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest \
   tests/test_butler.py tests/test_datastore.py -q -p no:randomly 2>&1 | tail -2
 ```
@@ -883,14 +882,14 @@ commit. Test count conserved at 31."
 - Modify: `tests/_migration/mapping.md`, `pyproject.toml`
 
 **Interfaces:**
-- Consumes: `butler_harness`, `repo_layout`, `butler_config` from `fixtures.py`.
+- Consumes: `butler_harness`, `repo_layout`, `butler_repo` from `fixtures.py`.
 - Produces: the config and repo-creation tests, count unchanged.
 
 - [ ] **Step 1: Extract and autofix**
 
 - [ ] **Step 2: Make `repo_layout` carry the outfile variants**
 
-The three `ButlerMakeRepoOutfile*` classes differ only in what `outfile` is passed to `make_repo_for_test`: a file in a second root, a directory, and a URI. Those become `repo_layout` values `outfile`, `outfile_dir`, `outfile_uri`, handled in `butler_config`. The two tests become:
+The three `ButlerMakeRepoOutfile*` classes differ only in what `outfile` is passed to `make_repo_for_test`: a file in a second root, a directory, and a URI. Those become `repo_layout` values `outfile`, `outfile_dir`, `outfile_uri`, already handled by `_make_outfile_repo` in `fixtures.py`. The two tests become:
 
 ```python
 @pytest.mark.parametrize("repo_layout", ["outfile", "outfile_dir", "outfile_uri"], indirect=True)
@@ -902,11 +901,11 @@ That still produces 3 x 2 = 6 executions where the classes produced 12 (3 classe
 
 - [ ] **Step 3: Make `ButlerExplicitRootTestCase` a `repo_layout` value**
 
-Its `setUp` writes the repo into `dir1`, moves the config to `dir2/butler2.yaml` with an explicit `root` key, and deletes the original. That logic moves into `butler_config` under `repo_layout == "explicit_root"`.
+Its `setUp` logic now lives in `_make_explicit_root_repo`; it writes the repo into `dir1`, moves the config to `dir2/butler2.yaml` with an explicit `root` key, and deletes the original. That logic already lives in `_make_explicit_root_repo`.
 
 `testFileLocations` becomes a single parametrized test. The other 39 inherited tests get, **for now**, `@pytest.mark.parametrize("repo_layout", ["in_repo", "explicit_root"], indirect=True)` so the execution count is preserved. Task 19 removes the `explicit_root` value from the ones with no marginal coverage.
 
-Note that `ButlerExplicitRootTestCase` sets `fullConfigKey = None` and `datastoreStr = ["dir1"]`, overriding the posix profile. Add an override mechanism to `butler_config`: when `repo_layout == "explicit_root"`, replace the profile with `dataclasses.replace(profile, full_config_key=None, datastore_str=["dir1"])`.
+Note that `ButlerExplicitRootTestCase` sets `fullConfigKey = None` and `datastoreStr = ["dir1"]`, overriding the posix profile. `_make_explicit_root_repo` already applies that override, so read it from `butler_repo.profile`.
 
 - [ ] **Step 4: Fix remaining PT011 and PT012, then delete from the original**
 
