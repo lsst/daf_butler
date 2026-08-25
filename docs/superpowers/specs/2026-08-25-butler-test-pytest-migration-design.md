@@ -421,10 +421,30 @@ It rewrites `self.assertEqual(a, b)` to `assert a == b` and `self.assertRaises`
 to `pytest.raises`, and adds the `import pytest`.
 No hand-written codemod is needed.
 
-The five leftovers are `PT011`, too-broad `pytest.raises`, and `PT012`,
-multi-statement `raises` blocks.
-Both are opinionated style rules rather than correctness rules, and both are
-added to `ignore` rather than churning 140 call sites.
+### The autofix leftovers are fixed, not ignored
+
+Counted after running the autofix over copies of both files:
+
+| Rule | In scope | Repo-wide |
+| --- | --- | --- |
+| `PT011`, too-broad `pytest.raises` | 14 | 117 |
+| `PT012`, multi-statement `raises` block | 4 | 7 |
+| `PT027`, `assertRaises` the fix cannot reach | 3 | 5 |
+
+Eighteen sites of `PT011` and `PT012` in the two files in scope is small enough
+to fix on this ticket, so neither rule is added to `ignore`.
+`PT011` sites gain a `match=` argument, which is a genuine improvement: a bare
+`pytest.raises(ValueError)` passes on any `ValueError`, including one raised for
+the wrong reason.
+`PT012` sites have the non-asserting statements lifted out of the `with` block.
+
+The three `PT027` sites have to be converted by hand regardless, since the
+autofix leaves them as `self.assertRaises` in a file that no longer has a
+`TestCase`.
+
+The remaining repo-wide balance, roughly 103 `PT011` and 3 `PT012` in the other
+71 files, is held by the ratchet below and falls to whichever ticket converts
+each file.
 
 ### Remaining manual surface
 
@@ -433,7 +453,7 @@ Counted across both files:
 | From | To | Sites |
 | --- | --- | --- |
 | `self.assert*` | bare `assert` | 814, automated |
-| `self.assertRaises` | `pytest.raises` | 140, automated |
+| `self.assertRaises` | `pytest.raises` | 140, of which 137 automated |
 | `self.subTest` | `@pytest.mark.parametrize` | 8 |
 | `self.assertLogs` | `caplog` | 10 |
 | `enterContext` | fixtures with `yield` | 25 |
@@ -458,9 +478,11 @@ IDs and lets xdist distribute them.
 
 ### The ruff ratchet
 
-`PT` is added to `[tool.ruff.lint] select`, with `per-file-ignores` entries
-disabling it for the 71 test files not yet converted.
-Each later ticket deletes entries.
+`PT` is added to `[tool.ruff.lint] select` in full, with no rules in `ignore`,
+and `per-file-ignores` entries disabling it for the 71 test files not yet
+converted.
+Each later ticket deletes entries, and in doing so takes on that file's share of
+the repo-wide `PT011` and `PT012` balance.
 
 This is 71 lines of `pyproject.toml`, shrinking over time.
 The alternative, deferring `PT` until the closing ticket, leaves the newly
