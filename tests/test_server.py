@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 import asyncio
 import os.path
 import tempfile
@@ -32,7 +34,9 @@ import threading
 import unittest
 import unittest.mock
 import uuid
+from collections.abc import Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from unittest.mock import DEFAULT, AsyncMock, NonCallableMock, patch
 
 from lsst.daf.butler import (
@@ -82,8 +86,11 @@ if butler_server_is_available:
         butler_factory_dependency,
     )
     from lsst.daf.butler.remote_butler.server._gafaelfawr import MockGafaelfawrGroupAuthorizer
+    from lsst.daf.butler.remote_butler.server.handlers._query_streaming import (
+        _stream_query_pages,
+    )
     from lsst.daf.butler.remote_butler.server.handlers._utils import generate_file_download_uri
-    from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel
+    from lsst.daf.butler.remote_butler.server_models import QueryCollectionsRequestModel, QueryKeepAliveModel
     from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 
 
@@ -1034,6 +1041,44 @@ def _timeout_twice():
         return DEFAULT
 
     return timeout
+
+
+class _MockStreamingQuery:
+    @contextmanager
+    def setup(self) -> Generator[None]:
+        self.cleanup_executed = False
+        self.count = 0
+        try:
+            yield
+        finally:
+            self.cleanup_executed = True
+
+    def execute(self, context: None) -> Iterator[QueryKeepAliveModel]:
+        for _ in range(10):
+            self.count += 1
+            yield QueryKeepAliveModel()
+
+
+@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
+class QueryStreamingTestCase(unittest.IsolatedAsyncioTestCase):
+    """Test implementation details of query streaming code."""
+
+    async def test_query_disconnects(self):
+        query = _MockStreamingQuery()
+        iter = _stream_query_pages(query, None)
+        await anext(iter)
+        await anext(iter)
+        # FastAPI calls aclose() on the generator when disconnect occurs, so we
+        # simulate that here.
+        await iter.aclose()
+        # We should have gone through the loop at least twice to yield the two
+        # results we read. Can go up to 3-4 times depending on the timing of
+        # the buffered results from the synchronous inner thread to the async
+        # code.
+        self.assertIn(query.count, (2, 3, 4))
+        # Cleanup was run correctly, meaning the thread was given time to exit
+        # before returning from aclose().
+        self.assertTrue(query.cleanup_executed)
 
 
 @unittest.skipIf(not butler_server_is_available, butler_server_import_error)
