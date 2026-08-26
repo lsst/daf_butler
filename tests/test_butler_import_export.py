@@ -437,7 +437,6 @@ def test_prune_datasets(butler_harness: ButlerHarness, datastore_type: str) -> N
     butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
 
-@pytest.mark.parametrize("repo_layout", ["in_repo", "explicit_root"], indirect=True)
 def test_export_transfer_copy(butler_harness: ButlerHarness, test_directory: str) -> None:
     """Test local export using all transfer modes."""
     storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")

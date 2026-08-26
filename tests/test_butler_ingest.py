@@ -60,9 +60,6 @@ from lsst.utils import doImportType
 # that BUTLER_TESTS_AXES adds are absent here rather than running empty.
 INGEST_AXES = FILE_DATASTORE_AXES
 
-LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
-"""Repository layouts of the two classes these posix-only tests ran under."""
-
 
 @pytest.mark.parametrize(AXIS_NAMES, INGEST_AXES, indirect=True)
 def test_ingest_zip(butler_harness: ButlerHarness) -> None:
@@ -310,7 +307,6 @@ def test_ingest(butler_harness: ButlerHarness, test_directory: str) -> None:
     butler.ingest(*datasets)
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_specialized_file_datasets_functions(butler_harness: ButlerHarness) -> None:
     """Test a workflow used in Prompt Processing where we export datasets
     from one repository and write them in-place to the datastore of
@@ -404,7 +400,6 @@ def test_specialized_file_datasets_functions(butler_harness: ButlerHarness) -> N
             assert target_butler.get(other_ref) is not None
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_temporary_for_ingest(butler_harness: ButlerHarness) -> None:
     """Test the `lsst.daf.butler._rubin.ingest_from_temporary` module."""
     with butler_harness.create_empty_butler("example_run") as butler:

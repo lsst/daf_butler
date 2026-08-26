@@ -76,9 +76,6 @@ from lsst.daf.butler.tests.utils import create_populated_sqlite_registry
 from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 
-LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
-"""Repository layouts of the two classes the posix-only tests ran under."""
-
 PICKLE_AXES = [
     pytest.param(
         *param.values,
@@ -232,7 +229,6 @@ def test_constructor(butler_harness: ButlerHarness, butler_client: str) -> None:
     stack.close()
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_path_constructor(butler_harness: ButlerHarness) -> None:
     """Independent test of constructor using PathLike."""
     config_file = butler_harness.config_file
@@ -245,9 +241,8 @@ def test_path_constructor(butler_harness: ButlerHarness) -> None:
         butler = stack.enter_context(Butler.from_config(path, writeable=False))
         assert isinstance(butler, Butler)
 
-        # And again with a Path object without the butler yaml
-        # (making sure we skip it if the config doesn't end in butler.yaml,
-        # which is the case for the explicit-root layout)
+        # And again with a Path object without the butler yaml. The guard
+        # matters for any layout whose config is not named butler.yaml.
         if config_file.endswith("butler.yaml"):
             path = pathlib.Path(os.path.dirname(config_file))
             butler = stack.enter_context(Butler.from_config(path, writeable=False))
@@ -654,7 +649,6 @@ def test_butler_metrics(butler_harness: ButlerHarness) -> None:
     assert new.n_ingest == 2
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_pytype_coercion(butler_harness: ButlerHarness) -> None:
     """Test python type coercion on Butler.get and put."""
     # Store some data with the normal example storage class.
@@ -712,7 +706,6 @@ def test_pytype_coercion(butler_harness: ButlerHarness) -> None:
         butler.get(dataset_type_name, dataId=data_id)
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_provenance(butler_harness: ButlerHarness) -> None:
     """Test that provenance is attached on put."""
     run = "test_run"

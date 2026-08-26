@@ -200,6 +200,8 @@ matching the pattern and by nothing else in the suite.
 | Axis | Contexts | Unique lines | Unique arcs | Decision |
 | --- | --- | --- | --- | --- |
 | `cloned` | 163 | 0 | 0 | Pure duplication. Removed from the axis lists and replaced by one `test_cloned_put_get`. `Butler.clone` itself is covered directly by `tests/test_simpleButler.py`. |
+| `explicit_root` | 20 | 0 | 0 | Pure duplication. |
+| `explicit-root` | 95 | 0 | 0 | Pure duplication. Both patterns removed; the layout keeps only `test_file_locations`, the one test that asserts a config in one directory can name a root in another. 39 executions become 1. |
 
 ## Findings for separate tickets
 
