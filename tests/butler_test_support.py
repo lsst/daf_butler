@@ -44,6 +44,7 @@ import pytest
 from lsst.daf.butler import DataCoordinate, DatasetNotFoundError, DatasetRef, DatasetType
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.registry import ConflictingDefinitionError
+from lsst.daf.butler.tests import MetricsExample
 from lsst.daf.butler.tests.fixtures import make_example_metrics
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.resources import ResourcePath
@@ -93,6 +94,31 @@ PUT_GET_AXES = [
     pytest.param("sqlite", "posix", "direct", "outfile_uri", id="outfile-uri"),
 ]
 """Axis combinations for the tests that also cover the outfile layouts."""
+
+
+def make_datastore_metrics(use_none: bool = False) -> MetricsExample:
+    """Return the example dataset the datastore tests use.
+
+    Deliberately not `~lsst.daf.butler.tests.fixtures.make_example_metrics`:
+    the datastore tests were written against a different data array, and one of
+    them needs the array to be absent.
+
+    Parameters
+    ----------
+    use_none : `bool`, optional
+        If `True`, leave the data array unset.
+
+    Returns
+    -------
+    metrics : `~lsst.daf.butler.tests.MetricsExample`
+        The example dataset.
+    """
+    array = None if use_none else [563, 234, 456.7, 105, 2054, -1045]
+    return MetricsExample(
+        {"AM1": 5.2, "AM2": 30.6},
+        {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+        array,
+    )
 
 
 def records_from(caplog: pytest.LogCaptureFixture, logger_name: str, level: int) -> list[logging.LogRecord]:
