@@ -118,6 +118,25 @@ def test_deferred_collection_passing(butler_harness: ButlerHarness) -> None:
     assert butler.exists(dataset_type, data_id, collections=[run])
 
 
+@pytest.mark.parametrize("butler_client", ["cloned"], indirect=True)
+def test_cloned_put_get(butler_harness: ButlerHarness) -> None:
+    """A Butler that has been cloned is still usable for put and get.
+
+    The cloned client was once an axis over every butler test. Its marginal
+    coverage across 163 contexts was zero unique lines and zero unique arcs, so
+    this stands in for all of it; `Butler.clone` itself is covered directly by
+    tests/test_simpleButler.py.
+    """
+    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")
+    butler, dataset_type = butler_harness.create_butler(
+        butler_harness.default_run, storage_class, "test_metric"
+    )
+    metric = make_example_metrics()
+    data_id = {"instrument": "DummyCamComp", "visit": 423}
+    ref = butler.put(metric, dataset_type, data_id)
+    assert butler.get(ref) == metric
+
+
 @pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
 def test_basic_put_get(butler_harness: ButlerHarness) -> None:
     storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")

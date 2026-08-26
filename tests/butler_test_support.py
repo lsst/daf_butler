@@ -64,7 +64,6 @@ _SERVER_MARKS = (
 FILE_DATASTORE_AXES = [
     pytest.param("sqlite", "posix", "direct", "in_repo", id="posix"),
     pytest.param("postgres", "posix", "direct", "in_repo", id="postgres", marks=pytest.mark.postgres),
-    pytest.param("postgres", "posix", "cloned", "in_repo", id="cloned-postgres", marks=pytest.mark.postgres),
     pytest.param("sqlite", "chained", "direct", "in_repo", id="chained"),
     pytest.param("sqlite", "posix", "direct", "explicit_root", id="explicit-root"),
     pytest.param("sqlite", "remote_test", "direct", "in_repo", id="remote-test"),
@@ -78,12 +77,16 @@ FILE_DATASTORE_AXES = [
         marks=(*_SERVER_MARKS, pytest.mark.postgres),
     ),
 ]
-"""Axis combinations covering every datastore that inherits FileDatastore."""
+"""Axis combinations covering every datastore that inherits FileDatastore.
+
+The cloned client is deliberately absent: DM-55822 measured its marginal
+coverage over 163 contexts as zero unique lines and zero unique arcs, so it
+is represented by the single ``test_cloned_put_get`` instead.
+"""
 
 BUTLER_TESTS_AXES = [
     *FILE_DATASTORE_AXES,
     pytest.param("sqlite", "in_memory", "direct", "in_repo", id="in-memory"),
-    pytest.param("sqlite", "in_memory", "cloned", "in_repo", id="cloned-sqlite"),
 ]
 """Axis combinations covering every datastore, including the ephemeral one."""
 

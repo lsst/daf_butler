@@ -191,6 +191,16 @@ Skips go from 30 to 31, and the one addition names the reason the plan
 predicted: `tests/test_datastore_file.py:968: Datastore supports auto but cannot
 transfer in place.`
 
+## Deduplication evidence
+
+Each axis is reduced only as far as its marginal coverage over
+`~/dm55822/postconvert.coverage` justifies. "Unique" means covered by contexts
+matching the pattern and by nothing else in the suite.
+
+| Axis | Contexts | Unique lines | Unique arcs | Decision |
+| --- | --- | --- | --- | --- |
+| `cloned` | 163 | 0 | 0 | Pure duplication. Removed from the axis lists and replaced by one `test_cloned_put_get`. `Butler.clone` itself is covered directly by `tests/test_simpleButler.py`. |
+
 ## Findings for separate tickets
 
 | Finding | Where | Why not fixed here |
