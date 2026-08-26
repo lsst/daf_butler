@@ -33,7 +33,6 @@ import os
 import pathlib
 import pickle
 import re
-import shutil
 import tempfile
 import unittest
 import unittest.mock
@@ -68,7 +67,6 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
-from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
@@ -132,27 +130,6 @@ class TransactionTestError(Exception):
     """
 
     pass
-
-
-class ButlerConfigTests(unittest.TestCase):
-    """Simple tests for ButlerConfig that are not tested in any other test
-    cases.
-    """
-
-    def testSearchPath(self) -> None:
-        configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
-        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
-            config1 = ButlerConfig(configFile)
-        self.assertNotIn("testConfigs", "\n".join(cm.output))
-
-        overrideDirectory = os.path.join(TESTDIR, "config", "testConfigs")
-        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
-            config2 = ButlerConfig(configFile, searchPaths=[overrideDirectory])
-        self.assertIn("testConfigs", "\n".join(cm.output))
-
-        key = ("datastore", "records", "table")
-        self.assertNotEqual(config1[key], config2[key])
-        self.assertEqual(config2[key], "override_record")
 
 
 class ButlerPutGetTests(TestCaseMixin):
@@ -888,58 +865,6 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
             butler.get(ref)
 
-    def testMakeRepo(self) -> None:
-        """Test that we can write butler configuration to a new repository via
-        the Butler.makeRepo interface and then instantiate a butler from the
-        repo root.
-        """
-        # Do not run the test if we know this datastore configuration does
-        # not support a file system root
-        if self.fullConfigKey is None:
-            return
-
-        # create two separate directories
-        root1 = tempfile.mkdtemp(dir=self.root)
-        root2 = tempfile.mkdtemp(dir=self.root)
-
-        # This test asserts on repository creation itself, so it must not go
-        # through the caching helper.
-        self.assertFalse(Butler.has_repo_config(root1))
-        butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
-        self.assertTrue(Butler.has_repo_config(root1))
-        limited = Config(self.configFile)
-        butler1 = Butler.from_config(butlerConfig)
-        self.enterContext(butler1)
-        assert isinstance(butler1, DirectButler), "Expect DirectButler in configuration"
-        butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
-        full = Config(self.tmpConfigFile)
-        butler2 = Butler.from_config(butlerConfig)
-        self.enterContext(butler2)
-        assert isinstance(butler2, DirectButler), "Expect DirectButler in configuration"
-        # Butlers should have the same configuration regardless of whether
-        # defaults were expanded.
-        self.assertEqual(butler1._config, butler2._config)
-        # Config files loaded directly should not be the same.
-        self.assertNotEqual(limited, full)
-        # Make sure "limited" doesn't have a few keys we know it should be
-        # inheriting from defaults.
-        self.assertIn(self.fullConfigKey, full)
-        self.assertNotIn(self.fullConfigKey, limited)
-
-        # Collections don't appear until something is put in them
-        collections1 = set(butler1.registry.queryCollections())
-        self.assertEqual(collections1, set())
-        self.assertEqual(set(butler2.registry.queryCollections()), collections1)
-
-        # Check that a config with no associated file name will not
-        # work properly with relocatable Butler repo
-        butlerConfig.configFile = None
-        with self.assertRaises(ValueError):
-            Butler.from_config(butlerConfig)
-
-        with self.assertRaises(FileExistsError):
-            Butler.makeRepo(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
-
     def testStringification(self) -> None:
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         self.enterContext(butler)
@@ -1282,93 +1207,6 @@ class FileDatastoreButlerTests(ButlerTests):
         """
         uri = ResourcePath(root, forceDirectory=True)
         return uri.join(relpath).exists()
-
-    def testPutTemplates(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = self.create_empty_butler(run=self.default_run)
-
-        # Add needed Dimensions
-        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData(
-            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
-        )
-        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
-        butler.registry.insertDimensionData(
-            "visit",
-            {
-                "instrument": "DummyCamComp",
-                "id": 423,
-                "name": "v423",
-                "physical_filter": "d-r",
-                "day_obs": 20250101,
-            },
-        )
-        butler.registry.insertDimensionData(
-            "visit",
-            {
-                "instrument": "DummyCamComp",
-                "id": 425,
-                "name": "v425",
-                "physical_filter": "d-r",
-                "day_obs": 20250101,
-            },
-        )
-
-        # Create and store a dataset
-        metric = makeExampleMetrics()
-
-        # Create two almost-identical DatasetTypes (both will use default
-        # template)
-        dimensions = butler.dimensions.conform(["instrument", "visit"])
-        butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
-        butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
-        butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
-
-        dataId1 = {"instrument": "DummyCamComp", "visit": 423}
-        dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
-
-        # Put with exactly the data ID keys needed
-        ref = butler.put(metric, "metric1", dataId1)
-        uri = butler.getURI(ref)
-        self.assertTrue(uri.exists())
-        self.assertTrue(
-            uri.unquoted_path.endswith(f"{self.default_run}/metric1/??#?/d-r/DummyCamComp_423.pickle")
-        )
-
-        # Check the template based on dimensions
-        if hasattr(butler._datastore, "templates"):
-            butler._datastore.templates.validateTemplates([ref])
-
-        # Put with extra data ID keys (physical_filter is an optional
-        # dependency); should not change template (at least the way we're
-        # defining them  to behave now; the important thing is that they
-        # must be consistent).
-        ref = butler.put(metric, "metric2", dataId2)
-        uri = butler.getURI(ref)
-        self.assertTrue(uri.exists())
-        self.assertTrue(
-            uri.unquoted_path.endswith(f"{self.default_run}/metric2/d-r/DummyCamComp_v423.pickle")
-        )
-
-        # Check the template based on dimensions
-        if hasattr(butler._datastore, "templates"):
-            butler._datastore.templates.validateTemplates([ref])
-
-        # Use a template that has a typo in dimension record metadata.
-        # Easier to test with a butler that has a ref with records attached.
-        template = FileTemplate("a/{visit.name}/{id}_{visit.namex:?}.fits")
-        with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
-            path = template.format(ref)
-        self.assertEqual(path, f"a/v423/{ref.id}_fits")
-
-        template = FileTemplate("a/{visit.name}/{id}_{visit.namex}.fits")
-        with self.assertRaises(KeyError):
-            with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
-                template.format(ref)
-
-        # Now use a file template that will not result in unique filenames
-        with self.assertRaises(FileTemplateValidationError):
-            butler.put(metric, "metric3", dataId1)
 
     def testImportExport(self) -> None:
         # Run put/get tests just to create and populate a repo.
@@ -2074,11 +1912,6 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
             os.remove(self.configFile)
         super().tearDown()
 
-    def testMakeRepo(self) -> None:
-        # The base class test assumes that it's using sqlite and assumes
-        # the config file is acceptable to sqlite.
-        raise unittest.SkipTest("Postgres config is not compatible with this test.")
-
 
 class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTestCase, unittest.TestCase):
     """Test that Butler with a Postgres registry still works after cloning."""
@@ -2173,73 +2006,6 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         os.remove(configFile1)
         self.tmpConfigFile = configFile2
 
-    def testFileLocations(self) -> None:
-        self.assertNotEqual(self.dir1, self.dir2)
-        self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
-        self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
-        self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
-
-
-class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
-    """Test that a config file created by makeRepo outside of repo works."""
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
-
-    def tearDown(self) -> None:
-        if os.path.exists(self.root2):
-            shutil.rmtree(self.root2, ignore_errors=True)
-        super().tearDown()
-
-    def testConfigExistence(self) -> None:
-        c = Config(self.tmpConfigFile)
-        uri_config = ResourcePath(c["root"])
-        uri_expected = ResourcePath(self.root, forceDirectory=True)
-        self.assertEqual(uri_config.geturl(), uri_expected.geturl())
-        self.assertNotIn(":", uri_config.path, "Check for URI concatenated with normal path")
-
-    def testPutGet(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        self.runPutGetTest(storageClass, "test_metric")
-
-
-class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
-    """Test that a config file created by makeRepo outside of repo works."""
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = self.root2
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
-
-    def testConfigExistence(self) -> None:
-        # Append the yaml file else Config constructor does not know the file
-        # type.
-        self.tmpConfigFile = os.path.join(self.tmpConfigFile, "butler.yaml")
-        super().testConfigExistence()
-
-
-class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
-    """Test that a config file created by makeRepo outside of repo works."""
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = ResourcePath(os.path.join(self.root2, "something.yaml")).geturl()
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
-
 
 class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """Specialization of a butler using a datastore root that reports itself
@@ -2332,10 +2098,6 @@ class ButlerServerTests(FileDatastoreButlerTests):
         # RemoteButler.
         pass
 
-    def testMakeRepo(self) -> None:
-        # Only applies to DirectButler.
-        pass
-
     # Pickling not yet implemented for RemoteButler/HybridButler.
     @unittest.expectedFailure
     def testPickle(self) -> None:
@@ -2349,11 +2111,6 @@ class ButlerServerTests(FileDatastoreButlerTests):
 
     def testTransaction(self) -> None:
         # Transactions will never be supported for RemoteButler.
-        pass
-
-    def testPutTemplates(self) -> None:
-        # The Butler server instance is configured with different file naming
-        # templates than this test is expecting.
         pass
 
 

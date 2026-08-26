@@ -37,6 +37,7 @@ from butler_test_support import (
     BUTLER_TESTS_AXES,
     FILE_DATASTORE_AXES,
     PUT_GET_AXES,
+    records_from,
     run_put_get_test,
 )
 
@@ -55,15 +56,6 @@ from lsst.utils.introspection import get_full_type_name
 
 COMPONENT_WARNING_LOGGER = "lsst.daf.butler.datastores.file_datastore.get"
 """Logger that warns when a component has to be extracted by conversion."""
-
-
-def _warnings_from(caplog: pytest.LogCaptureFixture, logger_name: str) -> list[logging.LogRecord]:
-    """Return the warning-or-worse records a given logger emitted."""
-    return [
-        record
-        for record in caplog.records
-        if record.name.startswith(logger_name) and record.levelno >= logging.WARNING
-    ]
 
 
 @pytest.mark.parametrize(AXIS_NAMES, PUT_GET_AXES, indirect=True)
@@ -385,7 +377,7 @@ def test_component_from_overridden_storage_class_warns(
     with caplog.at_level(logging.WARNING, logger=COMPONENT_WARNING_LOGGER):
         caplog.clear()
         assert butler.get(component_ref) == metric.summary
-        records = _warnings_from(caplog, COMPONENT_WARNING_LOGGER)
+        records = records_from(caplog, COMPONENT_WARNING_LOGGER, logging.WARNING)
     assert records
     message = "\n".join(record.getMessage() for record in records)
     # The message must name the component, the storage class that lacks it
@@ -404,4 +396,4 @@ def test_component_from_overridden_storage_class_warns(
     with caplog.at_level(logging.WARNING, logger=COMPONENT_WARNING_LOGGER):
         caplog.clear()
         assert butler.get(composite_ref.makeComponentRef("summary")) == metric.summary
-        assert not _warnings_from(caplog, COMPONENT_WARNING_LOGGER)
+        assert not records_from(caplog, COMPONENT_WARNING_LOGGER, logging.WARNING)

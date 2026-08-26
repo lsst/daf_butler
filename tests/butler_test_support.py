@@ -95,6 +95,31 @@ PUT_GET_AXES = [
 """Axis combinations for the tests that also cover the outfile layouts."""
 
 
+def records_from(caplog: pytest.LogCaptureFixture, logger_name: str, level: int) -> list[logging.LogRecord]:
+    """Return the records a given logger and its children emitted.
+
+    `caplog` collects from every logger, so a test that cares which logger
+    spoke has to filter, as ``unittest.TestCase.assertLogs`` did implicitly.
+
+    Parameters
+    ----------
+    caplog : `pytest.LogCaptureFixture`
+        Fixture holding the captured records.
+    logger_name : `str`
+        Name of the logger of interest; its children match too.
+    level : `int`
+        Lowest level to include.
+
+    Returns
+    -------
+    records : `list` [`logging.LogRecord`]
+        The matching records, in the order they were emitted.
+    """
+    return [
+        record for record in caplog.records if record.name.startswith(logger_name) and record.levelno >= level
+    ]
+
+
 def assert_get_components(
     butler: Butler,
     dataset_ref: DatasetRef,

@@ -35,6 +35,11 @@ This file explains why each removal was safe.
 | `ButlerPutGetTests.storageClassFactory` | the shim adds a `storage_class_factory` property so `self` satisfies the part of `ButlerHarness` the helper uses |
 | `runPutGetTest`'s `self.subTest(args=...)` | dropped; the loop identity moved into the assertion messages (`f"put with args {args!r}"`). Subtest count for these tests falls from 263 to 0, which is why the reported subtest total drops. |
 | `ChainedDatastoreButlerTestCase.testComponentFromOverriddenStorageClassWarns` | the empty override became an early `return` guarded on `datastore_type == "chained"`, so the execution is conserved. Task 21 may drop the axis with coverage evidence. |
+| `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
+| `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
+| `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
+| `ButlerMakeRepoOutfileDirTestCase.testConfigExistence`'s `self.tmpConfigFile = os.path.join(...)` | the override appended `butler.yaml` to the directory before calling `super()`; now a branch on `repo_layout == "outfile_dir"` inside the one test. |
+| `testPutTemplates`'s inner `assertLogs` inside `assertRaises(KeyError)` | dropped. The `KeyError` propagates out of the `assertLogs` context, so `assertLogs` never checked anything; only the `pytest.raises` survives. |
 | `DatastoreCacheTestCase.assertCache` | now module-level `_assert_cache(cache_manager, cache)` |
 | `DatastoreCacheTestCase.assertExpiration` | now module-level `_assert_expiration(cache_manager, cache, n_datasets, n_retained)` |
 | `DatastoreCacheTestCase.setUpClass` storage classes | now the `cache_storage_class_factory` fixture, named distinctly from the plugin's `storage_class_factory` because it loads `storageClasses.yaml` rather than the Butler configs |
@@ -63,6 +68,8 @@ This file explains why each removal was safe.
 | `self.id = 0` is dead state | `DatastoreCacheTestCase.setUp` assigned it and nothing read it; `DatasetTestHelper.makeDatasetRef` does not use instance state | Dropped rather than ported. Test-only. |
 | `runPutGetTest`'s `args = tuple[DatasetRef] \| tuple[str \| DatasetType, DataCoordinate]` | `tests/test_butler.py:306`, immediately before the loop that rebinds `args` | A type expression assigned as a value, so it did nothing. Written as the annotation it was meant to be. Test-only, so no library change and no ticket needed. |
 | `retrieveArtifacts(transfer="move")` raises different messages per client | `FileDatastore` says "Can not move artifacts out of datastore", `RemoteButler` says "Only 'copy' and 'auto' transfer modes are supported" | The original bare `assertRaises(ValueError)` hid this. `PT011` forces a `match`, so the converted assertion names both. Not a bug, but the two implementations could usefully agree; not worth a ticket on its own. |
+| `fullConfigKey` is now a dead class attribute | six classes in `tests/test_butler.py` set it and, since `testMakeRepo` moved out, nothing reads it | Left in place rather than churned out of a file Task 12 deletes. Not ported: the new files read `DatastoreProfile.full_config_key`. |
+| `Butler.from_config` on a config with `configFile = None` | raises "Required to replace &lt;butlerRoot&gt; ... but a replacement has not been defined", not a message about the config file | The original bare `assertRaises(ValueError)` hid which failure was being provoked. `PT011` forces a `match`, so the converted assertion names the real one. |
 
 ## Test mapping
 
@@ -196,3 +203,29 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerPostgresTests::testDeferredCollectionPassing` | `tests/test_butler_put_get.py::test_deferred_collection_passing[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testPytypePutCoercion` | `tests/test_butler_put_get.py::test_pytype_put_coercion[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testStorageClassOverrideGet` | `tests/test_butler_put_get.py::test_storage_class_override_get[server-postgres]` |
+| `tests/test_butler.py::ButlerConfigTests::testSearchPath` | `tests/test_butler_config_repo.py::test_search_path` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testFileLocations` | `tests/test_butler_config_repo.py::test_file_locations[explicit_root]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[posix]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[cloned-postgres]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[in-memory]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[cloned-sqlite]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[chained]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[explicit-root]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileTestCase::testConfigExistence` | `tests/test_butler_config_repo.py::test_config_existence[outfile]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileTestCase::testPutGet` | `tests/test_butler_config_repo.py::test_put_get[outfile]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileDirTestCase::testConfigExistence` | `tests/test_butler_config_repo.py::test_config_existence[outfile_dir]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileDirTestCase::testPutGet` | `tests/test_butler_config_repo.py::test_put_get[outfile_dir]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileUriTestCase::testConfigExistence` | `tests/test_butler_config_repo.py::test_config_existence[outfile_uri]` |
+| `tests/test_butler.py::ButlerMakeRepoOutfileUriTestCase::testPutGet` | `tests/test_butler_config_repo.py::test_put_get[outfile_uri]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[remote-test]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[server-postgres]` |
