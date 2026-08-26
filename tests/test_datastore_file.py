@@ -198,15 +198,20 @@ PROFILES = {
 }
 """One entry per concrete datastore test class.
 
-``trash`` and ``posix-no-checksums`` were subclasses of the posix case, so they
-rerun every shared test. Task 21 of DM-55822 reduces that with coverage
-evidence.
+``trash`` and ``posix-no-checksums`` are only used by their own tests; see
+`ALL_PROFILES`.
 """
 
-ALL_PROFILES = list(PROFILES)
-"""Profiles that run the shared datastore tests."""
+ALL_PROFILES = ["posix", "in-memory", "chained", "chained-memory"]
+"""Profiles that run the shared datastore tests.
 
-FILE_PROFILES = ["posix", "posix-no-checksums", "trash", "chained"]
+``trash`` and ``posix-no-checksums`` are absent. They were subclasses of the
+posix case and so reran every shared test; DM-55822 measured those 50 reruns
+each as zero unique lines and zero unique arcs. Both profiles survive, but only
+for the tests that gave them their names, which do have unique coverage.
+"""
+
+FILE_PROFILES = ["posix", "chained"]
 """Profiles backed by a FileDatastore, which run the file-specific tests."""
 
 

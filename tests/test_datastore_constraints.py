@@ -73,12 +73,19 @@ differently."""
 CONSTRAINT_DATASTORES = [
     pytest.param("posixDatastoreP.yaml", True, True, id="posix"),
     pytest.param("inMemoryDatastoreP.yaml", False, False, id="in-memory"),
-    pytest.param("chainedDatastorePa.yaml", True, True, id="chained-native"),
     pytest.param("chainedDatastoreP.yaml", True, True, id="chained"),
-    pytest.param("chainedDatastore2P.yaml", False, False, id="chained-memory"),
+    pytest.param("chainedDatastorePa.yaml", True, True, id="chained-native"),
 ]
 """(config file, can ingest, needs a root) for each datastore configuration
-that shares the same constraints."""
+that shares the same constraints.
+
+``chained-memory`` was measured by DM-55822 as zero unique lines and zero
+unique arcs and is gone. ``chained`` measured zero as well, but only because
+``chained-memory`` held the same coverage: between them they were the sole
+cover for `ChainedDatastore.put`'s "child rejects the ref, skip it" branch,
+`chainedDatastore.py` arc 470 to 471. Removing both lost it, so the file-backed
+one stays. A per-axis marginal query cannot see coverage two axes hold jointly.
+"""
 
 CONSTRAINT_CASES = [
     pytest.param("metric", "StructuredData", True, id="metric"),

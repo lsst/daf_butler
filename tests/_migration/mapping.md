@@ -207,6 +207,34 @@ matching the pattern and by nothing else in the suite.
 | `[outfile_uri]` | 6 | 0 | 0 | |
 | `test_put_get[outfile*]` | 9 | 0 | 0 | Dropped: it reran the whole put/get suite once per layout for no marginal coverage. |
 | `test_config_existence[outfile*]` | 9 | 0 | 0 | **Kept despite zero unique coverage.** It is the only test asserting that an outfile naming a file, a directory and a URI each resolve to the right root, and it costs three cheap executions. Coverage equality is not behaviour equality. |
+| `trash`, its own two tests | 4 | 3 | 8 | **Kept.** The unique set is `fileDatastore.py`'s trash paths and `registry/bridge/ephemeral.py`. |
+| `trash`, everything else | 80 | 0 | 0 | Dropped. The profile uses the same config as `posix`, so the 40 shared reruns covered nothing new. |
+| `posix-no-checksums`, its own two tests | 4 | 10 | 22 | **Kept.** |
+| `posix-no-checksums`, everything else | 80 | 0 | 0 | Dropped, same reasoning. |
+| `test_constraints[*-chained-native]` | 4 | 2 | 4 | **Kept.** Constraints on the chain rather than on its children. |
+| `test_constraints[*-in-memory]` | 4 | 2 | 4 | **Kept.** |
+| `test_constraints[*-posix]` | 5 | 2 | 4 | **Kept.** |
+| `test_constraints[*-chained]` | 4 | 0 | 0 | **Kept anyway; see below.** |
+| `test_constraints[*-chained-memory]` | 4 | 0 | 0 | Dropped. |
+
+### A per-axis marginal query cannot see coverage two axes hold jointly
+
+`test_constraints[*-chained]` and `test_constraints[*-chained-memory]` each
+measured zero unique lines and zero unique arcs, so by the per-axis rule both
+were removable.
+Removing both lost `chainedDatastore.py` arc 470 to 471, the branch where
+`ChainedDatastore.put` skips a child datastore whose constraints reject the ref.
+Querying the postconvert database for that arc named exactly two covering
+contexts, `test_constraints[metric5-chained]` and
+`test_constraints[metric5-chained-memory]`: each held it, so neither was unique,
+and each query was honest.
+
+The gate caught it, which is what the gate is for. The file-backed `chained`
+case is kept and only `chained-memory` is dropped.
+
+Anything removing more than one axis in a single step needs the gate, not just
+the queries. The queries justify each removal on its own; only the gate
+validates them in combination.
 
 ## Findings for separate tickets
 
