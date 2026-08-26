@@ -99,6 +99,84 @@ This file explains why each removal was safe.
 | Axis lists and shared assertions live in `tests/butler_test_support.py`, not `tests/conftest.py` | The plan offered `conftest.py` "so nothing imports across test modules", but a `parametrize` list has to be importable at collection time, which a fixture cannot supply, so a cross-module import happens either way. A named module keeps `conftest.py` for configuration and makes the import obvious. `conftest.py` calls `pytest.register_assert_rewrite` on it so its assertions still report values. |
 | `conftest.py` does not import `lsst.daf.butler.tests.fixtures` at module level | Importing the plugin from `conftest.py` beats pytest to it and raises `PytestAssertRewriteWarning: Module already imported so cannot be rewritten` on every run, silently disabling assertion rewriting inside the shipped fixture module. |
 
+## The conversion gate, and why the baseline had to be retaken
+
+The first run of Task 17's gate against `~/dm55822/baseline.coverage` reported
+419 lost lines and 1093 lost arcs.
+Almost all of it was an artifact, and the residue was one real defect.
+
+**The branch was rebased after the baseline was recorded.**
+The baseline commit named in this directory's README, `de89a4fce`, is not an
+ancestor of the current branch; `a8421a2fa` is its rewritten form.
+The rebase pulled in two upstream commits, `0ee9a6323` and `99acbecaf`, which
+between them changed seven library files.
+The gate compares line *numbers*, so every covered line in those files moved and
+was reported as both lost and gained:
+
+| File | Lost lines | Gained lines |
+| --- | --- | --- |
+| `datastore/stored_file_info.py` | 100 | 95 |
+| `dimensions/_elements.py` | 91 | 91 |
+| `column_spec.py` | 62 | 53 |
+| `dimensions/_schema.py` | 47 | 47 |
+| `dimensions/_record_table.py` | 43 | 40 |
+| `remote_butler/server/handlers/_query_streaming.py` | 42 | 34 |
+| `datastore/record_data.py` | 28 | 23 |
+| `version.py` | 5 | 1 |
+
+Excluding those eight files leaves **one lost line and three lost arcs**, which
+is what the gate was actually for.
+
+**`dimensions/_config.py`, arc 138 to 134: not a real loss.**
+That arc is the branch where a search path does not contain the config file and
+the loop tries the next one.
+The baseline attributed it to a long list of tests including
+`tests/test_astropyTableFormatter.py`, which this migration does not touch.
+Run on its own against the current tree that test still covers `138 -> 139` and
+still does not cover `138 -> 134`, so the arc belongs to no test: whether the
+loop takes a second iteration depends on state accumulated across the session,
+and the suite's file layout changed. A coverage flake, not a dropped path.
+
+**`datastore/cache_manager.py:1232`: a real loss, and the reason this gate
+exists.**
+That line is `DatastoreDisabledCacheManager.__str__`, and the baseline query
+named exactly one covering test,
+`tests/test_datastore.py::DatastoreCacheTestCase::testNoCache`.
+Its assertion was `self.assertIsNone(found, msg=f"{cache_manager}")`.
+`unittest` builds the message eagerly, so the f-string ran on every iteration
+whether or not the assertion failed, and that was the only caller of `__str__`
+in the whole suite.
+A bare `assert found is None, f"{cache_manager}"` formats the message *only on
+failure*, so the call disappeared.
+
+This is a property of the `PT009` codemod, not of one test: every
+`self.assertX(..., msg=...)` it rewrites becomes lazy.
+The fix keeps the pytest idiom and restores the original evaluation order by
+computing the message before the loop.
+The other converted site that formats a bare object,
+`test_cache_expiry_datasets_from_disabled`, needs nothing: it already calls
+`str(cache_manager)` explicitly on the next line.
+
+**`coverage_tool.py` now stores paths relative to the package root.**
+`_load` applied `_relative` only in `summary`, so `gate` compared absolute
+paths and could not compare two checkouts of the same source.
+The change is not a way of making the gate pass: with it applied, the gate
+still reports the same 419 and 1093 against the stale baseline, and
+`summary` still reproduces `baseline_summary.json` exactly.
+
+**The corrected baseline** is taken from `a5f25a878`, whose library is identical
+to the branch head apart from the added `fixtures.py`, and which still has the
+original `tests/test_butler.py` and `tests/test_datastore.py`.
+It reports `2060 passed, 30 skipped, 10 xfailed, 1440 subtests`, one more pass
+than the original baseline's 2059, which is the test the two upstream commits
+added.
+
+Gating the pre-fix conversion against it gives the picture the stale database
+hid: **37077 baseline lines against 37077 new lines**, and a lost set of exactly
+one line and two arcs, all of them `cache_manager.py:1232`.
+The `_config.py` arc is not lost against this baseline at all, which confirms it
+was an artifact of the stale database's session rather than a dropped path.
+
 ## Findings for separate tickets
 
 | Finding | Where | Why not fixed here |
@@ -114,6 +192,8 @@ This file explains why each removal was safe.
 | `Butler.exists` on a ref with a colliding UUID | raises "... has the same dataset ID as one in registry but has different incompatible values" | Another bare `assertRaises(ValueError)` that `PT011` forced to name its real message. |
 | `test_provenance`'s bad-input-ID assertion does not test what its comment says | `tests/test_butler.py::PosixDatastoreButlerTestCase::test_provenance`, the `prov_dict["input 0 id"] = uuid.uuid4()` case | The added key separates its words with spaces while the rest of the header separates with ".", so `from_flat_dict` raises "Inconsistent values found for separators" before it ever looks the input ID up. The bare `assertRaises(ValueError)` hid this. The converted test asserts the message that actually occurs and carries a comment; making the test check what it intended is a change of test behavior and belongs on its own ticket. |
 | `CleanupPosixDatastoreTestCase.testCleanup`'s two formatter cases are order-dependent | `tests/test_datastore.py::CleanupPosixDatastoreTestCase::testCleanup` | The second case asserts the datastore directory exists, but that directory is created by the *first* case's failed put. Parametrizing the two, as the plan asked, makes the `BadNoWriteFormatter` case fail on its own. The loop is kept, with a comment saying why. Making the second case independent is a change of test behavior and belongs on its own ticket. |
+| `unittest` assertion messages are eager, bare `assert` messages are lazy | every `self.assertX(..., msg=...)` the `PT009` codemod rewrote | Only one site's message had a side effect worth keeping (`DatastoreDisabledCacheManager.__str__`), and it is fixed. Worth knowing for any future conversion: a message that was the only caller of a `__repr__` silently stops calling it. |
+| `dimensions/_config.py` arc 138 to 134 belongs to no test | the search-path loop's "not in this directory, try the next" branch | Whether it is taken depends on state accumulated across a whole session, so which test covers it moves with the file layout. Not caused by this branch; noted so a future coverage comparison does not chase it. |
 
 ## Test mapping
 

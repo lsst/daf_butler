@@ -23,7 +23,10 @@ def _load(
 ) -> tuple[dict[int, set[tuple[str, int]]], dict[int, set[tuple[str, int, int]]], dict[int, str]]:
     """Return per-context line and arc sets, plus the id to name map."""
     conn = sqlite3.connect(db_path)
-    files = {i: p for i, p in conn.execute("select id, path from file") if _included(p)}
+    # Store paths relative to the package root. The baseline and the run under
+    # test can come from different checkouts of the same source, and an
+    # absolute path would then differ for every file.
+    files = {i: _relative(p) for i, p in conn.execute("select id, path from file") if _included(p)}
     contexts = dict(conn.execute("select id, context from context"))
 
     lines: dict[int, set[tuple[str, int]]] = defaultdict(set)

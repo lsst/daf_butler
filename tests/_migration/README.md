@@ -27,6 +27,22 @@ With per-test coverage contexts over the whole suite it is large and binary.
 `coverage_tool.py summary` against the out-of-repository database must reproduce
 it exactly; if it does not, that database is not the right one.
 
+## The baseline was retaken
+
+The database this directory originally described was recorded at `de89a4fce`,
+before the branch was rebased.
+The rebase pulled in two upstream library commits, so the line numbers the
+database records no longer match the source, and the gate reported hundreds of
+lines as lost when they had only moved.
+
+The gate now runs against `~/dm55822/rebaseline.coverage`, taken from
+`a5f25a878` in a detached worktree.
+That commit has the original, unmigrated `tests/test_butler.py` and
+`tests/test_datastore.py`, and a library identical to the branch head apart from
+the added `fixtures.py`.
+`baseline_summary.json` still describes the original database, which is kept for
+reference; see `mapping.md` for the full analysis.
+
 ## Baseline provenance
 
 Commit `de89a4fce`. Nothing in `tests/` or `python/lsst/daf/butler/` had changed

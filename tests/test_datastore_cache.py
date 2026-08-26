@@ -377,12 +377,16 @@ cached:
 def test_no_cache(cache, universe) -> None:
     """Test that the disabled cache manager caches nothing."""
     cache_manager = DatastoreDisabledCacheManager("", universe=universe)
+    # unittest formatted the failure message whether or not the assertion
+    # failed, so this was the only caller of the manager's __str__. A bare
+    # assert only formats its message on failure, so compute it up front.
+    message = f"{cache_manager}"
     for uri, ref in zip(cache.files, cache.refs, strict=True):
         assert not cache_manager.should_be_cached(ref)
         assert cache_manager.move_to_cache(uri, ref) is None
         assert not cache_manager.known_to_cache(ref)
         with cache_manager.find_in_cache(ref, ".txt") as found:
-            assert found is None, f"{cache_manager}"
+            assert found is None, message
 
 
 def test_cache_expiry_files(cache, universe) -> None:
