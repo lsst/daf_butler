@@ -61,6 +61,8 @@ This file explains why each removal was safe.
 | `testTransaction`'s `pytest.raises` block | carries `# noqa: PT012`. The block is inherently multi-statement: the test exists to show that everything inside the transaction rolls back. |
 | `StoredFileInfoTestCase.storageClassFactory` class attribute and `DatasetTestHelper` base | now a local `StorageClassFactory()` and `DatasetTestHelper()` inside the one test that needs them, matching what `tests/test_datastore_cache.py` already does. |
 | `DatasetRefURIsTestCase.testSequenceAccess`'s item assignments | carry `# type: ignore[index]`. The assignments are the point of the test: `DatasetRefURIs` rejects them at run time, and mypy rejects them statically for the same reason. |
+| `NullDatastoreTestCase.test_basics`'s `null.validateConfiguration(ref)` | now passes `[ref]`. The parameter is `Iterable[DatasetRef | DatasetType | StorageClass]` and a `DatasetRef` is not iterable; the call only ever worked because `NullDatastore.validateConfiguration` is `pass`. |
+| `NullDatastoreTestCase.test_basics`'s `null.transfer_from(null, [ref])` | now passes `{}` as the first argument. `transfer_from` takes a `FileTransferMap`, not a source datastore; the call only ever worked because the body raises `NotImplementedError` before looking at it. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -487,3 +489,4 @@ This file explains why each removal was safe.
 | `tests/test_datastore.py::StoredFileInfoTestCase::test_datastore_record_data_json_types` | `tests/test_datastore_records.py::test_datastore_record_data_json_types` |
 | `tests/test_datastore.py::TestDatastoreRecordTable::test_empty_datastore_records_table` | `tests/test_datastore_records.py::test_empty_datastore_records_table` |
 | `tests/test_datastore.py::TestDatastoreRecordTable::test_stored_file_info_table_records` | `tests/test_datastore_records.py::test_stored_file_info_table_records` |
+| `tests/test_datastore.py::NullDatastoreTestCase::test_basics` | `tests/test_datastore_null.py::test_basics` |

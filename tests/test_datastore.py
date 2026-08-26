@@ -52,7 +52,7 @@ from lsst.daf.butler import (
     StorageClass,
     StorageClassFactory,
 )
-from lsst.daf.butler.datastore import DatastoreConfig, DatastoreValidationError, NullDatastore
+from lsst.daf.butler.datastore import DatastoreConfig, DatastoreValidationError
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
@@ -66,7 +66,6 @@ from lsst.daf.butler.tests import (
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.utils import TestCaseMixin
-from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 TESTDIR = os.path.dirname(__file__)
@@ -1647,61 +1646,6 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
 
 @unittest.mock.patch.dict(os.environ, {}, clear=True)
-class NullDatastoreTestCase(DatasetTestHelper, unittest.TestCase):
-    """Test the null datastore."""
-
-    storageClassFactory = StorageClassFactory()
-
-    def test_basics(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
-        ref = self.makeDatasetRef("metric", DimensionUniverse().empty, storageClass, {})
-
-        null = NullDatastore(None, None)
-
-        self.assertFalse(null.exists(ref))
-        self.assertFalse(null.knows(ref))
-        knows = null.knows_these([ref])
-        self.assertFalse(knows[ref])
-        null.validateConfiguration(ref)
-
-        with self.assertRaises(FileNotFoundError):
-            null.get(ref)
-        with self.assertRaises(NotImplementedError):
-            null.put("", ref)
-        with self.assertRaises(FileNotFoundError):
-            null.getURI(ref)
-        with self.assertRaises(FileNotFoundError):
-            null.getURIs(ref)
-        with self.assertRaises(FileNotFoundError):
-            null.getManyURIs([ref])
-        with self.assertRaises(NotImplementedError):
-            null.getLookupKeys()
-        with self.assertRaises(NotImplementedError):
-            null.import_records({})
-        with self.assertRaises(NotImplementedError):
-            null.export_records([])
-        with self.assertRaises(NotImplementedError):
-            null.export_predicted_records([])
-        with self.assertRaises(NotImplementedError):
-            null.export([ref])
-        with self.assertRaises(NotImplementedError):
-            null.transfer(null, ref)
-        with self.assertRaises(NotImplementedError):
-            null.emptyTrash()
-        with self.assertRaises(NotImplementedError):
-            null.trash(ref)
-        with self.assertRaises(NotImplementedError):
-            null.forget([ref])
-        with self.assertRaises(NotImplementedError):
-            null.remove(ref)
-        with self.assertRaises(NotImplementedError):
-            null.retrieveArtifacts([ref], ResourcePath("."))
-        with self.assertRaises(NotImplementedError):
-            null.transfer_from(null, [ref])
-        with self.assertRaises(NotImplementedError):
-            null.ingest()
-
-
 @contextlib.contextmanager
 def _temp_yaml_file(data: Any) -> Iterator[str]:
     fh = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
