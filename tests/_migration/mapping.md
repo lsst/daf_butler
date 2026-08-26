@@ -46,6 +46,11 @@ This file explains why each removal was safe.
 | `ButlerServerTests.testGetDatasetTypes` | the empty override became an early `return` guarded on `butler_client == "server"`, so the execution is conserved. Task 22 may drop the axes with coverage evidence. |
 | `ButlerTests.validationCanFail` | now `butler_harness.profile.validation_can_fail`. |
 | `testGetDatasetTypes`'s `len(butler.registry.queryDatasetTypes("metric*"))` | the result is materialized into a `list` first. `queryDatasetTypes` is annotated `Iterable[DatasetType]`, so the `len` only typechecked before because `create_empty_butler` returned `Any`. |
+| `InMemoryDatastoreButlerTestCase.testIngest` and `.test_ingest_zip` | the empty overrides became excluded axis values: the ingest tests use `FILE_DATASTORE_AXES`, which is `BUTLER_TESTS_AXES` without the two ephemeral entries. **This drops 4 executions, not the 2 the plan predicted** — `ClonedSqliteButlerTestCase` inherits both overrides from `InMemoryDatastoreButlerTestCase`, so two classes carried them. The collected count for `tests/test_butler*.py` goes 363 to 359 here, and 359 is the reference from Task 10 onward. |
+| `test_temporary_for_ingest` and `test_specialized_file_datasets_functions` | the plan called them posix-only; they in fact ran under `ButlerExplicitRootTestCase` too, so they carry a `repo_layout` parametrization rather than no parametrize. |
+| `testIngest`'s `try/except AttributeError` around `getStoredItemsInfo` | now `contextlib.suppress(AttributeError)`, which is what `SIM105` requires and what the block meant. |
+| `test_specialized_file_datasets_functions`'s `Butler(target_repo_config, writeable=True)` | now `Butler.from_config(...)`. The test is not exercising the constructor, and `Butler` is abstract as far as mypy is concerned. |
+| `repo.addDataset(repo.ref1.dataId, ...)` | now passes `dict(repo.ref1.dataId.required)`. `MetricTestRepo.addDataset` is annotated `dict[str, Any]` but forwards straight to `Butler.put`, which takes any data ID. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -336,3 +341,27 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerPostgresTests::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[server-postgres]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_specialized_file_datasets_functions` | `tests/test_butler_ingest.py::test_specialized_file_datasets_functions[in_repo]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_temporary_for_ingest` | `tests/test_butler_ingest.py::test_temporary_for_ingest[in_repo]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[cloned-postgres]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testIngest` | dropped: empty override, InMemoryDatastore cannot ingest |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::test_ingest_zip` | dropped: empty override, InMemoryDatastore cannot ingest |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testIngest` | dropped: empty override, InMemoryDatastore cannot ingest |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::test_ingest_zip` | dropped: empty override, InMemoryDatastore cannot ingest |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[chained]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_specialized_file_datasets_functions` | `tests/test_butler_ingest.py::test_specialized_file_datasets_functions[explicit_root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_temporary_for_ingest` | `tests/test_butler_ingest.py::test_temporary_for_ingest[explicit_root]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testIngest` | `tests/test_butler_ingest.py::test_ingest[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[remote-test]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testIngest` | `tests/test_butler_ingest.py::test_ingest[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testIngest` | `tests/test_butler_ingest.py::test_ingest[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[server-postgres]` |

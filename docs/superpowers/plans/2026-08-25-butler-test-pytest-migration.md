@@ -775,7 +775,8 @@ env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/te
 | `tests/test_butler*.py` collected | **363** |
 | of which migration tests | **361** |
 
-Task 10 is the one deliberate exception, dropping 2 for the InMemory ingest no-ops; from there the numbers become 361 and 359.
+Task 10 is the one deliberate exception, dropping 4 for the InMemory ingest no-ops; from there the numbers become 359 and 357.
+The drop is 4 rather than 2 because `ClonedSqliteButlerTestCase` inherits both empty overrides from `InMemoryDatastoreButlerTestCase`, so two classes carried them.
 
 ---
 
@@ -1104,7 +1105,7 @@ Moves the axis lists to conftest now that a second file needs them."
 
 - [ ] **Step 4: Verify the count is conserved**
 
-Note that this task *reduces* the collected count by two, because two `pass` overrides that pytest counted as tests are now excluded axis values instead. That is the one legitimate count change in Tasks 5 to 12. Record the new reference count and the reason in `tests/_migration/mapping.md` as `dropped: empty override, InMemoryDatastore cannot ingest`.
+Note that this task *reduces* the collected count by four, because four `pass` overrides that pytest counted as tests are now excluded axis values instead. That is the one legitimate count change in Tasks 5 to 12. Record the new reference count and the reason in `tests/_migration/mapping.md` as `dropped: empty override, InMemoryDatastore cannot ingest`.
 
 ```bash
 env -u PYTHONPATH -u DYLD_LIBRARY_PATH uv run --all-extras --dev pytest tests/test_butler*.py \
