@@ -51,6 +51,14 @@ This file explains why each removal was safe.
 | `testIngest`'s `try/except AttributeError` around `getStoredItemsInfo` | now `contextlib.suppress(AttributeError)`, which is what `SIM105` requires and what the block meant. |
 | `test_specialized_file_datasets_functions`'s `Butler(target_repo_config, writeable=True)` | now `Butler.from_config(...)`. The test is not exercising the constructor, and `Butler` is abstract as far as mypy is concerned. |
 | `repo.addDataset(repo.ref1.dataId, ...)` | now passes `dict(repo.ref1.dataId.required)`. `MetricTestRepo.addDataset` is annotated `dict[str, Any]` but forwards straight to `Butler.put`, which takes any data ID. |
+| `clean_environment` and `setup_module` | now a module-scoped autouse `_clean_environment` fixture in `tests/test_butler_lifecycle.py`, which saves and restores the variable rather than only popping it. Only this file reads `DAF_BUTLER_REPOSITORY_INDEX`; the other split files inherited the old module-level cleanup but never depended on it. |
+| `TransactionTestError` | moved verbatim into `tests/test_butler_lifecycle.py`, its only user. |
+| `ButlerServerTests.testPickle`'s `@unittest.expectedFailure` | now a per-parameter `pytest.mark.xfail` built by `PICKLE_AXES`, so only the two server axes are expected to fail while the other eight must pass. |
+| `ButlerServerTests.testConstructor`, `.testDafButlerRepositories`, `.testTransaction` | the empty overrides became early `return`s guarded on `butler_client == "server"`. `.testStringification` had its own assertion, so it became a branch in the one function. |
+| `ButlerTests.registryStr` | derived in the test from `registry_backend` rather than carried on `DatastoreProfile`: it described the registry backend, not the datastore. |
+| `testClose` and `testGarbageCollection`'s `is_direct_butler` flag | narrowed with `isinstance` instead, since mypy cannot narrow through a bool. In `test_garbage_collection` the narrowing is deliberately inline rather than a second name, so no extra strong reference outlives the `del`. |
+| `testPickle`'s `assertIsInstance(butlerOut, Butler)` | now asserts `DirectButler`, which the very next line already assumed by reading `_config`. |
+| `testTransaction`'s `pytest.raises` block | carries `# noqa: PT012`. The block is inherently multi-statement: the test exists to show that everything inside the transaction rolls back. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -88,6 +96,7 @@ This file explains why each removal was safe.
 | `Butler.from_config` on a config with `configFile = None` | raises "Required to replace &lt;butlerRoot&gt; ... but a replacement has not been defined", not a message about the config file | The original bare `assertRaises(ValueError)` hid which failure was being provoked. `PT011` forces a `match`, so the converted assertion names the real one. |
 | `predictionSupported` and `trustModeSupported` are now dead class attributes | `tests/test_butler.py` still sets them; the last readers left with Tasks 11 and 8 | Left in place like `fullConfigKey`, rather than churned out of a file Task 12 deletes. Not ported: the new files read `ButlerHarness.prediction_supported` and `.trust_mode_supported`. |
 | `Butler.exists` on a ref with a colliding UUID | raises "... has the same dataset ID as one in registry but has different incompatible values" | Another bare `assertRaises(ValueError)` that `PT011` forced to name its real message. |
+| `test_provenance`'s bad-input-ID assertion does not test what its comment says | `tests/test_butler.py::PosixDatastoreButlerTestCase::test_provenance`, the `prov_dict["input 0 id"] = uuid.uuid4()` case | The added key separates its words with spaces while the rest of the header separates with ".", so `from_flat_dict` raises "Inconsistent values found for separators" before it ever looks the input ID up. The bare `assertRaises(ValueError)` hid this. The converted test asserts the message that actually occurs and carries a comment; making the test check what it intended is a change of test behavior and belongs on its own ticket. |
 
 ## Test mapping
 
@@ -365,3 +374,107 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerSqliteTests::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[server-sqlite]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testIngest` | `tests/test_butler_ingest.py::test_ingest[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::test_ingest_zip` | `tests/test_butler_ingest.py::test_ingest_zip[server-postgres]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testPathConstructor` | `tests/test_butler_lifecycle.py::test_path_constructor[in_repo]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testPytypeCoercion` | `tests/test_butler_lifecycle.py::test_pytype_coercion[in_repo]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_provenance` | `tests/test_butler_lifecycle.py::test_provenance[in_repo]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[posix]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[cloned-postgres]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[in-memory]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[cloned-sqlite]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[chained]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testPathConstructor` | `tests/test_butler_lifecycle.py::test_path_constructor[explicit_root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testPytypeCoercion` | `tests/test_butler_lifecycle.py::test_pytype_coercion[explicit_root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_provenance` | `tests/test_butler_lifecycle.py::test_provenance[explicit_root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[explicit-root]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testClose` | `tests/test_butler_lifecycle.py::test_close[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[remote-test]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testClose` | `tests/test_butler_lifecycle.py::test_close[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testButlerRewriteDataId` | `tests/test_butler_lifecycle.py::test_butler_rewrite_data_id[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testClose` | `tests/test_butler_lifecycle.py::test_close[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testConstructor` | `tests/test_butler_lifecycle.py::test_constructor[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testDafButlerRepositories` | `tests/test_butler_lifecycle.py::test_daf_butler_repositories[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testGarbageCollection` | `tests/test_butler_lifecycle.py::test_garbage_collection[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testPickle` | `tests/test_butler_lifecycle.py::test_pickle[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testStringification` | `tests/test_butler_lifecycle.py::test_stringification[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[server-postgres]` |
