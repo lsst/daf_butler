@@ -202,6 +202,11 @@ matching the pattern and by nothing else in the suite.
 | `cloned` | 163 | 0 | 0 | Pure duplication. Removed from the axis lists and replaced by one `test_cloned_put_get`. `Butler.clone` itself is covered directly by `tests/test_simpleButler.py`. |
 | `explicit_root` | 20 | 0 | 0 | Pure duplication. |
 | `explicit-root` | 95 | 0 | 0 | Pure duplication. Both patterns removed; the layout keeps only `test_file_locations`, the one test that asserts a config in one directory can name a root in another. 39 executions become 1. |
+| `test_butler_transfers.py::*[chained]` | 42 | 51 | 71 | **Kept.** The plan expected this to be a rerun of the posix transfers. It is not: the unique set is `chainedDatastore.transfer_from`, lines 1302 to 1354, plus three `_datastore.py` entry points. Removing it would have deleted real coverage. |
+| `[outfile_dir]` | 6 | 0 | 0 | |
+| `[outfile_uri]` | 6 | 0 | 0 | |
+| `test_put_get[outfile*]` | 9 | 0 | 0 | Dropped: it reran the whole put/get suite once per layout for no marginal coverage. |
+| `test_config_existence[outfile*]` | 9 | 0 | 0 | **Kept despite zero unique coverage.** It is the only test asserting that an outfile naming a file, a directory and a URI each resolve to the right root, and it costs three cheap executions. Coverage equality is not behaviour equality. |
 
 ## Findings for separate tickets
 

@@ -40,7 +40,6 @@ from butler_test_support import (
     BUTLER_TESTS_AXES,
     FILE_DATASTORE_AXES,
     records_from,
-    run_put_get_test,
 )
 
 from lsst.daf.butler import Butler, ButlerConfig, Config, DatasetType
@@ -61,7 +60,13 @@ FILE_TEMPLATE_LOGGER = "lsst.daf.butler.datastore.file_templates"
 """Logger that reports a template referring to a missing record field."""
 
 OUTFILE_LAYOUTS = ["outfile", "outfile_dir", "outfile_uri"]
-"""Repository layouts where makeRepo wrote the config outside the repo."""
+"""Repository layouts where makeRepo wrote the config outside the repo.
+
+DM-55822 measured each layout's marginal coverage as zero unique lines and
+zero unique arcs, so they no longer rerun the put/get suite. They stay on
+``test_config_existence``, which is the test that distinguishes an outfile
+naming a file, a directory and a URI.
+"""
 
 
 def test_search_path(test_directory: str, caplog: pytest.LogCaptureFixture) -> None:
@@ -114,13 +119,6 @@ def test_config_existence(butler_repo: ButlerRepo, repo_layout: str) -> None:
     uri_expected = ResourcePath(butler_repo.root, forceDirectory=True)
     assert uri_config.geturl() == uri_expected.geturl()
     assert ":" not in uri_config.path, "Check for URI concatenated with normal path"
-
-
-@pytest.mark.parametrize("repo_layout", OUTFILE_LAYOUTS, indirect=True)
-def test_put_get(butler_harness: ButlerHarness) -> None:
-    """Test that a repository opened through such a config works normally."""
-    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")
-    run_put_get_test(butler_harness, storage_class, "test_metric")
 
 
 @pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
