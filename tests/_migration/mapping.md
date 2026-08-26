@@ -59,6 +59,8 @@ This file explains why each removal was safe.
 | `testClose` and `testGarbageCollection`'s `is_direct_butler` flag | narrowed with `isinstance` instead, since mypy cannot narrow through a bool. In `test_garbage_collection` the narrowing is deliberately inline rather than a second name, so no extra strong reference outlives the `del`. |
 | `testPickle`'s `assertIsInstance(butlerOut, Butler)` | now asserts `DirectButler`, which the very next line already assumed by reading `_config`. |
 | `testTransaction`'s `pytest.raises` block | carries `# noqa: PT012`. The block is inherently multi-statement: the test exists to show that everything inside the transaction rolls back. |
+| `StoredFileInfoTestCase.storageClassFactory` class attribute and `DatasetTestHelper` base | now a local `StorageClassFactory()` and `DatasetTestHelper()` inside the one test that needs them, matching what `tests/test_datastore_cache.py` already does. |
+| `DatasetRefURIsTestCase.testSequenceAccess`'s item assignments | carry `# type: ignore[index]`. The assignments are the point of the test: `DatasetRefURIs` rejects them at run time, and mypy rejects them statically for the same reason. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -478,3 +480,10 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerPostgresTests::testTransaction` | `tests/test_butler_lifecycle.py::test_transaction[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::test_butler_metrics` | `tests/test_butler_lifecycle.py::test_butler_metrics[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::test_transfer_dimension_records_from` | `tests/test_butler_lifecycle.py::test_transfer_dimension_records_from[server-postgres]` |
+| `tests/test_datastore.py::DatasetRefURIsTestCase::testSequenceAccess` | `tests/test_datastore_records.py::test_sequence_access` |
+| `tests/test_datastore.py::DatasetRefURIsTestCase::testRepr` | `tests/test_datastore_records.py::test_repr` |
+| `tests/test_datastore.py::StoredFileInfoTestCase::test_StoredFileInfo` | `tests/test_datastore_records.py::test_stored_file_info` |
+| `tests/test_datastore.py::StoredFileInfoTestCase::test_make_datastore_path_relative` | `tests/test_datastore_records.py::test_make_datastore_path_relative` |
+| `tests/test_datastore.py::StoredFileInfoTestCase::test_datastore_record_data_json_types` | `tests/test_datastore_records.py::test_datastore_record_data_json_types` |
+| `tests/test_datastore.py::TestDatastoreRecordTable::test_empty_datastore_records_table` | `tests/test_datastore_records.py::test_empty_datastore_records_table` |
+| `tests/test_datastore.py::TestDatastoreRecordTable::test_stored_file_info_table_records` | `tests/test_datastore_records.py::test_stored_file_info_table_records` |
