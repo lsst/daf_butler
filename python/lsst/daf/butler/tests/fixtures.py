@@ -58,6 +58,8 @@ __all__ = [
     "DatastoreProfile",
     "ServerButlerHarness",
     "add_dataset_type",
+    "get_test_data_path",
+    "make_example_metrics",
 ]
 
 import contextlib
@@ -75,6 +77,7 @@ from .. import Butler, Config, DatasetRef, DatasetType, StorageClass, StorageCla
 from ..datastores.fileDatastore import FileDatastore
 from ..direct_butler import DirectButler
 from ..repo_relocation import BUTLER_ROOT_TAG
+from ._examplePythonTypes import MetricsExample
 from ._repo_template_cache import make_repo_for_test
 from .utils import makeTestTempDir, removeTestTempDir
 
@@ -149,6 +152,37 @@ DATASTORE_PROFILES: dict[str, DatastoreProfile] = {
     ),
 }
 """Configuration that varies between datastores, keyed by datastore type."""
+
+
+def make_example_metrics() -> MetricsExample:
+    """Return an example dataset suitable for tests.
+
+    Returns
+    -------
+    metrics : `MetricsExample`
+        The example dataset.
+    """
+    return MetricsExample(
+        {"AM1": 5.2, "AM2": 30.6},
+        {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+        [563, 234, 456.7, 752, 8, 9, 27],
+    )
+
+
+def get_test_data_path(filename: str) -> ResourcePath:
+    """Return the URI of a file in the packaged registry test data.
+
+    Parameters
+    ----------
+    filename : `str`
+        Name of the file within ``tests/registry_data``.
+
+    Returns
+    -------
+    uri : `ResourcePath`
+        URI of the requested file.
+    """
+    return ResourcePath(f"resource://lsst.daf.butler/tests/registry_data/{filename}")
 
 
 def add_dataset_type(
@@ -549,16 +583,29 @@ def repo_layout(request: pytest.FixtureRequest) -> str:  # numpydoc ignore=PR01
     return getattr(request, "param", "in_repo")
 
 
-@pytest.fixture(scope="session")
+SENTINEL_STORAGE_CLASS = "StructuredDataDictJson"
+"""Storage class used to detect whether the test configs are still loaded."""
+
+
+@pytest.fixture
 def storage_class_factory(test_directory: str) -> StorageClassFactory:  # numpydoc ignore=PR01
-    """Storage classes loaded once per worker from the test configurations.
+    """Storage classes from the test configurations.
 
     `StorageClassFactory` is a singleton, so loading every profile's config
     here matches what the per-class ``setUpClass`` methods did collectively.
+
+    This is function-scoped and reloads only when the sentinel class is absent,
+    which costs a dict lookup in the normal case. It cannot simply be
+    session-scoped: some tests call `StorageClassFactory.reset` to undo
+    converters they installed, and because the factory is a singleton that
+    reset would empty it for every later test that shares a session-scoped
+    instance. Reloading unconditionally is not an option either, at roughly
+    28 ms a time across the suite.
     """
     factory = StorageClassFactory()
-    for profile in DATASTORE_PROFILES.values():
-        factory.addFromConfig(os.path.join(test_directory, profile.config_file))
+    if SENTINEL_STORAGE_CLASS not in factory:
+        for profile in DATASTORE_PROFILES.values():
+            factory.addFromConfig(os.path.join(test_directory, profile.config_file))
     return factory
 
 
