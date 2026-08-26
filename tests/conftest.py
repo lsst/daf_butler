@@ -35,6 +35,11 @@ import pytest
 
 pytest_plugins = ["lsst.daf.butler.tests.fixtures"]
 
+# butler_test_support is a plain module, so pytest does not rewrite its
+# assertions unless asked. This must run before any test module imports it,
+# which conftest import order guarantees.
+pytest.register_assert_rewrite("butler_test_support")
+
 DEFAULT_TIMEOUT = 300
 """Seconds after which a single test is considered hung."""
 

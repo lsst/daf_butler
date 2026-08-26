@@ -29,7 +29,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import pathlib
 import pickle
@@ -45,6 +44,7 @@ from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
+from butler_test_support import assert_get_components, run_put_get_test
 from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler import (
@@ -57,13 +57,11 @@ from lsst.daf.butler import (
     Config,
     DataCoordinate,
     DatasetExistence,
-    DatasetNotFoundError,
     DatasetProvenance,
     DatasetRef,
     DatasetType,
     DimensionRecord,
     FileDataset,
-    NoDefaultCollectionError,
     StorageClassFactory,
     ValidationError,
     script,
@@ -71,11 +69,9 @@ from lsst.daf.butler import (
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
-from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
-    CollectionError,
     CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
@@ -87,7 +83,6 @@ from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
-from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import (
@@ -111,6 +106,7 @@ if TYPE_CHECKING:
     import types
 
     from lsst.daf.butler import DimensionGroup, Registry, StorageClass
+    from lsst.daf.butler.tests.fixtures import ButlerHarness
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -193,16 +189,7 @@ class ButlerPutGetTests(TestCaseMixin):
         reference: Any,
         collections: Any = None,
     ) -> None:
-        datasetType = datasetRef.datasetType
-        dataId = datasetRef.dataId
-        deferred = butler.getDeferred(datasetRef)
-
-        for component in components:
-            compTypeName = datasetType.componentTypeName(component)
-            result = butler.get(compTypeName, dataId, collections=collections)
-            self.assertEqual(result, getattr(reference, component))
-            result_deferred = deferred.get(component=component)
-            self.assertEqual(result_deferred, result)
+        assert_get_components(butler, datasetRef, components, reference, collections=collections)
 
     def tearDown(self) -> None:
         if self.root is not None:
@@ -281,338 +268,15 @@ class ButlerPutGetTests(TestCaseMixin):
             )
         return butler, datasetType
 
+    @property
+    def storage_class_factory(self) -> StorageClassFactory:
+        """Name the shared put/get helper expects for the storage classes."""
+        return self.storageClassFactory
+
     def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> Butler:
-        # New datasets will be added to run and tag, but we will only look in
-        # tag when looking up datasets.
-        run = self.default_run
-        butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
-        assert butler.run is not None
-
-        # Create and store a dataset
-        metric = makeExampleMetrics()
-        dataId = butler.registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
-
-        # Dataset should not exist if we haven't added it
-        with self.assertRaises(DatasetNotFoundError):
-            butler.get(datasetTypeName, dataId)
-
-        # Put and remove the dataset once as a DatasetRef, once as a dataId,
-        # and once with a DatasetType
-
-        # Keep track of any collections we add and do not clean up
-        expected_collections = {run}
-
-        counter = 0
-        ref = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run="put_run_1")
-        args = tuple[DatasetRef] | tuple[str | DatasetType, DataCoordinate]
-        for args in ((ref,), (datasetTypeName, dataId), (datasetType, dataId)):
-            # Since we are using subTest we can get cascading failures
-            # here with the first attempt failing and the others failing
-            # immediately because the dataset already exists. Work around
-            # this by using a distinct run collection each time
-            counter += 1
-            this_run = f"put_run_{counter}"
-            butler.collections.register(this_run)
-            expected_collections.update({this_run})
-
-            with self.subTest(args=repr(args)):
-                kwargs: dict[str, Any] = {}
-                if not isinstance(args[0], DatasetRef):  # type: ignore
-                    kwargs["run"] = this_run
-                ref = butler.put(metric, *args, **kwargs)
-                self.assertIsInstance(ref, DatasetRef)
-
-                # Test get of a ref.
-                metricOut = butler.get(ref)
-                self.assertEqual(metric, metricOut)
-                # Test get
-                metricOut = butler.get(ref.datasetType.name, dataId, collections=this_run)
-                self.assertEqual(metric, metricOut)
-                # Test get with a datasetRef
-                metricOut = butler.get(ref)
-                self.assertEqual(metric, metricOut)
-                # Test getDeferred with dataId
-                metricOut = butler.getDeferred(ref.datasetType.name, dataId, collections=this_run).get()
-                self.assertEqual(metric, metricOut)
-                # Test getDeferred with a ref
-                metricOut = butler.getDeferred(ref).get()
-                self.assertEqual(metric, metricOut)
-
-                # Check we can get components
-                if storageClass.isComposite():
-                    self.assertGetComponents(
-                        butler, ref, ("summary", "data", "output"), metric, collections=this_run
-                    )
-
-                primary_uri, secondary_uris = butler.getURIs(ref)
-                n_uris = len(secondary_uris)
-                if primary_uri:
-                    n_uris += 1
-
-                # Can the artifacts themselves be retrieved?
-                if not butler._datastore.isEphemeral:
-                    # Create a temporary directory to hold the retrieved
-                    # artifacts.
-                    with tempfile.TemporaryDirectory(
-                        prefix="butler-artifacts-", ignore_cleanup_errors=True
-                    ) as artifact_root:
-                        root_uri = ResourcePath(artifact_root, forceDirectory=True)
-
-                        for preserve_path in (True, False):
-                            destination = root_uri.join(f"{preserve_path}_{counter}/")
-                            log = logging.getLogger("lsst.x")
-                            log.debug("Using destination %s for args %s", destination, args)
-                            # Use copy so that we can test that overwrite
-                            # protection works (using "auto" for File URIs
-                            # would use hard links and subsequent transfer
-                            # would work because it knows they are the same
-                            # file).
-                            transferred = butler.retrieveArtifacts(
-                                [ref], destination, preserve_path=preserve_path, transfer="copy"
-                            )
-                            self.assertGreater(len(transferred), 0)
-                            artifacts = list(ResourcePath.findFileResources([destination]))
-                            # Filter out the index file.
-                            artifacts = [a for a in artifacts if a.basename() != ZipIndex.index_name]
-                            self.assertEqual(set(transferred), set(artifacts))
-
-                            for artifact in transferred:
-                                path_in_destination = artifact.relative_to(destination)
-                                self.assertIsNotNone(path_in_destination)
-                                assert path_in_destination is not None
-
-                                # When path is not preserved there should not
-                                # be any path separators.
-                                num_seps = path_in_destination.count("/")
-                                if preserve_path:
-                                    self.assertGreater(num_seps, 0)
-                                else:
-                                    self.assertEqual(num_seps, 0)
-
-                            self.assertEqual(
-                                len(artifacts),
-                                n_uris,
-                                "Comparing expected artifacts vs actual:"
-                                f" {artifacts} vs {primary_uri} and {secondary_uris}",
-                            )
-
-                            if preserve_path:
-                                # No need to run these twice
-                                with self.assertRaises(ValueError):
-                                    butler.retrieveArtifacts([ref], destination, transfer="move")
-
-                                with self.assertRaisesRegex(
-                                    ValueError, "^Destination location must refer to a directory"
-                                ):
-                                    butler.retrieveArtifacts(
-                                        [ref], ResourcePath("/some/file.txt", forceDirectory=False)
-                                    )
-
-                                with self.assertRaises(FileExistsError):
-                                    butler.retrieveArtifacts([ref], destination)
-
-                                transferred_again = butler.retrieveArtifacts(
-                                    [ref], destination, preserve_path=preserve_path, overwrite=True
-                                )
-                                self.assertEqual(set(transferred_again), set(transferred))
-
-                # Now remove the dataset completely.
-                butler.pruneDatasets([ref], purge=True, unstore=True)
-                # Lookup with original args should still fail.
-                kwargs = {"collections": this_run}
-                if isinstance(args[0], DatasetRef):
-                    kwargs = {}  # Prevent warning from being issued.
-                self.assertFalse(butler.exists(*args, **kwargs))
-                # get() should still fail.
-                with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
-                    butler.get(ref)
-                # Registry shouldn't be able to find it by dataset_id anymore.
-                self.assertIsNone(butler.get_dataset(ref.id))
-
-                # Do explicit registry removal since we know they are
-                # empty
-                butler.collections.x_remove(this_run)
-                expected_collections.remove(this_run)
-
-        # Create DatasetRef for put using default run.
-        refIn = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run=butler.run)
-
-        # Check that getDeferred fails with standalone ref.
-        with self.assertRaises(LookupError):
-            butler.getDeferred(refIn)
-
-        # Put the dataset again, since the last thing we did was remove it
-        # and we want to use the default collection.
-        ref = butler.put(metric, refIn)
-
-        # Get with parameters
-        stop = 4
-        sliced = butler.get(ref, parameters={"slice": slice(stop)})
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        assert metric.data is not None  # for mypy
-        self.assertEqual(metric.data[:stop], sliced.data)
-        # getDeferred with parameters
-        sliced = butler.getDeferred(ref, parameters={"slice": slice(stop)}).get()
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        self.assertEqual(metric.data[:stop], sliced.data)
-        # getDeferred with deferred parameters
-        sliced = butler.getDeferred(ref).get(parameters={"slice": slice(stop)})
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        self.assertEqual(metric.data[:stop], sliced.data)
-
-        if storageClass.isComposite():
-            # Check that components can be retrieved
-            metricOut = butler.get(ref.datasetType.name, dataId)
-            compNameS = ref.datasetType.componentTypeName("summary")
-            compNameD = ref.datasetType.componentTypeName("data")
-            summary = butler.get(compNameS, dataId)
-            self.assertEqual(summary, metric.summary)
-            data = butler.get(compNameD, dataId)
-            self.assertEqual(data, metric.data)
-
-            if "counter" in storageClass.derivedComponents:
-                count = butler.get(ref.datasetType.componentTypeName("counter"), dataId)
-                self.assertEqual(count, len(data))
-
-                count = butler.get(
-                    ref.datasetType.componentTypeName("counter"), dataId, parameters={"slice": slice(stop)}
-                )
-                self.assertEqual(count, stop)
-
-            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections.defaults)
-            assert compRef is not None
-            summary = butler.get(compRef)
-            self.assertEqual(summary, metric.summary)
-
-        # Create a Dataset type that has the same name but is inconsistent.
-        inconsistentDatasetType = DatasetType(
-            datasetTypeName, datasetType.dimensions, self.storageClassFactory.getStorageClass("Config")
-        )
-
-        # Getting with a dataset type that does not match registry fails
-        with self.assertRaisesRegex(
-            ValueError,
-            "(Supplied dataset type .* inconsistent with registry)"
-            "|(The new storage class .* is not compatible with the existing storage class)",
-        ):
-            butler.get(inconsistentDatasetType, dataId)
-
-        # Combining a DatasetRef with a dataId should fail
-        with self.assertRaisesRegex(ValueError, "DatasetRef given, cannot use dataId as well"):
-            butler.get(ref, dataId)
-        # Getting with an explicit ref should fail if the id doesn't match.
-        with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
-            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101), run=butler.run))
-
-        # Getting a dataset with unknown parameters should fail
-        with self.assertRaisesRegex(KeyError, "Parameter 'unsupported' not understood"):
-            butler.get(ref, parameters={"unsupported": True})
-
-        # Check we have a collection
-        collections = set(butler.collections.query("*"))
-        self.assertEqual(collections, expected_collections)
-
-        # Clean up to check that we can remove something that may have
-        # already had a component removed
-        butler.pruneDatasets([ref], unstore=True, purge=True)
-
-        # Add the same ref again, so we can check that duplicate put fails.
-        ref = butler.put(metric, datasetType, dataId)
-
-        # Repeat put will fail.
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, datasetType, dataId)
-
-        # Remove the datastore entry.
-        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
-
-        # Put will still fail
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, datasetType, dataId)
-
-        # Repeat the same sequence with resolved ref.
-        butler.pruneDatasets([ref], unstore=True, purge=True)
-        ref = butler.put(metric, refIn)
-
-        # Repeat put will fail.
-        with self.assertRaisesRegex(ConflictingDefinitionError, "Datastore already contains dataset"):
-            butler.put(metric, refIn)
-
-        # Remove the datastore entry.
-        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
-
-        # In case of resolved ref this write will succeed.
-        ref = butler.put(metric, refIn)
-
-        # Leave the dataset in place since some downstream tests require
-        # something to be present
-
-        return butler
-
-    def testDeferredCollectionPassing(self) -> None:
-        # Construct a butler with no run or collection, but make it writeable.
-        butler = self.create_empty_butler(writeable=True)
-        # Create and register a DatasetType
-        dimensions = butler.dimensions.conform(["instrument", "visit"])
-        datasetType = self.addDatasetType(
-            "example", dimensions, self.storageClassFactory.getStorageClass("StructuredData"), butler.registry
-        )
-        # Add needed Dimensions
-        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData(
-            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
-        )
-        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
-        butler.registry.insertDimensionData(
-            "visit",
-            {
-                "instrument": "DummyCamComp",
-                "id": 423,
-                "name": "fourtwentythree",
-                "physical_filter": "d-r",
-                "day_obs": 20250101,
-            },
-        )
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        # Create dataset.
-        metric = makeExampleMetrics()
-        # Register a new run and put dataset.
-        run = "deferred"
-        self.assertTrue(butler.collections.register(run))
-        # Second time it will be allowed but indicate no-op
-        self.assertFalse(butler.collections.register(run))
-        ref = butler.put(metric, datasetType, dataId, run=run)
-        # Putting with no run should fail with TypeError.
-        with self.assertRaises(CollectionError):
-            butler.put(metric, datasetType, dataId)
-        # Dataset should exist.
-        self.assertTrue(butler.exists(datasetType, dataId, collections=[run]))
-        # We should be able to get the dataset back, but with and without
-        # a deferred dataset handle.
-        self.assertEqual(metric, butler.get(datasetType, dataId, collections=[run]))
-        self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collections=[run]).get())
-        # Trying to find the dataset without any collection is an error.
-        with self.assertRaises(NoDefaultCollectionError):
-            butler.exists(datasetType, dataId)
-        with self.assertRaises(CollectionError):
-            butler.get(datasetType, dataId)
-        # Associate the dataset with a different collection.
-        butler.collections.register("tagged", type=CollectionType.TAGGED)
-        butler.registry.associate("tagged", [ref])
-        # Deleting the dataset from the new collection should make it findable
-        # in the original collection.
-        butler.pruneDatasets([ref], tags=["tagged"])
-        self.assertTrue(butler.exists(datasetType, dataId, collections=[run]))
+        # The classes left in this file still reach the helper through self,
+        # which supplies the parts of ButlerHarness that the helper uses.
+        return run_put_get_test(cast("ButlerHarness", self), storageClass, datasetTypeName)
 
 
 class ButlerTests(ButlerPutGetTests):
@@ -821,226 +485,6 @@ class ButlerTests(ButlerPutGetTests):
         ):
             with self.assertRaisesRegex(ValueError, "Repository index not in expected format"):
                 Butler.get_repo_uri("label")
-
-    def testBasicPutGet(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        self.runPutGetTest(storageClass, "test_metric")
-
-    def testCompositePutGetConcrete(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadCompNoDisassembly")
-        butler = self.runPutGetTest(storageClass, "test_metric")
-
-        # Should *not* be disassembled
-        datasets = list(butler.registry.queryDatasets(..., collections=self.default_run))
-        self.assertEqual(len(datasets), 1)
-        uri, components = butler.getURIs(datasets[0])
-        self.assertIsInstance(uri, ResourcePath)
-        self.assertFalse(components)
-        self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
-        self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
-
-        # Predicted dataset
-        if self.predictionSupported:
-            dataId = {"instrument": "DummyCamComp", "visit": 424}
-            uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
-            self.assertFalse(components)
-            self.assertIsInstance(uri, ResourcePath)
-            self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
-            self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
-            # Repeat with a DatasetRef to test that code path.
-            ref = DatasetRef(
-                datasets[0].datasetType,
-                dataId=DataCoordinate.standardize(dataId, universe=butler.dimensions),
-                run=self.default_run,
-            )
-            uri2, components2 = butler.getURIs(ref, predict=True)
-            self.assertFalse(components2)
-            self.assertEqual(uri, uri2)
-
-    def testCompositePutGetVirtual(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadComp")
-        butler = self.runPutGetTest(storageClass, "test_metric_comp")
-
-        # Should be disassembled
-        datasets = list(butler.registry.queryDatasets(..., collections=self.default_run))
-        self.assertEqual(len(datasets), 1)
-        uri, components = butler.getURIs(datasets[0])
-
-        if butler._datastore.isEphemeral:
-            # Never disassemble in-memory datastore
-            self.assertIsInstance(uri, ResourcePath)
-            self.assertFalse(components)
-            self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
-            self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
-        else:
-            self.assertIsNone(uri)
-            self.assertEqual(set(components), set(storageClass.components))
-            for compuri in components.values():
-                self.assertIsInstance(compuri, ResourcePath)
-                self.assertIn("423", str(compuri), f"Checking visit is in URI {compuri}")
-                self.assertEqual(compuri.fragment, "", f"Checking absence of fragment in {compuri}")
-
-        if self.predictionSupported:
-            # Predicted dataset
-            dataId = {"instrument": "DummyCamComp", "visit": 424}
-            uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
-
-            if butler._datastore.isEphemeral:
-                # Never disassembled
-                self.assertIsInstance(uri, ResourcePath)
-                self.assertFalse(components)
-                self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
-                self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
-            else:
-                self.assertIsNone(uri)
-                self.assertEqual(set(components), set(storageClass.components))
-                for compuri in components.values():
-                    self.assertIsInstance(compuri, ResourcePath)
-                    self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
-                    self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
-
-    def testStorageClassOverrideGet(self) -> None:
-        """Test storage class conversion on get with override."""
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        datasetTypeName = "anything"
-        run = self.default_run
-
-        butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
-
-        # Create and store a dataset.
-        metric = makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-
-        ref = butler.put(metric, datasetType, dataId)
-
-        # Return native type.
-        retrieved = butler.get(ref)
-        self.assertEqual(retrieved, metric)
-
-        # Specify an override.
-        new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        model = butler.get(ref, storageClass=new_sc)
-        self.assertNotEqual(type(model), type(retrieved))
-        self.assertIs(type(model), new_sc.pytype)
-        self.assertEqual(retrieved, model)
-
-        # Defer but override later.
-        deferred = butler.getDeferred(ref)
-        model = deferred.get(storageClass=new_sc)
-        self.assertIs(type(model), new_sc.pytype)
-        self.assertEqual(retrieved, model)
-
-        # Defer but override up front.
-        deferred = butler.getDeferred(ref, storageClass=new_sc)
-        model = deferred.get()
-        self.assertIs(type(model), new_sc.pytype)
-        self.assertEqual(retrieved, model)
-
-        # Retrieve a component. Should be a tuple.
-        data = butler.get("anything.data", dataId, storageClass="StructuredDataDataTestTuple")
-        self.assertIs(type(data), tuple)
-        self.assertEqual(data, tuple(retrieved.data))
-
-        # Parameter on the write storage class should work regardless
-        # of read storage class.
-        data = butler.get(
-            "anything.data",
-            dataId,
-            storageClass="StructuredDataDataTestTuple",
-            parameters={"slice": slice(2, 4)},
-        )
-        self.assertEqual(len(data), 2)
-
-        # Try a parameter that is known to the read storage class but not
-        # the write storage class.
-        with self.assertRaises(KeyError):
-            butler.get(
-                "anything.data",
-                dataId,
-                storageClass="StructuredDataDataTestTuple",
-                parameters={"xslice": slice(2, 4)},
-            )
-
-    def testComponentFromOverriddenStorageClass(self) -> None:
-        """Test component get where the component is only defined by the
-        read storage class and not by the storage class used to write.
-        """
-        # StructuredDataNoComponents defines no components at all, whereas
-        # MetricsConversion (which it can be converted to) defines several.
-        write_sc = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        read_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        self.assertFalse(write_sc.allComponents())
-        self.assertIn("summary", read_sc.allComponents())
-
-        butler, datasetType = self.create_butler(self.default_run, write_sc, "unstructured")
-
-        metric = makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        ref = butler.put(metric, datasetType, dataId)
-
-        # The composite conversion on its own must work.
-        self.assertIs(type(butler.get(ref, storageClass=read_sc)), read_sc.pytype)
-
-        # A component of the converted composite, requested via a ref.
-        component_ref = ref.overrideStorageClass(read_sc).makeComponentRef("summary")
-        self.assertEqual(butler.get(component_ref), metric.summary)
-
-        # The same component, requested via a deferred handle that was given
-        # the storage class override up front.
-        deferred = butler.getDeferred(ref, storageClass=read_sc)
-        self.assertEqual(deferred.get(component="summary"), metric.summary)
-
-        # A component whose storage class is also overridden, on top of the
-        # storage class the read composite declares for it.
-        converted = butler.get(component_ref, storageClass="DictConvertibleModel")
-        self.assertIsInstance(converted, DictConvertibleModel)
-        self.assertEqual(converted.content, metric.summary)
-
-        # The handle storage class applies to the composite and so selects the
-        # component, while the one given to get() applies to the component.
-        converted = deferred.get(component="summary", storageClass="DictConvertibleModel")
-        self.assertIsInstance(converted, DictConvertibleModel)
-        self.assertEqual(converted.content, metric.summary)
-
-    def testPytypePutCoercion(self) -> None:
-        """Test python type coercion on Butler.get and put."""
-        # Store some data with the normal example storage class.
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        datasetTypeName = "test_metric"
-        butler, _ = self.create_butler(self.default_run, storageClass, datasetTypeName)
-
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-
-        # Put a dict and this should coerce to a MetricsExample
-        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
-        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
-        test_metric = butler.get(metric_ref)
-        self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
-        self.assertEqual(test_metric.summary, test_dict["summary"])
-        self.assertEqual(test_metric.output, test_dict["output"])
-
-        # Check that the put still works if a DatasetType is given with
-        # a definition matching this python type.
-        registry_type = butler.get_dataset_type(datasetTypeName)
-        this_type = DatasetType(datasetTypeName, registry_type.dimensions, "StructuredDataDictJson")
-        metric2_ref = butler.put(test_dict, this_type, dataId=dataId, visit=425)
-        self.assertEqual(metric2_ref.datasetType, registry_type)
-
-        # The get will return the type expected by registry.
-        test_metric2 = butler.get(metric2_ref)
-        self.assertEqual(get_full_type_name(test_metric2), "lsst.daf.butler.tests.MetricsExample")
-
-        # Make a new DatasetRef with the compatible but different DatasetType.
-        # This should now return a dict.
-        new_ref = DatasetRef(this_type, metric2_ref.dataId, id=metric2_ref.id, run=metric2_ref.run)
-        test_dict2 = butler.get(new_ref)
-        self.assertEqual(get_full_type_name(test_dict2), "dict")
-
-        # Get it again with the wrong dataset type definition using get()
-        # rather than get(). This should be consistent with get()
-        # behavior and return the type of the DatasetType.
-        test_dict3 = butler.get(this_type, dataId=dataId, visit=425)
-        self.assertEqual(get_full_type_name(test_dict3), "dict")
 
     def test_ingest_zip(self) -> None:
         """Create butler, export data, delete data, import from Zip."""
@@ -1829,41 +1273,6 @@ class FileDatastoreButlerTests(ButlerTests):
     """
 
     trustModeSupported = True
-
-    def testComponentFromOverriddenStorageClassWarns(self) -> None:
-        """Test that getting a component that only the read storage class
-        defines warns, since the whole dataset has to be retrieved and
-        converted before the component can be extracted.
-        """
-        write_sc = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        read_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        butler, datasetType = self.create_butler(self.default_run, write_sc, "unstructured")
-        metric = makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        ref = butler.put(metric, datasetType, dataId)
-        component_ref = ref.overrideStorageClass(read_sc).makeComponentRef("summary")
-
-        logger = "lsst.daf.butler.datastores.file_datastore.get"
-        with self.assertLogs(logger, level="WARNING") as cm:
-            self.assertEqual(butler.get(component_ref), metric.summary)
-        message = "\n".join(cm.output)
-        # The message must name the component, the storage class that lacks it
-        # along with the components it does have, and the storage class the
-        # dataset has to be converted to.
-        self.assertIn("summary", message)
-        self.assertIn(write_sc.name, message)
-        self.assertIn("components it does define: none", message)
-        self.assertIn(read_sc.name, message)
-        self.assertIn("less efficient", message)
-
-        # Reading a component that the write storage class does define must not
-        # warn.
-        composite_type = self.addDatasetType(
-            "composite", datasetType.dimensions, "StructuredData", butler.registry
-        )
-        composite_ref = butler.put(metric, composite_type, dataId)
-        with self.assertNoLogs(logger, level="WARNING"):
-            self.assertEqual(butler.get(composite_ref.makeComponentRef("summary")), metric.summary)
 
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
         """Check if file exists at a given path (relative to root).
@@ -2735,12 +2144,6 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
         # This test relies on manipulating files out-of-band, which is
         # impossible for this configuration because of the InMemoryDatastore in
         # the ChainedDatastore.
-        pass
-
-    def testComponentFromOverriddenStorageClassWarns(self) -> None:
-        # The InMemoryDatastore in the ChainedDatastore satisfies the get, so
-        # the FileDatastore warning about having to read the whole dataset to
-        # extract the component is never issued.
         pass
 
 
