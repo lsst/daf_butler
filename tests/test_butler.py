@@ -32,14 +32,13 @@ from __future__ import annotations
 import os
 import pathlib
 import pickle
-import re
 import tempfile
 import unittest
 import unittest.mock
 import uuid
 import warnings
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
@@ -50,8 +49,6 @@ from lsst.daf.butler import (
     ButlerConfig,
     ButlerMetrics,
     ButlerRepoIndex,
-    CollectionCycleError,
-    CollectionType,
     Config,
     DataCoordinate,
     DatasetProvenance,
@@ -60,17 +57,13 @@ from lsst.daf.butler import (
     DimensionRecord,
     FileDataset,
     StorageClassFactory,
-    ValidationError,
 )
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
-    CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
-    DatasetTypeExpressionError,
-    MissingCollectionError,
 )
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
@@ -714,99 +707,6 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(list(butlerOut.collections.defaults), list(butler.collections.defaults))
         self.assertEqual(butlerOut.run, butler.run)
 
-    def testGetDatasetTypes(self) -> None:
-        butler = self.create_empty_butler(run=self.default_run)
-        dimensions = butler.dimensions.conform(["instrument", "visit", "physical_filter"])
-        dimensionEntries: list[tuple[str, list[Mapping[str, Any]]]] = [
-            (
-                "instrument",
-                [
-                    {"instrument": "DummyCam"},
-                    {"instrument": "DummyHSC"},
-                    {"instrument": "DummyCamComp"},
-                ],
-            ),
-            ("physical_filter", [{"instrument": "DummyCam", "name": "d-r", "band": "R"}]),
-            ("day_obs", [{"instrument": "DummyCam", "id": 20250101}]),
-            (
-                "visit",
-                [
-                    {
-                        "instrument": "DummyCam",
-                        "id": 42,
-                        "name": "fortytwo",
-                        "physical_filter": "d-r",
-                        "day_obs": 20250101,
-                    }
-                ],
-            ),
-        ]
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        # Add needed Dimensions
-        for element, data in dimensionEntries:
-            butler.registry.insertDimensionData(element, *data)
-
-        # When a DatasetType is added to the registry entries are not created
-        # for components but querying them can return the components.
-        datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
-        components = set()
-        for datasetTypeName in datasetTypeNames:
-            # Create and register a DatasetType
-            self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
-
-            for componentName in storageClass.components:
-                components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
-
-        fromRegistry: set[DatasetType] = set()
-        for parent_dataset_type in butler.registry.queryDatasetTypes():
-            fromRegistry.add(parent_dataset_type)
-            fromRegistry.update(parent_dataset_type.makeAllComponentDatasetTypes())
-        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
-
-        # Query with wildcard.
-        dataset_types = butler.registry.queryDatasetTypes("metric*")
-        self.assertEqual(len(dataset_types), 4, f"Got: {dataset_types}")
-        # but not regex.
-        with self.assertRaises(DatasetTypeExpressionError):
-            butler.registry.queryDatasetTypes(["pvi", re.compile("metric.*")])
-
-        # Now that we have some dataset types registered, validate them
-        butler.validateConfiguration(
-            ignore=[
-                "test_metric_comp",
-                "metric3",
-                "metric5",
-                "calexp",
-                "DummySC",
-                "datasetType.component",
-                "random_data",
-                "random_data_2",
-            ]
-        )
-
-        # Add a new datasetType that will fail template validation
-        self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
-        if self.validationCanFail:
-            with self.assertRaises(ValidationError):
-                butler.validateConfiguration()
-
-        # Rerun validation but with a subset of dataset type names
-        butler.validateConfiguration(datasetTypeNames=["metric4"])
-
-        # Rerun validation but ignore the bad datasetType
-        butler.validateConfiguration(
-            ignore=[
-                "test_metric_comp",
-                "metric3",
-                "metric5",
-                "calexp",
-                "DummySC",
-                "datasetType.component",
-                "random_data",
-                "random_data_2",
-            ]
-        )
-
     def testTransaction(self) -> None:
         butler = self.create_empty_butler(run=self.default_run)
         datasetTypeName = "test_metric"
@@ -956,151 +856,6 @@ class ButlerTests(ButlerPutGetTests):
             )
         )
         self.assertEqual(datasets_1, datasets_2)
-
-    def testGetDatasetCollectionCaching(self):
-        # Prior to DM-41117, there was a bug where get_dataset would throw
-        # MissingCollectionError if you tried to fetch a dataset that was added
-        # after the collection cache was last updated.
-        reader_butler, datasetType = self.create_butler(self.default_run, "int", "datasettypename")
-        writer_butler = self.create_empty_butler(writeable=True, run="new_run")
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        put_ref = writer_butler.put(123, datasetType, dataId)
-        get_ref = reader_butler.get_dataset(put_ref.id)
-        self.assertEqual(get_ref.id, put_ref.id)
-        # Also works when looking up via a hexadecimal string instead of a UUID
-        # instance.
-        hex_ref = reader_butler.get_dataset(put_ref.id.hex)
-        self.assertEqual(hex_ref.id, put_ref.id)
-
-    def testCollectionChainRedefine(self):
-        butler = self._setup_to_test_collection_chain()
-
-        butler.collections.redefine_chain("chain", "a")
-        self._check_chain(butler, ["a"])
-
-        # Duplicates are removed from the list of children
-        butler.collections.redefine_chain("chain", ["c", "b", "c"])
-        self._check_chain(butler, ["c", "b"])
-
-        # Empty list clears the chain
-        butler.collections.redefine_chain("chain", [])
-        self._check_chain(butler, [])
-
-        self._test_common_chain_functionality(butler, butler.collections.redefine_chain)
-
-    def testCollectionChainPrepend(self):
-        butler = self._setup_to_test_collection_chain()
-
-        # Duplicates are removed from the list of children
-        butler.collections.prepend_chain("chain", ["c", "b", "c"])
-        self._check_chain(butler, ["c", "b"])
-
-        # Prepend goes on the front of existing chain
-        butler.collections.prepend_chain("chain", ["a"])
-        self._check_chain(butler, ["a", "c", "b"])
-
-        # Empty prepend does nothing
-        butler.collections.prepend_chain("chain", [])
-        self._check_chain(butler, ["a", "c", "b"])
-
-        # Prepending children that already exist in the chain removes them from
-        # their current position.
-        butler.collections.prepend_chain("chain", ["d", "b", "c"])
-        self._check_chain(butler, ["d", "b", "c", "a"])
-
-        self._test_common_chain_functionality(butler, butler.collections.prepend_chain)
-
-    def testCollectionChainExtend(self):
-        butler = self._setup_to_test_collection_chain()
-
-        # Duplicates are removed from the list of children
-        butler.collections.extend_chain("chain", ["c", "b", "c"])
-        self._check_chain(butler, ["c", "b"])
-
-        # Extend goes on the end of existing chain
-        butler.collections.extend_chain("chain", ["a"])
-        self._check_chain(butler, ["c", "b", "a"])
-
-        # Empty extend does nothing
-        butler.collections.extend_chain("chain", [])
-        self._check_chain(butler, ["c", "b", "a"])
-
-        # Extending children that already exist in the chain removes them from
-        # their current position.
-        butler.collections.extend_chain("chain", ["d", "b", "c"])
-        self._check_chain(butler, ["a", "d", "b", "c"])
-
-        self._test_common_chain_functionality(butler, butler.collections.extend_chain)
-
-    def testCollectionChainRemove(self) -> None:
-        butler = self._setup_to_test_collection_chain()
-
-        butler.collections.redefine_chain("chain", ["a", "b", "c", "d"])
-
-        butler.collections.remove_from_chain("chain", "c")
-        self._check_chain(butler, ["a", "b", "d"])
-
-        # Duplicates are allowed in the list of children
-        butler.collections.remove_from_chain("chain", ["b", "b", "a"])
-        self._check_chain(butler, ["d"])
-
-        # Empty remove does nothing
-        butler.collections.remove_from_chain("chain", [])
-        self._check_chain(butler, ["d"])
-
-        # Removing children that aren't in the chain does nothing
-        butler.collections.remove_from_chain("chain", ["a", "chain"])
-        self._check_chain(butler, ["d"])
-
-        self._test_common_chain_functionality(
-            butler, butler.collections.remove_from_chain, skip_cycle_check=True
-        )
-
-    def _setup_to_test_collection_chain(self) -> Butler:
-        butler = self.create_empty_butler(writeable=True)
-
-        butler.collections.register("chain", CollectionType.CHAINED)
-
-        runs = ["a", "b", "c", "d"]
-        for run in runs:
-            butler.collections.register(run)
-
-        butler.collections.register("staticchain", CollectionType.CHAINED)
-        butler.collections.redefine_chain("staticchain", ["a", "b"])
-
-        return butler
-
-    def _check_chain(self, butler: Butler, expected: list[str]) -> None:
-        children = butler.collections.get_info("chain").children
-        self.assertEqual(expected, list(children))
-
-    def _test_common_chain_functionality(
-        self, butler, func: Callable[[str, str | list[str]], Any], *, skip_cycle_check=False
-    ) -> None:
-        # Missing parent collection
-        with self.assertRaises(MissingCollectionError):
-            func("doesnotexist", [])
-        # Missing child collection
-        with self.assertRaises(MissingCollectionError):
-            func("chain", ["doesnotexist"])
-        # Forbid operations on non-chained collections
-        with self.assertRaises(CollectionTypeError):
-            func("d", ["a"])
-
-        # Prevent collection cycles
-        if not skip_cycle_check:
-            butler.collections.register("chain2", CollectionType.CHAINED)
-            func("chain2", "chain")
-            with self.assertRaises(CollectionCycleError):
-                func("chain", "chain2")
-
-        # Make sure none of the earlier operations interfered with unrelated
-        # chains.
-        self.assertEqual(["a", "b"], list(butler.collections.get_info("staticchain").children))
-
-        with butler._caching_context():
-            with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
-                func("chain", "a")
 
     def test_transfer_dimension_records_from(self) -> None:
         source_butler = self.create_empty_butler(writeable=True)
@@ -1686,12 +1441,6 @@ class ButlerServerTests(FileDatastoreButlerTests):
     def testDafButlerRepositories(self):
         # Loading of RemoteButler via repository index is tested in
         # test_server.py.
-        pass
-
-    def testGetDatasetTypes(self) -> None:
-        # This is mostly a test of validateConfiguration, which is for
-        # validating Datastore configuration and thus isn't relevant to
-        # RemoteButler.
         pass
 
     # Pickling not yet implemented for RemoteButler/HybridButler.

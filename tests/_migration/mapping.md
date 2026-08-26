@@ -42,6 +42,10 @@ This file explains why each removal was safe.
 | `testImportExportVirtualComposite`'s `@unittest.expectedFailure` | now `@pytest.mark.xfail` without `raises=`, matching `expectedFailure`'s any-exception behavior. The observed cause on the posix axis is `NotImplementedError("Can not export disassembled datasets ...")`. `xfail_strict` is on, so an unexpected pass still fails. |
 | `ChainedDatastoreButlerTestCase.testPruneDatasets` | the empty override became an early `return` guarded on `datastore_type == "chained"`, so the execution is conserved. Task 21 may drop the axis with coverage evidence. |
 | `testPruneDatasets`'s `butler._datastore` accesses | narrowed with `cast(FileDatastore, ...)` inside the trust-mode block. The original went unchecked only because `create_empty_butler` had no return annotation and so returned `Any`. |
+| `ButlerTests._setup_to_test_collection_chain`, `._check_chain`, `._test_common_chain_functionality` | now module-level `_setup_to_test_collection_chain(butler_harness)`, `_check_chain(butler, expected)` and `_check_common_chain_functionality(...)`. The last was renamed from `_test_` because pytest collects anything named `test_*` at module level. |
+| `ButlerServerTests.testGetDatasetTypes` | the empty override became an early `return` guarded on `butler_client == "server"`, so the execution is conserved. Task 22 may drop the axes with coverage evidence. |
+| `ButlerTests.validationCanFail` | now `butler_harness.profile.validation_can_fail`. |
+| `testGetDatasetTypes`'s `len(butler.registry.queryDatasetTypes("metric*"))` | the result is materialized into a `list` first. `queryDatasetTypes` is annotated `Iterable[DatasetType]`, so the `len` only typechecked before because `create_empty_butler` returned `Any`. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -272,3 +276,63 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerPostgresTests::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[server-postgres]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[posix]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[cloned-postgres]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[in-memory]` |
+| `tests/test_butler.py::InMemoryDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[in-memory]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[cloned-sqlite]` |
+| `tests/test_butler.py::ClonedSqliteButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[cloned-sqlite]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[chained]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[explicit-root]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[remote-test]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testCollectionChainExtend` | `tests/test_butler_collections.py::test_collection_chain_extend[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testCollectionChainPrepend` | `tests/test_butler_collections.py::test_collection_chain_prepend[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testCollectionChainRedefine` | `tests/test_butler_collections.py::test_collection_chain_redefine[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testCollectionChainRemove` | `tests/test_butler_collections.py::test_collection_chain_remove[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testGetDatasetCollectionCaching` | `tests/test_butler_collections.py::test_get_dataset_collection_caching[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testGetDatasetTypes` | `tests/test_butler_collections.py::test_get_dataset_types[server-postgres]` |
