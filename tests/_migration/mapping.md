@@ -216,6 +216,9 @@ matching the pattern and by nothing else in the suite.
 | `test_constraints[*-posix]` | 5 | 2 | 4 | **Kept.** |
 | `test_constraints[*-chained]` | 4 | 0 | 0 | **Kept anyway; see below.** |
 | `test_constraints[*-chained-memory]` | 4 | 0 | 0 | Dropped. |
+| `server-postgres` | 90 | 0 | 0 | Dropped. Running the server on postgres adds nothing over running it on sqlite and running a direct Butler on postgres, both of which remain. |
+| `server-sqlite` | 90 | 1 | 2 | **Kept.** |
+| `[postgres]` in the butler files | 95 | 0 | 0 | **Kept despite zero unique coverage.** The postgres-specific coverage lives in `tests/test_postgresql.py`, which has 81 unique lines and 131 unique arcs of its own. But this is the only place Butler-level operations run against a real postgres, and an operation can generate different SQL while executing the same lines. Coverage cannot see that difference. |
 
 ### A per-axis marginal query cannot see coverage two axes hold jointly
 

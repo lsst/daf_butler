@@ -67,21 +67,20 @@ FILE_DATASTORE_AXES = [
     pytest.param("sqlite", "chained", "direct", "in_repo", id="chained"),
     pytest.param("sqlite", "remote_test", "direct", "in_repo", id="remote-test"),
     pytest.param("sqlite", "posix", "server", "in_repo", id="server-sqlite", marks=_SERVER_MARKS),
-    pytest.param(
-        "postgres",
-        "posix",
-        "server",
-        "in_repo",
-        id="server-postgres",
-        marks=(*_SERVER_MARKS, pytest.mark.postgres),
-    ),
 ]
 """Axis combinations covering every datastore that inherits FileDatastore.
 
-The cloned client and the explicit-root layout are deliberately absent:
-DM-55822 measured each one's marginal coverage as zero unique lines and zero
-unique arcs, so they are represented by the single ``test_cloned_put_get``
-and ``test_file_locations`` respectively.
+The cloned client, the explicit-root layout and the server-on-postgres
+combination are deliberately absent. DM-55822 measured each one's marginal
+coverage as zero unique lines and zero unique arcs. The first two are
+represented by the single ``test_cloned_put_get`` and ``test_file_locations``;
+the third adds nothing over running the server on sqlite and a direct Butler on
+postgres, which both remain.
+
+The direct ``postgres`` combination measures zero as well and is kept anyway.
+It is the only place Butler-level operations run against a real postgres, and
+the SQL an operation generates can differ while the lines executed do not,
+which is a difference coverage cannot see.
 """
 
 BUTLER_TESTS_AXES = [
