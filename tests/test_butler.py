@@ -44,7 +44,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
 from butler_test_support import assert_get_components, run_put_get_test
-from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler import (
     Butler,
@@ -55,7 +54,6 @@ from lsst.daf.butler import (
     CollectionType,
     Config,
     DataCoordinate,
-    DatasetExistence,
     DatasetProvenance,
     DatasetRef,
     DatasetType,
@@ -63,11 +61,9 @@ from lsst.daf.butler import (
     FileDataset,
     StorageClassFactory,
     ValidationError,
-    script,
 )
 from lsst.daf.butler._rubin.file_datasets import transfer_datasets_to_datastore
 from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
-from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
     CollectionTypeError,
@@ -75,7 +71,6 @@ from lsst.daf.butler.registry import (
     DataIdValueError,
     DatasetTypeExpressionError,
     MissingCollectionError,
-    OrphanedRecordError,
 )
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
@@ -89,7 +84,6 @@ from lsst.daf.butler.tests.utils import (
     create_populated_sqlite_registry,
     makeTestTempDir,
     removeTestTempDir,
-    safeTestTempDir,
 )
 from lsst.resources import ResourcePath
 from lsst.resources.tests import make_remote_test_uri
@@ -1199,363 +1193,6 @@ class FileDatastoreButlerTests(ButlerTests):
 
     trustModeSupported = True
 
-    def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
-        """Check if file exists at a given path (relative to root).
-
-        Test testPutTemplates verifies actual physical existance of the files
-        in the requested location.
-        """
-        uri = ResourcePath(root, forceDirectory=True)
-        return uri.join(relpath).exists()
-
-    def testImportExport(self) -> None:
-        # Run put/get tests just to create and populate a repo.
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        self.runImportExportTest(storageClass)
-
-    @unittest.expectedFailure
-    def testImportExportVirtualComposite(self) -> None:
-        # Run put/get tests just to create and populate a repo.
-        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
-        self.runImportExportTest(storageClass)
-
-    def runImportExportTest(self, storageClass: StorageClass) -> None:
-        """Test exporting and importing.
-
-        This test does an export to a temp directory and an import back
-        into a new temp directory repo. It does not assume a posix datastore.
-        """
-        exportButler = self.runPutGetTest(storageClass, "test_metric")
-
-        # Test that we must have a file extension.
-        with self.assertRaises(ValueError):
-            with exportButler.export(filename="dump", directory=".") as export:
-                pass
-
-        # Test that unknown format is not allowed.
-        with self.assertRaises(ValueError):
-            with exportButler.export(filename="dump.fits", directory=".") as export:
-                pass
-
-        # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
-        self.assertGreater(len(datasets), 0)
-        # Add a DimensionRecord that's unused by those datasets.
-        skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
-        exportButler.registry.insertDimensionData("skymap", skymapRecord)
-        # Export and then import datasets.
-        with safeTestTempDir(TESTDIR) as exportDir:
-            exportFile = os.path.join(exportDir, "exports.yaml")
-            with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
-                export.saveDatasets(datasets)
-                # Export the same datasets again. This should quietly do
-                # nothing because of internal deduplication, and it shouldn't
-                # complain about being asked to export the "htm7" elements even
-                # though there aren't any in these datasets or in the database.
-                export.saveDatasets(datasets, elements=["htm7"])
-                # Save one of the data IDs again; this should be harmless
-                # because of internal deduplication.
-                export.saveDataIds([datasets[0].dataId])
-                # Save some dimension records directly.
-                export.saveDimensionData("skymap", [skymapRecord])
-            self.assertTrue(os.path.exists(exportFile))
-            with safeTestTempDir(TESTDIR) as importDir:
-                # We always want this to be a local posix butler
-                make_repo_for_test(
-                    importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml"))
-                )
-                # Calling script.butlerImport tests the implementation of the
-                # butler command line interface "import" subcommand. Functions
-                # in the script folder are generally considered protected and
-                # should not be used as public api.
-                with open(exportFile) as f:
-                    script.butlerImport(
-                        importDir,
-                        export_file=f,
-                        directory=exportDir,
-                        transfer="auto",
-                        skip_dimensions=None,
-                    )
-                importButler = Butler.from_config(importDir, run=self.default_run)
-                self.enterContext(importButler)
-                for ref in datasets:
-                    with self.subTest(ref=repr(ref)):
-                        # Test for existence by passing in the DatasetType and
-                        # data ID separately, to avoid lookup by dataset_id.
-                        self.assertTrue(importButler.exists(ref.datasetType, ref.dataId))
-                self.assertEqual(
-                    list(importButler.registry.queryDimensionRecords("skymap")),
-                    [importButler.dimensions["skymap"].RecordClass(**skymapRecord)],
-                )
-
-    def testRemoveRuns(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = self.create_empty_butler(writeable=True)
-        # Load registry data with dimensions to hang datasets off of.
-        butler.import_(filename=ResourcePath("resource://lsst.daf.butler/tests/registry_data/base.yaml"))
-        # Add some RUN-type collection.
-        run1 = "run1"
-        butler.collections.register(run1)
-        run2 = "run2"
-        butler.collections.register(run2)
-        # put a dataset in each
-        metric = makeExampleMetrics()
-        dimensions = butler.dimensions.conform(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType(
-            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
-        )
-        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
-        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
-        uri1 = butler.getURI(ref1)
-        uri2 = butler.getURI(ref2)
-
-        # Put one of the runs in a chain.
-        butler.collections.register("Chain", CollectionType.CHAINED)
-        butler.collections.extend_chain("Chain", run1)
-
-        with self.assertRaises(OrphanedRecordError):
-            butler.registry.removeDatasetType(datasetType.name)
-
-        # Remove a non-run.
-        with self.assertRaises(TypeError):
-            butler.removeRuns(["Chain"])
-
-        # Remove without unlinking from chain should fail.
-        with self.assertRaises(IntegrityError):
-            butler.removeRuns([run1])
-
-        # Remove from both runs. No longer use unstore parameter since it
-        # always purges.
-        butler.removeRuns([run1, run2], unlink_from_chains=True)
-
-        # Should be nothing in registry for either one, and datastore should
-        # not think either exists.
-        with self.assertRaises(MissingCollectionError):
-            butler.collections.get_info(run1)
-        with self.assertRaises(MissingCollectionError):
-            butler.collections.get_info(run1)
-        self.assertFalse(butler.stored(ref1))
-        self.assertFalse(butler.stored(ref2))
-        # We always unstore so both URIs should be gone.
-        self.assertFalse(uri1.exists())
-        self.assertFalse(uri2.exists())
-
-        # Now that the collections have been pruned we can remove the
-        # dataset type
-        butler.registry.removeDatasetType(datasetType.name)
-
-        with self.assertLogs("lsst.daf.butler.registry", "INFO") as cm:
-            butler.registry.removeDatasetType(("test*", "test*"))
-        self.assertIn("not defined", "\n".join(cm.output))
-
-    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
-        """Simulate an external actor removing a file outside of Butler's
-        knowledge.
-
-        Subclasses may override to handle more complicated datastore
-        configurations.
-        """
-        uri = butler.getURI(ref)
-        uri.remove()
-        datastore = cast(FileDatastore, butler._datastore)
-        datastore.cacheManager.remove_from_cache(ref)
-
-    def testPruneDatasets(self) -> None:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = self.create_empty_butler(writeable=True)
-        # Load registry data with dimensions to hang datasets off of.
-        butler.import_(filename=_get_test_data_path("base.yaml"))
-        # Add some RUN-type collections.
-        run1 = "run1"
-        butler.collections.register(run1)
-        run2 = "run2"
-        butler.collections.register(run2)
-        # put some datasets.  ref1 and ref2 have the same data ID, and are in
-        # different runs.  ref3 has a different data ID.
-        metric = makeExampleMetrics()
-        dimensions = butler.dimensions.conform(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType(
-            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
-        )
-        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
-        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
-        ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
-
-        many_stored = butler.stored_many([ref1, ref2, ref3])
-        for ref, stored in many_stored.items():
-            self.assertTrue(stored, f"Ref {ref} should be stored")
-
-        many_exists = butler._exists_many([ref1, ref2, ref3])
-        for ref, exists in many_exists.items():
-            self.assertTrue(exists, f"Checking ref {ref} exists.")
-            self.assertEqual(exists, DatasetExistence.VERIFIED, f"Ref {ref} should be stored")
-
-        # Simple prune.
-        butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
-        self.assertFalse(butler.exists(ref1.datasetType, ref1.dataId, collections=run1))
-
-        many_stored = butler.stored_many([ref1, ref2, ref3])
-        for ref, stored in many_stored.items():
-            self.assertFalse(stored, f"Ref {ref} should not be stored")
-
-        many_exists = butler._exists_many([ref1, ref2, ref3])
-        for ref, exists in many_exists.items():
-            self.assertEqual(exists, DatasetExistence.UNRECOGNIZED, f"Ref {ref} should not be stored")
-
-        # Put data back.
-        ref1_new = butler.put(metric, ref1)
-        self.assertEqual(ref1_new, ref1)  # Reuses original ID.
-        ref2 = butler.put(metric, ref2)
-
-        many_stored = butler.stored_many([ref1, ref2, ref3])
-        self.assertTrue(many_stored[ref1])
-        self.assertTrue(many_stored[ref2])
-        self.assertFalse(many_stored[ref3])
-
-        ref3 = butler.put(metric, ref3)
-
-        many_exists = butler._exists_many([ref1, ref2, ref3])
-        for ref, exists in many_exists.items():
-            self.assertTrue(exists, f"Ref {ref} should not be stored")
-
-        # Clear out the datasets from registry and start again.
-        refs = [ref1, ref2, ref3]
-        butler.pruneDatasets(refs, purge=True, unstore=True)
-        for ref in refs:
-            butler.put(metric, ref)
-
-        # Confirm we can retrieve deferred.
-        dref1 = butler.getDeferred(ref1)  # known and exists
-        metric1 = dref1.get()
-        self.assertEqual(metric1, metric)
-
-        # Test different forms of file availability.
-        # Need to be in a state where:
-        # - one ref just has registry record.
-        # - one ref has a missing file but a datastore record.
-        # - one ref has a missing datastore record but file is there.
-        # - one ref does not exist anywhere.
-        # Do not need to test a ref that has everything since that is tested
-        # above.
-        ref0 = DatasetRef(
-            datasetType,
-            DataCoordinate.standardize(
-                {"instrument": "Cam1", "physical_filter": "Cam1-G"}, universe=butler.dimensions
-            ),
-            run=run1,
-        )
-
-        # Delete from datastore and retain in Registry.
-        butler.pruneDatasets([ref1], purge=False, unstore=True, disassociate=False)
-
-        # File has been removed.
-        self.remove_dataset_out_of_band(butler, ref2)
-
-        # Datastore has lost track.
-        butler._datastore.forget([ref3])
-
-        # First test with a standard butler.
-        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
-        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
-        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
-        self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
-        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED)
-
-        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=False)
-        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
-        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED | DatasetExistence._ASSUMED)
-        self.assertEqual(exists_many[ref2], DatasetExistence.KNOWN)
-        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ASSUMED)
-        self.assertTrue(exists_many[ref2])
-
-        # Check that per-ref query gives the same answer as many query.
-        for ref, exists in exists_many.items():
-            self.assertEqual(butler.exists(ref, full_check=False), exists)
-
-        # Get deferred checks for existence before it allows it to be
-        # retrieved.
-        with self.assertRaises(LookupError):
-            butler.getDeferred(ref3)  # not known, file exists
-        dref2 = butler.getDeferred(ref2)  # known but file missing
-        with self.assertRaises(FileNotFoundError):
-            dref2.get()
-
-        # Test again with a trusting butler.
-        if self.trustModeSupported:
-            butler._datastore.trustGetRequest = True
-            exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
-            self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
-            self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
-            self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
-            self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ARTIFACT)
-
-            # When trusting we can get a deferred dataset handle that is not
-            # known but does exist.
-            dref3 = butler.getDeferred(ref3)
-            metric3 = dref3.get()
-            self.assertEqual(metric3, metric)
-
-            # Check that per-ref query gives the same answer as many query.
-            for ref, exists in exists_many.items():
-                self.assertEqual(butler.exists(ref, full_check=True), exists)
-
-            # Create a ref that surprisingly has the UUID of an existing ref
-            # but is not the same.
-            ref_bad = DatasetRef(datasetType, dataId=ref3.dataId, run=ref3.run, id=ref2.id)
-            with self.assertRaises(ValueError):
-                butler.exists(ref_bad)
-
-            # Create a ref that has a compatible storage class.
-            ref_compat = ref2.overrideStorageClass("StructuredDataDict")
-            exists = butler.exists(ref_compat)
-            self.assertEqual(exists, exists_many[ref2])
-
-            # Remove everything and start from scratch.
-            butler._datastore.trustGetRequest = False
-            butler.pruneDatasets(refs, purge=True, unstore=True)
-            for ref in refs:
-                butler.put(metric, ref)
-
-            # These tests mess directly with the trash table and can leave the
-            # datastore in an odd state. Do them at the end.
-            # Check that in normal mode, deleting the record will lead to
-            # trash not touching the file.
-            uri1 = butler.getURI(ref1)
-            butler._datastore.bridge.moveToTrash(
-                [ref1], transaction=None
-            )  # Update the dataset_location table
-            butler._datastore.forget([ref1])
-            butler._datastore.trash(ref1)
-            butler._datastore.emptyTrash()
-            self.assertTrue(uri1.exists())
-            uri1.remove()  # Clean it up.
-
-            # Simulate execution butler setup by deleting the datastore
-            # record but keeping the file around and trusting.
-            butler._datastore.trustGetRequest = True
-            uris = butler.get_many_uris([ref2, ref3])
-            uri2 = uris[ref2].primaryURI
-            uri3 = uris[ref3].primaryURI
-            self.assertTrue(uri2.exists())
-            self.assertTrue(uri3.exists())
-
-            # Remove the datastore record.
-            butler._datastore.bridge.moveToTrash(
-                [ref2], transaction=None
-            )  # Update the dataset_location table
-            butler._datastore.forget([ref2])
-            self.assertTrue(uri2.exists())
-            butler._datastore.trash([ref2, ref3])
-            # Immediate removal for ref2 file
-            self.assertFalse(uri2.exists())
-            # But ref3 has to wait for the empty.
-            self.assertTrue(uri3.exists())
-            butler._datastore.emptyTrash()
-            self.assertFalse(uri3.exists())
-
-            # Clear out the datasets from registry.
-            butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
-
     def test_butler_metrics(self):
         """Test that metrics are collected."""
         run = "test_run"
@@ -1630,35 +1267,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             butler = Butler.from_config(path, writeable=False)
             self.enterContext(butler)
             self.assertIsInstance(butler, Butler)
-
-    def testExportTransferCopy(self) -> None:
-        """Test local export using all transfer modes"""
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        exportButler = self.runPutGetTest(storageClass, "test_metric")
-        # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
-        self.assertGreater(len(datasets), 0)
-        uris = [exportButler.getURI(d) for d in datasets]
-        assert isinstance(exportButler._datastore, FileDatastore)
-        datastoreRoot = exportButler.get_datastore_roots()[exportButler.get_datastore_names()[0]]
-
-        pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
-
-        for path in pathsInStore:
-            # Assume local file system
-            assert path is not None
-            self.assertTrue(self.checkFileExists(datastoreRoot, path), f"Checking path {path}")
-
-        for transfer in ("copy", "link", "symlink", "relsymlink"):
-            with safeTestTempDir(TESTDIR) as exportDir:
-                with exportButler.export(directory=exportDir, format="yaml", transfer=transfer) as export:
-                    export.saveDatasets(datasets)
-                    for path in pathsInStore:
-                        assert path is not None
-                        self.assertTrue(
-                            self.checkFileExists(exportDir, path),
-                            f"Check that mode {transfer} exported files",
-                        )
 
     def testPytypeCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
@@ -1973,12 +1581,6 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
     ]
     registryStr = "/gen3.sqlite3"
 
-    def testPruneDatasets(self) -> None:
-        # This test relies on manipulating files out-of-band, which is
-        # impossible for this configuration because of the InMemoryDatastore in
-        # the ChainedDatastore.
-        pass
-
 
 class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
     """Test that a yaml file in one location can refer to a root in another."""
@@ -2075,12 +1677,6 @@ class ButlerServerTests(FileDatastoreButlerTests):
         cleanup: bool = True,
     ) -> Butler:
         return self.server_instance.hybrid_butler.clone(run=run, metrics=metrics)
-
-    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
-        # Can't delete a file via S3 signed URLs, so we need to reach in
-        # through DirectButler to delete the dataset.
-        uri = self.server_instance.direct_butler.getURI(ref)
-        uri.remove()
 
     def testConstructor(self):
         # RemoteButler constructor is tested in test_server.py and

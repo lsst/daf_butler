@@ -35,6 +35,13 @@ This file explains why each removal was safe.
 | `ButlerPutGetTests.storageClassFactory` | the shim adds a `storage_class_factory` property so `self` satisfies the part of `ButlerHarness` the helper uses |
 | `runPutGetTest`'s `self.subTest(args=...)` | dropped; the loop identity moved into the assertion messages (`f"put with args {args!r}"`). Subtest count for these tests falls from 263 to 0, which is why the reported subtest total drops. |
 | `ChainedDatastoreButlerTestCase.testComponentFromOverriddenStorageClassWarns` | the empty override became an early `return` guarded on `datastore_type == "chained"`, so the execution is conserved. Task 21 may drop the axis with coverage evidence. |
+| `FileDatastoreButlerTests.runImportExportTest` | now module-level `_run_import_export_test(butler_harness, storage_class_name, test_directory)`; it takes the storage class by name because both callers looked it up from the factory. |
+| `FileDatastoreButlerTests.checkFileExists` | now module-level `_check_file_exists`, private to `tests/test_butler_import_export.py`, its only caller. |
+| `FileDatastoreButlerTests.remove_dataset_out_of_band` and the `ButlerServerTests` override | already present as `ButlerHarness.remove_dataset_out_of_band` and `ServerButlerHarness`'s override; both copies deleted rather than ported. |
+| `runImportExportTest`'s `self.subTest(ref=repr(ref))` | dropped; the ref moved into the assertion message. The first missing dataset now ends the loop instead of reporting all of them, which is accepted because the loop is inside one test either way. |
+| `testImportExportVirtualComposite`'s `@unittest.expectedFailure` | now `@pytest.mark.xfail` without `raises=`, matching `expectedFailure`'s any-exception behavior. The observed cause on the posix axis is `NotImplementedError("Can not export disassembled datasets ...")`. `xfail_strict` is on, so an unexpected pass still fails. |
+| `ChainedDatastoreButlerTestCase.testPruneDatasets` | the empty override became an early `return` guarded on `datastore_type == "chained"`, so the execution is conserved. Task 21 may drop the axis with coverage evidence. |
+| `testPruneDatasets`'s `butler._datastore` accesses | narrowed with `cast(FileDatastore, ...)` inside the trust-mode block. The original went unchecked only because `create_empty_butler` had no return annotation and so returned `Any`. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -70,6 +77,8 @@ This file explains why each removal was safe.
 | `retrieveArtifacts(transfer="move")` raises different messages per client | `FileDatastore` says "Can not move artifacts out of datastore", `RemoteButler` says "Only 'copy' and 'auto' transfer modes are supported" | The original bare `assertRaises(ValueError)` hid this. `PT011` forces a `match`, so the converted assertion names both. Not a bug, but the two implementations could usefully agree; not worth a ticket on its own. |
 | `fullConfigKey` is now a dead class attribute | six classes in `tests/test_butler.py` set it and, since `testMakeRepo` moved out, nothing reads it | Left in place rather than churned out of a file Task 12 deletes. Not ported: the new files read `DatastoreProfile.full_config_key`. |
 | `Butler.from_config` on a config with `configFile = None` | raises "Required to replace &lt;butlerRoot&gt; ... but a replacement has not been defined", not a message about the config file | The original bare `assertRaises(ValueError)` hid which failure was being provoked. `PT011` forces a `match`, so the converted assertion names the real one. |
+| `predictionSupported` and `trustModeSupported` are now dead class attributes | `tests/test_butler.py` still sets them; the last readers left with Tasks 11 and 8 | Left in place like `fullConfigKey`, rather than churned out of a file Task 12 deletes. Not ported: the new files read `ButlerHarness.prediction_supported` and `.trust_mode_supported`. |
+| `Butler.exists` on a ref with a colliding UUID | raises "... has the same dataset ID as one in registry but has different incompatible values" | Another bare `assertRaises(ValueError)` that `PT011` forced to name its real message. |
 
 ## Test mapping
 
@@ -229,3 +238,37 @@ This file explains why each removal was safe.
 | `tests/test_butler.py::ButlerServerSqliteTests::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[server-sqlite]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testMakeRepo` | `tests/test_butler_config_repo.py::test_make_repo[server-postgres]` |
 | `tests/test_butler.py::ButlerServerPostgresTests::testPutTemplates` | `tests/test_butler_config_repo.py::test_put_templates[server-postgres]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testExportTransferCopy` | `tests/test_butler_import_export.py::test_export_transfer_copy[in_repo]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[posix]` |
+| `tests/test_butler.py::PosixDatastoreButlerTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[posix]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[postgres]` |
+| `tests/test_butler.py::PostgresPosixDatastoreButlerTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[cloned-postgres]` |
+| `tests/test_butler.py::ClonedPostgresPosixDatastoreButlerTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[cloned-postgres]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[chained]` |
+| `tests/test_butler.py::ChainedDatastoreButlerTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[chained]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testExportTransferCopy` | `tests/test_butler_import_export.py::test_export_transfer_copy[explicit_root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[explicit-root]` |
+| `tests/test_butler.py::ButlerExplicitRootTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[explicit-root]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testImportExport` | `tests/test_butler_import_export.py::test_import_export[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[remote-test]` |
+| `tests/test_butler.py::RemoteTestDatastoreButlerTestCase::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[remote-test]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testImportExport` | `tests/test_butler_import_export.py::test_import_export[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerSqliteTests::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[server-sqlite]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testImportExport` | `tests/test_butler_import_export.py::test_import_export[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testImportExportVirtualComposite` | `tests/test_butler_import_export.py::test_import_export_virtual_composite[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testPruneDatasets` | `tests/test_butler_import_export.py::test_prune_datasets[server-postgres]` |
+| `tests/test_butler.py::ButlerServerPostgresTests::testRemoveRuns` | `tests/test_butler_import_export.py::test_remove_runs[server-postgres]` |
