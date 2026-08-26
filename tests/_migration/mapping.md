@@ -177,6 +177,20 @@ one line and two arcs, all of them `cache_manager.py:1232`.
 The `_config.py` arc is not lost against this baseline at all, which confirms it
 was an artifact of the stale database's session rather than a dropped path.
 
+**With the fix applied the gate passes.**
+
+| | Corrected baseline | Post-conversion | Lost |
+| --- | --- | --- | --- |
+| Lines | 37077 | 37078 | 0 |
+| Arcs | 54830 | 54832 | 0 |
+
+The single gained line is `datastore/_datastore.py:463`, `Datastore.__repr__`,
+which the converted suite reaches and the original did not.
+
+Skips go from 30 to 31, and the one addition names the reason the plan
+predicted: `tests/test_datastore_file.py:968: Datastore supports auto but cannot
+transfer in place.`
+
 ## Findings for separate tickets
 
 | Finding | Where | Why not fixed here |
