@@ -264,7 +264,6 @@ extend-select = [
 "tests/test_connectionString.py" = ["PT"]
 "tests/test_constraints.py" = ["PT"]
 "tests/test_datasets.py" = ["PT"]
-"tests/test_datastore.py" = ["PT"]
 "tests/test_ddl.py" = ["PT"]
 "tests/test_dimension_record_containers.py" = ["PT"]
 "tests/test_dimensions_versions.py" = ["PT"]

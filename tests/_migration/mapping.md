@@ -68,6 +68,13 @@ This file explains why each removal was safe.
 | `DatastoreTestsBase.setUpClass`/`setUpDatastoreTests`/`makeDatastore` | collapsed into a local `_make_datastore(config_file, root)`. It reproduces the same three steps: import the datastore class named in the config, apply `setConfigRoot` when the layout needs a root, and build from a copy of the config against a fresh `DummyRegistry`. |
 | `tests/test_datastore.py::makeExampleMetrics` | now `butler_test_support.make_datastore_metrics`. Deliberately not `fixtures.make_example_metrics`: the datastore tests use a different data array and one needs the array absent. |
 | `PosixDatastoreConstraintsTestCase.setUp`'s `tempfile.mkdtemp()` | now pytest's `tmp_path_factory`, which cleans up on its own; the old `tearDown` did the `shutil.rmtree`. |
+| The seven concrete datastore classes | now `DatastoreTestProfile` and the `PROFILES` dict, one entry per class. `trash` and `posix-no-checksums` were subclasses of the posix case and so rerun every shared test; Task 21 reduces that with coverage evidence. |
+| `DatastoreTests.canIngestNoTransferAuto` on the ephemeral classes | it was never defined there. `testIngestNoTransfer` reads it only after `"auto" in self.ingestTransferModes`, which is `False` for an empty tuple, so Python's short-circuit kept it from ever being evaluated. The profile gives it a default and says so. |
+| `testDisassembly`, `testIngestNoTransfer` and `testIngestTransfer` subTest loops | now parametrize lists (6, 2 and 7 cases). This is why the collected count rises: **213 to 285**, a rise of 72, which is (6-1) + (2-1) + (7-1) cases across 6 profiles. |
+| `testIngestNoTransfer`'s `continue` for chained | now `pytest.skip("Datastore supports auto but cannot transfer in place.")`. This is the one legitimate rise in the skip count, from 30 to 31 across the suite. |
+| `DatastoreTests`'s two `raise unittest.SkipTest` calls | now `pytest.skip`, with the same message and the same 8 executions skipped. |
+| `PosixDatastoreTestCase.setUp`'s `os.path.realpath` | kept, on the `ds` fixture's temporary root. The original comment explains why: on macOS a temporary file can be under either `/var/folders` or `/private/var/folders`, and `relsymlink` cannot traverse between the two forms. |
+| `testBasicTransaction` and `testNestedTransaction`'s `pytest.raises` blocks | carry `# noqa: PT012`, like `test_transaction` in the butler lifecycle file: the block is inherently multi-statement because the test exists to show the transaction rolls back. |
 | `ButlerTests.testMakeRepo`'s `if self.fullConfigKey is None: return` | now reads `butler_harness.profile.full_config_key`, which `_make_explicit_root_repo` already overrides to `None` for the explicit-root layout, so that axis still no-ops as it did. |
 | `PostgresPosixDatastoreButlerTestCase.testMakeRepo`'s `raise unittest.SkipTest` | now `pytest.skip` guarded on `registry_backend == "postgres"`, still reported as 2 skips. |
 | `ButlerServerTests.testMakeRepo` and `.testPutTemplates` | the empty overrides became early `return`s guarded on `butler_client == "server"`, so the executions are conserved. Task 22 may drop the axes with coverage evidence. |
@@ -106,6 +113,7 @@ This file explains why each removal was safe.
 | `predictionSupported` and `trustModeSupported` are now dead class attributes | `tests/test_butler.py` still sets them; the last readers left with Tasks 11 and 8 | Left in place like `fullConfigKey`, rather than churned out of a file Task 12 deletes. Not ported: the new files read `ButlerHarness.prediction_supported` and `.trust_mode_supported`. |
 | `Butler.exists` on a ref with a colliding UUID | raises "... has the same dataset ID as one in registry but has different incompatible values" | Another bare `assertRaises(ValueError)` that `PT011` forced to name its real message. |
 | `test_provenance`'s bad-input-ID assertion does not test what its comment says | `tests/test_butler.py::PosixDatastoreButlerTestCase::test_provenance`, the `prov_dict["input 0 id"] = uuid.uuid4()` case | The added key separates its words with spaces while the rest of the header separates with ".", so `from_flat_dict` raises "Inconsistent values found for separators" before it ever looks the input ID up. The bare `assertRaises(ValueError)` hid this. The converted test asserts the message that actually occurs and carries a comment; making the test check what it intended is a change of test behavior and belongs on its own ticket. |
+| `CleanupPosixDatastoreTestCase.testCleanup`'s two formatter cases are order-dependent | `tests/test_datastore.py::CleanupPosixDatastoreTestCase::testCleanup` | The second case asserts the datastore directory exists, but that directory is created by the *first* case's failed put. Parametrizing the two, as the plan asked, makes the `BadNoWriteFormatter` case fail on its own. The loop is kept, with a comment saying why. Making the second case independent is a change of test behavior and belongs on its own ticket. |
 
 ## Test mapping
 
@@ -501,3 +509,168 @@ This file explains why each removal was safe.
 | `tests/test_datastore.py::ChainedDatastoreConstraintsTestCase::testConstraints` | `tests/test_datastore_constraints.py::` `test_constraints[chained-metric]`, `test_constraints[chained-metric5]`, `test_constraints[chained-metric33]`, `test_constraints[chained-metric5-json]` (four former subtests) |
 | `tests/test_datastore.py::ChainedDatastoreMemoryConstraintsTestCase::testConstraints` | `tests/test_datastore_constraints.py::` `test_constraints[chained-memory-metric]`, `test_constraints[chained-memory-metric5]`, `test_constraints[chained-memory-metric33]`, `test_constraints[chained-memory-metric5-json]` (four former subtests) |
 | `tests/test_datastore.py::ChainedDatastorePerStoreConstraintsTests::testConstraints` | `tests/test_datastore_constraints.py::` `test_per_store_constraints[metric]`, `test_per_store_constraints[metric5]`, `test_per_store_constraints[metric5-hsc]`, `test_per_store_constraints[metric33]`, `test_per_store_constraints[metric5-json]` (five former subtests) |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[posix-...]` (6 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testForget` | `tests/test_datastore_file.py::test_forget[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[posix-...]` (2 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[posix-...]` (7 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testExport` | `tests/test_datastore_file.py::test_export[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[posix]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[posix-no-checksums-...]` (6 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testForget` | `tests/test_datastore_file.py::test_forget[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[posix-no-checksums-...]` (2 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[posix-no-checksums-...]` (7 former subtests) |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testExport` | `tests/test_datastore_file.py::test_export[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[posix-no-checksums]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[trash-...]` (6 former subtests) |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testForget` | `tests/test_datastore_file.py::test_forget[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[trash-...]` (2 former subtests) |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[trash-...]` (7 former subtests) |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testExport` | `tests/test_datastore_file.py::test_export[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[trash]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[in-memory-...]` (6 former subtests) |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testForget` | `tests/test_datastore_file.py::test_forget[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[in-memory-...]` (2 former subtests) |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[in-memory-...]` (7 former subtests) |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::testExport` | `tests/test_datastore_file.py::test_export[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[in-memory]` |
+| `tests/test_datastore.py::InMemoryDatastoreTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[in-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[chained-...]` (6 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testForget` | `tests/test_datastore_file.py::test_forget[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[chained-...]` (2 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[chained-...]` (7 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testExport` | `tests/test_datastore_file.py::test_export[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testConfigRoot` | `tests/test_datastore_file.py::test_config_root[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testConstructor` | `tests/test_datastore_file.py::test_constructor[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testConfigurationValidation` | `tests/test_datastore_file.py::test_configuration_validation[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testParameterValidation` | `tests/test_datastore_file.py::test_parameter_validation[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testBasicPutGet` | `tests/test_datastore_file.py::test_basic_put_get[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testTrustGetRequest` | `tests/test_datastore_file.py::test_trust_get_request[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testDisassembly` | `tests/test_datastore_file.py::test_disassembly[chained-memory-...]` (6 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testRemove` | `tests/test_datastore_file.py::test_remove[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testForget` | `tests/test_datastore_file.py::test_forget[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testTransfer` | `tests/test_datastore_file.py::test_transfer[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testBasicTransaction` | `tests/test_datastore_file.py::test_basic_transaction[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testNestedTransaction` | `tests/test_datastore_file.py::test_nested_transaction[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testIngestNoTransfer` | `tests/test_datastore_file.py::test_ingest_no_transfer[chained-memory-...]` (2 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testIngestTransfer` | `tests/test_datastore_file.py::test_ingest_transfer[chained-memory-...]` (7 former subtests) |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testIngestSymlinkOfSymlink` | `tests/test_datastore_file.py::test_ingest_symlink_of_symlink[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testExportImportRecords` | `tests/test_datastore_file.py::test_export_import_records[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testExportImportTable` | `tests/test_datastore_file.py::test_export_import_table[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testExportPredictedRecords` | `tests/test_datastore_file.py::test_export_predicted_records[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::testExport` | `tests/test_datastore_file.py::test_export[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::test_pydantic_dict_storage_class_conversions` | `tests/test_datastore_file.py::test_pydantic_dict_storage_class_conversions[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::test_simple_class_put_get` | `tests/test_datastore_file.py::test_simple_class_put_get[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::test_dataclass_put_get` | `tests/test_datastore_file.py::test_dataclass_put_get[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::test_pydantic_put_get` | `tests/test_datastore_file.py::test_pydantic_put_get[chained-memory]` |
+| `tests/test_datastore.py::ChainedDatastoreMemoryTestCase::test_tuple_put_get` | `tests/test_datastore_file.py::test_tuple_put_get[chained-memory]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testAtomicWrite` | `tests/test_datastore_file.py::test_atomic_write[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::testCanNotDeterminePutFormatterLocation` | `tests/test_datastore_file.py::test_can_not_determine_put_formatter_location[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_roots` | `tests/test_datastore_file.py::test_roots[posix]` |
+| `tests/test_datastore.py::PosixDatastoreTestCase::test_prepare_get_for_external_client` | `tests/test_datastore_file.py::test_prepare_get_for_external_client[posix]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testAtomicWrite` | `tests/test_datastore_file.py::test_atomic_write[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testCanNotDeterminePutFormatterLocation` | `tests/test_datastore_file.py::test_can_not_determine_put_formatter_location[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_roots` | `tests/test_datastore_file.py::test_roots[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_prepare_get_for_external_client` | `tests/test_datastore_file.py::test_prepare_get_for_external_client[posix-no-checksums]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testAtomicWrite` | `tests/test_datastore_file.py::test_atomic_write[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testCanNotDeterminePutFormatterLocation` | `tests/test_datastore_file.py::test_can_not_determine_put_formatter_location[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_roots` | `tests/test_datastore_file.py::test_roots[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_prepare_get_for_external_client` | `tests/test_datastore_file.py::test_prepare_get_for_external_client[trash]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testAtomicWrite` | `tests/test_datastore_file.py::test_atomic_write[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::testCanNotDeterminePutFormatterLocation` | `tests/test_datastore_file.py::test_can_not_determine_put_formatter_location[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_roots` | `tests/test_datastore_file.py::test_roots[chained]` |
+| `tests/test_datastore.py::ChainedDatastoreTestCase::test_prepare_get_for_external_client` | `tests/test_datastore_file.py::test_prepare_get_for_external_client[chained]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::testChecksum` | `tests/test_datastore_file.py::test_checksum[posix-no-checksums]` |
+| `tests/test_datastore.py::PosixDatastoreNoChecksumsTestCase::test_repeat_ingest` | `tests/test_datastore_file.py::test_repeat_ingest[posix-no-checksums]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::testTrash` | `tests/test_datastore_file.py::test_trash[trash]` |
+| `tests/test_datastore.py::TrashDatastoreTestCase::test_empty_trash` | `tests/test_datastore_file.py::test_empty_trash[trash]` |
+| `tests/test_datastore.py::CleanupPosixDatastoreTestCase::testCleanup` | `tests/test_datastore_file.py::test_cleanup[posix]` |
