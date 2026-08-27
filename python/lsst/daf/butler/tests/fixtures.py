@@ -154,8 +154,14 @@ DATASTORE_PROFILES: dict[str, DatastoreProfile] = {
 """Configuration that varies between datastores, keyed by datastore type."""
 
 
-def make_example_metrics() -> MetricsExample:
+def make_example_metrics(use_none: bool = False) -> MetricsExample:
     """Return an example dataset suitable for tests.
+
+    Parameters
+    ----------
+    use_none : `bool`, optional
+        If `True`, leave the data array unset, for tests that check a
+        component reads back as `None`.
 
     Returns
     -------
@@ -165,7 +171,7 @@ def make_example_metrics() -> MetricsExample:
     return MetricsExample(
         {"AM1": 5.2, "AM2": 30.6},
         {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
-        [563, 234, 456.7, 752, 8, 9, 27],
+        None if use_none else [563, 234, 456.7, 752, 8, 9, 27],
     )
 
 

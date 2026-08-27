@@ -35,7 +35,6 @@ from collections.abc import Iterator
 from typing import cast
 
 import pytest
-from butler_test_support import make_datastore_metrics
 
 from lsst.daf.butler import (
     DatasetTypeNotSupportedError,
@@ -47,6 +46,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore import DatastoreConfig
 from lsst.daf.butler.datastores.chainedDatastore import ChainedDatastore
 from lsst.daf.butler.tests import DatasetTestHelper, DummyRegistry
+from lsst.daf.butler.tests.fixtures import make_example_metrics
 from lsst.utils import doImport
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -172,7 +172,7 @@ def test_constraints(
     dimensions = DimensionUniverse().conform(("visit", "physical_filter", "instrument"))
     testfile = _testfile_for(testfiles, storage_class.name)
 
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     ref = helper.makeDatasetRef(dataset_type_name, dimensions, storage_class, DATA_ID)
     if accepted:
         datastore.put(metrics, ref)
@@ -221,7 +221,7 @@ def test_per_store_constraints(
     dimensions = DimensionUniverse().conform(("visit", "physical_filter", "instrument"))
     testfile = _testfile_for(testfiles, storage_class.name)
 
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     ref = helper.makeDatasetRef(dataset_type_name, dimensions, storage_class, data_id)
     if not any(accept):
         with pytest.raises(DatasetTypeNotSupportedError):

@@ -42,7 +42,7 @@ from typing import Any, cast
 
 import pytest
 import yaml
-from butler_test_support import make_datastore_metrics, records_from
+from butler_test_support import records_from
 
 import lsst.daf.butler.datastores.fileDatastore
 from lsst.daf.butler import (
@@ -69,6 +69,7 @@ from lsst.daf.butler.tests import (
     MetricsExampleModel,
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+from lsst.daf.butler.tests.fixtures import make_example_metrics
 from lsst.utils import doImport
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -398,7 +399,7 @@ def test_parameter_validation(ds: DatastoreHarness) -> None:
 
 @pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
 def test_basic_put_get(ds: DatastoreHarness) -> None:
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     datastore = ds.make_datastore()
 
     # Create multiple storage classes for testing different formulations
@@ -481,7 +482,7 @@ def test_basic_put_get(ds: DatastoreHarness) -> None:
 
     # Check that we can put a metric with None in a component and
     # get it back as None
-    metricsNone = make_datastore_metrics(use_none=True)
+    metricsNone = make_example_metrics(use_none=True)
     dataIdNone = {
         "instrument": "dummy",
         "visit": 54,
@@ -528,7 +529,7 @@ def test_trust_get_request(ds: DatastoreHarness) -> None:
     if not hasattr(datastore, "trustGetRequest"):
         return
 
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
 
     i = 0
     for sc_name in ("StructuredDataNoComponents", "StructuredData", "StructuredComposite"):
@@ -682,7 +683,7 @@ def test_trust_get_request(ds: DatastoreHarness) -> None:
 @pytest.mark.parametrize(("i", "sc_name"), list(enumerate(COMPOSITE_STORAGE_CLASS_NAMES)))
 def test_disassembly(ds: DatastoreHarness, i: int, sc_name: str) -> None:
     """Test disassembly within datastore."""
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     if ds.profile.is_ephemeral:
         # in-memory datastore does not disassemble
         return
@@ -741,7 +742,7 @@ def test_disassembly(ds: DatastoreHarness, i: int, sc_name: str) -> None:
 
 
 def _prep_delete_test(ds: DatastoreHarness, n_refs: int = 1) -> tuple[Datastore, tuple[DatasetRef, ...]]:
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     datastore = ds.make_datastore()
     # Put
     dimensions = ds.universe.conform(("visit", "physical_filter"))
@@ -818,7 +819,7 @@ def test_forget(ds: DatastoreHarness) -> None:
 
 @pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
 def test_transfer(ds: DatastoreHarness) -> None:
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
 
     dimensions = ds.universe.conform(("visit", "physical_filter"))
     dataId = {
@@ -855,7 +856,7 @@ def test_basic_transaction(ds: DatastoreHarness) -> None:
     data = [
         (
             ds.make_dataset_ref("metric", dimensions, storageClass, dataId),
-            make_datastore_metrics(),
+            make_example_metrics(),
         )
         for dataId in dataIds
     ]
@@ -897,7 +898,7 @@ def test_nested_transaction(ds: DatastoreHarness) -> None:
     datastore = ds.make_datastore()
     storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
     dimensions = ds.universe.conform(("visit", "physical_filter"))
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
 
     dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
     refBefore = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
@@ -943,7 +944,7 @@ def test_nested_transaction(ds: DatastoreHarness) -> None:
 def _prepare_ingest_test(ds: DatastoreHarness) -> tuple[MetricsExample, DatasetRef]:
     storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
     dimensions = ds.universe.conform(("visit", "physical_filter"))
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
     ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
     return metrics, ref
@@ -1152,7 +1153,7 @@ def _populate_export_datastore(ds: DatastoreHarness, name: str) -> tuple[Datasto
     else:
         pytest.skip("in-memory datastore does not support record export/import")
 
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     dimensions = ds.universe.conform(("visit", "physical_filter"))
     sc = ds.storage_class_factory.getStorageClass("StructuredData")
 
@@ -1370,7 +1371,7 @@ def test_atomic_write(ds: DatastoreHarness, caplog: pytest.LogCaptureFixture) ->
     datastore = ds.make_datastore()
     storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
     dimensions = ds.universe.conform(("visit", "physical_filter"))
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
 
     dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
     ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
@@ -1392,7 +1393,7 @@ def test_can_not_determine_put_formatter_location(ds: DatastoreHarness) -> None:
     """Verify that the expected exception is raised if the FileDatastore
     can not determine the put formatter location.
     """
-    _ = make_datastore_metrics()
+    _ = make_example_metrics()
     datastore = ds.make_datastore()
 
     # Create multiple storage classes for testing different formulations
@@ -1460,7 +1461,7 @@ def test_checksum(ds: DatastoreHarness) -> None:
     datastore = ds.make_datastore()
     storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
     dimensions = ds.universe.conform(("visit", "physical_filter"))
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
 
     dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
     ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
@@ -1591,7 +1592,7 @@ def test_empty_trash(ds: DatastoreHarness) -> None:
 @pytest.mark.parametrize("ds", ["posix"], indirect=True)
 def test_cleanup(ds: DatastoreHarness) -> None:
     """Test that a failed formatter write does cleanup a partial file."""
-    metrics = make_datastore_metrics()
+    metrics = make_example_metrics()
     datastore = ds.make_datastore()
 
     storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
