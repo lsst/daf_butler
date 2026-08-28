@@ -32,6 +32,7 @@ from .._collection_type import CollectionType
 from .._exceptions import (
     CollectionTypeError,
     DataIdValueError,
+    DatasetTypeExpressionError,
     DimensionNameError,
     InconsistentDataIdError,
     MissingCollectionError,

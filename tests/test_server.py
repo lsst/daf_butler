@@ -55,7 +55,7 @@ from lsst.daf.butler import (
     UnknownComponentError,
 )
 from lsst.daf.butler.datastore import DatasetRefURIs
-from lsst.daf.butler.registry import RegistryDefaults
+from lsst.daf.butler.registry import DatasetTypeExpressionError, RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
@@ -197,6 +197,28 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # An unknown parent dataset type still raises the standard error.
         with self.assertRaises(MissingDatasetTypeError):
             self.butler_without_error_propagation.get_dataset_type("not_bias.image")
+
+    def test_get_dataset_type_with_invalid_name(self):
+        """Test that a syntactically invalid dataset type name is rejected on
+        the client without contacting the server (DM-53347).
+        """
+        with patch.object(self.butler._connection, "get") as mock:
+            with self.assertRaises(DatasetTypeExpressionError):
+                self.butler.get_dataset_type("...")
+        mock.assert_not_called()
+
+    def test_query_dataset_types_with_invalid_name(self):
+        """Test that a dataset type search expression the server cannot handle
+        is reported to the client as a user error rather than an internal
+        server error (DM-53347).
+        """
+        # "..." is a valid wildcard for the Ellipsis object but not as a
+        # string, where it parses as a component dataset type name.
+        with self.assertRaises(DatasetTypeExpressionError):
+            self.butler.registry.queryDatasetTypes("...")
+
+        with self.assertRaises(DatasetTypeExpressionError):
+            self.butler.registry.queryDatasetTypes("bias.image")
 
     def test_find_dataset(self):
         storage_class = self.storageClassFactory.getStorageClass("Exposure")
@@ -466,11 +488,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
             deferred_ref_data = self.butler.getDeferred(component_ref).get()
             self.assertEqual(deferred_ref_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
-            # An empty component name raises rather than silently returning
-            # the composite.
-            with self.assertRaises(KeyError):
+            # A trailing separator with no component name is not a valid
+            # dataset type name and is rejected rather than silently
+            # returning the composite.
+            with self.assertRaises(DatasetTypeExpressionError):
                 self.butler.get(f"{dataset_type}.", dataId=data_id, collections=collections)
-            with self.assertRaises(KeyError):
+            with self.assertRaises(DatasetTypeExpressionError):
                 self.butler.getDeferred(f"{dataset_type}.", data_id, collections=collections)
 
         self.assertGreater(len(sent_dataset_types), 0)

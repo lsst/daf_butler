@@ -291,7 +291,7 @@ class Query(QueryBase):
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when the ``dataset_type`` expression is invalid.
         lsst.daf.butler.registry.NoDefaultCollectionError
             Raised when ``collections`` is `None` and default butler

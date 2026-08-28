@@ -38,9 +38,10 @@ from .._butler import Butler
 from .._collection_type import CollectionType
 from .._dataset_association import DatasetAssociation
 from .._dataset_type import DatasetType
+from .._exceptions import DatasetTypeExpressionError
 from ..dimensions import DataId, DimensionElement, DimensionGroup
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
-from ._exceptions import ArgumentError, DatasetTypeExpressionError, NoDefaultCollectionError
+from ._exceptions import ArgumentError, NoDefaultCollectionError
 from ._registry import CollectionArgType, Registry
 from .queries import (
     ChainedDatasetQueryResults,

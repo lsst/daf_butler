@@ -2051,7 +2051,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``dataset_type`` expression is invalid.
         lsst.daf.butler.registry.DataIdError
             Raised when ``data_id`` or keyword arguments specify unknown

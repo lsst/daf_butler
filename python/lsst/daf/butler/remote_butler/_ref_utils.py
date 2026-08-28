@@ -39,7 +39,7 @@ __all__ = (
 from pydantic import TypeAdapter
 
 from .._dataset_ref import DatasetRef
-from .._dataset_type import DatasetType, get_dataset_type_name
+from .._dataset_type import DatasetType, get_dataset_type_name, validate_dataset_type_name
 from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate, DataId, DataIdValue, SerializedDataId
 from .server_models import DatasetTypeName
@@ -170,8 +170,17 @@ def split_dataset_type_name(
         Name of the parent dataset type, suitable for sending to the server.
     component : `str` | `None`
         Component name, or `None` if this is not a component dataset type.
+
+    Raises
+    ------
+    lsst.daf.butler.DatasetTypeExpressionError
+        Raised if the given name is not a syntactically valid dataset type
+        name.  Sending such a name to the server would produce a confusing
+        HTTP error instead of a useful message.
     """
-    parent_name, component = DatasetType.splitDatasetTypeName(get_dataset_type_name(datasetTypeOrName))
+    name = get_dataset_type_name(datasetTypeOrName)
+    validate_dataset_type_name(name)
+    parent_name, component = DatasetType.splitDatasetTypeName(name)
     return DatasetTypeName(parent_name), component
 
 

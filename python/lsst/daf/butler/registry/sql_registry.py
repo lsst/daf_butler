@@ -45,7 +45,7 @@ from lsst.utils.iteration import ensure_iterable
 from .._collection_type import CollectionType
 from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
-from .._dataset_type import DatasetType
+from .._dataset_type import DatasetType, validate_dataset_type_name
 from .._exceptions import DataIdValueError, DimensionNameError, InconsistentDataIdError
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
@@ -814,7 +814,9 @@ class SqlRegistry:
 
         Raises
         ------
-        lsst.daf.butler.registry.MissingDatasetTypeError
+        lsst.daf.butler.DatasetTypeExpressionError
+            Raised if ``name`` is not a valid dataset type name.
+        lsst.daf.butler.MissingDatasetTypeError
             Raised if the requested dataset type has not been registered.
 
         Notes
@@ -822,6 +824,7 @@ class SqlRegistry:
         This method handles component dataset types automatically, though most
         other registry operations do not.
         """
+        validate_dataset_type_name(name)
         parent_name, component = DatasetType.splitDatasetTypeName(name)
         parent_dataset_type = self._managers.datasets.get_dataset_type(parent_name)
         if component is None:
@@ -1551,7 +1554,7 @@ class SqlRegistry:
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
         wildcard = DatasetTypeWildcard.from_expression(expression)
