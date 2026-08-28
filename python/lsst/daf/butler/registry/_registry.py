@@ -470,7 +470,7 @@ class Registry(ABC):
 
         Raises
         ------
-        lsst.daf.butler.registry.MissingDatasetTypeError
+        lsst.daf.butler.MissingDatasetTypeError
             Raised if the requested dataset type has not been registered.
 
         Notes
@@ -554,9 +554,9 @@ class Registry(ABC):
             ``self.defaults.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
-        lsst.daf.butler.registry.MissingDatasetTypeError
+        lsst.daf.butler.MissingDatasetTypeError
             Raised if the dataset type does not exist.
-        lsst.daf.butler.registry.MissingCollectionError
+        lsst.daf.butler.MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
 
         Notes
@@ -1064,7 +1064,7 @@ class Registry(ABC):
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
         raise NotImplementedError()
@@ -1207,7 +1207,7 @@ class Registry(ABC):
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
         TypeError
             Raised when the arguments are incompatible, such as when a
@@ -1323,7 +1323,7 @@ class Registry(ABC):
         lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when they contain inconsistent values.
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
@@ -1402,7 +1402,7 @@ class Registry(ABC):
         lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when they contain inconsistent values.
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.

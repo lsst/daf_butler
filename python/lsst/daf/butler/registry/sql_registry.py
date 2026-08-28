@@ -1554,7 +1554,7 @@ class SqlRegistry:
 
         Raises
         ------
-        lsst.daf.butler.registry.DatasetTypeExpressionError
+        lsst.daf.butler.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
         wildcard = DatasetTypeWildcard.from_expression(expression)
