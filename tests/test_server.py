@@ -202,18 +202,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
         """Test that a syntactically invalid dataset type name is rejected on
         the client without contacting the server (DM-53347).
         """
-        requested_paths: list[str] = []
-        original_get = self.butler._connection.get
-
-        def tracking_get(path, **kwargs):
-            requested_paths.append(path)
-            return original_get(path, **kwargs)
-
-        with patch.object(self.butler._connection, "get", side_effect=tracking_get):
+        with patch.object(self.butler._connection, "get") as mock:
             with self.assertRaises(DatasetTypeExpressionError):
                 self.butler.get_dataset_type("...")
-
-        self.assertEqual(requested_paths, [])
+        mock.assert_not_called()
 
     def test_query_dataset_types_with_invalid_name(self):
         """Test that a dataset type search expression the server cannot handle
