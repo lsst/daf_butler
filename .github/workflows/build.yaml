@@ -89,7 +89,7 @@ jobs:
           if [ "$COVERAGE" = "true" ]; then
             coverage_args=(--cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch)
           fi
-          uv run pytest -Wd -r a -v -n 3 "${coverage_args[@]}" \
+          uv run pytest -Wd -r a -v -n 3 --durations=200 "${coverage_args[@]}" \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
         if: matrix.variant.coverage
