@@ -43,8 +43,9 @@ from typing import Any
 from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
+from .._exceptions import DatasetTypeExpressionError
 from ..utils import globToRegex
-from ._exceptions import CollectionExpressionError, DatasetTypeExpressionError
+from ._exceptions import CollectionExpressionError
 
 
 @dataclasses.dataclass

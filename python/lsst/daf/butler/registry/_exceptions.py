@@ -30,7 +30,6 @@ __all__ = (
     "ArgumentError",
     "CollectionExpressionError",
     "ConflictingDefinitionError",
-    "DatasetTypeExpressionError",
     "MissingSpatialOverlapError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
@@ -45,10 +44,6 @@ from .._exceptions_legacy import CollectionError, RegistryError
 
 class ArgumentError(RegistryError):
     """Exception raised when method arguments are invalid or inconsistent."""
-
-
-class DatasetTypeExpressionError(RegistryError):
-    """Exception raised for an incorrect dataset type expression."""
 
 
 class CollectionExpressionError(CollectionError):

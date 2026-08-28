@@ -65,6 +65,7 @@ from ..._exceptions import (
     CalibrationLookupError,
     CollectionTypeError,
     DataIdValueError,
+    DatasetTypeExpressionError,
     InconsistentDataIdError,
     InvalidQueryError,
     MissingCollectionError,
@@ -81,7 +82,6 @@ from .._exceptions import (
     ArgumentError,
     CollectionError,
     ConflictingDefinitionError,
-    DatasetTypeExpressionError,
     NoDefaultCollectionError,
     OrphanedRecordError,
 )
@@ -905,6 +905,31 @@ class RegistryTests(ABC):
         # Search for a single dataset with findDataset.
         with self.assertRaises(DatasetTypeError):
             registry.findDataset("bias.wcs", collections=collection, dataId=parentRefResolved.dataId)
+
+    def testInvalidDatasetTypeName(self):
+        """Test that a syntactically invalid dataset type name is reported as
+        a bad expression rather than as a missing dataset type.
+        """
+        butler = self.make_butler()
+        registry = butler.registry
+        self.load_data(butler, "base.yaml", "datasets.yaml")
+        with self.assertRaisesRegex(DatasetTypeExpressionError, "does not look like a valid"):
+            registry.getDatasetType("...")
+        # A search expression reports the name as invalid rather than
+        # complaining that "." introduces an unsupported component.
+        with self.assertRaisesRegex(DatasetTypeExpressionError, "does not look like a valid"):
+            registry.queryDatasetTypes("...")
+        with self.assertRaisesRegex(DatasetTypeExpressionError, "Component dataset types"):
+            registry.queryDatasetTypes("bias.image")
+        # A well-formed name that is simply not registered is still missing
+        # rather than invalid.
+        with self.assertRaises(MissingDatasetTypeError):
+            registry.getDatasetType("not_bias")
+        # Names that cannot be registered do not prevent a search from
+        # reporting the other names it could not find.
+        missing: list[str] = []
+        registry.queryDatasetTypes(["bias", "not-a-legal-name"], missing=missing)
+        self.assertEqual(missing, ["not-a-legal-name"])
 
     def testCollections(self):
         """Tests for registry methods that manage collections."""

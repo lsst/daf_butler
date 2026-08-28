@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
-from ._exceptions import InconsistentUniverseError, UnknownComponentError
+from ._exceptions import DatasetTypeExpressionError, InconsistentUniverseError, UnknownComponentError
 from ._storage_class import StorageClass, StorageClassFactory
 from .dimensions import DimensionGroup
 from .json import from_json_pydantic, to_json_pydantic
@@ -207,7 +207,7 @@ class DatasetType:
         isCalibration: bool = False,
     ):
         if self.VALID_NAME_REGEX.match(name) is None:
-            raise ValueError(f"DatasetType name '{name}' is invalid.")
+            raise ValueError(f"DatasetType '{name}' does not look like a valid dataset type name.")
         self._name = name
         universe = universe or getattr(dimensions, "universe", None)
         if universe is None:
@@ -875,3 +875,22 @@ def get_dataset_type_name(datasetTypeOrName: DatasetType | str) -> str:
         return datasetTypeOrName
     else:
         raise TypeError(f"Expected DatasetType or str, got unexpected object: {datasetTypeOrName}")
+
+
+def validate_dataset_type_name(name: str) -> None:
+    """Check that a string is usable as a dataset type name.
+
+    Parameters
+    ----------
+    name : `str`
+        Name of a dataset type, possibly including a component.
+
+    Raises
+    ------
+    lsst.daf.butler.DatasetTypeExpressionError
+        Raised if ``name`` is not a syntactically valid dataset type name.
+    """
+    if DatasetType.VALID_NAME_REGEX.match(name) is None:
+        raise DatasetTypeExpressionError(
+            f"DatasetType {name!r} does not look like a valid dataset type name."
+        )

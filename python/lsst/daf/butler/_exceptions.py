@@ -34,6 +34,7 @@ __all__ = (
     "CollectionTypeError",
     "DataIdValueError",
     "DatasetNotFoundError",
+    "DatasetTypeExpressionError",
     "DatasetTypeNotSupportedError",
     "DimensionNameError",
     "EmptyQueryResultError",
@@ -120,6 +121,12 @@ class DatasetNotFoundError(LookupError, ButlerUserError):
     """The requested dataset could not be found."""
 
     error_type = "dataset_not_found"
+
+
+class DatasetTypeExpressionError(DatasetTypeError, ButlerUserError):
+    """Exception raised for an incorrect dataset type expression."""
+
+    error_type = "dataset_type_expression"
 
 
 class DimensionNameError(KeyError, DataIdError, ButlerUserError):
@@ -237,6 +244,7 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     DimensionValueError,
     DataIdValueError,
     DatasetNotFoundError,
+    DatasetTypeExpressionError,
     InconsistentDataIdError,
     InvalidQueryError,
     MissingCollectionError,

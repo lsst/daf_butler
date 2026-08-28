@@ -18,8 +18,8 @@ from lsst.utils.iteration import chunk_iterable
 from .... import ddl
 from ...._collection_type import CollectionType
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
-from ...._dataset_type import DatasetType, get_dataset_type_name
-from ...._exceptions import CollectionTypeError, MissingDatasetTypeError
+from ...._dataset_type import DatasetType, get_dataset_type_name, validate_dataset_type_name
+from ...._exceptions import CollectionTypeError, DatasetTypeExpressionError, MissingDatasetTypeError
 from ...._exceptions_legacy import DatasetTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate, DimensionGroup, DimensionUniverse
@@ -28,7 +28,7 @@ from ....queries import QueryFactoryFunction
 from ....queries import tree as qt  # new query system, both clients + server
 from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
-from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
+from ..._exceptions import ConflictingDefinitionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorageManager, RunRecord, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._dataset_type_cache import DatasetTypeCache
@@ -453,7 +453,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
         for name, dataset_type in wildcard.values.items():
             parent_name, component_name = DatasetType.splitDatasetTypeName(name)
             if component_name is not None:
-                raise DatasetTypeError(
+                # Distinguish a real component name from a string that is not
+                # a valid dataset type name at all, such as "...", which is
+                # sometimes passed in place of the "..." wildcard.
+                validate_dataset_type_name(name)
+                raise DatasetTypeExpressionError(
                     "Component dataset types are not supported in Registry methods; use DatasetRef or "
                     "DatasetType methods to obtain components from parents instead."
                 )
@@ -469,7 +473,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
                         # conversions.
                         resolved_dataset_type = dataset_type
                     else:
-                        raise DatasetTypeError(
+                        raise DatasetTypeExpressionError(
                             f"Dataset type definition in query expression {dataset_type} is "
                             f"not compatible with the registered type {resolved_dataset_type}."
                         )
