@@ -39,6 +39,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
+from lsst.utils.iteration import chunk_iterable
+
+from .._dataset_ref import DatasetId
 from .._utilities.thread_safe_cache import ThreadSafeCache
 from ..ddl import FieldSpec, TableSpec
 from .interfaces import (
@@ -102,14 +105,6 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         self,
         **where: Any,
     ) -> Iterator[sqlalchemy.RowMapping]:
-        # Docstring inherited from OpaqueTableStorage.
-        for batch in self.fetch_batches(**where):
-            yield from batch
-
-    def fetch_batches(
-        self,
-        **where: Any,
-    ) -> Iterator[Sequence[sqlalchemy.RowMapping]]:
         def _batch_in_clause(
             column: sqlalchemy.schema.Column, values: Iterable[Any]
         ) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
@@ -150,6 +145,19 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
             batched_sql = [sql]
         for sql_batch in batched_sql:
             with self._db.query(sql_batch) as sql_result:
+                sql_mappings = sql_result.mappings().fetchall()
+            yield from sql_mappings
+
+    def fetch_by_dataset_ids(
+        self, dataset_ids: Iterable[DatasetId]
+    ) -> Iterator[Sequence[sqlalchemy.RowMapping]]:
+        batch_size = 50_000
+        sorted_uniques = sorted(set(dataset_ids))
+        for batch in chunk_iterable(sorted_uniques, batch_size):
+            sql = self._table.select().where(
+                self._db.make_in_array_constraint(self._table.c["dataset_id"], batch)
+            )
+            with self._db.query(sql) as sql_result:
                 sql_mappings = sql_result.mappings().fetchall()
             yield sql_mappings
 

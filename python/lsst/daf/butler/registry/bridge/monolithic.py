@@ -223,7 +223,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                     .where(
                         sqlalchemy.sql.and_(
                             self._tables.dataset_location.columns.datastore_name == self.datastoreName,
-                            self._tables.dataset_location.columns.dataset_id.in_(batch),
+                            self._db.make_in_array_constraint(
+                                self._tables.dataset_location.columns.dataset_id, batch
+                            ),
                         )
                     )
                 )
