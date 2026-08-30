@@ -301,6 +301,7 @@ class ButlerCollections(ABC, Sequence):
         include_summary: bool = False,
         include_doc: bool = False,
         summary_datasets: Iterable[DatasetType] | Iterable[str] | None = None,
+        ignore_missing: bool = False,
     ) -> Sequence[CollectionInfo]:
         """Query the butler for collections matching an expression and
         return detailed information about those collections.
