@@ -17,7 +17,7 @@ jobs:
           {"python-version": "3.11", "pinned": true},
           {"python-version": "3.12", "pinned": true},
           {"python-version": "3.13", "pinned": true},
-          {"python-version": "3.14", "pinned": true},
+          {"python-version": "3.14", "pinned": true, "coverage": true},
           {"python-version": "3.14", "pinned": false},
         ]
 
@@ -59,14 +59,26 @@ jobs:
       - name: List installed packages
         run: uv tree
 
+      # Coverage is measured in a single variant rather than all of them.
+      # Before Python 3.14 coverage.py has to use its sys.settrace core,
+      # which disables bytecode specialization and inlining of Python-to-
+      # Python calls; that adds around 65% to the time spent running the
+      # tests, against around 10% for the sys.monitoring core used from
+      # 3.14 onwards.
       - name: Run tests
         shell: bash -l {0}
         env:
           SQLALCHEMY_WARN_20: 1
+          COVERAGE: ${{ matrix.variant.coverage && 'true' || 'false' }}
         run: |
-          uv run pytest -Wd -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch \
+          coverage_args=()
+          if [ "$COVERAGE" = "true" ]; then
+            coverage_args=(--cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch)
+          fi
+          uv run pytest -Wd -r a -v -n 3 "${coverage_args[@]}" \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
+        if: matrix.variant.coverage
         uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
