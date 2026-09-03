@@ -42,12 +42,13 @@ from pydantic_core import core_schema
 
 from lsst.utils.classes import cached_getter
 
-from .. import arrow_utils, column_spec, ddl, pydantic_utils
+from .. import column_spec, ddl, pydantic_utils
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from .. import arrow_utils
     from ..registry import Registry
     from ._governor import GovernorDimension
     from ._group import DimensionGroup

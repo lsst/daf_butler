@@ -83,6 +83,13 @@ from lsst.daf.butler.registry import CollectionSummary, DatasetTypeError
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord
 from lsst.sphgeom import DISJOINT, Mq3cPixelization
 
+try:
+    import pyarrow
+except ImportError:
+    pyarrow = None
+
+requires_arrow = unittest.skipIf(pyarrow is None, "pyarrow is not available")
+
 
 class _TestVisitor(PredicateVisitor[bool, bool, bool], ColumnExpressionVisitor[Any]):
     """Test visitor for column expressions.
@@ -1104,6 +1111,7 @@ class QueryTestCase(unittest.TestCase):
         kwargs.setdefault("dataset_types", self.dataset_types)
         return Query(_TestQueryDriver(**kwargs), qt.make_identity_query_tree(self.universe))
 
+    @requires_arrow
     def test_dataset_join(self) -> None:
         """Test queries that have had a dataset search explicitly joined in via
         Query.join_dataset_search.
@@ -1511,6 +1519,7 @@ class QueryTestCase(unittest.TestCase):
                 # Make sure numpy scalar types have been cast to builtins.
                 self.assertIsInstance(value, (int, str))
 
+    @requires_arrow
     def test_dimension_record_iteration(self) -> None:
         """Tests for DimensionRecordQueryResult iteration."""
 

@@ -34,12 +34,13 @@ from typing import TYPE_CHECKING
 
 from lsst.utils.classes import immutable
 
-from .. import arrow_utils, ddl
+from .. import ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
 from ..column_spec import RegionColumnSpec, TimespanColumnSpec
 from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from .. import arrow_utils
     from ._elements import Dimension, DimensionElement, KeyColumnSpec, MetadataColumnSpec
     from ._group import DimensionGroup
 

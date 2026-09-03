@@ -32,12 +32,11 @@ __all__ = ("DimensionRecordTable",)
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any, final, overload
 
-import pyarrow as pa
-import pyarrow.compute as pc
-
 from lsst.utils.iteration import chunk_iterable
 
 if TYPE_CHECKING:
+    import pyarrow as pa
+
     from ._elements import DimensionElement
     from ._records import DimensionRecord
     from ._universe import DimensionUniverse
@@ -87,6 +86,9 @@ class DimensionRecordTable:
         table: pa.Table | None = None,
         batch_size: int | None = None,
     ):
+        import pyarrow as pa
+        import pyarrow.compute as pc
+
         if element is None:
             if table is not None and b"element" in table.schema.metadata:
                 element = table.schema.metadata[b"element"].decode()
@@ -137,6 +139,8 @@ class DimensionRecordTable:
         schema : `pyarrow.Schema`
             Arrow schema.
         """
+        import pyarrow as pa
+
         return pa.schema([converter.field for converter in element.schema.to_arrow()])
 
     @property
@@ -175,6 +179,8 @@ class DimensionRecordTable:
         records : `~collections.abc.Iterable` [ `DimensionRecord` ]
             Dimension records to add to the table.
         """
+        import pyarrow as pa
+
         batches: list[pa.RecordBatch] = self._table.to_batches()
         batches.append(self._make_batch(records, self._table.schema))
         self._table = pa.Table.from_batches(batches, self._table.schema)
@@ -215,6 +221,8 @@ class DimensionRecordTable:
         batch : `pyarrow.RecordBatch`
             Record batch holding the records.
         """
+        import pyarrow as pa
+
         list_columns: list[list[Any]] = [list() for _ in self._converters]
         for record in records:
             for converter, column in zip(self._converters, list_columns):

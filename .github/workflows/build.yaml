@@ -12,6 +12,8 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     strategy:
+      # A failure on an unreleased interpreter must not cancel the others.
+      fail-fast: false
       matrix:
         variant: [
           {"python-version": "3.11", "pinned": true},
@@ -19,7 +21,16 @@ jobs:
           {"python-version": "3.13", "pinned": true},
           {"python-version": "3.14", "pinned": true, "coverage": true},
           {"python-version": "3.14", "pinned": false},
+          # Python 3.15 is not released yet.  There is no point testing it
+          # against the lockfile since the pinned versions predate it, so it is
+          # tested against the newest libraries in both the standard and the
+          # free-threaded build.
+          {"python-version": "3.15", "pinned": false, "prerelease": true},
+          {"python-version": "3.15t", "pinned": false, "prerelease": true},
         ]
+    # Many binary dependencies have no wheels for an unreleased interpreter,
+    # so those jobs must not block a PR.
+    continue-on-error: ${{ matrix.variant.prerelease == true }}
 
     steps:
       - uses: actions/checkout@v7
@@ -53,8 +64,11 @@ jobs:
         run: uv lock --upgrade
         if: matrix.variant.pinned == false
 
+      # pyarrow publishes no wheels for an unreleased interpreter and cannot
+      # practically be built from source, so the "arrow" extra is left out
+      # there and the tests that need Arrow skip themselves.
       - name: Build and install
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --all-extras --dev ${{ matrix.variant.prerelease == true && '--no-extra arrow' || '' }}
 
       - name: List installed packages
         run: uv tree
@@ -75,7 +89,7 @@ jobs:
           if [ "$COVERAGE" = "true" ]; then
             coverage_args=(--cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch)
           fi
-          uv run pytest -Wd -r a -v -n 3 "${coverage_args[@]}" \
+          uv run pytest -Wd -r a -v -n 3 --durations=200 "${coverage_args[@]}" \
             --junitxml=junit.xml -o junit_family=legacy
       - name: Upload coverage to codecov
         if: matrix.variant.coverage
