@@ -225,10 +225,16 @@ PROFILES = {
 rerun every shared test.
 """
 
-ALL_PROFILES = list(PROFILES)
-"""Profiles that run the shared datastore tests."""
+ALL_PROFILES = ["posix", "posix-no-checksums", "in-memory", "chained", "chained-memory"]
+"""Profiles that run the shared datastore tests.
 
-FILE_PROFILES = ["posix", "posix-no-checksums", "trash", "chained"]
+``trash`` is absent. It was a subclass of the posix case and so reran every
+shared test against the same configuration; DM-55822 measured those reruns as
+zero unique lines and zero unique arcs. The profile survives for the trash
+tests that gave it its name, which do have unique coverage.
+"""
+
+FILE_PROFILES = ["posix", "posix-no-checksums", "chained"]
 """Profiles backed by a FileDatastore, which run the file-specific tests."""
 
 
