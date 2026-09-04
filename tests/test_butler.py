@@ -29,13 +29,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import pathlib
 import pickle
 import re
-import shutil
 import tempfile
 import unittest
 import unittest.mock
@@ -45,7 +45,6 @@ import weakref
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import astropy.time
 from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler import (
@@ -87,10 +86,19 @@ from lsst.daf.butler.registry import (
     OrphanedRecordError,
 )
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
-from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MetricsExampleModel, MultiDetectorFormatter
 from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+from lsst.daf.butler.tests.fixtures import (
+    DATASTORE_PROFILES,
+    DEFAULT_RUN,
+    ButlerHarness,
+    ButlerRepo,
+    ClonedButlerHarness,
+    ServerButlerHarness,
+    add_dataset_type,
+    make_butler_repo,
+)
 from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
 from lsst.daf.butler.tests.utils import (
@@ -168,26 +176,77 @@ class ButlerPutGetTests(TestCaseMixin):
     butler configurations.
     """
 
-    root: str
-    default_run = "ingésτ😺"
+    default_run = DEFAULT_RUN
     storageClassFactory: StorageClassFactory
-    configFile: str | None
-    tmpConfigFile: str
+
+    profileName = "posix"
+    """Key of `DATASTORE_PROFILES` naming the datastore under test."""
+
+    repoLayout = "in_repo"
+    """Where the configuration sits relative to the repository root."""
+
+    registryBackend = "sqlite"
+    """Registry backend to configure: ``sqlite`` or ``postgres``."""
+
+    harness: ButlerHarness
+    """Repository under test and the Butlers built from it."""
 
     @staticmethod
     def addDatasetType(
         datasetTypeName: str, dimensions: DimensionGroup, storageClass: StorageClass | str, registry: Registry
     ) -> DatasetType:
         """Create a DatasetType and register it"""
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        registry.registerDatasetType(datasetType)
-        return datasetType
+        return add_dataset_type(datasetTypeName, dimensions, storageClass, registry)
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.storageClassFactory = StorageClassFactory()
-        if cls.configFile is not None:
-            cls.storageClassFactory.addFromConfig(cls.configFile)
+        profile = DATASTORE_PROFILES[cls.profileName]
+        cls.storageClassFactory.addFromConfig(os.path.join(TESTDIR, profile.config_file))
+
+    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
+        """Return the postgres instance to configure, or None for sqlite."""
+        return None
+
+    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
+        """Build the harness for this test's Butler client.
+
+        Parameters
+        ----------
+        repo : `ButlerRepo`
+            Repository the harness should open.
+        exit_stack : `contextlib.ExitStack`
+            Stack the harness registers its cleanups on.
+
+        Returns
+        -------
+        harness : `ButlerHarness`
+            Harness handing out the Butlers under test.
+        """
+        return ButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
+
+    def setUp(self) -> None:
+        """Build the repository for this test and a harness over it."""
+        exit_stack = self.enterContext(contextlib.ExitStack())
+        repo = exit_stack.enter_context(
+            make_butler_repo(TESTDIR, self.profileName, self.repoLayout, self._postgres_instance())
+        )
+        self.harness = self._make_harness(repo, exit_stack)
+        # The names the test bodies still read. Phase 2 replaces each of these
+        # reads with the harness or the profile directly.
+        self.root = repo.root
+        self.tmpConfigFile = repo.config_file
+        self.configFile = os.path.join(TESTDIR, DATASTORE_PROFILES[self.profileName].config_file)
+        self.dir1 = repo.dir1
+        self.dir2 = repo.dir2
+        profile = repo.profile
+        self.fullConfigKey = profile.full_config_key
+        self.validationCanFail = profile.validation_can_fail
+        self.datastoreStr = profile.datastore_str
+        self.datastoreName = profile.datastore_name
+        self.predictionSupported = self.harness.prediction_supported
+        self.trustModeSupported = self.harness.trust_mode_supported
+        self.registryStr = "PostgreSQL@test" if self.registryBackend == "postgres" else "/gen3.sqlite3"
 
     def assertGetComponents(
         self,
@@ -208,23 +267,19 @@ class ButlerPutGetTests(TestCaseMixin):
             result_deferred = deferred.get(component=component)
             self.assertEqual(result_deferred, result)
 
-    def tearDown(self) -> None:
-        if self.root is not None:
-            removeTestTempDir(self.root)
-
     def create_empty_butler(
         self,
         run: str | None = None,
         writeable: bool | None = None,
         metrics: ButlerMetrics | None = None,
         cleanup: bool = True,
-    ):
+    ) -> DirectButler:
         """Create a Butler for the test repository, without inserting test
         data.
         """
-        butler = Butler.from_config(self.tmpConfigFile, run=run, writeable=writeable, metrics=metrics)
-        if cleanup:
-            self.enterContext(butler)
+        butler = self.harness.create_empty_butler(
+            run=run, writeable=writeable, metrics=metrics, cleanup=cleanup
+        )
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         return butler
 
@@ -238,52 +293,7 @@ class ButlerPutGetTests(TestCaseMixin):
         """Create a Butler for the test repository and insert some test data
         into it.
         """
-        butler = self.create_empty_butler(run=run, metrics=metrics)
-
-        collections = set(butler.collections.query("*"))
-        self.assertEqual(collections, {run})
-        # Create and register a DatasetType
-        dimensions = butler.dimensions.conform(["instrument", "visit"])
-
-        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
-
-        # Add needed Dimensions
-        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData(
-            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
-        )
-        butler.registry.insertDimensionData(
-            "visit_system", {"instrument": "DummyCamComp", "id": 1, "name": "default"}
-        )
-        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20200101})
-        visit_start = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
-        visit_end = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
-        butler.registry.insertDimensionData(
-            "visit",
-            {
-                "instrument": "DummyCamComp",
-                "id": 423,
-                "name": "fourtwentythree",
-                "physical_filter": "d-r",
-                "datetime_begin": visit_start,
-                "datetime_end": visit_end,
-                "day_obs": 20200101,
-            },
-        )
-
-        # Add more visits for some later tests
-        for visit_id in (424, 425):
-            butler.registry.insertDimensionData(
-                "visit",
-                {
-                    "instrument": "DummyCamComp",
-                    "id": visit_id,
-                    "name": f"fourtwentyfour_{visit_id}",
-                    "physical_filter": "d-r",
-                    "day_obs": 20200101,
-                },
-            )
-        return butler, datasetType
+        return self.harness.create_butler(run, storageClass, datasetTypeName, metrics=metrics)
 
     def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> Butler:
         # New datasets will be added to run and tag, but we will only look in
@@ -622,27 +632,12 @@ class ButlerPutGetTests(TestCaseMixin):
 class ButlerTests(ButlerPutGetTests):
     """Tests for Butler."""
 
-    useTempRoot = True
-    validationCanFail: bool
-    fullConfigKey: str | None
-    registryStr: str | None
-    datastoreName: list[str] | None
-    datastoreStr: list[str]
-    predictionSupported = True
-    """Does getURIs support 'prediction mode'?"""
-
-    def setUp(self) -> None:
-        """Create a new butler root for each test."""
-        self.root = makeTestTempDir(TESTDIR)
-        make_repo_for_test(self.root, config=Config(self.configFile))
-        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
-
     def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
         """Return True if two URIs refer to the same resource.
 
         Subclasses may override to handle unique requirements.
         """
-        return uri1 == uri2
+        return self.harness.are_uris_equivalent(uri1, uri2)
 
     def testConstructor(self) -> None:
         """Independent test of constructor."""
@@ -2360,12 +2355,7 @@ class FileDatastoreButlerTests(ButlerTests):
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey: str | None = ".datastore.formatters"
-    validationCanFail = True
-    datastoreStr = ["/tmp"]
-    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3"
+    profileName = "posix"
 
     def testPathConstructor(self) -> None:
         """Independent test of constructor using PathLike."""
@@ -2641,33 +2631,17 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler using Postgres"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey = ".datastore.formatters"
-    validationCanFail = True
-    datastoreStr = ["/tmp"]
-    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "PostgreSQL@test"
+    profileName = "posix"
+    registryBackend = "postgres"
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.postgresql = cls.enterClassContext(setup_postgres_test_db())
         super().setUpClass()
 
-    def setUp(self) -> None:
-        # Need to add a registry section to the config.
-        self._temp_config = False
-        config = Config(self.configFile)
-        self.postgresql.patch_butler_config(config)
-        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
-            config.dump(fh)
-            self.configFile = fh.name
-            self._temp_config = True
-        super().setUp()
-
-    def tearDown(self) -> None:
-        if self._temp_config and os.path.exists(self.configFile):
-            os.remove(self.configFile)
-        super().tearDown()
+    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
+        # Docstring inherited.
+        return self.postgresql
 
     def testMakeRepo(self) -> None:
         # The base class test assumes that it's using sqlite and assumes
@@ -2678,27 +2652,15 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
 class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTestCase, unittest.TestCase):
     """Test that Butler with a Postgres registry still works after cloning."""
 
-    def create_butler(
-        self,
-        run: str,
-        storageClass: StorageClass | str,
-        datasetTypeName: str,
-        metrics: ButlerMetrics | None = None,
-    ) -> tuple[DirectButler, DatasetType]:
-        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName, metrics=metrics)
-        return butler.clone(run=run, metrics=metrics), datasetType
+    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
+        # Docstring inherited.
+        return ClonedButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
-    fullConfigKey = None
-    useTempRoot = False
-    validationCanFail = False
-    datastoreStr = ["datastore='InMemory"]
-    datastoreName = ["InMemoryDatastore@"]
-    registryStr = "/gen3.sqlite3"
+    profileName = "in_memory"
 
     def testIngest(self) -> None:
         pass
@@ -2710,30 +2672,17 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 class ClonedSqliteButlerTestCase(InMemoryDatastoreButlerTestCase, unittest.TestCase):
     """Test that a Butler with a Sqlite registry still works after cloning."""
 
-    def create_butler(
-        self,
-        run: str,
-        storageClass: StorageClass | str,
-        datasetTypeName: str,
-        metrics: ButlerMetrics | None = None,
-    ) -> tuple[DirectButler, DatasetType]:
-        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName, metrics=metrics)
-        return butler.clone(run=run), datasetType
+    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
+        # Docstring inherited. ClonedButlerHarness passes metrics through to
+        # clone(); this class previously dropped them, which the coverage gate
+        # confirmed costs nothing.
+        return ClonedButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
 
 
 class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
-    fullConfigKey = ".datastore.datastores.1.formatters"
-    validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/FileDatastore_1/,", "/FileDatastore_2/'"]
-    datastoreName = [
-        "InMemoryDatastore@",
-        f"FileDatastore@{BUTLER_ROOT_TAG}/FileDatastore_1",
-        "SecondDatastore",
-    ]
-    registryStr = "/gen3.sqlite3"
+    profileName = "chained"
 
     def testPruneDatasets(self) -> None:
         # This test relies on manipulating files out-of-band, which is
@@ -2751,28 +2700,7 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
 class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
     """Test that a yaml file in one location can refer to a root in another."""
 
-    datastoreStr = ["dir1"]
-    # Disable the makeRepo test since we are deliberately not using
-    # butler.yaml as the config name.
-    fullConfigKey = None
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-
-        # Make a new repository in one place
-        self.dir1 = os.path.join(self.root, "dir1")
-        make_repo_for_test(self.dir1, config=Config(self.configFile))
-
-        # Move the yaml file to a different place and add a "root"
-        self.dir2 = os.path.join(self.root, "dir2")
-        os.makedirs(self.dir2, exist_ok=True)
-        configFile1 = os.path.join(self.dir1, "butler.yaml")
-        config = Config(configFile1)
-        config["root"] = self.dir1
-        configFile2 = os.path.join(self.dir2, "butler2.yaml")
-        config.dumpToUri(configFile2)
-        os.remove(configFile1)
-        self.tmpConfigFile = configFile2
+    repoLayout = "explicit_root"
 
     def testFileLocations(self) -> None:
         self.assertNotEqual(self.dir1, self.dir2)
@@ -2784,19 +2712,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
 class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
     """Test that a config file created by makeRepo outside of repo works."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
-
-    def tearDown(self) -> None:
-        if os.path.exists(self.root2):
-            shutil.rmtree(self.root2, ignore_errors=True)
-        super().tearDown()
+    repoLayout = "outfile"
 
     def testConfigExistence(self) -> None:
         c = Config(self.tmpConfigFile)
@@ -2813,14 +2729,7 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
 class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
     """Test that a config file created by makeRepo outside of repo works."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = self.root2
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
+    repoLayout = "outfile_dir"
 
     def testConfigExistence(self) -> None:
         # Append the yaml file else Config constructor does not know the file
@@ -2832,14 +2741,7 @@ class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
 class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
     """Test that a config file created by makeRepo outside of repo works."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
-
-        self.tmpConfigFile = ResourcePath(os.path.join(self.root2, "something.yaml")).geturl()
-        make_repo_for_test(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
+    repoLayout = "outfile_uri"
 
 
 class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -2847,38 +2749,7 @@ class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestC
     as not local; a remote file datastore + a local SqlRegistry.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler-remotetest-store.yaml")
-    fullConfigKey = None
-    validationCanFail = True
-
-    registryStr = "/gen3.sqlite3"
-    """Expected format of the Registry string."""
-
-    def setUp(self) -> None:
-        config = Config(self.configFile)
-
-        self.root = makeTestTempDir(TESTDIR)
-        # The space in the directory name is deliberate. It ensures the URI
-        # has to be percent-encoded correctly on the way in and decoded on
-        # the way out.
-        root_path = os.path.join(self.root, "butler root")
-        os.makedirs(root_path)
-        rooturi = make_remote_test_uri(root_path)
-        config.update({"datastore": {"datastore": {"root": str(rooturi)}}})
-
-        # The registry database has to live on a real local file system.
-        self.reg_dir = makeTestTempDir(TESTDIR)
-        config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
-
-        self.datastoreStr = [f"datastore='{rooturi}'"]
-        self.datastoreName = [f"FileDatastore@{rooturi}"]
-        make_repo_for_test(rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = str(rooturi.join("butler.yaml", forceDirectory=False))
-
-    def tearDown(self) -> None:
-        removeTestTempDir(self.reg_dir)
-        # The base class removes self.root, which contains the datastore.
-        super().tearDown()
+    profileName = "remote_test"
 
 
 class DatastoreTransfers(TestCaseMixin):
@@ -3574,22 +3445,18 @@ class NullDatastoreTestCase(unittest.TestCase):
 class ButlerServerTests(FileDatastoreButlerTests):
     """Test RemoteButler and Butler server."""
 
-    configFile = None
-    predictionSupported = False
-    trustModeSupported = False
-
     postgres: TemporaryPostgresInstance | None
 
-    def setUp(self):
-        self.server_instance = self.enterContext(create_test_server(TESTDIR))
+    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
+        # Docstring inherited.
+        return self.postgres
 
-    def tearDown(self):
-        pass
-
-    def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
-        # S3 pre-signed URLs may end up with differing expiration times in the
-        # query parameters, so ignore query parameters when comparing.
-        return uri1.scheme == uri2.scheme and uri1.netloc == uri2.netloc and uri1.path == uri2.path
+    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
+        # Docstring inherited.
+        self.server_instance = exit_stack.enter_context(create_test_server(TESTDIR, postgres=self.postgres))
+        return ServerButlerHarness(
+            self.server_instance, repo, self.storageClassFactory, exit_stack, self.default_run
+        )
 
     def create_empty_butler(
         self,
@@ -3598,7 +3465,11 @@ class ButlerServerTests(FileDatastoreButlerTests):
         metrics: ButlerMetrics | None = None,
         cleanup: bool = True,
     ) -> Butler:
-        return self.server_instance.hybrid_butler.clone(run=run, metrics=metrics)
+        # The server hands out a HybridButler, so the base class assertion
+        # that this is a DirectButler does not apply.
+        return self.harness.create_empty_butler(
+            run=run, writeable=writeable, metrics=metrics, cleanup=cleanup
+        )
 
     def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
         # Can't delete a file via S3 signed URLs, so we need to reach in
@@ -3653,7 +3524,7 @@ class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
     server.
     """
 
-    postgres = None
+    postgres: TemporaryPostgresInstance | None = None
 
 
 @unittest.skipIf(not butler_server_is_available, butler_server_import_error)
@@ -3661,6 +3532,8 @@ class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
     """Tests for RemoteButler's registry shim, with a Postgres DB backing the
     server.
     """
+
+    registryBackend = "postgres"
 
     @classmethod
     def setUpClass(cls):
