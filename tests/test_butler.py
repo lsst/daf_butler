@@ -694,9 +694,6 @@ def test_component_from_overridden_storage_class_warns(
         assert not records_from(caplog, COMPONENT_WARNING_LOGGER, logging.WARNING)
 
 
-LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
-"""Repository layouts of the two classes the posix-only tests ran under."""
-
 PICKLE_AXES = [
     pytest.param(
         *param.values,
@@ -850,7 +847,6 @@ def test_constructor(butler_harness: ButlerHarness, butler_client: str) -> None:
     stack.close()
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_path_constructor(butler_harness: ButlerHarness) -> None:
     """Independent test of constructor using PathLike."""
     config_file = butler_harness.config_file
@@ -863,9 +859,8 @@ def test_path_constructor(butler_harness: ButlerHarness) -> None:
         butler = stack.enter_context(Butler.from_config(path, writeable=False))
         assert isinstance(butler, Butler)
 
-        # And again with a Path object without the butler yaml
-        # (making sure we skip it if the config doesn't end in butler.yaml,
-        # which is the case for the explicit-root layout)
+        # And again with a Path object without the butler yaml. The guard
+        # matters for any layout whose config is not named butler.yaml.
         if config_file.endswith("butler.yaml"):
             path = pathlib.Path(os.path.dirname(config_file))
             butler = stack.enter_context(Butler.from_config(path, writeable=False))
@@ -1272,7 +1267,6 @@ def test_butler_metrics(butler_harness: ButlerHarness) -> None:
     assert new.n_ingest == 2
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_pytype_coercion(butler_harness: ButlerHarness) -> None:
     """Test python type coercion on Butler.get and put."""
     # Store some data with the normal example storage class.
@@ -1330,7 +1324,6 @@ def test_pytype_coercion(butler_harness: ButlerHarness) -> None:
         butler.get(dataset_type_name, dataId=data_id)
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_provenance(butler_harness: ButlerHarness) -> None:
     """Test that provenance is attached on put."""
     run = "test_run"
@@ -1663,9 +1656,6 @@ def test_collection_chain_remove(butler_harness: ButlerHarness) -> None:
 # that BUTLER_TESTS_AXES adds are absent here rather than running empty.
 INGEST_AXES = FILE_DATASTORE_AXES
 
-LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
-"""Repository layouts of the two classes these posix-only tests ran under."""
-
 
 @pytest.mark.parametrize(AXIS_NAMES, INGEST_AXES, indirect=True)
 def test_ingest_zip(butler_harness: ButlerHarness) -> None:
@@ -1913,7 +1903,6 @@ def test_ingest(butler_harness: ButlerHarness, test_directory: str) -> None:
     butler.ingest(*datasets)
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_specialized_file_datasets_functions(butler_harness: ButlerHarness) -> None:
     """Test a workflow used in Prompt Processing where we export datasets
     from one repository and write them in-place to the datastore of
@@ -2007,7 +1996,6 @@ def test_specialized_file_datasets_functions(butler_harness: ButlerHarness) -> N
             assert target_butler.get(other_ref) is not None
 
 
-@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
 def test_temporary_for_ingest(butler_harness: ButlerHarness) -> None:
     """Test the `lsst.daf.butler._rubin.ingest_from_temporary` module."""
     with butler_harness.create_empty_butler("example_run") as butler:
@@ -2403,7 +2391,6 @@ def test_prune_datasets(butler_harness: ButlerHarness, datastore_type: str) -> N
     butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
 
-@pytest.mark.parametrize("repo_layout", ["in_repo", "explicit_root"], indirect=True)
 def test_export_transfer_copy(butler_harness: ButlerHarness, test_directory: str) -> None:
     """Test local export using all transfer modes."""
     storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")

@@ -65,7 +65,6 @@ FILE_DATASTORE_AXES = [
     pytest.param("postgres", "posix", "direct", "in_repo", id="postgres", marks=pytest.mark.postgres),
     pytest.param("postgres", "posix", "cloned", "in_repo", id="cloned-postgres", marks=pytest.mark.postgres),
     pytest.param("sqlite", "chained", "direct", "in_repo", id="chained"),
-    pytest.param("sqlite", "posix", "direct", "explicit_root", id="explicit-root"),
     pytest.param("sqlite", "remote_test", "direct", "in_repo", id="remote-test"),
     pytest.param("sqlite", "posix", "server", "in_repo", id="server-sqlite", marks=_SERVER_MARKS),
     pytest.param(
@@ -78,6 +77,9 @@ FILE_DATASTORE_AXES = [
     ),
 ]
 """Axis combinations covering every datastore that inherits FileDatastore.
+
+The explicit-root layout is deliberately absent; ``test_file_locations``
+stands in for it.
 
 Three of these axes look redundant on a coverage report and are broad on
 purpose:
