@@ -1476,8 +1476,68 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     isEphemeral = True
 
 
+def _make_constraint_storage_class_factory() -> StorageClassFactory:
+    """Load the storage classes the constraint configurations refer to.
+
+    `StorageClassFactory` is a singleton, so this accumulates with whatever
+    else the session has already loaded rather than replacing it.
+
+    Returns
+    -------
+    factory : `StorageClassFactory`
+        The populated factory.
+    """
+    factory = StorageClassFactory()
+    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
+    return factory
+
+
+def _make_datastore(config_file: str, root: str | None) -> Datastore:
+    """Build a datastore from a test configuration, as the base class did.
+
+    Parameters
+    ----------
+    config_file : `str`
+        Configuration file name, relative to ``config/basic``.
+    root : `str` or `None`
+        Root to point the configuration at, or `None` for an ephemeral
+        datastore that has no root.
+
+    Returns
+    -------
+    datastore : `Datastore`
+        The configured datastore.
+    """
+    path = os.path.join(TESTDIR, "config/basic", config_file)
+    config = DatastoreConfig(path)
+    datastore_type = cast(type[Datastore], doImport(config["cls"]))
+    if root is not None:
+        datastore_type.setConfigRoot(root, config, config.copy())
+    registry = DummyRegistry()
+    return Datastore.fromConfig(config=config.copy(), bridgeManager=registry.getDatastoreBridgeManager())
+
+
 class DatastoreConstraintsTests(DatastoreTestsBase):
     """Basic tests of constraints model of Datastores."""
+
+    needsRoot = True
+    """Whether this configuration needs a directory on disk."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # These tests build their datastore straight from its configuration,
+        # so they need neither the imported datastore type nor the Butler
+        # configs that DatastoreTestsBase.setUpClass loads.
+        cls.storageClassFactory = _make_constraint_storage_class_factory()
+        cls.universe = DimensionUniverse()
+
+    def setUp(self) -> None:
+        self.root = tempfile.mkdtemp() if self.needsRoot else None
+
+    def makeDatastore(self, sub: str | None = None) -> Datastore:
+        # Docstring inherited.
+        assert sub is None, "the constraint tests do not use datastore subdirectories"
+        return _make_datastore(self.configFile, self.root)
 
     def testConstraints(self) -> None:
         """Test constraints model.  Assumes that each test class has the
@@ -1536,20 +1596,16 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """PosixDatastore specialization"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreP.yaml")
+    configFile = "posixDatastoreP.yaml"
     canIngest = True
-
-    def setUp(self) -> None:
-        # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp()
-        super().setUp()
 
 
 class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """InMemoryDatastore specialization."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
+    configFile = "inMemoryDatastoreP.yaml"
     canIngest = False
+    needsRoot = False
 
 
 class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCase):
@@ -1557,19 +1613,19 @@ class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCas
     at the ChainedDatstore.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePa.yaml")
+    configFile = "chainedDatastorePa.yaml"
 
 
 class ChainedDatastoreConstraintsTestCase(PosixDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using a POSIXDatastore."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastoreP.yaml")
+    configFile = "chainedDatastoreP.yaml"
 
 
 class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
+    configFile = "chainedDatastore2P.yaml"
     canIngest = False
 
 
