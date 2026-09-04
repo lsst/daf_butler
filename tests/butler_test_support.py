@@ -63,28 +63,46 @@ _SERVER_MARKS = (
 FILE_DATASTORE_AXES = [
     pytest.param("sqlite", "posix", "direct", "in_repo", id="posix"),
     pytest.param("postgres", "posix", "direct", "in_repo", id="postgres", marks=pytest.mark.postgres),
+    pytest.param("postgres", "posix", "cloned", "in_repo", id="cloned-postgres", marks=pytest.mark.postgres),
     pytest.param("sqlite", "chained", "direct", "in_repo", id="chained"),
     pytest.param("sqlite", "remote_test", "direct", "in_repo", id="remote-test"),
     pytest.param("sqlite", "posix", "server", "in_repo", id="server-sqlite", marks=_SERVER_MARKS),
+    pytest.param(
+        "postgres",
+        "posix",
+        "server",
+        "in_repo",
+        id="server-postgres",
+        marks=(*_SERVER_MARKS, pytest.mark.postgres),
+    ),
 ]
 """Axis combinations covering every datastore that inherits FileDatastore.
 
-The cloned client, the explicit-root layout and the server-on-postgres
-combination are deliberately absent. DM-55822 measured each one's marginal
-coverage as zero unique lines and zero unique arcs. The first two are
-represented by the single ``test_cloned_put_get`` and ``test_file_locations``;
-the third adds nothing over running the server on sqlite and a direct Butler on
-postgres, which both remain.
+The explicit-root layout is deliberately absent; ``test_file_locations``
+stands in for it.
 
-The direct ``postgres`` combination measures zero as well and is kept anyway.
-It is the only place Butler-level operations run against a real postgres, and
-the SQL an operation generates can differ while the lines executed do not,
-which is a difference coverage cannot see.
+Three of these axes look redundant on a coverage report and are broad on
+purpose:
+
+``cloned`` runs the suite against a Butler that has been through
+`~lsst.daf.butler.Butler.clone`, which copies the internal state of every
+registry manager. A manager that grows state and is not taught to copy it
+fails here and nowhere else, so this axis stays as wide as the direct one.
+
+``postgres`` is the only place Butler-level operations run against a real
+postgres. An operation can generate different SQL while executing the same
+lines, which is a difference a coverage report cannot see.
+
+``server-postgres`` is the configuration the deployed server runs. The server
+has broken on postgres while still passing on sqlite (DM-44842), so neither
+the sqlite server axis nor the direct postgres axis substitutes for their
+combination.
 """
 
 BUTLER_TESTS_AXES = [
     *FILE_DATASTORE_AXES,
     pytest.param("sqlite", "in_memory", "direct", "in_repo", id="in-memory"),
+    pytest.param("sqlite", "in_memory", "cloned", "in_repo", id="cloned-sqlite"),
 ]
 """Axis combinations covering every datastore, including the ephemeral one."""
 
