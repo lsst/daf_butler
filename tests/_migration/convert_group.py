@@ -53,6 +53,88 @@ def _function_name(item: str) -> str | None:
     return tail or None
 
 
+def read_rows() -> list[tuple[str, str, str, str, set[str]]]:
+    """Read every mapping row: where a test came from and what it became.
+
+    Returns
+    -------
+    rows : `list` [`tuple`]
+        One ``(old file, old class, old method, new file, new function
+        names)`` per row that names a single original node id.
+    """
+    rows: list[tuple[str, str, str, str, set[str]]] = []
+    for line in MAPPING.read_text().splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = line.split("|")
+        if len(cells) < 4:
+            continue
+        old_items = QUOTED.findall(cells[1])
+        if len(old_items) != 1:
+            continue
+        parts = old_items[0].split("::")
+        if len(parts) != 3 or not parts[0].startswith("tests/"):
+            continue
+
+        new_items = QUOTED.findall(cells[2])
+        new_file = next(
+            (i.split("::")[0].strip() for i in new_items if i.strip().startswith("tests/")),
+            "",
+        )
+        names = {n for i in new_items if (n := _function_name(i)) is not None}
+        if not names:
+            continue
+        rows.append((parts[0].strip(), parts[1].strip(), parts[2].strip(), new_file, names))
+    return rows
+
+
+def class_methods(src: str) -> dict[str, dict[str, tuple[int, int]]]:
+    """Locate each class's methods.
+
+    Parameters
+    ----------
+    src : `str`
+        Python source.
+
+    Returns
+    -------
+    methods : `dict` [`str`, `dict` [`str`, `tuple` [`int`, `int`]]]
+        Class name to method name to its (first line, last line), with
+        decorators included.
+    """
+    out: dict[str, dict[str, tuple[int, int]]] = {}
+    for node in ast.parse(src).body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        methods: dict[str, tuple[int, int]] = {}
+        for item in node.body:
+            if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                first = min([item.lineno, *(d.lineno for d in item.decorator_list)])
+                methods[item.name] = (first, item.end_lineno)
+        out[node.name] = methods
+    return out
+
+
+def class_bases(src: str) -> dict[str, set[str]]:
+    """Return each class's base class names.
+
+    Parameters
+    ----------
+    src : `str`
+        Python source.
+
+    Returns
+    -------
+    bases : `dict` [`str`, `set` [`str`]]
+        Class name to the names it inherits from.
+    """
+    return {
+        node.name: {b.id for b in node.bases if isinstance(b, ast.Name)}
+        for node in ast.parse(src).body
+        if isinstance(node, ast.ClassDef)
+    }
+
+
 def read_mapping() -> dict[str, set[str]]:
     """Map each original ``file::Class`` to the new function names it became.
 
@@ -234,6 +316,143 @@ def target_source(path: str) -> str:
     ).stdout
 
 
+def convert_for(path: str, dest: str) -> int:
+    """Convert the tests that end up in one file of the eventual split.
+
+    The interlocked butler hierarchy cannot be converted class by class: its
+    concrete subclasses exist only to supply axes, so removing a method from a
+    mixin removes it from all of them at once. This converts one subject area
+    instead, named by the file those tests end up in, which is also the
+    boundary the final split uses.
+
+    Parameters
+    ----------
+    path : `str`
+        Working file to edit.
+    dest : `str`
+        File the converted tests eventually live in, as the mapping records it.
+
+    Returns
+    -------
+    status : `int`
+        Zero on success.
+    """
+    working = pathlib.Path(path)
+    src = working.read_text()
+    target = target_source(path)
+    have = bindings(src)
+    want = bindings(target)
+
+    rows = [r for r in read_rows() if r[0] == path and r[3] == dest]
+    if not rows:
+        print(f"the mapping has no rows from {path} to {dest}", file=sys.stderr)
+        return 1
+    method_names = {r[2] for r in rows}
+    wanted: set[str] = set()
+    for row in rows:
+        wanted |= row[4]
+
+    unknown = sorted(wanted - set(want))
+    if unknown:
+        print(f"mapping names functions absent from {TARGET}: {', '.join(unknown)}", file=sys.stderr)
+        return 1
+
+    # Every definition of those method names, wherever in the hierarchy it
+    # lives: a row names the class that ran the test, not the one that
+    # defined it.
+    methods = class_methods(src)
+    spans: list[tuple[int, int]] = []
+    touched: list[str] = []
+    for cls, by_name in methods.items():
+        hit = sorted((by_name[m][0], by_name[m][1]) for m in method_names & set(by_name))
+        if hit:
+            spans.extend(hit)
+            touched.append(cls)
+    if not spans:
+        print(f"none of the {len(method_names)} method names are still in {path}", file=sys.stderr)
+        return 1
+
+    # The functions pull in what they read, transitively.
+    needed = set(wanted)
+    frontier = set(wanted)
+    while frontier:
+        reads: set[str] = set()
+        for name in frontier:
+            reads |= free_names(want[name][2])
+        frontier = {r for r in reads if r in want and r not in needed}
+        needed |= frontier
+    to_add = sorted(needed - set(have), key=lambda n: want[n][0])
+
+    lines = src.splitlines(keepends=True)
+    for start, end in sorted(spans, reverse=True):
+        del lines[start - 1 : end]
+
+    # Insert at module level, just before the first class that held any of
+    # them, so the remaining classes and the new functions sit together.
+    anchor = min(have[c][0] for c in touched)
+    inserted = "\n\n".join(want[n][2].rstrip("\n") for n in to_add) + "\n\n\n"
+    lines.insert(anchor - 1, inserted)
+    out = "".join(lines)
+
+    # Drop any class left with no tests that nothing else inherits.
+    for _ in range(len(touched)):
+        methods = class_methods(out)
+        bases = class_bases(out)
+        current = bindings(out)
+
+        # A subclass with no test methods of its own still runs every test it
+        # inherits, so deadness has to be judged over the whole chain.
+        def runs_tests(cls: str, seen: frozenset[str] = frozenset()) -> bool:
+            if cls in seen or cls not in methods:
+                return False
+            if any(m.startswith("test") for m in methods[cls]):
+                return True
+            return any(runs_tests(b, seen | {cls}) for b in bases.get(cls, set()))
+
+        # A class is finished only when nothing in its chain has tests left,
+        # nothing inherits it, nothing else mentions it, and the target does
+        # not keep it. The last two guards matter: a harness class has no
+        # tests and no subclasses, but the converted functions name it.
+        dead = [
+            cls
+            for cls in methods
+            if cls in current
+            and cls not in want
+            and not runs_tests(cls)
+            and not any(cls in b for other, b in bases.items() if other != cls)
+            and out.count(cls) <= 1
+        ]
+        if not dead:
+            break
+        out_lines = out.splitlines(keepends=True)
+        for cls in sorted(dead, key=lambda c: current[c][0], reverse=True):
+            first, end, _ = current[cls]
+            del out_lines[first - 1 : end]
+        out = "".join(out_lines)
+
+    target_imports = import_lines(target)
+    present = set(import_lines(out))
+    wanted_imports = sorted(
+        {
+            target_imports[n]
+            for n in free_names(inserted)
+            if n in target_imports and n not in present and n not in want
+        }
+    )
+    if wanted_imports:
+        marker = "\nTESTDIR"
+        at = out.index(marker) if marker in out else None
+        block = "".join(f"{line}\n" for line in wanted_imports)
+        out = out[:at] + "\n" + block + out[at:] if at is not None else block + out
+
+    working.write_text(out)
+    print(f"{path} -> {dest}: removed {len(spans)} methods from {len(touched)} classes")
+    print(f"  added {len(to_add)} definitions ({len(wanted & set(to_add))} tests)")
+    for line in wanted_imports:
+        print(f"    + {line}")
+    return 0
+
+
 def main() -> int:
     """Rewrite one group of classes into their converted form.
 
@@ -242,6 +461,8 @@ def main() -> int:
     status : `int`
         Zero on success.
     """
+    if len(sys.argv) >= 4 and sys.argv[1] == "--for":
+        return convert_for(sys.argv[2], sys.argv[3])
     if len(sys.argv) < 3:
         print(__doc__)
         return 2
