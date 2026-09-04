@@ -37,14 +37,23 @@ import pathlib
 import pickle
 import re
 import tempfile
-import unittest
 import unittest.mock
 import uuid
 import warnings
 import weakref
-from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, cast
 
+import pytest
+from butler_test_support import (
+    AXIS_NAMES,
+    BUTLER_TESTS_AXES,
+    FILE_DATASTORE_AXES,
+    PUT_GET_AXES,
+    assert_get_components,
+    records_from,
+    run_put_get_test,
+)
 from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler import (
@@ -57,7 +66,6 @@ from lsst.daf.butler import (
     Config,
     DataCoordinate,
     DatasetExistence,
-    DatasetNotFoundError,
     DatasetProvenance,
     DatasetRef,
     DatasetType,
@@ -73,7 +81,6 @@ from lsst.daf.butler._rubin.temporary_for_ingest import TemporaryForIngest
 from lsst.daf.butler._rubin.transfer_datasets_in_place import transfer_datasets_in_place
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
-from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import (
@@ -91,76 +98,20 @@ from lsst.daf.butler.tests._repo_template_cache import make_repo_for_test
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.fixtures import (
     DATASTORE_PROFILES,
-    DEFAULT_RUN,
     ButlerHarness,
     ButlerRepo,
-    ClonedButlerHarness,
     ServerButlerHarness,
     add_dataset_type,
-    make_butler_repo,
+    get_test_data_path,
+    make_example_metrics,
 )
-from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.server_available import butler_server_import_error, butler_server_is_available
-from lsst.daf.butler.tests.utils import (
-    MetricTestRepo,
-    TestCaseMixin,
-    create_populated_sqlite_registry,
-    safeTestTempDir,
-)
+from lsst.daf.butler.tests.utils import MetricTestRepo, create_populated_sqlite_registry, safeTestTempDir
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 from lsst.resources.tests import make_remote_test_uri
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-
-if butler_server_is_available:
-    from lsst.daf.butler.tests.server import create_test_server
-
-
-if TYPE_CHECKING:
-    import types
-
-    from lsst.daf.butler import DimensionGroup, Registry, StorageClass
-
-from collections.abc import Iterator
-
-import pytest
-from butler_test_support import (
-    AXIS_NAMES,
-    BUTLER_TESTS_AXES,
-    FILE_DATASTORE_AXES,
-    PUT_GET_AXES,
-    records_from,
-    run_put_get_test,
-)
-
-from lsst.daf.butler.tests.fixtures import get_test_data_path, make_example_metrics
-
-TESTDIR = os.path.abspath(os.path.dirname(__file__))
-
-
-def clean_environment() -> None:
-    """Remove external environment variables that affect the tests."""
-    for k in ("DAF_BUTLER_REPOSITORY_INDEX",):
-        os.environ.pop(k, None)
-
-
-def makeExampleMetrics() -> MetricsExample:
-    """Return example dataset suitable for tests."""
-    return MetricsExample(
-        {"AM1": 5.2, "AM2": 30.6},
-        {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
-        [563, 234, 456.7, 752, 8, 9, 27],
-    )
-
-
-class TransactionTestError(Exception):
-    """Specific error for testing transactions, to prevent misdiagnosing
-    that might otherwise occur when a standard exception is used.
-    """
-
-    pass
-
 
 BUTLER_LOGGER = "lsst.daf.butler"
 """Root of the loggers the config search path test watches."""
@@ -743,409 +694,973 @@ def test_component_from_overridden_storage_class_warns(
         assert not records_from(caplog, COMPONENT_WARNING_LOGGER, logging.WARNING)
 
 
-class ButlerPutGetTests(TestCaseMixin):
-    """Helper method for running a suite of put/get tests from different
-    butler configurations.
+LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
+"""Repository layouts of the two classes the posix-only tests ran under."""
+
+PICKLE_AXES = [
+    pytest.param(
+        *param.values,
+        id=param.id,
+        marks=[
+            *param.marks,
+            pytest.mark.xfail(reason="Pickling not yet implemented for RemoteButler/HybridButler."),
+        ],
+    )
+    if isinstance(param.id, str) and param.id.startswith("server")
+    else param
+    for param in BUTLER_TESTS_AXES
+]
+"""BUTLER_TESTS_AXES with the server axes marked as expected to fail."""
+
+
+class TransactionTestError(Exception):
+    """Specific error for testing transactions, to prevent misdiagnosing
+    that might otherwise occur when a standard exception is used.
     """
 
-    default_run = DEFAULT_RUN
-    storageClassFactory: StorageClassFactory
 
-    profileName = "posix"
-    """Key of `DATASTORE_PROFILES` naming the datastore under test."""
+@pytest.fixture(autouse=True, scope="module")
+def _clean_environment() -> Iterator[None]:
+    """Remove external environment variables that affect these tests.
 
-    repoLayout = "in_repo"
-    """Where the configuration sits relative to the repository root."""
+    Only this file needs it: the repository index variable is read by the
+    constructor and repository-alias tests here and nowhere else in the
+    migrated set.
+    """
+    saved = os.environ.pop("DAF_BUTLER_REPOSITORY_INDEX", None)
+    yield
+    if saved is not None:
+        os.environ["DAF_BUTLER_REPOSITORY_INDEX"] = saved
 
-    registryBackend = "sqlite"
-    """Registry backend to configure: ``sqlite`` or ``postgres``."""
 
-    harness: ButlerHarness
-    """Repository under test and the Butlers built from it."""
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_constructor(butler_harness: ButlerHarness, butler_client: str) -> None:
+    """Independent test of constructor."""
+    if butler_client == "server":
+        # RemoteButler constructor is tested in test_server.py and
+        # test_remote_butler.py.
+        return
 
-    @staticmethod
-    def addDatasetType(
-        datasetTypeName: str, dimensions: DimensionGroup, storageClass: StorageClass | str, registry: Registry
-    ) -> DatasetType:
-        """Create a DatasetType and register it"""
-        return add_dataset_type(datasetTypeName, dimensions, storageClass, registry)
+    config_file = butler_harness.config_file
+    default_run = butler_harness.default_run
+    stack = contextlib.ExitStack()
+    butler = butler_harness.create_empty_butler(run=default_run)
+    assert isinstance(butler, Butler)
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.storageClassFactory = StorageClassFactory()
-        profile = DATASTORE_PROFILES[cls.profileName]
-        cls.storageClassFactory.addFromConfig(os.path.join(TESTDIR, profile.config_file))
+    # Check that butler.yaml is added automatically.
+    if config_file.endswith(end := "/butler.yaml"):
+        config_dir = config_file[: -len(end)]
+        butler = stack.enter_context(Butler.from_config(config_dir, run=default_run))
+        assert isinstance(butler, Butler)
 
-    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
-        """Return the postgres instance to configure, or None for sqlite."""
-        return None
-
-    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
-        """Build the harness for this test's Butler client.
-
-        Parameters
-        ----------
-        repo : `ButlerRepo`
-            Repository the harness should open.
-        exit_stack : `contextlib.ExitStack`
-            Stack the harness registers its cleanups on.
-
-        Returns
-        -------
-        harness : `ButlerHarness`
-            Harness handing out the Butlers under test.
-        """
-        return ButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
-
-    def setUp(self) -> None:
-        """Build the repository for this test and a harness over it."""
-        exit_stack = self.enterContext(contextlib.ExitStack())
-        repo = exit_stack.enter_context(
-            make_butler_repo(TESTDIR, self.profileName, self.repoLayout, self._postgres_instance())
+        # Even with a ResourcePath.
+        butler = stack.enter_context(
+            Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=default_run)
         )
-        self.harness = self._make_harness(repo, exit_stack)
-        # The names the test bodies still read. Phase 2 replaces each of these
-        # reads with the harness or the profile directly.
-        self.root = repo.root
-        self.tmpConfigFile = repo.config_file
-        self.configFile = os.path.join(TESTDIR, DATASTORE_PROFILES[self.profileName].config_file)
-        self.dir1 = repo.dir1
-        self.dir2 = repo.dir2
-        profile = repo.profile
-        self.fullConfigKey = profile.full_config_key
-        self.validationCanFail = profile.validation_can_fail
-        self.datastoreStr = profile.datastore_str
-        self.datastoreName = profile.datastore_name
-        self.predictionSupported = self.harness.prediction_supported
-        self.trustModeSupported = self.harness.trust_mode_supported
-        self.registryStr = "PostgreSQL@test" if self.registryBackend == "postgres" else "/gen3.sqlite3"
+        assert isinstance(butler, Butler)
 
-    def assertGetComponents(
-        self,
-        butler: Butler,
-        datasetRef: DatasetRef,
-        components: tuple[str, ...],
-        reference: Any,
-        collections: Any = None,
-    ) -> None:
-        datasetType = datasetRef.datasetType
-        dataId = datasetRef.dataId
-        deferred = butler.getDeferred(datasetRef)
+    collections = set(butler.collections.query("*"))
+    assert collections == {default_run}
 
-        for component in components:
-            compTypeName = datasetType.componentTypeName(component)
-            result = butler.get(compTypeName, dataId, collections=collections)
-            self.assertEqual(result, getattr(reference, component))
-            result_deferred = deferred.get(component=component)
-            self.assertEqual(result_deferred, result)
+    # Check that some special characters can be included in run name.
+    special_run = "u@b.c-A"
+    with Butler.from_config(butler=butler, run=special_run) as butler_special:
+        collections = set(butler_special.registry.queryCollections("*@*"))
+        assert collections == {special_run}
 
-    def create_empty_butler(
-        self,
-        run: str | None = None,
-        writeable: bool | None = None,
-        metrics: ButlerMetrics | None = None,
-        cleanup: bool = True,
-    ) -> DirectButler:
-        """Create a Butler for the test repository, without inserting test
-        data.
-        """
-        butler = self.harness.create_empty_butler(
-            run=run, writeable=writeable, metrics=metrics, cleanup=cleanup
+    with Butler.from_config(butler=butler, collections=["other"]) as butler2:
+        assert butler2.collections.defaults == ("other",)
+        assert butler2.run is None
+        assert type(butler._datastore) is type(butler2._datastore)
+        assert butler._datastore.config == butler2._datastore.config
+
+    # Test that we can use an environment variable to find this
+    # repository.
+    butler_index = Config()
+    butler_index["label"] = config_file
+    for suffix in (".yaml", ".json"):
+        # Ensure that the content differs so that we know that
+        # we aren't reusing the cache.
+        bad_label = f"file://bucket/not_real{suffix}"
+        butler_index["bad_label"] = bad_label
+        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+            butler_index.dumpToUri(temp_file)
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                assert Butler.get_known_repos() == {"label", "bad_label"}
+                uri = Butler.get_repo_uri("bad_label")
+                assert uri == ResourcePath(bad_label)
+                uri = Butler.get_repo_uri("label")
+                butler = Butler.from_config(uri, writeable=False)
+                assert isinstance(butler, Butler)
+                butler.close()
+                butler = Butler.from_config("label", writeable=False)
+                assert isinstance(butler, Butler)
+                butler.close()
+                with pytest.raises(FileNotFoundError, match="aliases:.*bad_label"):
+                    Butler.from_config("not_there", writeable=False)
+                with pytest.raises(FileNotFoundError, match="resolved from alias 'bad_label'"):
+                    Butler.from_config("bad_label")
+                with pytest.raises(FileNotFoundError):
+                    # Should ignore aliases.
+                    Butler.from_config(ResourcePath("label", forceAbsolute=False))
+                with pytest.raises(KeyError, match="not known to") as exc_info:
+                    Butler.get_repo_uri("missing")
+                assert Butler.get_repo_uri("missing", True) == ResourcePath("missing", forceAbsolute=False)
+                assert "not known to" in str(exc_info.value)
+                # Should report no failure.
+                assert ButlerRepoIndex.get_failure_reason() == ""
+    with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+        # Now with empty configuration.
+        butler_index = Config()
+        butler_index.dumpToUri(temp_file)
+        with (
+            unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}),
+            pytest.raises(FileNotFoundError, match="(no known aliases)"),
+        ):
+            Butler.from_config("label")
+    with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+        # Now with bad contents.
+        with open(temp_file.ospath, "w") as fh:
+            print("'", file=fh)
+        with (
+            unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}),
+            pytest.raises(FileNotFoundError, match="(no known aliases:.*could not be read)"),
+        ):
+            Butler.from_config("label")
+    with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
+        with pytest.raises(FileNotFoundError):
+            Butler.get_repo_uri("label")
+        assert Butler.get_known_repos() == set()
+
+        with pytest.raises(FileNotFoundError, match="index file not found"):
+            Butler.from_config("label")
+
+        # Check that we can create Butler when the alias file is not found.
+        butler = butler_harness.create_empty_butler(writeable=False)
+        assert isinstance(butler, Butler)
+    with pytest.raises(RuntimeError, match="No repository index defined") as runtime_info:
+        # No environment variable set.
+        Butler.get_repo_uri("label")
+    assert Butler.get_repo_uri("label", True) == ResourcePath("label", forceAbsolute=False)
+    assert "No repository index defined" in str(runtime_info.value)
+    with pytest.raises(FileNotFoundError, match="no known aliases.*No repository index"):
+        # No aliases registered.
+        Butler.from_config("not_there")
+    assert Butler.get_known_repos() == set()
+    stack.close()
+
+
+@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
+def test_path_constructor(butler_harness: ButlerHarness) -> None:
+    """Independent test of constructor using PathLike."""
+    config_file = butler_harness.config_file
+    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
+    assert isinstance(butler, Butler)
+
+    with contextlib.ExitStack() as stack:
+        # And again with a Path object with the butler yaml
+        path = pathlib.Path(config_file)
+        butler = stack.enter_context(Butler.from_config(path, writeable=False))
+        assert isinstance(butler, Butler)
+
+        # And again with a Path object without the butler yaml
+        # (making sure we skip it if the config doesn't end in butler.yaml,
+        # which is the case for the explicit-root layout)
+        if config_file.endswith("butler.yaml"):
+            path = pathlib.Path(os.path.dirname(config_file))
+            butler = stack.enter_context(Butler.from_config(path, writeable=False))
+            assert isinstance(butler, Butler)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_close(butler_harness: ButlerHarness) -> None:
+    butler = butler_harness.create_empty_butler(cleanup=False)
+    # A RemoteButler has no _closed flag, so only the direct case can check it.
+    direct_butler = butler if isinstance(butler, DirectButler) else None
+    if direct_butler is not None:
+        assert not direct_butler._closed
+
+    with butler as butler_from_context_manager:
+        assert butler is butler_from_context_manager
+    if direct_butler is not None:
+        assert direct_butler._closed
+        with pytest.raises(RuntimeError, match="has been closed"):
+            butler.get_dataset_type("raw")
+
+    # Close may be called multiple times.
+    butler.close()
+    if direct_butler is not None:
+        assert direct_butler._closed
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_garbage_collection(butler_harness: ButlerHarness) -> None:
+    """Test that Butler does not have any circular references that prevent
+    it from being garbage collected immediately when it goes out of scope.
+    """
+    butler = butler_harness.create_empty_butler(cleanup=False)
+    is_direct_butler = isinstance(butler, DirectButler)
+    butler_ref = weakref.ref(butler)
+    # Narrowed with isinstance rather than the flag so that no second strong
+    # reference to the butler outlives the `del` below.
+    if isinstance(butler, DirectButler):
+        registry_ref = weakref.ref(butler._registry)
+        managers_ref = weakref.ref(butler._registry._managers)
+        datastore_ref = weakref.ref(butler._datastore)
+        db_ref = weakref.ref(butler._registry._db)
+        engine_ref = weakref.ref(butler._registry._db._engine)
+
+    with warnings.catch_warnings():
+        # Hide warnings from unclosed database handles.
+        warnings.simplefilter("ignore", ResourceWarning)
+        del butler
+        assert butler_ref() is None, "Butler should have been garbage collected"
+        if is_direct_butler:
+            assert registry_ref() is None, "SqlRegistry should have been garbage collected"
+            assert managers_ref() is None, "Registry managers should have been garbage collected"
+            assert datastore_ref() is None, "Datastore should have been garbage collected"
+            assert db_ref() is None, "Database should have been garbage collected"
+            # SQLAlchemy has internal reference cycles, so the Engine instance
+            # is not cleaned up promptly even if we release our reference to
+            # it.  Explicitly clean it up here to avoid file handles leaking.
+            engine = engine_ref()
+            if engine is not None:
+                engine.dispose()
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_daf_butler_repositories(butler_harness: ButlerHarness, butler_client: str) -> None:
+    # butler_harness is requested but unused: the original built a repository
+    # in setUp for every one of these runs, and the axis parametrization
+    # needs the whole fixture closure.
+    if butler_client == "server":
+        # Loading of RemoteButler via repository index is tested in
+        # test_server.py.
+        return
+
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_REPOSITORIES": "label: 'https://someuri.com'\notherLabel: 'https://otheruri.com'\n"},
+    ):
+        assert str(Butler.get_repo_uri("label")) == "https://someuri.com"
+
+    with (
+        unittest.mock.patch.dict(
+            os.environ,
+            {
+                "DAF_BUTLER_REPOSITORIES": "label: https://someuri.com",
+                "DAF_BUTLER_REPOSITORY_INDEX": "https://someuri.com",
+            },
+        ),
+        pytest.raises(RuntimeError, match="Only one of the environment variables"),
+    ):
+        Butler.get_repo_uri("label")
+
+    with (
+        unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORIES": "invalid"}),
+        pytest.raises(ValueError, match="Repository index not in expected format"),
+    ):
+        Butler.get_repo_uri("label")
+
+
+@pytest.mark.parametrize(AXIS_NAMES, PICKLE_AXES, indirect=True)
+def test_pickle(butler_harness: ButlerHarness) -> None:
+    """Test pickle support."""
+    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
+    assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
+    with pickle.loads(pickle.dumps(butler)) as butler_out:
+        assert isinstance(butler_out, DirectButler)
+        assert butler_out._config == butler._config
+        assert list(butler_out.collections.defaults) == list(butler.collections.defaults)
+        assert butler_out.run == butler.run
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_transaction(butler_harness: ButlerHarness, butler_client: str) -> None:
+    if butler_client == "server":
+        # Transactions will never be supported for RemoteButler.
+        return
+
+    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
+    dataset_type_name = "test_metric"
+    dimensions = butler.dimensions.conform(["instrument", "visit"])
+    dimension_entries: tuple[tuple[str, Mapping[str, Any]], ...] = (
+        ("instrument", {"instrument": "DummyCam"}),
+        ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
+        ("day_obs", {"instrument": "DummyCam", "id": 20250101}),
+        (
+            "visit",
+            {
+                "instrument": "DummyCam",
+                "id": 42,
+                "name": "fortytwo",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
+        ),
+    )
+    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredData")
+    metric = make_example_metrics()
+    data_id = {"instrument": "DummyCam", "visit": 42}
+    # Create and register a DatasetType
+    dataset_type = add_dataset_type(dataset_type_name, dimensions, storage_class, butler.registry)
+    with pytest.raises(TransactionTestError), butler.transaction():  # noqa: PT012
+        # Add needed Dimensions
+        for args in dimension_entries:
+            butler.registry.insertDimensionData(*args)
+        # Store a dataset
+        ref = butler.put(metric, dataset_type_name, data_id)
+        assert isinstance(ref, DatasetRef)
+        # Test get of a ref.
+        metric_out = butler.get(ref)
+        assert metric == metric_out
+        # Test get
+        metric_out = butler.get(dataset_type_name, data_id)
+        assert metric == metric_out
+        # Check we can get components
+        assert_get_components(butler, ref, ("summary", "data", "output"), metric)
+        raise TransactionTestError("This should roll back the entire transaction")
+
+    with pytest.raises(DataIdValueError):
+        butler.registry.expandDataId(data_id)
+    # Should raise LookupError for missing data ID value
+    with pytest.raises(LookupError):
+        butler.get(dataset_type_name, data_id)
+    # Also check explicitly if Dataset entry is missing
+    assert butler.find_dataset(dataset_type, data_id, collections=butler.collections.defaults) is None
+    # Direct retrieval should not find the file in the Datastore
+    with pytest.raises(FileNotFoundError):
+        butler.get(ref)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_stringification(butler_harness: ButlerHarness, butler_client: str, registry_backend: str) -> None:
+    if butler_client == "server":
+        assert isinstance(butler_harness, ServerButlerHarness)
+        assert (
+            str(butler_harness.server_instance.remote_butler)
+            == "RemoteButler(https://test.example/api/butler/repo/testrepo/)"
         )
-        assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
-        return butler
+        return
 
-    def create_butler(
-        self,
-        run: str,
-        storageClass: StorageClass | str,
-        datasetTypeName: str,
-        metrics: ButlerMetrics | None = None,
-    ) -> tuple[Butler, DatasetType]:
-        """Create a Butler for the test repository and insert some test data
-        into it.
-        """
-        return self.harness.create_butler(run, storageClass, datasetTypeName, metrics=metrics)
+    profile = butler_harness.profile
+    # The registry string is a property of the backend, not the datastore.
+    registry_str = "PostgreSQL@test" if registry_backend == "postgres" else "/gen3.sqlite3"
 
-    def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> Butler:
-        # New datasets will be added to run and tag, but we will only look in
-        # tag when looking up datasets.
-        run = self.default_run
-        butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
-        assert butler.run is not None
+    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
+    butler_str = str(butler)
 
-        # Create and store a dataset
-        metric = makeExampleMetrics()
-        dataId = butler.registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
+    for test_str in profile.datastore_str:
+        assert test_str in butler_str
+    assert registry_str in butler_str
 
-        # Dataset should not exist if we haven't added it
-        with self.assertRaises(DatasetNotFoundError):
-            butler.get(datasetTypeName, dataId)
+    datastore_name = butler._datastore.name
+    if profile.datastore_name is not None:
+        for test_str in profile.datastore_name:
+            assert test_str in datastore_name
 
-        # Put and remove the dataset once as a DatasetRef, once as a dataId,
-        # and once with a DatasetType
 
-        # Keep track of any collections we add and do not clean up
-        expected_collections = {run}
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_butler_rewrite_data_id(butler_harness: ButlerHarness) -> None:
+    """Test that dataIds can be rewritten based on dimension records."""
+    default_run = butler_harness.default_run
+    butler = butler_harness.create_empty_butler(run=default_run)
 
-        counter = 0
-        ref = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run="put_run_1")
-        args = tuple[DatasetRef] | tuple[str | DatasetType, DataCoordinate]
-        for args in ((ref,), (datasetTypeName, dataId), (datasetType, dataId)):
-            # Since we are using subTest we can get cascading failures
-            # here with the first attempt failing and the others failing
-            # immediately because the dataset already exists. Work around
-            # this by using a distinct run collection each time
-            counter += 1
-            this_run = f"put_run_{counter}"
-            butler.collections.register(this_run)
-            expected_collections.update({this_run})
+    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataDict")
+    dataset_type_name = "random_data"
 
-            with self.subTest(args=repr(args)):
-                kwargs: dict[str, Any] = {}
-                if not isinstance(args[0], DatasetRef):  # type: ignore
-                    kwargs["run"] = this_run
-                ref = butler.put(metric, *args, **kwargs)
-                self.assertIsInstance(ref, DatasetRef)
+    # Create dimension records.
+    butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+    butler.registry.insertDimensionData(
+        "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+    )
+    butler.registry.insertDimensionData(
+        "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
+    )
 
-                # Test get of a ref.
-                metricOut = butler.get(ref)
-                self.assertEqual(metric, metricOut)
-                # Test get
-                metricOut = butler.get(ref.datasetType.name, dataId, collections=this_run)
-                self.assertEqual(metric, metricOut)
-                # Test get with a datasetRef
-                metricOut = butler.get(ref)
-                self.assertEqual(metric, metricOut)
-                # Test getDeferred with dataId
-                metricOut = butler.getDeferred(ref.datasetType.name, dataId, collections=this_run).get()
-                self.assertEqual(metric, metricOut)
-                # Test getDeferred with a ref
-                metricOut = butler.getDeferred(ref).get()
-                self.assertEqual(metric, metricOut)
+    dimensions = butler.dimensions.conform(["instrument", "exposure"])
+    dataset_type = DatasetType(dataset_type_name, dimensions, storage_class)
+    butler.registry.registerDatasetType(dataset_type)
 
-                # Check we can get components
-                if storageClass.isComposite():
-                    self.assertGetComponents(
-                        butler, ref, ("summary", "data", "output"), metric, collections=this_run
-                    )
+    n_exposures = 5
+    dayobs = 20210530
 
-                primary_uri, secondary_uris = butler.getURIs(ref)
-                n_uris = len(secondary_uris)
-                if primary_uri:
-                    n_uris += 1
+    # Create records for multiple day_obs but same seq_num to test that
+    # we are constraining gets properly when day_obs/seq_num is used
+    # for an exposure. Second day is year in future but is not used.
+    for day_obs in (dayobs, dayobs + 1_00_00):
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": day_obs})
 
-                # Can the artifacts themselves be retrieved?
-                if not butler._datastore.isEphemeral:
-                    # Create a temporary directory to hold the retrieved
-                    # artifacts.
-                    with tempfile.TemporaryDirectory(
-                        prefix="butler-artifacts-", ignore_cleanup_errors=True
-                    ) as artifact_root:
-                        root_uri = ResourcePath(artifact_root, forceDirectory=True)
+        for i in range(n_exposures):
+            group_name = f"group_{day_obs}_{i}"
+            butler.registry.insertDimensionData("group", {"instrument": "DummyCamComp", "name": group_name})
+            butler.registry.insertDimensionData(
+                "exposure",
+                {
+                    "instrument": "DummyCamComp",
+                    "id": day_obs + i,
+                    "obs_id": f"exp_{day_obs}_{i}",
+                    "seq_num": i,
+                    "day_obs": day_obs,
+                    "physical_filter": "d-r",
+                    "group": group_name,
+                },
+            )
 
-                        for preserve_path in (True, False):
-                            destination = root_uri.join(f"{preserve_path}_{counter}/")
-                            log = logging.getLogger("lsst.x")
-                            log.debug("Using destination %s for args %s", destination, args)
-                            # Use copy so that we can test that overwrite
-                            # protection works (using "auto" for File URIs
-                            # would use hard links and subsequent transfer
-                            # would work because it knows they are the same
-                            # file).
-                            transferred = butler.retrieveArtifacts(
-                                [ref], destination, preserve_path=preserve_path, transfer="copy"
-                            )
-                            self.assertGreater(len(transferred), 0)
-                            artifacts = list(ResourcePath.findFileResources([destination]))
-                            # Filter out the index file.
-                            artifacts = [a for a in artifacts if a.basename() != ZipIndex.index_name]
-                            self.assertEqual(set(transferred), set(artifacts))
+    # Write some data.
+    for i in range(n_exposures):
+        metric = {"something": i, "other": "metric", "list": [2 * x for x in range(i)]}
 
-                            for artifact in transferred:
-                                path_in_destination = artifact.relative_to(destination)
-                                self.assertIsNotNone(path_in_destination)
-                                assert path_in_destination is not None
+        # Use the seq_num for the put to test rewriting.
+        data_id = {"seq_num": i, "day_obs": dayobs, "instrument": "DummyCamComp", "physical_filter": "d-r"}
+        ref = butler.put(metric, dataset_type_name, dataId=data_id)
 
-                                # When path is not preserved there should not
-                                # be any path separators.
-                                num_seps = path_in_destination.count("/")
-                                if preserve_path:
-                                    self.assertGreater(num_seps, 0)
-                                else:
-                                    self.assertEqual(num_seps, 0)
+        # Check that the exposure is correct in the dataId
+        assert ref.dataId["exposure"] == dayobs + i
 
-                            self.assertEqual(
-                                len(artifacts),
-                                n_uris,
-                                "Comparing expected artifacts vs actual:"
-                                f" {artifacts} vs {primary_uri} and {secondary_uris}",
-                            )
+        # and check that we can get the dataset back with the same dataId
+        new_metric = butler.get(dataset_type_name, dataId=data_id)
+        assert new_metric == metric
 
-                            if preserve_path:
-                                # No need to run these twice
-                                with self.assertRaises(ValueError):
-                                    butler.retrieveArtifacts([ref], destination, transfer="move")
+    # Check that we can find the datasets using the day_obs or the
+    # exposure.day_obs.
+    datasets_1 = list(
+        butler.registry.queryDatasets(
+            dataset_type,
+            collections=default_run,
+            where="day_obs = :dayObs AND instrument = :instr",
+            bind={"dayObs": dayobs, "instr": "DummyCamComp"},
+        )
+    )
+    datasets_2 = list(
+        butler.registry.queryDatasets(
+            dataset_type,
+            collections=default_run,
+            where="exposure.day_obs = :dayObs AND instrument = :instr",
+            bind={"dayObs": dayobs, "instr": "DummyCamComp"},
+        )
+    )
+    assert datasets_1 == datasets_2
 
-                                with self.assertRaisesRegex(
-                                    ValueError, "^Destination location must refer to a directory"
-                                ):
-                                    butler.retrieveArtifacts(
-                                        [ref], ResourcePath("/some/file.txt", forceDirectory=False)
-                                    )
 
-                                with self.assertRaises(FileExistsError):
-                                    butler.retrieveArtifacts([ref], destination)
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_transfer_dimension_records_from(butler_harness: ButlerHarness) -> None:
+    source_butler = butler_harness.create_empty_butler(writeable=True)
+    source_butler.import_(filename=get_test_data_path("lsstcam-subset.yaml"))
 
-                                transferred_again = butler.retrieveArtifacts(
-                                    [ref], destination, preserve_path=preserve_path, overwrite=True
-                                )
-                                self.assertEqual(set(transferred_again), set(transferred))
-
-                # Now remove the dataset completely.
-                butler.pruneDatasets([ref], purge=True, unstore=True)
-                # Lookup with original args should still fail.
-                kwargs = {"collections": this_run}
-                if isinstance(args[0], DatasetRef):
-                    kwargs = {}  # Prevent warning from being issued.
-                self.assertFalse(butler.exists(*args, **kwargs))
-                # get() should still fail.
-                with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
-                    butler.get(ref)
-                # Registry shouldn't be able to find it by dataset_id anymore.
-                self.assertIsNone(butler.get_dataset(ref.id))
-
-                # Do explicit registry removal since we know they are
-                # empty
-                butler.collections.x_remove(this_run)
-                expected_collections.remove(this_run)
-
-        # Create DatasetRef for put using default run.
-        refIn = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run=butler.run)
-
-        # Check that getDeferred fails with standalone ref.
-        with self.assertRaises(LookupError):
-            butler.getDeferred(refIn)
-
-        # Put the dataset again, since the last thing we did was remove it
-        # and we want to use the default collection.
-        ref = butler.put(metric, refIn)
-
-        # Get with parameters
-        stop = 4
-        sliced = butler.get(ref, parameters={"slice": slice(stop)})
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        assert metric.data is not None  # for mypy
-        self.assertEqual(metric.data[:stop], sliced.data)
-        # getDeferred with parameters
-        sliced = butler.getDeferred(ref, parameters={"slice": slice(stop)}).get()
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        self.assertEqual(metric.data[:stop], sliced.data)
-        # getDeferred with deferred parameters
-        sliced = butler.getDeferred(ref).get(parameters={"slice": slice(stop)})
-        self.assertNotEqual(metric, sliced)
-        self.assertEqual(metric.summary, sliced.summary)
-        self.assertEqual(metric.output, sliced.output)
-        self.assertEqual(metric.data[:stop], sliced.data)
-
-        if storageClass.isComposite():
-            # Check that components can be retrieved
-            metricOut = butler.get(ref.datasetType.name, dataId)
-            compNameS = ref.datasetType.componentTypeName("summary")
-            compNameD = ref.datasetType.componentTypeName("data")
-            summary = butler.get(compNameS, dataId)
-            self.assertEqual(summary, metric.summary)
-            data = butler.get(compNameD, dataId)
-            self.assertEqual(data, metric.data)
-
-            if "counter" in storageClass.derivedComponents:
-                count = butler.get(ref.datasetType.componentTypeName("counter"), dataId)
-                self.assertEqual(count, len(data))
-
-                count = butler.get(
-                    ref.datasetType.componentTypeName("counter"), dataId, parameters={"slice": slice(stop)}
-                )
-                self.assertEqual(count, stop)
-
-            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections.defaults)
-            assert compRef is not None
-            summary = butler.get(compRef)
-            self.assertEqual(summary, metric.summary)
-
-        # Create a Dataset type that has the same name but is inconsistent.
-        inconsistentDatasetType = DatasetType(
-            datasetTypeName, datasetType.dimensions, self.storageClassFactory.getStorageClass("Config")
+    visit_id = 2025120200439
+    exposure_id = visit_id
+    with create_populated_sqlite_registry() as target_butler:
+        target_butler.transfer_dimension_records_from(
+            source_butler,
+            [
+                # Should trigger the lookup of visit and all its associated
+                # "populated_by" records (visit_detector_region,
+                # visit_definition, etc.)
+                DataCoordinate.standardize(
+                    {"instrument": "LSSTCam", "visit": visit_id, "detector": 10},
+                    universe=source_butler.dimensions,
+                ),
+                # Shouldn't add any records to the lookup.
+                DataCoordinate.make_empty(source_butler.dimensions),
+            ],
         )
 
-        # Getting with a dataset type that does not match registry fails
-        with self.assertRaisesRegex(
-            ValueError,
-            "(Supplied dataset type .* inconsistent with registry)"
-            "|(The new storage class .* is not compatible with the existing storage class)",
-        ):
-            butler.get(inconsistentDatasetType, dataId)
+        def _fetch_record(dimension: str) -> DimensionRecord:
+            records = target_butler.query_dimension_records(dimension)
+            assert len(records) == 1
+            return records[0]
 
-        # Combining a DatasetRef with a dataId should fail
-        with self.assertRaisesRegex(ValueError, "DatasetRef given, cannot use dataId as well"):
-            butler.get(ref, dataId)
-        # Getting with an explicit ref should fail if the id doesn't match.
-        with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
-            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101), run=butler.run))
+        visit = _fetch_record("visit")
+        assert visit.id == visit_id
+        assert visit.day_obs == 20251202
+        assert visit.target_name == "lowdust"
+        assert visit.seq_num == 439
+        original_visit = source_butler.query_dimension_records("visit", instrument="LSSTCam", visit=visit_id)[
+            0
+        ]
+        assert visit.region == original_visit.region
+        assert visit.timespan == original_visit.timespan
 
-        # Getting a dataset with unknown parameters should fail
-        with self.assertRaisesRegex(KeyError, "Parameter 'unsupported' not understood"):
-            butler.get(ref, parameters={"unsupported": True})
+        visit_detector_region = _fetch_record("visit_detector_region")
+        assert visit_detector_region.instrument == "LSSTCam"
+        assert visit_detector_region.detector == 10
+        assert visit_detector_region.visit == visit_id
+        original_visit_detector_region = source_butler.query_dimension_records(
+            "visit_detector_region", instrument="LSSTCam", visit=visit_id, detector=10
+        )[0]
+        assert visit_detector_region.region == original_visit_detector_region.region
 
-        # Check we have a collection
-        collections = set(butler.collections.query("*"))
-        self.assertEqual(collections, expected_collections)
+        visit_definition = _fetch_record("visit_definition")
+        assert visit_definition.instrument == "LSSTCam"
+        assert visit_definition.exposure == 2025120200439
+        assert visit_definition.visit == visit_id
 
-        # Clean up to check that we can remove something that may have
-        # already had a component removed
-        butler.pruneDatasets([ref], unstore=True, purge=True)
+        # The matching exposure record should have been pulled in via
+        # visit -> visit_definition.
+        exposure = _fetch_record("exposure")
+        assert exposure.instrument == "LSSTCam"
+        assert exposure.id == 2025120200439
+        assert exposure.obs_id == "MC_O_20251202_000439"
+        original_exposure = source_butler.query_dimension_records(
+            "exposure", instrument="LSSTCam", exposure=exposure_id
+        )[0]
+        assert exposure.timespan == original_exposure.timespan
 
-        # Add the same ref again, so we can check that duplicate put fails.
-        ref = butler.put(metric, datasetType, dataId)
+        group = _fetch_record("group")
+        assert group.instrument == "LSSTCam"
+        assert group.name == "2025-12-03T07:58:10.858"
 
-        # Repeat put will fail.
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, datasetType, dataId)
+        visit_system_memberships = target_butler.query_dimension_records("visit_system_membership")
+        visit_system_memberships.sort(key=lambda record: record.visit_system)
+        assert len(visit_system_memberships) == 2
+        assert visit_system_memberships[0].visit_system == 0
+        assert visit_system_memberships[1].visit_system == 2
+        assert visit_system_memberships[0].visit == visit_id
+        assert visit_system_memberships[1].visit == visit_id
 
-        # Remove the datastore entry.
-        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
-
-        # Put will still fail
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, datasetType, dataId)
-
-        # Repeat the same sequence with resolved ref.
-        butler.pruneDatasets([ref], unstore=True, purge=True)
-        ref = butler.put(metric, refIn)
-
-        # Repeat put will fail.
-        with self.assertRaisesRegex(ConflictingDefinitionError, "Datastore already contains dataset"):
-            butler.put(metric, refIn)
-
-        # Remove the datastore entry.
-        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
-
-        # In case of resolved ref this write will succeed.
-        ref = butler.put(metric, refIn)
-
-        # Leave the dataset in place since some downstream tests require
-        # something to be present
-
-        return butler
+        visit_systems = target_butler.query_dimension_records("visit_system")
+        visit_systems.sort(key=lambda record: record.id)
+        assert visit_systems[0].id == 0
+        assert visit_systems[1].id == 2
+        assert visit_systems[0].name == "one-to-one"
+        assert visit_systems[1].name == "by-seq-start-end"
 
 
+@pytest.mark.parametrize(AXIS_NAMES, FILE_DATASTORE_AXES, indirect=True)
+def test_butler_metrics(butler_harness: ButlerHarness) -> None:
+    """Test that metrics are collected."""
+    run = "test_run"
+    metrics = ButlerMetrics()
+    butler, dataset_type = butler_harness.create_butler(
+        run, "MetricsExampleModelProvenance", "prov_metric", metrics=metrics
+    )
+    data = MetricsExampleModel(
+        summary={"AM1": 5.2, "AM2": 30.6},
+        output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+        data=[563, 234, 456.7, 752, 8, 9, 27],
+    )
+
+    data_ref = butler.put(data, dataset_type, visit=424, instrument="DummyCamComp")
+    butler.get(data_ref)
+    butler.get(data_ref)
+    assert metrics.n_get == 2
+    assert metrics.time_in_get > 0.0
+    assert metrics.n_put == 1
+    assert metrics.time_in_put > 0.0
+
+    deferred = butler.getDeferred(data_ref)
+    deferred.get()
+    assert metrics.n_get == 3
+
+    with butler.record_metrics() as new:
+        data_ref_2 = butler.put(data, dataset_type, visit=425, instrument="DummyCamComp")
+        butler.get(data_ref)
+
+        butler.pruneDatasets([data_ref, data_ref_2], purge=True, unstore=True)
+        with ResourcePath.temporary_uri(suffix=".json") as tmp_file:
+            tmp_file.write(data.model_dump_json().encode())
+            refs = [
+                DatasetRef(dataset_type, data_ref_2.dataId, run),
+                DatasetRef(dataset_type, data_ref.dataId, run),
+            ]
+            datasets = [FileDataset(path=tmp_file, refs=refs)]
+            butler.ingest(*datasets, transfer="copy")
+
+    assert new.n_get == 1
+    assert new.n_put == 1
+    assert new.n_ingest == 2
+
+
+@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
+def test_pytype_coercion(butler_harness: ButlerHarness) -> None:
+    """Test python type coercion on Butler.get and put."""
+    # Store some data with the normal example storage class.
+    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredDataNoComponents")
+    dataset_type_name = "test_metric"
+    butler = run_put_get_test(butler_harness, storage_class, dataset_type_name)
+
+    data_id = {"instrument": "DummyCamComp", "visit": 423}
+    metric = butler.get(dataset_type_name, dataId=data_id)
+    assert get_full_type_name(metric) == "lsst.daf.butler.tests.MetricsExample"
+
+    dataset_type_ori = butler.get_dataset_type(dataset_type_name)
+    assert dataset_type_ori.storageClass.name == "StructuredDataNoComponents"
+
+    # Now need to hack the registry dataset type definition.
+    # There is no API for this.
+    registry = butler._registry  # type: ignore[attr-defined]
+    assert isinstance(registry, SqlRegistry)
+    manager = registry._managers.datasets
+    assert hasattr(manager, "_db")
+    assert hasattr(manager, "_static")
+    manager._db.update(
+        manager._static.dataset_type,
+        {"name": dataset_type_name},
+        {dataset_type_name: dataset_type_name, "storage_class": "StructuredDataNoComponentsModel"},
+    )
+
+    # Force reset of dataset type cache
+    butler.registry.refresh()
+
+    dataset_type_new = butler.get_dataset_type(dataset_type_name)
+    assert dataset_type_new.name == dataset_type_ori.name
+    assert dataset_type_new.storageClass.name == "StructuredDataNoComponentsModel"
+
+    metric_model = butler.get(dataset_type_name, dataId=data_id)
+    assert type(metric_model) is not type(metric)
+    assert get_full_type_name(metric_model) == "lsst.daf.butler.tests.MetricsExampleModel"
+
+    # Put the model and read it back to show that everything now
+    # works as normal.
+    metric_ref = butler.put(metric_model, dataset_type_name, dataId=data_id, visit=424)
+    metric_model_new = butler.get(metric_ref)
+    assert metric_model_new == metric_model
+
+    # Hack the storage class again to something that will fail on the
+    # get with no conversion class.
+    manager._db.update(
+        manager._static.dataset_type,
+        {"name": dataset_type_name},
+        {dataset_type_name: dataset_type_name, "storage_class": "StructuredDataListYaml"},
+    )
+    butler.registry.refresh()
+
+    with pytest.raises(ValueError, match="no valid converter found to convert"):
+        butler.get(dataset_type_name, dataId=data_id)
+
+
+@pytest.mark.parametrize("repo_layout", LOCAL_LAYOUTS, indirect=True)
+def test_provenance(butler_harness: ButlerHarness) -> None:
+    """Test that provenance is attached on put."""
+    run = "test_run"
+    butler, dataset_type = butler_harness.create_butler(run, "MetricsExampleModelProvenance", "prov_metric")
+    metric = MetricsExampleModel(
+        summary={"AM1": 5.2, "AM2": 30.6},
+        output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+        data=[563, 234, 456.7, 752, 8, 9, 27],
+    )
+    # Provenance can be attached to the object being put. Whether
+    # it is or not is dependent on the formatter. For this test we
+    # copy on adding provenance to ensure they differ.
+    assert metric.dataset_id is None
+    metric_ref = butler.put(metric, dataset_type, visit=424, instrument="DummyCamComp")
+    assert metric.dataset_id is None
+    metric_2 = butler.get(metric_ref)
+    assert metric_2.data == metric.data
+    assert metric_2.dataset_id == metric_ref.id
+    assert metric_2.provenance is None
+
+    # Put with provenance.
+    prov = DatasetProvenance(quantum_id=uuid.uuid4())
+    prov.add_input(metric_ref)
+    prov.add_extra_provenance(metric_ref.id, {"answer": 42})
+    metric_ref2 = butler.put(metric, dataset_type, visit=423, instrument="DummyCamComp", provenance=prov)
+    metric_3 = butler.get(metric_ref2)
+    assert metric_3.provenance == prov
+
+    # Check that we can extract provenance from dict form.
+    prov_dict = prov.to_flat_dict(metric_ref2)
+    prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
+    assert ref_from_prov == metric_ref2
+    # Direct __eq__ of the provenance does not work because one side
+    # includes dimension records.
+    assert {ref.id for ref in prov_from_prov.inputs} == {ref.id for ref in prov.inputs}
+    assert prov_from_prov.quantum_id == prov.quantum_id
+    assert prov_from_prov.extras == prov.extras
+
+    # Force a bad ID into the dict.
+    prov_dict["id"] = uuid.uuid4()
+    with pytest.raises(ValueError, match="Dataset associated with this provenance"):
+        DatasetProvenance.from_flat_dict(prov_dict, butler)
+    del prov_dict["id"]
+    prov_dict["input 0 id"] = uuid.uuid4()
+    # The added key separates on spaces while the rest of the header separates
+    # on ".", so the separator check rejects it before the unknown input ID is
+    # ever looked up. See DM-55822's mapping notes.
+    with pytest.raises(ValueError, match="Inconsistent values found for separators"):
+        DatasetProvenance.from_flat_dict(prov_dict, butler)
+
+    # Check that simple types can be reconstructed with non-standard
+    # separators.
+    prov_dict = prov.to_flat_dict(metric_ref2, prefix="XYZ", sep="😎", simple_types=True)
+    prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
+    assert ref_from_prov == metric_ref2
+    assert {ref.id for ref in prov_from_prov.inputs} == {ref.id for ref in prov.inputs}
+
+    with pytest.raises(ValueError, match="No provenance information found in header"):
+        DatasetProvenance.from_flat_dict({"unknown": 42}, butler)
+
+
+def _setup_to_test_collection_chain(butler_harness: ButlerHarness) -> Butler:
+    """Return a writeable Butler holding a chain and four runs to put in it."""
+    butler = butler_harness.create_empty_butler(writeable=True)
+
+    butler.collections.register("chain", CollectionType.CHAINED)
+
+    runs = ["a", "b", "c", "d"]
+    for run in runs:
+        butler.collections.register(run)
+
+    butler.collections.register("staticchain", CollectionType.CHAINED)
+    butler.collections.redefine_chain("staticchain", ["a", "b"])
+
+    return butler
+
+
+def _check_chain(butler: Butler, expected: list[str]) -> None:
+    """Assert that the test chain has exactly the expected children."""
+    children = butler.collections.get_info("chain").children
+    assert expected == list(children)
+
+
+def _check_common_chain_functionality(
+    butler: Butler,
+    func: Callable[[str, str | list[str]], Any],
+    *,
+    skip_cycle_check: bool = False,
+) -> None:
+    """Assert the behavior every chain-modifying operation shares.
+
+    Parameters
+    ----------
+    butler : `~lsst.daf.butler.Butler`
+        Butler set up by `_setup_to_test_collection_chain`.
+    func : `~collections.abc.Callable`
+        The chain operation under test.
+    skip_cycle_check : `bool`, optional
+        Whether to skip the cycle check, which does not apply to removal.
+    """
+    # Missing parent collection
+    with pytest.raises(MissingCollectionError):
+        func("doesnotexist", [])
+    # Missing child collection
+    with pytest.raises(MissingCollectionError):
+        func("chain", ["doesnotexist"])
+    # Forbid operations on non-chained collections
+    with pytest.raises(CollectionTypeError):
+        func("d", ["a"])
+
+    # Prevent collection cycles
+    if not skip_cycle_check:
+        butler.collections.register("chain2", CollectionType.CHAINED)
+        func("chain2", "chain")
+        with pytest.raises(CollectionCycleError):
+            func("chain", "chain2")
+
+    # Make sure none of the earlier operations interfered with unrelated
+    # chains.
+    assert ["a", "b"] == list(butler.collections.get_info("staticchain").children)
+
+    with (
+        butler._caching_context(),
+        pytest.raises(RuntimeError, match="Chained collection modification not permitted"),
+    ):
+        func("chain", "a")
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_get_dataset_types(butler_harness: ButlerHarness, butler_client: str) -> None:
+    if butler_client == "server":
+        # This is mostly a test of validateConfiguration, which is for
+        # validating Datastore configuration and thus isn't relevant to
+        # RemoteButler.
+        return
+
+    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
+    dimensions = butler.dimensions.conform(["instrument", "visit", "physical_filter"])
+    dimension_entries: list[tuple[str, list[Mapping[str, Any]]]] = [
+        (
+            "instrument",
+            [
+                {"instrument": "DummyCam"},
+                {"instrument": "DummyHSC"},
+                {"instrument": "DummyCamComp"},
+            ],
+        ),
+        ("physical_filter", [{"instrument": "DummyCam", "name": "d-r", "band": "R"}]),
+        ("day_obs", [{"instrument": "DummyCam", "id": 20250101}]),
+        (
+            "visit",
+            [
+                {
+                    "instrument": "DummyCam",
+                    "id": 42,
+                    "name": "fortytwo",
+                    "physical_filter": "d-r",
+                    "day_obs": 20250101,
+                }
+            ],
+        ),
+    ]
+    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredData")
+    # Add needed Dimensions
+    for element, data in dimension_entries:
+        butler.registry.insertDimensionData(element, *data)
+
+    # When a DatasetType is added to the registry entries are not created
+    # for components but querying them can return the components.
+    dataset_type_names = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
+    components = set()
+    for dataset_type_name in dataset_type_names:
+        # Create and register a DatasetType
+        add_dataset_type(dataset_type_name, dimensions, storage_class, butler.registry)
+
+        for component_name in storage_class.components:
+            components.add(DatasetType.nameWithComponent(dataset_type_name, component_name))
+
+    from_registry: set[DatasetType] = set()
+    for parent_dataset_type in butler.registry.queryDatasetTypes():
+        from_registry.add(parent_dataset_type)
+        from_registry.update(parent_dataset_type.makeAllComponentDatasetTypes())
+    assert {d.name for d in from_registry} == dataset_type_names | components
+
+    # Query with wildcard.
+    dataset_types = list(butler.registry.queryDatasetTypes("metric*"))
+    assert len(dataset_types) == 4, f"Got: {dataset_types}"
+    # but not regex.
+    with pytest.raises(DatasetTypeExpressionError):
+        butler.registry.queryDatasetTypes(["pvi", re.compile("metric.*")])
+
+    # Now that we have some dataset types registered, validate them
+    ignore = [
+        "test_metric_comp",
+        "metric3",
+        "metric5",
+        "calexp",
+        "DummySC",
+        "datasetType.component",
+        "random_data",
+        "random_data_2",
+    ]
+    butler.validateConfiguration(ignore=ignore)
+
+    # Add a new datasetType that will fail template validation
+    add_dataset_type("test_metric_comp", dimensions, storage_class, butler.registry)
+    if butler_harness.profile.validation_can_fail:
+        with pytest.raises(ValidationError):
+            butler.validateConfiguration()
+
+    # Rerun validation but with a subset of dataset type names
+    butler.validateConfiguration(datasetTypeNames=["metric4"])
+
+    # Rerun validation but ignore the bad datasetType
+    butler.validateConfiguration(ignore=ignore)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_get_dataset_collection_caching(butler_harness: ButlerHarness) -> None:
+    # Prior to DM-41117, there was a bug where get_dataset would throw
+    # MissingCollectionError if you tried to fetch a dataset that was added
+    # after the collection cache was last updated.
+    reader_butler, dataset_type = butler_harness.create_butler(
+        butler_harness.default_run, "int", "datasettypename"
+    )
+    writer_butler = butler_harness.create_empty_butler(writeable=True, run="new_run")
+    data_id = {"instrument": "DummyCamComp", "visit": 423}
+    put_ref = writer_butler.put(123, dataset_type, data_id)
+    get_ref = reader_butler.get_dataset(put_ref.id)
+    assert get_ref is not None
+    assert get_ref.id == put_ref.id
+    # Also works when looking up via a hexadecimal string instead of a UUID
+    # instance.
+    hex_ref = reader_butler.get_dataset(put_ref.id.hex)
+    assert hex_ref is not None
+    assert hex_ref.id == put_ref.id
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_collection_chain_redefine(butler_harness: ButlerHarness) -> None:
+    butler = _setup_to_test_collection_chain(butler_harness)
+
+    butler.collections.redefine_chain("chain", "a")
+    _check_chain(butler, ["a"])
+
+    # Duplicates are removed from the list of children
+    butler.collections.redefine_chain("chain", ["c", "b", "c"])
+    _check_chain(butler, ["c", "b"])
+
+    # Empty list clears the chain
+    butler.collections.redefine_chain("chain", [])
+    _check_chain(butler, [])
+
+    _check_common_chain_functionality(butler, butler.collections.redefine_chain)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_collection_chain_prepend(butler_harness: ButlerHarness) -> None:
+    butler = _setup_to_test_collection_chain(butler_harness)
+
+    # Duplicates are removed from the list of children
+    butler.collections.prepend_chain("chain", ["c", "b", "c"])
+    _check_chain(butler, ["c", "b"])
+
+    # Prepend goes on the front of existing chain
+    butler.collections.prepend_chain("chain", ["a"])
+    _check_chain(butler, ["a", "c", "b"])
+
+    # Empty prepend does nothing
+    butler.collections.prepend_chain("chain", [])
+    _check_chain(butler, ["a", "c", "b"])
+
+    # Prepending children that already exist in the chain removes them from
+    # their current position.
+    butler.collections.prepend_chain("chain", ["d", "b", "c"])
+    _check_chain(butler, ["d", "b", "c", "a"])
+
+    _check_common_chain_functionality(butler, butler.collections.prepend_chain)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_collection_chain_extend(butler_harness: ButlerHarness) -> None:
+    butler = _setup_to_test_collection_chain(butler_harness)
+
+    # Duplicates are removed from the list of children
+    butler.collections.extend_chain("chain", ["c", "b", "c"])
+    _check_chain(butler, ["c", "b"])
+
+    # Extend goes on the end of existing chain
+    butler.collections.extend_chain("chain", ["a"])
+    _check_chain(butler, ["c", "b", "a"])
+
+    # Empty extend does nothing
+    butler.collections.extend_chain("chain", [])
+    _check_chain(butler, ["c", "b", "a"])
+
+    # Extending children that already exist in the chain removes them from
+    # their current position.
+    butler.collections.extend_chain("chain", ["d", "b", "c"])
+    _check_chain(butler, ["a", "d", "b", "c"])
+
+    _check_common_chain_functionality(butler, butler.collections.extend_chain)
+
+
+@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
+def test_collection_chain_remove(butler_harness: ButlerHarness) -> None:
+    butler = _setup_to_test_collection_chain(butler_harness)
+
+    butler.collections.redefine_chain("chain", ["a", "b", "c", "d"])
+
+    butler.collections.remove_from_chain("chain", "c")
+    _check_chain(butler, ["a", "b", "d"])
+
+    # Duplicates are allowed in the list of children
+    butler.collections.remove_from_chain("chain", ["b", "b", "a"])
+    _check_chain(butler, ["d"])
+
+    # Empty remove does nothing
+    butler.collections.remove_from_chain("chain", [])
+    _check_chain(butler, ["d"])
+
+    # Removing children that aren't in the chain does nothing
+    butler.collections.remove_from_chain("chain", ["a", "chain"])
+    _check_chain(butler, ["d"])
+
+    _check_common_chain_functionality(butler, butler.collections.remove_from_chain, skip_cycle_check=True)
+
+
+# An InMemoryDatastore cannot ingest files, so the two ephemeral axis values
+# that BUTLER_TESTS_AXES adds are absent here rather than running empty.
 INGEST_AXES = FILE_DATASTORE_AXES
 
 LOCAL_LAYOUTS = ["in_repo", "explicit_root"]
@@ -1507,756 +2022,6 @@ def test_temporary_for_ingest(butler_harness: ButlerHarness) -> None:
             temporary.ingest()
         loaded = butler.get(ref)
         assert loaded == {"three": 3}
-
-
-def _setup_to_test_collection_chain(butler_harness: ButlerHarness) -> Butler:
-    """Return a writeable Butler holding a chain and four runs to put in it."""
-    butler = butler_harness.create_empty_butler(writeable=True)
-
-    butler.collections.register("chain", CollectionType.CHAINED)
-
-    runs = ["a", "b", "c", "d"]
-    for run in runs:
-        butler.collections.register(run)
-
-    butler.collections.register("staticchain", CollectionType.CHAINED)
-    butler.collections.redefine_chain("staticchain", ["a", "b"])
-
-    return butler
-
-
-def _check_chain(butler: Butler, expected: list[str]) -> None:
-    """Assert that the test chain has exactly the expected children."""
-    children = butler.collections.get_info("chain").children
-    assert expected == list(children)
-
-
-def _check_common_chain_functionality(
-    butler: Butler,
-    func: Callable[[str, str | list[str]], Any],
-    *,
-    skip_cycle_check: bool = False,
-) -> None:
-    """Assert the behavior every chain-modifying operation shares.
-
-    Parameters
-    ----------
-    butler : `~lsst.daf.butler.Butler`
-        Butler set up by `_setup_to_test_collection_chain`.
-    func : `~collections.abc.Callable`
-        The chain operation under test.
-    skip_cycle_check : `bool`, optional
-        Whether to skip the cycle check, which does not apply to removal.
-    """
-    # Missing parent collection
-    with pytest.raises(MissingCollectionError):
-        func("doesnotexist", [])
-    # Missing child collection
-    with pytest.raises(MissingCollectionError):
-        func("chain", ["doesnotexist"])
-    # Forbid operations on non-chained collections
-    with pytest.raises(CollectionTypeError):
-        func("d", ["a"])
-
-    # Prevent collection cycles
-    if not skip_cycle_check:
-        butler.collections.register("chain2", CollectionType.CHAINED)
-        func("chain2", "chain")
-        with pytest.raises(CollectionCycleError):
-            func("chain", "chain2")
-
-    # Make sure none of the earlier operations interfered with unrelated
-    # chains.
-    assert ["a", "b"] == list(butler.collections.get_info("staticchain").children)
-
-    with (
-        butler._caching_context(),
-        pytest.raises(RuntimeError, match="Chained collection modification not permitted"),
-    ):
-        func("chain", "a")
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_get_dataset_types(butler_harness: ButlerHarness, butler_client: str) -> None:
-    if butler_client == "server":
-        # This is mostly a test of validateConfiguration, which is for
-        # validating Datastore configuration and thus isn't relevant to
-        # RemoteButler.
-        return
-
-    butler = butler_harness.create_empty_butler(run=butler_harness.default_run)
-    dimensions = butler.dimensions.conform(["instrument", "visit", "physical_filter"])
-    dimension_entries: list[tuple[str, list[Mapping[str, Any]]]] = [
-        (
-            "instrument",
-            [
-                {"instrument": "DummyCam"},
-                {"instrument": "DummyHSC"},
-                {"instrument": "DummyCamComp"},
-            ],
-        ),
-        ("physical_filter", [{"instrument": "DummyCam", "name": "d-r", "band": "R"}]),
-        ("day_obs", [{"instrument": "DummyCam", "id": 20250101}]),
-        (
-            "visit",
-            [
-                {
-                    "instrument": "DummyCam",
-                    "id": 42,
-                    "name": "fortytwo",
-                    "physical_filter": "d-r",
-                    "day_obs": 20250101,
-                }
-            ],
-        ),
-    ]
-    storage_class = butler_harness.storage_class_factory.getStorageClass("StructuredData")
-    # Add needed Dimensions
-    for element, data in dimension_entries:
-        butler.registry.insertDimensionData(element, *data)
-
-    # When a DatasetType is added to the registry entries are not created
-    # for components but querying them can return the components.
-    dataset_type_names = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
-    components = set()
-    for dataset_type_name in dataset_type_names:
-        # Create and register a DatasetType
-        add_dataset_type(dataset_type_name, dimensions, storage_class, butler.registry)
-
-        for component_name in storage_class.components:
-            components.add(DatasetType.nameWithComponent(dataset_type_name, component_name))
-
-    from_registry: set[DatasetType] = set()
-    for parent_dataset_type in butler.registry.queryDatasetTypes():
-        from_registry.add(parent_dataset_type)
-        from_registry.update(parent_dataset_type.makeAllComponentDatasetTypes())
-    assert {d.name for d in from_registry} == dataset_type_names | components
-
-    # Query with wildcard.
-    dataset_types = list(butler.registry.queryDatasetTypes("metric*"))
-    assert len(dataset_types) == 4, f"Got: {dataset_types}"
-    # but not regex.
-    with pytest.raises(DatasetTypeExpressionError):
-        butler.registry.queryDatasetTypes(["pvi", re.compile("metric.*")])
-
-    # Now that we have some dataset types registered, validate them
-    ignore = [
-        "test_metric_comp",
-        "metric3",
-        "metric5",
-        "calexp",
-        "DummySC",
-        "datasetType.component",
-        "random_data",
-        "random_data_2",
-    ]
-    butler.validateConfiguration(ignore=ignore)
-
-    # Add a new datasetType that will fail template validation
-    add_dataset_type("test_metric_comp", dimensions, storage_class, butler.registry)
-    if butler_harness.profile.validation_can_fail:
-        with pytest.raises(ValidationError):
-            butler.validateConfiguration()
-
-    # Rerun validation but with a subset of dataset type names
-    butler.validateConfiguration(datasetTypeNames=["metric4"])
-
-    # Rerun validation but ignore the bad datasetType
-    butler.validateConfiguration(ignore=ignore)
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_get_dataset_collection_caching(butler_harness: ButlerHarness) -> None:
-    # Prior to DM-41117, there was a bug where get_dataset would throw
-    # MissingCollectionError if you tried to fetch a dataset that was added
-    # after the collection cache was last updated.
-    reader_butler, dataset_type = butler_harness.create_butler(
-        butler_harness.default_run, "int", "datasettypename"
-    )
-    writer_butler = butler_harness.create_empty_butler(writeable=True, run="new_run")
-    data_id = {"instrument": "DummyCamComp", "visit": 423}
-    put_ref = writer_butler.put(123, dataset_type, data_id)
-    get_ref = reader_butler.get_dataset(put_ref.id)
-    assert get_ref is not None
-    assert get_ref.id == put_ref.id
-    # Also works when looking up via a hexadecimal string instead of a UUID
-    # instance.
-    hex_ref = reader_butler.get_dataset(put_ref.id.hex)
-    assert hex_ref is not None
-    assert hex_ref.id == put_ref.id
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_collection_chain_redefine(butler_harness: ButlerHarness) -> None:
-    butler = _setup_to_test_collection_chain(butler_harness)
-
-    butler.collections.redefine_chain("chain", "a")
-    _check_chain(butler, ["a"])
-
-    # Duplicates are removed from the list of children
-    butler.collections.redefine_chain("chain", ["c", "b", "c"])
-    _check_chain(butler, ["c", "b"])
-
-    # Empty list clears the chain
-    butler.collections.redefine_chain("chain", [])
-    _check_chain(butler, [])
-
-    _check_common_chain_functionality(butler, butler.collections.redefine_chain)
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_collection_chain_prepend(butler_harness: ButlerHarness) -> None:
-    butler = _setup_to_test_collection_chain(butler_harness)
-
-    # Duplicates are removed from the list of children
-    butler.collections.prepend_chain("chain", ["c", "b", "c"])
-    _check_chain(butler, ["c", "b"])
-
-    # Prepend goes on the front of existing chain
-    butler.collections.prepend_chain("chain", ["a"])
-    _check_chain(butler, ["a", "c", "b"])
-
-    # Empty prepend does nothing
-    butler.collections.prepend_chain("chain", [])
-    _check_chain(butler, ["a", "c", "b"])
-
-    # Prepending children that already exist in the chain removes them from
-    # their current position.
-    butler.collections.prepend_chain("chain", ["d", "b", "c"])
-    _check_chain(butler, ["d", "b", "c", "a"])
-
-    _check_common_chain_functionality(butler, butler.collections.prepend_chain)
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_collection_chain_extend(butler_harness: ButlerHarness) -> None:
-    butler = _setup_to_test_collection_chain(butler_harness)
-
-    # Duplicates are removed from the list of children
-    butler.collections.extend_chain("chain", ["c", "b", "c"])
-    _check_chain(butler, ["c", "b"])
-
-    # Extend goes on the end of existing chain
-    butler.collections.extend_chain("chain", ["a"])
-    _check_chain(butler, ["c", "b", "a"])
-
-    # Empty extend does nothing
-    butler.collections.extend_chain("chain", [])
-    _check_chain(butler, ["c", "b", "a"])
-
-    # Extending children that already exist in the chain removes them from
-    # their current position.
-    butler.collections.extend_chain("chain", ["d", "b", "c"])
-    _check_chain(butler, ["a", "d", "b", "c"])
-
-    _check_common_chain_functionality(butler, butler.collections.extend_chain)
-
-
-@pytest.mark.parametrize(AXIS_NAMES, BUTLER_TESTS_AXES, indirect=True)
-def test_collection_chain_remove(butler_harness: ButlerHarness) -> None:
-    butler = _setup_to_test_collection_chain(butler_harness)
-
-    butler.collections.redefine_chain("chain", ["a", "b", "c", "d"])
-
-    butler.collections.remove_from_chain("chain", "c")
-    _check_chain(butler, ["a", "b", "d"])
-
-    # Duplicates are allowed in the list of children
-    butler.collections.remove_from_chain("chain", ["b", "b", "a"])
-    _check_chain(butler, ["d"])
-
-    # Empty remove does nothing
-    butler.collections.remove_from_chain("chain", [])
-    _check_chain(butler, ["d"])
-
-    # Removing children that aren't in the chain does nothing
-    butler.collections.remove_from_chain("chain", ["a", "chain"])
-    _check_chain(butler, ["d"])
-
-    _check_common_chain_functionality(butler, butler.collections.remove_from_chain, skip_cycle_check=True)
-
-
-class ButlerTests(ButlerPutGetTests):
-    """Tests for Butler."""
-
-    def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
-        """Return True if two URIs refer to the same resource.
-
-        Subclasses may override to handle unique requirements.
-        """
-        return self.harness.are_uris_equivalent(uri1, uri2)
-
-    def testConstructor(self) -> None:
-        """Independent test of constructor."""
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
-        self.enterContext(butler)
-        self.assertIsInstance(butler, Butler)
-
-        # Check that butler.yaml is added automatically.
-        if self.tmpConfigFile.endswith(end := "/butler.yaml"):
-            config_dir = self.tmpConfigFile[: -len(end)]
-            butler = Butler.from_config(config_dir, run=self.default_run)
-            self.enterContext(butler)
-            self.assertIsInstance(butler, Butler)
-
-            # Even with a ResourcePath.
-            butler = Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
-            self.enterContext(butler)
-            self.assertIsInstance(butler, Butler)
-
-        collections = set(butler.collections.query("*"))
-        self.assertEqual(collections, {self.default_run})
-
-        # Check that some special characters can be included in run name.
-        special_run = "u@b.c-A"
-        butler_special = Butler.from_config(butler=butler, run=special_run)
-        self.enterContext(butler_special)
-        collections = set(butler_special.registry.queryCollections("*@*"))
-        self.assertEqual(collections, {special_run})
-
-        butler2 = Butler.from_config(butler=butler, collections=["other"])
-        self.enterContext(butler2)
-        self.assertEqual(butler2.collections.defaults, ("other",))
-        self.assertIsNone(butler2.run)
-        self.assertEqual(type(butler._datastore), type(butler2._datastore))
-        self.assertEqual(butler._datastore.config, butler2._datastore.config)
-
-        # Test that we can use an environment variable to find this
-        # repository.
-        butler_index = Config()
-        butler_index["label"] = self.tmpConfigFile
-        for suffix in (".yaml", ".json"):
-            # Ensure that the content differs so that we know that
-            # we aren't reusing the cache.
-            bad_label = f"file://bucket/not_real{suffix}"
-            butler_index["bad_label"] = bad_label
-            with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
-                butler_index.dumpToUri(temp_file)
-                with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
-                    self.assertEqual(Butler.get_known_repos(), {"label", "bad_label"})
-                    uri = Butler.get_repo_uri("bad_label")
-                    self.assertEqual(uri, ResourcePath(bad_label))
-                    uri = Butler.get_repo_uri("label")
-                    butler = Butler.from_config(uri, writeable=False)
-                    self.assertIsInstance(butler, Butler)
-                    butler.close()
-                    butler = Butler.from_config("label", writeable=False)
-                    self.assertIsInstance(butler, Butler)
-                    butler.close()
-                    with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
-                        Butler.from_config("not_there", writeable=False)
-                    with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
-                        Butler.from_config("bad_label")
-                    with self.assertRaises(FileNotFoundError):
-                        # Should ignore aliases.
-                        Butler.from_config(ResourcePath("label", forceAbsolute=False))
-                    with self.assertRaises(KeyError) as cm:
-                        Butler.get_repo_uri("missing")
-                    self.assertEqual(
-                        Butler.get_repo_uri("missing", True), ResourcePath("missing", forceAbsolute=False)
-                    )
-                    self.assertIn("not known to", str(cm.exception))
-                    # Should report no failure.
-                    self.assertEqual(ButlerRepoIndex.get_failure_reason(), "")
-        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
-            # Now with empty configuration.
-            butler_index = Config()
-            butler_index.dumpToUri(temp_file)
-            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
-                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases)"):
-                    Butler.from_config("label")
-        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
-            # Now with bad contents.
-            with open(temp_file.ospath, "w") as fh:
-                print("'", file=fh)
-            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
-                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases:.*could not be read)"):
-                    Butler.from_config("label")
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
-            with self.assertRaises(FileNotFoundError):
-                Butler.get_repo_uri("label")
-            self.assertEqual(Butler.get_known_repos(), set())
-
-            with self.assertRaisesRegex(FileNotFoundError, "index file not found"):
-                Butler.from_config("label")
-
-            # Check that we can create Butler when the alias file is not found.
-            butler = Butler.from_config(self.tmpConfigFile, writeable=False)
-            self.enterContext(butler)
-            self.assertIsInstance(butler, Butler)
-        with self.assertRaises(RuntimeError) as cm:
-            # No environment variable set.
-            Butler.get_repo_uri("label")
-        self.assertEqual(Butler.get_repo_uri("label", True), ResourcePath("label", forceAbsolute=False))
-        self.assertIn("No repository index defined", str(cm.exception))
-        with self.assertRaisesRegex(FileNotFoundError, "no known aliases.*No repository index"):
-            # No aliases registered.
-            Butler.from_config("not_there")
-        self.assertEqual(Butler.get_known_repos(), set())
-
-    def testClose(self):
-        butler = self.create_empty_butler(cleanup=False)
-        is_direct_butler = isinstance(butler, DirectButler)
-        if is_direct_butler:
-            self.assertFalse(butler._closed)
-
-        with butler as butler_from_context_manager:
-            self.assertIs(butler, butler_from_context_manager)
-        if is_direct_butler:
-            self.assertTrue(butler._closed)
-            with self.assertRaisesRegex(RuntimeError, "has been closed"):
-                butler.get_dataset_type("raw")
-
-        # Close may be called multiple times.
-        butler.close()
-        if is_direct_butler:
-            self.assertTrue(butler._closed)
-
-    def testGarbageCollection(self):
-        """Test that Butler does not have any circular references that prevent
-        it from being garbage collected immediately when it goes out of scope.
-        """
-        butler = self.create_empty_butler(cleanup=False)
-        is_direct_butler = isinstance(butler, DirectButler)
-        butler_ref = weakref.ref(butler)
-        if is_direct_butler:
-            registry_ref = weakref.ref(butler._registry)
-            managers_ref = weakref.ref(butler._registry._managers)
-            datastore_ref = weakref.ref(butler._datastore)
-            db_ref = weakref.ref(butler._registry._db)
-            engine_ref = weakref.ref(butler._registry._db._engine)
-
-        with warnings.catch_warnings():
-            # Hide warnings from unclosed database handles.
-            warnings.simplefilter("ignore", ResourceWarning)
-            del butler
-            self.assertIsNone(butler_ref(), "Butler should have been garbage collected")
-            if is_direct_butler:
-                self.assertIsNone(registry_ref(), "SqlRegistry should have been garbage collected")
-                self.assertIsNone(managers_ref(), "Registry managers should have been garbage collected")
-                self.assertIsNone(datastore_ref(), "Datastore should have been garbage collected")
-                self.assertIsNone(db_ref(), "Database should have been garbage collected")
-            # SQLAlchemy has internal reference cycles, so the Engine instance
-            # is not cleaned up promptly even if we release our reference to
-            # it.  Explicitly clean it up here to avoid file handles leaking.
-            if is_direct_butler:
-                engine = engine_ref()
-                if engine is not None:
-                    engine.dispose()
-
-    def testDafButlerRepositories(self):
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_REPOSITORIES": "label: 'https://someuri.com'\notherLabel: 'https://otheruri.com'\n"},
-        ):
-            self.assertEqual(str(Butler.get_repo_uri("label")), "https://someuri.com")
-
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "DAF_BUTLER_REPOSITORIES": "label: https://someuri.com",
-                "DAF_BUTLER_REPOSITORY_INDEX": "https://someuri.com",
-            },
-        ):
-            with self.assertRaisesRegex(RuntimeError, "Only one of the environment variables"):
-                Butler.get_repo_uri("label")
-
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_REPOSITORIES": "invalid"},
-        ):
-            with self.assertRaisesRegex(ValueError, "Repository index not in expected format"):
-                Butler.get_repo_uri("label")
-
-    def testPickle(self) -> None:
-        """Test pickle support."""
-        butler = self.create_empty_butler(run=self.default_run)
-        assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
-        butlerOut = pickle.loads(pickle.dumps(butler))
-        self.enterContext(butlerOut)
-        self.assertIsInstance(butlerOut, Butler)
-        self.assertEqual(butlerOut._config, butler._config)
-        self.assertEqual(list(butlerOut.collections.defaults), list(butler.collections.defaults))
-        self.assertEqual(butlerOut.run, butler.run)
-
-    def testTransaction(self) -> None:
-        butler = self.create_empty_butler(run=self.default_run)
-        datasetTypeName = "test_metric"
-        dimensions = butler.dimensions.conform(["instrument", "visit"])
-        dimensionEntries: tuple[tuple[str, Mapping[str, Any]], ...] = (
-            ("instrument", {"instrument": "DummyCam"}),
-            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
-            ("day_obs", {"instrument": "DummyCam", "id": 20250101}),
-            (
-                "visit",
-                {
-                    "instrument": "DummyCam",
-                    "id": 42,
-                    "name": "fortytwo",
-                    "physical_filter": "d-r",
-                    "day_obs": 20250101,
-                },
-            ),
-        )
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        metric = makeExampleMetrics()
-        dataId = {"instrument": "DummyCam", "visit": 42}
-        # Create and register a DatasetType
-        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
-        with self.assertRaises(TransactionTestError):
-            with butler.transaction():
-                # Add needed Dimensions
-                for args in dimensionEntries:
-                    butler.registry.insertDimensionData(*args)
-                # Store a dataset
-                ref = butler.put(metric, datasetTypeName, dataId)
-                self.assertIsInstance(ref, DatasetRef)
-                # Test get of a ref.
-                metricOut = butler.get(ref)
-                self.assertEqual(metric, metricOut)
-                # Test get
-                metricOut = butler.get(datasetTypeName, dataId)
-                self.assertEqual(metric, metricOut)
-                # Check we can get components
-                self.assertGetComponents(butler, ref, ("summary", "data", "output"), metric)
-                raise TransactionTestError("This should roll back the entire transaction")
-        with self.assertRaises(DataIdValueError, msg=f"Check can't expand DataId {dataId}"):
-            butler.registry.expandDataId(dataId)
-        # Should raise LookupError for missing data ID value
-        with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
-            butler.get(datasetTypeName, dataId)
-        # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.find_dataset(datasetType, dataId, collections=butler.collections.defaults))
-        # Direct retrieval should not find the file in the Datastore
-        with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
-            butler.get(ref)
-
-    def testStringification(self) -> None:
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
-        self.enterContext(butler)
-        butlerStr = str(butler)
-
-        if self.datastoreStr is not None:
-            for testStr in self.datastoreStr:
-                self.assertIn(testStr, butlerStr)
-        if self.registryStr is not None:
-            self.assertIn(self.registryStr, butlerStr)
-
-        datastoreName = butler._datastore.name
-        if self.datastoreName is not None:
-            for testStr in self.datastoreName:
-                self.assertIn(testStr, datastoreName)
-
-    def testButlerRewriteDataId(self) -> None:
-        """Test that dataIds can be rewritten based on dimension records."""
-        butler = self.create_empty_butler(run=self.default_run)
-
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
-        datasetTypeName = "random_data"
-
-        # Create dimension records.
-        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData(
-            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
-        )
-        butler.registry.insertDimensionData(
-            "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
-        )
-
-        dimensions = butler.dimensions.conform(["instrument", "exposure"])
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        butler.registry.registerDatasetType(datasetType)
-
-        n_exposures = 5
-        dayobs = 20210530
-
-        # Create records for multiple day_obs but same seq_num to test that
-        # we are constraining gets properly when day_obs/seq_num is used
-        # for an exposure. Second day is year in future but is not used.
-        for day_obs in (dayobs, dayobs + 1_00_00):
-            butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": day_obs})
-
-            for i in range(n_exposures):
-                group_name = f"group_{day_obs}_{i}"
-                butler.registry.insertDimensionData(
-                    "group", {"instrument": "DummyCamComp", "name": group_name}
-                )
-                butler.registry.insertDimensionData(
-                    "exposure",
-                    {
-                        "instrument": "DummyCamComp",
-                        "id": day_obs + i,
-                        "obs_id": f"exp_{day_obs}_{i}",
-                        "seq_num": i,
-                        "day_obs": day_obs,
-                        "physical_filter": "d-r",
-                        "group": group_name,
-                    },
-                )
-
-        # Write some data.
-        for i in range(n_exposures):
-            metric = {"something": i, "other": "metric", "list": [2 * x for x in range(i)]}
-
-            # Use the seq_num for the put to test rewriting.
-            dataId = {"seq_num": i, "day_obs": dayobs, "instrument": "DummyCamComp", "physical_filter": "d-r"}
-            ref = butler.put(metric, datasetTypeName, dataId=dataId)
-
-            # Check that the exposure is correct in the dataId
-            self.assertEqual(ref.dataId["exposure"], dayobs + i)
-
-            # and check that we can get the dataset back with the same dataId
-            new_metric = butler.get(datasetTypeName, dataId=dataId)
-            self.assertEqual(new_metric, metric)
-
-        # Check that we can find the datasets using the day_obs or the
-        # exposure.day_obs.
-        datasets_1 = list(
-            butler.registry.queryDatasets(
-                datasetType,
-                collections=self.default_run,
-                where="day_obs = :dayObs AND instrument = :instr",
-                bind={"dayObs": dayobs, "instr": "DummyCamComp"},
-            )
-        )
-        datasets_2 = list(
-            butler.registry.queryDatasets(
-                datasetType,
-                collections=self.default_run,
-                where="exposure.day_obs = :dayObs AND instrument = :instr",
-                bind={"dayObs": dayobs, "instr": "DummyCamComp"},
-            )
-        )
-        self.assertEqual(datasets_1, datasets_2)
-
-    def _setup_to_test_collection_chain(self) -> Butler:
-        butler = self.create_empty_butler(writeable=True)
-
-        butler.collections.register("chain", CollectionType.CHAINED)
-
-        runs = ["a", "b", "c", "d"]
-        for run in runs:
-            butler.collections.register(run)
-
-        butler.collections.register("staticchain", CollectionType.CHAINED)
-        butler.collections.redefine_chain("staticchain", ["a", "b"])
-
-        return butler
-
-    def _check_chain(self, butler: Butler, expected: list[str]) -> None:
-        children = butler.collections.get_info("chain").children
-        self.assertEqual(expected, list(children))
-
-    def _test_common_chain_functionality(
-        self, butler, func: Callable[[str, str | list[str]], Any], *, skip_cycle_check=False
-    ) -> None:
-        # Missing parent collection
-        with self.assertRaises(MissingCollectionError):
-            func("doesnotexist", [])
-        # Missing child collection
-        with self.assertRaises(MissingCollectionError):
-            func("chain", ["doesnotexist"])
-        # Forbid operations on non-chained collections
-        with self.assertRaises(CollectionTypeError):
-            func("d", ["a"])
-
-        # Prevent collection cycles
-        if not skip_cycle_check:
-            butler.collections.register("chain2", CollectionType.CHAINED)
-            func("chain2", "chain")
-            with self.assertRaises(CollectionCycleError):
-                func("chain", "chain2")
-
-        # Make sure none of the earlier operations interfered with unrelated
-        # chains.
-        self.assertEqual(["a", "b"], list(butler.collections.get_info("staticchain").children))
-
-        with butler._caching_context():
-            with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
-                func("chain", "a")
-
-    def test_transfer_dimension_records_from(self) -> None:
-        source_butler = self.create_empty_butler(writeable=True)
-        source_butler.import_(filename=_get_test_data_path("lsstcam-subset.yaml"))
-
-        visit_id = 2025120200439
-        exposure_id = visit_id
-        target_butler = self.enterContext(create_populated_sqlite_registry())
-        target_butler.transfer_dimension_records_from(
-            source_butler,
-            [
-                # Should trigger the lookup of visit and all its associated
-                # "populated_by" records (visit_detector_region,
-                # visit_definition, etc.)
-                DataCoordinate.standardize(
-                    {"instrument": "LSSTCam", "visit": visit_id, "detector": 10},
-                    universe=source_butler.dimensions,
-                ),
-                # Shouldn't add any records to the lookup.
-                DataCoordinate.make_empty(source_butler.dimensions),
-            ],
-        )
-
-        def _fetch_record(dimension: str) -> DimensionRecord:
-            records = target_butler.query_dimension_records(dimension)
-            self.assertEqual(len(records), 1)
-            return records[0]
-
-        visit = _fetch_record("visit")
-        self.assertEqual(visit.id, visit_id)
-        self.assertEqual(visit.day_obs, 20251202)
-        self.assertEqual(visit.target_name, "lowdust")
-        self.assertEqual(visit.seq_num, 439)
-        original_visit = source_butler.query_dimension_records("visit", instrument="LSSTCam", visit=visit_id)[
-            0
-        ]
-        self.assertEqual(visit.region, original_visit.region)
-        self.assertEqual(visit.timespan, original_visit.timespan)
-
-        visit_detector_region = _fetch_record("visit_detector_region")
-        self.assertEqual(visit_detector_region.instrument, "LSSTCam")
-        self.assertEqual(visit_detector_region.detector, 10)
-        self.assertEqual(visit_detector_region.visit, visit_id)
-        original_visit_detector_region = source_butler.query_dimension_records(
-            "visit_detector_region", instrument="LSSTCam", visit=visit_id, detector=10
-        )[0]
-        self.assertEqual(visit_detector_region.region, original_visit_detector_region.region)
-
-        visit_definition = _fetch_record("visit_definition")
-        self.assertEqual(visit_definition.instrument, "LSSTCam")
-        self.assertEqual(visit_definition.exposure, 2025120200439)
-        self.assertEqual(visit_definition.visit, visit_id)
-
-        # The matching exposure record should have been pulled in via
-        # visit -> visit_definition.
-        exposure = _fetch_record("exposure")
-        self.assertEqual(exposure.instrument, "LSSTCam")
-        self.assertEqual(exposure.id, 2025120200439)
-        self.assertEqual(exposure.obs_id, "MC_O_20251202_000439")
-        original_exposure = source_butler.query_dimension_records(
-            "exposure", instrument="LSSTCam", exposure=exposure_id
-        )[0]
-        self.assertEqual(exposure.timespan, original_exposure.timespan)
-
-        group = _fetch_record("group")
-        self.assertEqual(group.instrument, "LSSTCam")
-        self.assertEqual(group.name, "2025-12-03T07:58:10.858")
-
-        visit_system_memberships = target_butler.query_dimension_records("visit_system_membership")
-        visit_system_memberships.sort(key=lambda record: record.visit_system)
-        self.assertEqual(len(visit_system_memberships), 2)
-        self.assertEqual(visit_system_memberships[0].visit_system, 0)
-        self.assertEqual(visit_system_memberships[1].visit_system, 2)
-        self.assertEqual(visit_system_memberships[0].visit, visit_id)
-        self.assertEqual(visit_system_memberships[1].visit, visit_id)
-
-        visit_systems = target_butler.query_dimension_records("visit_system")
-        visit_systems.sort(key=lambda record: record.id)
-        visit_system_memberships.sort(key=lambda record: record.visit_system)
-        self.assertEqual(visit_systems[0].id, 0)
-        self.assertEqual(visit_systems[1].id, 2)
-        self.assertEqual(visit_systems[0].name, "one-to-one")
-        self.assertEqual(visit_systems[1].name, "by-seq-start-end")
 
 
 REGISTRY_LOGGER = "lsst.daf.butler.registry"
@@ -2667,342 +2432,11 @@ def test_export_transfer_copy(butler_harness: ButlerHarness, test_directory: str
                     assert _check_file_exists(export_dir, path), f"Check that mode {transfer} exported files"
 
 
-class FileDatastoreButlerTests(ButlerTests):
-    """Common tests and specialization of ButlerTests for butlers backed
-    by datastores that inherit from FileDatastore.
-    """
-
-    def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
-        """Check if file exists at a given path (relative to root).
-
-        Test testPutTemplates verifies actual physical existance of the files
-        in the requested location.
-        """
-        uri = ResourcePath(root, forceDirectory=True)
-        return uri.join(relpath).exists()
-
-    def runImportExportTest(self, storageClass: StorageClass) -> None:
-        """Test exporting and importing.
-
-        This test does an export to a temp directory and an import back
-        into a new temp directory repo. It does not assume a posix datastore.
-        """
-        exportButler = self.runPutGetTest(storageClass, "test_metric")
-
-        # Test that we must have a file extension.
-        with self.assertRaises(ValueError):
-            with exportButler.export(filename="dump", directory=".") as export:
-                pass
-
-        # Test that unknown format is not allowed.
-        with self.assertRaises(ValueError):
-            with exportButler.export(filename="dump.fits", directory=".") as export:
-                pass
-
-        # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
-        self.assertGreater(len(datasets), 0)
-        # Add a DimensionRecord that's unused by those datasets.
-        skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
-        exportButler.registry.insertDimensionData("skymap", skymapRecord)
-        # Export and then import datasets.
-        with safeTestTempDir(TESTDIR) as exportDir:
-            exportFile = os.path.join(exportDir, "exports.yaml")
-            with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
-                export.saveDatasets(datasets)
-                # Export the same datasets again. This should quietly do
-                # nothing because of internal deduplication, and it shouldn't
-                # complain about being asked to export the "htm7" elements even
-                # though there aren't any in these datasets or in the database.
-                export.saveDatasets(datasets, elements=["htm7"])
-                # Save one of the data IDs again; this should be harmless
-                # because of internal deduplication.
-                export.saveDataIds([datasets[0].dataId])
-                # Save some dimension records directly.
-                export.saveDimensionData("skymap", [skymapRecord])
-            self.assertTrue(os.path.exists(exportFile))
-            with safeTestTempDir(TESTDIR) as importDir:
-                # We always want this to be a local posix butler
-                make_repo_for_test(
-                    importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml"))
-                )
-                # Calling script.butlerImport tests the implementation of the
-                # butler command line interface "import" subcommand. Functions
-                # in the script folder are generally considered protected and
-                # should not be used as public api.
-                with open(exportFile) as f:
-                    script.butlerImport(
-                        importDir,
-                        export_file=f,
-                        directory=exportDir,
-                        transfer="auto",
-                        skip_dimensions=None,
-                    )
-                importButler = Butler.from_config(importDir, run=self.default_run)
-                self.enterContext(importButler)
-                for ref in datasets:
-                    with self.subTest(ref=repr(ref)):
-                        # Test for existence by passing in the DatasetType and
-                        # data ID separately, to avoid lookup by dataset_id.
-                        self.assertTrue(importButler.exists(ref.datasetType, ref.dataId))
-                self.assertEqual(
-                    list(importButler.registry.queryDimensionRecords("skymap")),
-                    [importButler.dimensions["skymap"].RecordClass(**skymapRecord)],
-                )
-
-    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
-        """Simulate an external actor removing a file outside of Butler's
-        knowledge.
-
-        Subclasses may override to handle more complicated datastore
-        configurations.
-        """
-        uri = butler.getURI(ref)
-        uri.remove()
-        datastore = cast(FileDatastore, butler._datastore)
-        datastore.cacheManager.remove_from_cache(ref)
-
-    def test_butler_metrics(self):
-        """Test that metrics are collected."""
-        run = "test_run"
-        metrics = ButlerMetrics()
-        butler, datasetType = self.create_butler(
-            run, "MetricsExampleModelProvenance", "prov_metric", metrics=metrics
-        )
-        data = MetricsExampleModel(
-            summary={"AM1": 5.2, "AM2": 30.6},
-            output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
-            data=[563, 234, 456.7, 752, 8, 9, 27],
-        )
-
-        data_ref = butler.put(data, datasetType, visit=424, instrument="DummyCamComp")
-        butler.get(data_ref)
-        butler.get(data_ref)
-        self.assertEqual(metrics.n_get, 2)
-        self.assertGreater(metrics.time_in_get, 0.0)
-        self.assertEqual(metrics.n_put, 1)
-        self.assertGreater(metrics.time_in_put, 0.0)
-
-        deferred = butler.getDeferred(data_ref)
-        deferred.get()
-        self.assertEqual(metrics.n_get, 3)
-
-        with butler.record_metrics() as new:
-            data_ref_2 = butler.put(data, datasetType, visit=425, instrument="DummyCamComp")
-            butler.get(data_ref)
-
-            butler.pruneDatasets([data_ref, data_ref_2], purge=True, unstore=True)
-            with ResourcePath.temporary_uri(suffix=".json") as tmpFile:
-                tmpFile.write(data.model_dump_json().encode())
-                refs = [
-                    DatasetRef(datasetType, data_ref_2.dataId, run),
-                    DatasetRef(datasetType, data_ref.dataId, run),
-                ]
-                datasets = [FileDataset(path=tmpFile, refs=refs)]
-                butler.ingest(*datasets, transfer="copy")
-
-        self.assertEqual(new.n_get, 1)
-        self.assertEqual(new.n_put, 1)
-        self.assertEqual(new.n_ingest, 2)
+if butler_server_is_available:
+    from lsst.daf.butler.tests.server import create_test_server
 
 
-class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """PosixDatastore specialization of a butler"""
-
-    profileName = "posix"
-
-    def testPathConstructor(self) -> None:
-        """Independent test of constructor using PathLike."""
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
-        self.enterContext(butler)
-        self.assertIsInstance(butler, Butler)
-
-        # And again with a Path object with the butler yaml
-        path = pathlib.Path(self.tmpConfigFile)
-        butler = Butler.from_config(path, writeable=False)
-        self.enterContext(butler)
-        self.assertIsInstance(butler, Butler)
-
-        # And again with a Path object without the butler yaml
-        # (making sure we skip it if the tmp config doesn't end
-        # in butler.yaml -- which is the case for a subclass)
-        if self.tmpConfigFile.endswith("butler.yaml"):
-            path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
-            butler = Butler.from_config(path, writeable=False)
-            self.enterContext(butler)
-            self.assertIsInstance(butler, Butler)
-
-    def testPytypeCoercion(self) -> None:
-        """Test python type coercion on Butler.get and put."""
-        # Store some data with the normal example storage class.
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        datasetTypeName = "test_metric"
-        butler = self.runPutGetTest(storageClass, datasetTypeName)
-
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        metric = butler.get(datasetTypeName, dataId=dataId)
-        self.assertEqual(get_full_type_name(metric), "lsst.daf.butler.tests.MetricsExample")
-
-        datasetType_ori = butler.get_dataset_type(datasetTypeName)
-        self.assertEqual(datasetType_ori.storageClass.name, "StructuredDataNoComponents")
-
-        # Now need to hack the registry dataset type definition.
-        # There is no API for this.
-        assert isinstance(butler._registry, SqlRegistry)
-        manager = butler._registry._managers.datasets
-        assert hasattr(manager, "_db") and hasattr(manager, "_static")
-        manager._db.update(
-            manager._static.dataset_type,
-            {"name": datasetTypeName},
-            {datasetTypeName: datasetTypeName, "storage_class": "StructuredDataNoComponentsModel"},
-        )
-
-        # Force reset of dataset type cache
-        butler.registry.refresh()
-
-        datasetType_new = butler.get_dataset_type(datasetTypeName)
-        self.assertEqual(datasetType_new.name, datasetType_ori.name)
-        self.assertEqual(datasetType_new.storageClass.name, "StructuredDataNoComponentsModel")
-
-        metric_model = butler.get(datasetTypeName, dataId=dataId)
-        self.assertNotEqual(type(metric_model), type(metric))
-        self.assertEqual(get_full_type_name(metric_model), "lsst.daf.butler.tests.MetricsExampleModel")
-
-        # Put the model and read it back to show that everything now
-        # works as normal.
-        metric_ref = butler.put(metric_model, datasetTypeName, dataId=dataId, visit=424)
-        metric_model_new = butler.get(metric_ref)
-        self.assertEqual(metric_model_new, metric_model)
-
-        # Hack the storage class again to something that will fail on the
-        # get with no conversion class.
-        manager._db.update(
-            manager._static.dataset_type,
-            {"name": datasetTypeName},
-            {datasetTypeName: datasetTypeName, "storage_class": "StructuredDataListYaml"},
-        )
-        butler.registry.refresh()
-
-        with self.assertRaises(ValueError):
-            butler.get(datasetTypeName, dataId=dataId)
-
-    def test_provenance(self):
-        """Test that provenance is attached on put."""
-        run = "test_run"
-        butler, datasetType = self.create_butler(run, "MetricsExampleModelProvenance", "prov_metric")
-        metric = MetricsExampleModel(
-            summary={"AM1": 5.2, "AM2": 30.6},
-            output={"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
-            data=[563, 234, 456.7, 752, 8, 9, 27],
-        )
-        # Provenance can be attached to the object being put. Whether
-        # it is or not is dependent on the formatter. For this test we
-        # copy on adding provenance to ensure they differ.
-        self.assertIsNone(metric.dataset_id)
-        metric_ref = butler.put(metric, datasetType, visit=424, instrument="DummyCamComp")
-        self.assertIsNone(metric.dataset_id)
-        metric_2 = butler.get(metric_ref)
-        self.assertEqual(metric_2.data, metric.data)
-        self.assertEqual(metric_2.dataset_id, metric_ref.id)
-        self.assertIsNone(metric_2.provenance)
-
-        # Put with provenance.
-        prov = DatasetProvenance(quantum_id=uuid.uuid4())
-        prov.add_input(metric_ref)
-        prov.add_extra_provenance(metric_ref.id, {"answer": 42})
-        metric_ref2 = butler.put(metric, datasetType, visit=423, instrument="DummyCamComp", provenance=prov)
-        metric_3 = butler.get(metric_ref2)
-        self.assertEqual(metric_3.provenance, prov)
-
-        # Check that we can extract provenance from dict form.
-        prov_dict = prov.to_flat_dict(metric_ref2)
-        prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
-        self.assertEqual(ref_from_prov, metric_ref2)
-        # Direct __eq__ of the provenance does not work because one side
-        # includes dimension records.
-        self.assertEqual({ref.id for ref in prov_from_prov.inputs}, {ref.id for ref in prov.inputs})
-        self.assertEqual(prov_from_prov.quantum_id, prov.quantum_id)
-        self.assertEqual(prov_from_prov.extras, prov.extras)
-
-        # Force a bad ID into the dict.
-        prov_dict["id"] = uuid.uuid4()
-        with self.assertRaises(ValueError):
-            DatasetProvenance.from_flat_dict(prov_dict, butler)
-        del prov_dict["id"]
-        prov_dict["input 0 id"] = uuid.uuid4()
-        with self.assertRaises(ValueError):
-            DatasetProvenance.from_flat_dict(prov_dict, butler)
-
-        # Check that simple types can be reconstructed with non-standard
-        # separators.
-        prov_dict = prov.to_flat_dict(metric_ref2, prefix="XYZ", sep="😎", simple_types=True)
-        prov_from_prov, ref_from_prov = DatasetProvenance.from_flat_dict(prov_dict, butler)
-        self.assertEqual(ref_from_prov, metric_ref2)
-        self.assertEqual({ref.id for ref in prov_from_prov.inputs}, {ref.id for ref in prov.inputs})
-
-        with self.assertRaises(ValueError):
-            DatasetProvenance.from_flat_dict({"unknown": 42}, butler)
-
-
-class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """PosixDatastore specialization of a butler using Postgres"""
-
-    profileName = "posix"
-    registryBackend = "postgres"
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.postgresql = cls.enterClassContext(setup_postgres_test_db())
-        super().setUpClass()
-
-    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
-        # Docstring inherited.
-        return self.postgresql
-
-
-class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTestCase, unittest.TestCase):
-    """Test that Butler with a Postgres registry still works after cloning."""
-
-    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
-        # Docstring inherited.
-        return ClonedButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
-
-
-class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
-    """InMemoryDatastore specialization of a butler"""
-
-    profileName = "in_memory"
-
-
-class ClonedSqliteButlerTestCase(InMemoryDatastoreButlerTestCase, unittest.TestCase):
-    """Test that a Butler with a Sqlite registry still works after cloning."""
-
-    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
-        # Docstring inherited. ClonedButlerHarness passes metrics through to
-        # clone(); this class previously dropped them, which the coverage gate
-        # confirmed costs nothing.
-        return ClonedButlerHarness(repo, self.storageClassFactory, exit_stack, self.default_run)
-
-
-class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """PosixDatastore specialization"""
-
-    profileName = "chained"
-
-
-class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
-    """Test that a yaml file in one location can refer to a root in another."""
-
-    repoLayout = "explicit_root"
-
-
-class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """Specialization of a butler using a datastore root that reports itself
-    as not local; a remote file datastore + a local SqlRegistry.
-    """
-
-    profileName = "remote_test"
-
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 DEFAULT_MANAGER = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
 """Dataset record storage manager used when a test does not name one."""
@@ -3690,102 +3124,3 @@ def test_fallback(butler_repo: ButlerRepo, storage_class_factory: StorageClassFa
             butler.get(ref)
         with pytest.raises(FileNotFoundError):
             butler.getURI(ref)
-
-
-@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
-class ButlerServerTests(FileDatastoreButlerTests):
-    """Test RemoteButler and Butler server."""
-
-    postgres: TemporaryPostgresInstance | None
-
-    def _postgres_instance(self) -> TemporaryPostgresInstance | None:
-        # Docstring inherited.
-        return self.postgres
-
-    def _make_harness(self, repo: ButlerRepo, exit_stack: contextlib.ExitStack) -> ButlerHarness:
-        # Docstring inherited.
-        self.server_instance = exit_stack.enter_context(create_test_server(TESTDIR, postgres=self.postgres))
-        return ServerButlerHarness(
-            self.server_instance, repo, self.storageClassFactory, exit_stack, self.default_run
-        )
-
-    def create_empty_butler(
-        self,
-        run: str | None = None,
-        writeable: bool | None = None,
-        metrics: ButlerMetrics | None = None,
-        cleanup: bool = True,
-    ) -> Butler:
-        # The server hands out a HybridButler, so the base class assertion
-        # that this is a DirectButler does not apply.
-        return self.harness.create_empty_butler(
-            run=run, writeable=writeable, metrics=metrics, cleanup=cleanup
-        )
-
-    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
-        # Can't delete a file via S3 signed URLs, so we need to reach in
-        # through DirectButler to delete the dataset.
-        uri = self.server_instance.direct_butler.getURI(ref)
-        uri.remove()
-
-    def testConstructor(self):
-        # RemoteButler constructor is tested in test_server.py and
-        # test_remote_butler.py.
-        pass
-
-    def testDafButlerRepositories(self):
-        # Loading of RemoteButler via repository index is tested in
-        # test_server.py.
-        pass
-
-    # Pickling not yet implemented for RemoteButler/HybridButler.
-    @unittest.expectedFailure
-    def testPickle(self) -> None:
-        return super().testPickle()
-
-    def testStringification(self) -> None:
-        self.assertEqual(
-            str(self.server_instance.remote_butler),
-            "RemoteButler(https://test.example/api/butler/repo/testrepo/)",
-        )
-
-    def testTransaction(self) -> None:
-        # Transactions will never be supported for RemoteButler.
-        pass
-
-
-@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
-class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
-    """Tests for RemoteButler's registry shim, with a SQLite DB backing the
-    server.
-    """
-
-    postgres: TemporaryPostgresInstance | None = None
-
-
-@unittest.skipIf(not butler_server_is_available, butler_server_import_error)
-class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
-    """Tests for RemoteButler's registry shim, with a Postgres DB backing the
-    server.
-    """
-
-    registryBackend = "postgres"
-
-    @classmethod
-    def setUpClass(cls):
-        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
-        super().setUpClass()
-
-
-def setup_module(module: types.ModuleType) -> None:
-    """Set up the module for pytest."""
-    clean_environment()
-
-
-def _get_test_data_path(filename: str) -> ResourcePath:
-    return ResourcePath(f"resource://lsst.daf.butler/tests/registry_data/{filename}")
-
-
-if __name__ == "__main__":
-    clean_environment()
-    unittest.main()

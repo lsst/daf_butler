@@ -59,7 +59,6 @@ __all__ = [
     "ServerButlerHarness",
     "add_dataset_type",
     "get_test_data_path",
-    "make_butler_repo",
     "make_example_metrics",
 ]
 
@@ -250,62 +249,16 @@ def _make_config(test_directory: str, profile: DatastoreProfile) -> Config:
     return Config(os.path.join(test_directory, profile.config_file))
 
 
-@contextlib.contextmanager
-def make_butler_repo(
-    test_directory: str,
-    datastore_type: str = "posix",
-    repo_layout: str = "in_repo",
-    postgres: Any = None,
-) -> Iterator[ButlerRepo]:
-    """Build a Butler repository for one test and remove it afterwards.
+def _apply_registry_backend(config: Config, registry_backend: str, request: pytest.FixtureRequest) -> None:
+    """Patch a Butler config for the requested registry backend.
 
-    Public only while `tests/test_butler.py` still holds `unittest` classes,
-    which cannot consume the `butler_repo` fixture. It becomes private again
-    once they are gone.
-
-    Parameters
-    ----------
-    test_directory : `str`
-        Directory holding the Butler test configuration.
-    datastore_type : `str`, optional
-        Key of `DATASTORE_PROFILES` naming the datastore to configure.
-    repo_layout : `str`, optional
-        Where the configuration sits relative to the repository root: one of
-        ``in_repo``, ``explicit_root``, ``outfile``, ``outfile_dir`` or
-        ``outfile_uri``.
-    postgres : `object`, optional
-        Postgres instance whose connection details should be patched into the
-        config, or `None` to leave the config on sqlite.
-
-    Yields
-    ------
-    repo : `ButlerRepo`
-        The repository, valid until the context exits.
+    The postgres instance is resolved lazily rather than declared as a fixture
+    parameter, so that a sqlite test never starts a postgres server.
     """
-    profile = DATASTORE_PROFILES[datastore_type]
-    config = _make_config(test_directory, profile)
-    if postgres is not None:
-        postgres.patch_butler_config(config)
-
-    root = makeTestTempDir(test_directory)
-    root2: str | None = None
-    try:
-        if datastore_type == "remote_test":
-            if repo_layout != "in_repo":
-                raise ValueError("The remote_test datastore only supports the in_repo layout.")
-            yield _make_remote_test_repo(root, config)
-        elif repo_layout == "in_repo":
-            make_repo_for_test(root, config=config)
-            yield ButlerRepo(config_file=os.path.join(root, "butler.yaml"), root=root, profile=profile)
-        elif repo_layout == "explicit_root":
-            yield _make_explicit_root_repo(root, config, profile)
-        else:
-            root2 = makeTestTempDir(test_directory)
-            yield _make_outfile_repo(root, root2, config, profile, repo_layout)
-    finally:
-        removeTestTempDir(root)
-        if root2 is not None:
-            removeTestTempDir(root2)
+    if registry_backend == "postgres":
+        request.getfixturevalue("postgres_instance").patch_butler_config(config)
+    elif registry_backend != "sqlite":
+        raise ValueError(f"Unknown registry backend {registry_backend!r}")
 
 
 def _make_remote_test_repo(root: str, config: Config) -> ButlerRepo:
@@ -680,17 +633,29 @@ def butler_repo(
     repo_layout: str,
 ) -> Iterator[ButlerRepo]:  # numpydoc ignore=PR01
     """Build a Butler repository for the requested axis combination."""
-    # The postgres instance is resolved lazily rather than declared as a
-    # fixture parameter, so that a sqlite test never starts a postgres server.
-    if registry_backend == "postgres":
-        postgres = request.getfixturevalue("postgres_instance")
-    elif registry_backend == "sqlite":
-        postgres = None
-    else:
-        raise ValueError(f"Unknown registry backend {registry_backend!r}")
+    profile = DATASTORE_PROFILES[datastore_type]
+    config = _make_config(test_directory, profile)
+    _apply_registry_backend(config, registry_backend, request)
 
-    with make_butler_repo(test_directory, datastore_type, repo_layout, postgres) as repo:
-        yield repo
+    root = makeTestTempDir(test_directory)
+    root2: str | None = None
+    try:
+        if datastore_type == "remote_test":
+            if repo_layout != "in_repo":
+                raise ValueError("The remote_test datastore only supports the in_repo layout.")
+            yield _make_remote_test_repo(root, config)
+        elif repo_layout == "in_repo":
+            make_repo_for_test(root, config=config)
+            yield ButlerRepo(config_file=os.path.join(root, "butler.yaml"), root=root, profile=profile)
+        elif repo_layout == "explicit_root":
+            yield _make_explicit_root_repo(root, config, profile)
+        else:
+            root2 = makeTestTempDir(test_directory)
+            yield _make_outfile_repo(root, root2, config, profile, repo_layout)
+    finally:
+        removeTestTempDir(root)
+        if root2 is not None:
+            removeTestTempDir(root2)
 
 
 @pytest.fixture

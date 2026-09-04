@@ -236,7 +236,6 @@ extend-select = [
 "tests_integration/test_docker_container.py" = ["PT"]
 "tests/test_astropyTableFormatter.py" = ["PT"]
 "tests/test_authentication.py" = ["PT"]
-"tests/test_butler.py" = ["PT"]
 "tests/test_butler_factory.py" = ["PT"]
 "tests/test_cliCmdAssociate.py" = ["PT"]
 "tests/test_cliCmdConfigDump.py" = ["PT"]
