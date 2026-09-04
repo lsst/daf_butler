@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 import pickle
 import shutil
@@ -1732,63 +1733,135 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
 
 @unittest.mock.patch.dict(os.environ, {}, clear=True)
+@dataclasses.dataclass
+class CacheFixtures:
+    """Datasets and files shared by the cache tests."""
+
+    root: str
+    """Directory the test files live in."""
+
+    refs: list[DatasetRef]
+    """Simple refs, one per file in ``files``."""
+
+    files: list[ResourcePath]
+    """Files backing ``refs``."""
+
+    composite_refs: list[DatasetRef]
+    """Composite refs, one per entry in ``comp_refs`` and ``comp_files``."""
+
+    comp_refs: list[list[DatasetRef]]
+    """Component refs for each composite."""
+
+    comp_files: list[list[ResourcePath]]
+    """Files backing ``comp_refs``."""
+
+
+def _make_cache_storage_class_factory() -> StorageClassFactory:
+    """Load the storage classes the cache tests refer to.
+
+    `StorageClassFactory` is a singleton, so this accumulates with whatever
+    else the session has already loaded rather than replacing it.
+
+    Returns
+    -------
+    factory : `StorageClassFactory`
+        The populated factory.
+    """
+    factory = StorageClassFactory()
+    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
+    return factory
+
+
+def _make_cache_fixtures(
+    root: str,
+    universe: DimensionUniverse,
+    cache_storage_class_factory: StorageClassFactory,
+) -> CacheFixtures:
+    """Build the refs and files the cache tests operate on.
+
+    Parameters
+    ----------
+    root : `str`
+        Directory to write the test files into.
+    universe : `DimensionUniverse`
+        Universe the refs are conformed against.
+    cache_storage_class_factory : `StorageClassFactory`
+        Factory holding the test storage classes.
+
+    Returns
+    -------
+    fixtures : `CacheFixtures`
+        The refs and files.
+    """
+    helper = DatasetTestHelper()
+
+    # Create some test dataset refs and associated test files
+    sc = cache_storage_class_factory.getStorageClass("StructuredDataDict")
+    dimensions = universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+
+    # Create list of refs and list of temporary files
+    n_datasets = 10
+    refs = [helper.makeDatasetRef(f"metric{n}", dimensions, sc, dataId) for n in range(n_datasets)]
+
+    root_uri = ResourcePath(root, forceDirectory=True)
+    files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
+
+    # Create test files.
+    for uri in files:
+        uri.write(b"0123456789")
+
+    # Create some composite refs with component files.
+    sc = cache_storage_class_factory.getStorageClass("StructuredData")
+    composite_refs = [helper.makeDatasetRef(f"composite{n}", dimensions, sc, dataId) for n in range(3)]
+    comp_files = []
+    comp_refs = []
+    for n, ref in enumerate(composite_refs):
+        component_refs = []
+        component_files = []
+        for component in sc.components:
+            component_ref = ref.makeComponentRef(component)
+            file = root_uri.join(f"composite_file-{n}-{component}.txt")
+            component_refs.append(component_ref)
+            component_files.append(file)
+            file.write(b"9876543210")
+
+        comp_files.append(component_files)
+        comp_refs.append(component_refs)
+
+    return CacheFixtures(
+        root=root,
+        refs=refs,
+        files=files,
+        composite_refs=composite_refs,
+        comp_refs=comp_refs,
+        comp_files=comp_files,
+    )
+
+
 class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
     """Tests for datastore caching infrastructure."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.storageClassFactory = StorageClassFactory()
+        cls.storageClassFactory = _make_cache_storage_class_factory()
         cls.universe = DimensionUniverse()
 
-        # Ensure that we load the test storage class definitions.
-        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
-        cls.storageClassFactory.addFromConfig(scConfigFile)
-
     def setUp(self) -> None:
-        self.id = 0
-
         # Create a root that we can use for caching tests.
         self.root = tempfile.mkdtemp()
-
-        # Create some test dataset refs and associated test files
-        sc = self.storageClassFactory.getStorageClass("StructuredDataDict")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-
-        # Create list of refs and list of temporary files
-        n_datasets = 10
-        self.refs = [self.makeDatasetRef(f"metric{n}", dimensions, sc, dataId) for n in range(n_datasets)]
-
-        root_uri = ResourcePath(self.root, forceDirectory=True)
-        self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
-
-        # Create test files.
-        for uri in self.files:
-            uri.write(b"0123456789")
-
-        # Create some composite refs with component files.
-        sc = self.storageClassFactory.getStorageClass("StructuredData")
-        self.composite_refs = [self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId) for n in range(3)]
-        self.comp_files = []
-        self.comp_refs = []
-        for n, ref in enumerate(self.composite_refs):
-            component_refs = []
-            component_files = []
-            for component in sc.components:
-                component_ref = ref.makeComponentRef(component)
-                file = root_uri.join(f"composite_file-{n}-{component}.txt")
-                component_refs.append(component_ref)
-                component_files.append(file)
-                file.write(b"9876543210")
-
-            self.comp_files.append(component_files)
-            self.comp_refs.append(component_refs)
+        fixtures = _make_cache_fixtures(self.root, self.universe, self.storageClassFactory)
+        self.refs = fixtures.refs
+        self.files = fixtures.files
+        self.composite_refs = fixtures.composite_refs
+        self.comp_refs = fixtures.comp_refs
+        self.comp_files = fixtures.comp_files
 
     def tearDown(self) -> None:
         if self.root is not None and os.path.exists(self.root):
