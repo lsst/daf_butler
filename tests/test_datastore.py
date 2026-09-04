@@ -40,6 +40,7 @@ import uuid
 from collections.abc import Callable, Iterator
 from typing import Any, cast
 
+import pytest
 import yaml
 
 import lsst.utils.tests
@@ -72,6 +73,7 @@ from lsst.daf.butler.datastore.stored_file_info import (
     StoredFileInfoTable,
     make_datastore_path_relative,
 )
+from lsst.daf.butler.datastores.chainedDatastore import ChainedDatastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
@@ -84,6 +86,7 @@ from lsst.daf.butler.tests import (
     MetricsExampleModel,
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+from lsst.daf.butler.tests.fixtures import make_example_metrics
 from lsst.daf.butler.tests.utils import TestCaseMixin
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
@@ -1692,218 +1695,202 @@ def _make_datastore(config_file: str, root: str | None) -> Datastore:
     return Datastore.fromConfig(config=config.copy(), bridgeManager=registry.getDatastoreBridgeManager())
 
 
-class DatastoreConstraintsTests(DatastoreTestsBase):
-    """Basic tests of constraints model of Datastores."""
+DATA_ID = {
+    "visit": 52,
+    "physical_filter": "V",
+    "band": "v",
+    "instrument": "DummyCamComp",
+    "day_obs": 20250101,
+}
+"""Data ID the constraint configurations are written against."""
 
-    needsRoot = True
-    """Whether this configuration needs a directory on disk."""
+OTHER_DATA_ID = {
+    "visit": 52,
+    "physical_filter": "V",
+    "band": "v",
+    "instrument": "HSC",
+    "day_obs": 20250101,
+}
+"""Data ID for a second instrument, which the per-store constraints treat
+differently."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        # These tests build their datastore straight from its configuration,
-        # so they need neither the imported datastore type nor the Butler
-        # configs that DatastoreTestsBase.setUpClass loads.
-        cls.storageClassFactory = _make_constraint_storage_class_factory()
-        cls.universe = DimensionUniverse()
+CONSTRAINT_DATASTORES = [
+    pytest.param("posixDatastoreP.yaml", True, True, id="posix"),
+    pytest.param("inMemoryDatastoreP.yaml", False, False, id="in-memory"),
+    pytest.param("chainedDatastorePa.yaml", True, True, id="chained-native"),
+    pytest.param("chainedDatastoreP.yaml", True, True, id="chained"),
+    pytest.param("chainedDatastore2P.yaml", False, False, id="chained-memory"),
+]
+"""(config file, can ingest, needs a root) for each datastore configuration
+that shares the same constraints."""
 
-    def setUp(self) -> None:
-        self.root = tempfile.mkdtemp() if self.needsRoot else None
+CONSTRAINT_CASES = [
+    pytest.param("metric", "StructuredData", True, id="metric"),
+    pytest.param("metric5", "StructuredData", False, id="metric5"),
+    pytest.param("metric33", "StructuredData", True, id="metric33"),
+    pytest.param("metric5", "StructuredDataJson", True, id="metric5-json"),
+]
+"""(dataset type name, storage class, whether the constraint accepts it).
 
-    def makeDatastore(self, sub: str | None = None) -> Datastore:
-        # Docstring inherited.
-        assert sub is None, "the constraint tests do not use datastore subdirectories"
-        return _make_datastore(self.configFile, self.root)
+These were subtests of one method; `parametrize` could not be applied while
+they lived on a `unittest.TestCase`.
+"""
 
-    def testConstraints(self) -> None:
-        """Test constraints model.  Assumes that each test class has the
-        same constraints.
-        """
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
-
-        sc1 = self.storageClassFactory.getStorageClass("StructuredData")
-        sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
-        dimensions = self.universe.conform(("visit", "physical_filter", "instrument"))
-        dataId = {
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "instrument": "DummyCamComp",
-            "day_obs": 20250101,
-        }
-
-        # Write empty file suitable for ingest check (JSON and YAML variants)
-        testfile_y = tempfile.NamedTemporaryFile(suffix=".yaml")
-        testfile_j = tempfile.NamedTemporaryFile(suffix=".json")
-        for datasetTypeName, sc, accepted in (
-            ("metric", sc1, True),
-            ("metric5", sc1, False),
-            ("metric33", sc1, True),
-            ("metric5", sc2, True),
-        ):
-            # Choose different temp file depending on StorageClass
-            testfile = testfile_j if sc.name.endswith("Json") else testfile_y
-
-            with self.subTest(datasetTypeName=datasetTypeName, storageClass=sc.name, file=testfile.name):
-                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
-                if accepted:
-                    datastore.put(metrics, ref)
-                    self.assertTrue(datastore.exists(ref))
-                    datastore.remove(ref)
-
-                    # Try ingest
-                    if self.canIngest:
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
-                        self.assertTrue(datastore.exists(ref))
-                        datastore.remove(ref)
-                else:
-                    with self.assertRaises(DatasetTypeNotSupportedError):
-                        datastore.put(metrics, ref)
-                    self.assertFalse(datastore.exists(ref))
-
-                    # Again with ingest
-                    if self.canIngest:
-                        with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
-                        self.assertFalse(datastore.exists(ref))
+PER_STORE_CASES = [
+    pytest.param("metric", DATA_ID, "StructuredData", (False, True, False), True, id="metric"),
+    pytest.param("metric5", DATA_ID, "StructuredData", (False, False, False), False, id="metric5"),
+    pytest.param("metric5", OTHER_DATA_ID, "StructuredData", (True, False, False), False, id="metric5-hsc"),
+    pytest.param("metric33", OTHER_DATA_ID, "StructuredDataJson", (True, True, False), True, id="metric33"),
+    pytest.param("metric5", DATA_ID, "StructuredDataJson", (False, True, False), True, id="metric5-json"),
+]
+"""(dataset type name, data ID, storage class, per-child acceptance, whether
+ingest is expected to work) for the per-store constraint chain."""
 
 
-class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
-    """PosixDatastore specialization"""
+@pytest.fixture(scope="module")
+def constraint_storage_class_factory() -> StorageClassFactory:
+    """Storage classes for the constraint tests.
 
-    configFile = "posixDatastoreP.yaml"
-    canIngest = True
-
-
-class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
-    """InMemoryDatastore specialization."""
-
-    configFile = "inMemoryDatastoreP.yaml"
-    canIngest = False
-    needsRoot = False
-
-
-class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCase):
-    """ChainedDatastore specialization using a POSIXDatastore and constraints
-    at the ChainedDatstore.
+    Named distinctly from the plugin's ``storage_class_factory`` because this
+    loads ``storageClasses.yaml`` rather than the Butler configs, matching what
+    ``DatastoreTestsBase.setUpClass`` did. `StorageClassFactory` is a
+    singleton, so the two accumulate rather than conflict.
     """
-
-    configFile = "chainedDatastorePa.yaml"
-
-
-class ChainedDatastoreConstraintsTestCase(PosixDatastoreConstraintsTestCase):
-    """ChainedDatastore specialization using a POSIXDatastore."""
-
-    configFile = "chainedDatastoreP.yaml"
+    factory = StorageClassFactory()
+    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
+    return factory
 
 
-class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTestCase):
-    """ChainedDatastore specialization using all InMemoryDatastore."""
+@pytest.fixture
+def testfiles() -> Iterator[dict[str, str]]:
+    """Empty JSON and YAML files, suitable for the ingest checks."""
+    with (
+        tempfile.NamedTemporaryFile(suffix=".yaml") as yaml_file,
+        tempfile.NamedTemporaryFile(suffix=".json") as json_file,
+    ):
+        yield {"yaml": yaml_file.name, "json": json_file.name}
 
-    configFile = "chainedDatastore2P.yaml"
-    canIngest = False
+
+def _testfile_for(testfiles: dict[str, str], storage_class_name: str) -> str:
+    """Choose the temporary file whose suffix matches the storage class."""
+    return testfiles["json"] if storage_class_name.endswith("Json") else testfiles["yaml"]
 
 
-class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.TestCase):
+@pytest.mark.parametrize(("config_file", "can_ingest", "needs_root"), CONSTRAINT_DATASTORES)
+@pytest.mark.parametrize(("dataset_type_name", "storage_class_name", "accepted"), CONSTRAINT_CASES)
+def test_constraints(
+    config_file: str,
+    can_ingest: bool,
+    needs_root: bool,
+    dataset_type_name: str,
+    storage_class_name: str,
+    accepted: bool,
+    constraint_storage_class_factory: StorageClassFactory,
+    testfiles: dict[str, str],
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """Test the constraints model shared by all these datastores."""
+    helper = DatasetTestHelper()
+    root = str(tmp_path_factory.mktemp("datastore")) if needs_root else None
+    datastore = _make_datastore(config_file, root)
+
+    storage_class = constraint_storage_class_factory.getStorageClass(storage_class_name)
+    dimensions = DimensionUniverse().conform(("visit", "physical_filter", "instrument"))
+    testfile = _testfile_for(testfiles, storage_class.name)
+
+    metrics = make_example_metrics()
+    ref = helper.makeDatasetRef(dataset_type_name, dimensions, storage_class, DATA_ID)
+    if accepted:
+        datastore.put(metrics, ref)
+        assert datastore.exists(ref)
+        datastore.remove(ref)
+
+        # Try ingest
+        if can_ingest:
+            datastore.ingest(FileDataset(testfile, [ref]), transfer="link")
+            assert datastore.exists(ref)
+            datastore.remove(ref)
+    else:
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.put(metrics, ref)
+        assert not datastore.exists(ref)
+
+        # Again with ingest
+        if can_ingest:
+            with pytest.raises(DatasetTypeNotSupportedError):
+                datastore.ingest(FileDataset(testfile, [ref]), transfer="link")
+            assert not datastore.exists(ref)
+
+
+@pytest.mark.parametrize(
+    ("dataset_type_name", "data_id", "storage_class_name", "accept", "ingest"), PER_STORE_CASES
+)
+def test_per_store_constraints(
+    dataset_type_name: str,
+    data_id: dict[str, object],
+    storage_class_name: str,
+    accept: tuple[bool, bool, bool],
+    ingest: bool,
+    constraint_storage_class_factory: StorageClassFactory,
+    testfiles: dict[str, str],
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
     """Test that a chained datastore can control constraints per-datastore
-    even if child datastore would accept.
+    even if a child datastore would accept.
     """
+    helper = DatasetTestHelper()
+    root = str(tmp_path_factory.mktemp("datastore"))
+    datastore = _make_datastore("chainedDatastorePb.yaml", root)
+    assert isinstance(datastore, ChainedDatastore)
 
-    configFile = "chainedDatastorePb.yaml"
+    storage_class = constraint_storage_class_factory.getStorageClass(storage_class_name)
+    dimensions = DimensionUniverse().conform(("visit", "physical_filter", "instrument"))
+    testfile = _testfile_for(testfiles, storage_class.name)
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        # Built straight from the configuration, as the other constraint tests
-        # are, so DatastoreTestsBase.setUpClass has nothing left to do here.
-        cls.storageClassFactory = _make_constraint_storage_class_factory()
-        cls.universe = DimensionUniverse()
+    metrics = make_example_metrics()
+    ref = helper.makeDatasetRef(dataset_type_name, dimensions, storage_class, data_id)
+    if not any(accept):
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.put(metrics, ref)
+        assert not datastore.exists(ref)
 
-    def setUp(self) -> None:
-        self.root = tempfile.mkdtemp()
+        # Again with ingest
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.ingest(FileDataset(testfile, [ref]), transfer="link")
+        assert not datastore.exists(ref)
+        return
 
-    def makeDatastore(self, sub: str | None = None) -> Datastore:
-        # Docstring inherited.
-        assert sub is None, "the constraint tests do not use datastore subdirectories"
-        return _make_datastore(self.configFile, self.root)
+    datastore.put(metrics, ref)
+    assert datastore.exists(ref)
 
-    def testConstraints(self) -> None:
-        """Test chained datastore constraints model."""
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
+    # Check each datastore inside the chained datastore
+    for child_datastore, expected in zip(datastore.datastores, accept, strict=True):
+        assert child_datastore.exists(ref) == expected, (
+            f"Testing presence of {ref} in datastore {child_datastore.name}"
+        )
 
-        sc1 = self.storageClassFactory.getStorageClass("StructuredData")
-        sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
-        dimensions = self.universe.conform(("visit", "physical_filter", "instrument"))
-        dataId1 = {
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "instrument": "DummyCamComp",
-            "day_obs": 20250101,
-        }
-        dataId2 = {"visit": 52, "physical_filter": "V", "band": "v", "instrument": "HSC", "day_obs": 20250101}
+    datastore.remove(ref)
 
-        # Write empty file suitable for ingest check (JSON and YAML variants)
-        testfile_y = tempfile.NamedTemporaryFile(suffix=".yaml")
-        testfile_j = tempfile.NamedTemporaryFile(suffix=".json")
+    # Check that ingest works
+    if not ingest:
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.ingest(FileDataset(testfile, [ref]), transfer="link")
+        return
 
-        for typeName, dataId, sc, accept, ingest in (
-            ("metric", dataId1, sc1, (False, True, False), True),
-            ("metric5", dataId1, sc1, (False, False, False), False),
-            ("metric5", dataId2, sc1, (True, False, False), False),
-            ("metric33", dataId2, sc2, (True, True, False), True),
-            ("metric5", dataId1, sc2, (False, True, False), True),
-        ):
-            # Choose different temp file depending on StorageClass
-            testfile = testfile_j if sc.name.endswith("Json") else testfile_y
+    datastore.ingest(FileDataset(testfile, [ref]), transfer="link")
+    assert datastore.exists(ref)
 
-            with self.subTest(datasetTypeName=typeName, dataId=dataId, sc=sc.name):
-                ref = self.makeDatasetRef(typeName, dimensions, sc, dataId)
-                if any(accept):
-                    datastore.put(metrics, ref)
-                    self.assertTrue(datastore.exists(ref))
+    # Check each datastore inside the chained datastore
+    for child_datastore, expected in zip(datastore.datastores, accept, strict=True):
+        # Ephemeral datastores means InMemory at the moment and that does not
+        # accept ingest of files.
+        if child_datastore.isEphemeral:
+            expected = False
+        assert child_datastore.exists(ref) == expected, (
+            f"Testing presence of ingested {ref} in datastore {child_datastore.name}"
+        )
 
-                    # Check each datastore inside the chained datastore
-                    for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
-                        self.assertEqual(
-                            childDatastore.exists(ref),
-                            expected,
-                            f"Testing presence of {ref} in datastore {childDatastore.name}",
-                        )
-
-                    datastore.remove(ref)
-
-                    # Check that ingest works
-                    if ingest:
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
-                        self.assertTrue(datastore.exists(ref))
-
-                        # Check each datastore inside the chained datastore
-                        for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
-                            # Ephemeral datastores means InMemory at the moment
-                            # and that does not accept ingest of files.
-                            if childDatastore.isEphemeral:
-                                expected = False
-                            self.assertEqual(
-                                childDatastore.exists(ref),
-                                expected,
-                                f"Testing presence of ingested {ref} in datastore {childDatastore.name}",
-                            )
-
-                        datastore.remove(ref)
-                    else:
-                        with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
-
-                else:
-                    with self.assertRaises(DatasetTypeNotSupportedError):
-                        datastore.put(metrics, ref)
-                    self.assertFalse(datastore.exists(ref))
-
-                    # Again with ingest
-                    with self.assertRaises(DatasetTypeNotSupportedError):
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
-                    self.assertFalse(datastore.exists(ref))
+    datastore.remove(ref)
 
 
 @unittest.mock.patch.dict(os.environ, {}, clear=True)
