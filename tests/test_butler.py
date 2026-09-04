@@ -3470,22 +3470,17 @@ class TransferDatasetsInPlace(unittest.TestCase):
 class NullDatastoreTestCase(unittest.TestCase):
     """Test that we can fall back to a null datastore."""
 
-    # Need a good config to create the repo.
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory: StorageClassFactory
 
     @classmethod
     def setUpClass(cls) -> None:
+        # Needs a good config to create the repo from.
         cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(cls.configFile)
+        cls.storageClassFactory.addFromConfig(os.path.join(TESTDIR, DATASTORE_PROFILES["posix"].config_file))
 
     def setUp(self) -> None:
         """Create a new butler root for each test."""
-        self.root = makeTestTempDir(TESTDIR)
-        make_repo_for_test(self.root, config=Config(self.configFile))
-
-    def tearDown(self) -> None:
-        removeTestTempDir(self.root)
+        self.root = self.enterContext(make_butler_repo(TESTDIR)).root
 
     def test_fallback(self) -> None:
         # Read the butler config and mess with the datastore section.
