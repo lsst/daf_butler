@@ -3403,55 +3403,42 @@ def _test_transfer_datasets_in_place(source_butler: DirectButler, target_butler:
     assert 1 == target_butler.get(ref)
 
 
-class NullDatastoreTestCase(unittest.TestCase):
-    """Test that we can fall back to a null datastore."""
+def test_fallback(butler_repo: ButlerRepo, storage_class_factory: StorageClassFactory) -> None:
+    """Test that a broken datastore config still yields a usable registry."""
+    # Read the butler config and mess with the datastore section.
+    config_path = os.path.join(butler_repo.root, "butler.yaml")
+    bad_config = Config(config_path)
+    bad_config["datastore", "cls"] = "lsst.not.a.datastore.Datastore"
+    bad_config.dumpToUri(config_path)
 
-    storageClassFactory: StorageClassFactory
+    with pytest.raises(RuntimeError):
+        Butler(butler_repo.root, without_datastore=False)
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        # Needs a good config to create the repo from.
-        cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(os.path.join(TESTDIR, DATASTORE_PROFILES["posix"].config_file))
+    with pytest.raises(RuntimeError):
+        Butler.from_config(butler_repo.root, without_datastore=False)
 
-    def setUp(self) -> None:
-        """Create a new butler root for each test."""
-        self.root = self.enterContext(make_butler_repo(TESTDIR)).root
-
-    def test_fallback(self) -> None:
-        # Read the butler config and mess with the datastore section.
-        config_path = os.path.join(self.root, "butler.yaml")
-        bad_config = Config(config_path)
-        bad_config["datastore", "cls"] = "lsst.not.a.datastore.Datastore"
-        bad_config.dumpToUri(config_path)
-
-        with self.assertRaises(RuntimeError):
-            Butler(self.root, without_datastore=False)
-
-        with self.assertRaises(RuntimeError):
-            Butler.from_config(self.root, without_datastore=False)
-
-        butler = Butler.from_config(self.root, writeable=True, without_datastore=True)
-        self.enterContext(butler)
-        self.assertIsInstance(butler._datastore, NullDatastore)
+    with contextlib.closing(
+        Butler.from_config(butler_repo.root, writeable=True, without_datastore=True)
+    ) as butler:
+        assert isinstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.
         butler.collections.register("MYRUN")
         collections = butler.collections.query("*")
-        self.assertIn("MYRUN", set(collections))
+        assert "MYRUN" in set(collections)
 
         # Create a ref.
         dimensions = butler.dimensions.conform([])
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        storageClass = storage_class_factory.getStorageClass("StructuredDataDict")
         datasetTypeName = "metric"
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         butler.registry.registerDatasetType(datasetType)
         ref = DatasetRef(datasetType, {}, run="MYRUN")
 
         # Check that datastore will complain.
-        with self.assertRaises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError):
             butler.get(ref)
-        with self.assertRaises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError):
             butler.getURI(ref)
 
 
