@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import logging
 import os
+import pathlib
 import pickle
 import shutil
 import tempfile
@@ -1654,22 +1656,6 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     profileName = "chained-memory"
 
 
-def _make_constraint_storage_class_factory() -> StorageClassFactory:
-    """Load the storage classes the constraint configurations refer to.
-
-    `StorageClassFactory` is a singleton, so this accumulates with whatever
-    else the session has already loaded rather than replacing it.
-
-    Returns
-    -------
-    factory : `StorageClassFactory`
-        The populated factory.
-    """
-    factory = StorageClassFactory()
-    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
-    return factory
-
-
 def _make_datastore(config_file: str, root: str | None) -> Datastore:
     """Build a datastore from a test configuration, as the base class did.
 
@@ -1917,44 +1903,35 @@ class CacheFixtures:
     """Files backing ``comp_refs``."""
 
 
-def _make_cache_storage_class_factory() -> StorageClassFactory:
-    """Load the storage classes the cache tests refer to.
+@pytest.fixture(scope="module")
+def universe() -> DimensionUniverse:
+    """Dimension universe shared by every test in this module."""
+    return DimensionUniverse()
 
-    `StorageClassFactory` is a singleton, so this accumulates with whatever
-    else the session has already loaded rather than replacing it.
 
-    Returns
-    -------
-    factory : `StorageClassFactory`
-        The populated factory.
+@pytest.fixture(scope="module")
+def cache_storage_class_factory() -> StorageClassFactory:
+    """Storage classes for the cache tests.
+
+    Named distinctly from the plugin's ``storage_class_factory`` because this
+    loads ``storageClasses.yaml`` rather than the Butler configs, matching what
+    ``DatastoreCacheTestCase.setUpClass`` did. `StorageClassFactory` is a
+    singleton, so the two accumulate rather than conflict.
     """
     factory = StorageClassFactory()
     factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
     return factory
 
 
-def _make_cache_fixtures(
-    root: str,
+@pytest.fixture
+def cache(  # numpydoc ignore=PR01
+    tmp_path: pathlib.Path,
     universe: DimensionUniverse,
     cache_storage_class_factory: StorageClassFactory,
 ) -> CacheFixtures:
-    """Build the refs and files the cache tests operate on.
-
-    Parameters
-    ----------
-    root : `str`
-        Directory to write the test files into.
-    universe : `DimensionUniverse`
-        Universe the refs are conformed against.
-    cache_storage_class_factory : `StorageClassFactory`
-        Factory holding the test storage classes.
-
-    Returns
-    -------
-    fixtures : `CacheFixtures`
-        The refs and files.
-    """
+    """Build the refs and files the cache tests operate on."""
     helper = DatasetTestHelper()
+    root = str(tmp_path)
 
     # Create some test dataset refs and associated test files
     sc = cache_storage_class_factory.getStorageClass("StructuredDataDict")
@@ -2006,212 +1983,15 @@ def _make_cache_fixtures(
     )
 
 
-class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
-    """Tests for datastore caching infrastructure."""
+def _make_cache_manager(config_str: str, universe: DimensionUniverse) -> DatastoreCacheManager:
+    """Build a cache manager from a YAML fragment."""
+    config = Config.fromYaml(config_str)
+    return DatastoreCacheManager(DatastoreCacheManagerConfig(config), universe=universe)
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.storageClassFactory = _make_cache_storage_class_factory()
-        cls.universe = DimensionUniverse()
 
-    def setUp(self) -> None:
-        # Create a root that we can use for caching tests.
-        self.root = tempfile.mkdtemp()
-        fixtures = _make_cache_fixtures(self.root, self.universe, self.storageClassFactory)
-        self.refs = fixtures.refs
-        self.files = fixtures.files
-        self.composite_refs = fixtures.composite_refs
-        self.comp_refs = fixtures.comp_refs
-        self.comp_files = fixtures.comp_files
-
-    def tearDown(self) -> None:
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
-
-    def _make_cache_manager(self, config_str: str) -> DatastoreCacheManager:
-        config = Config.fromYaml(config_str)
-        return DatastoreCacheManager(DatastoreCacheManagerConfig(config), universe=self.universe)
-
-    def testNoCacheDir(self) -> None:
-        config_str = """
-cached:
-  root: null
-  cacheable:
-    metric0: true
-        """
-        cache_manager = self._make_cache_manager(config_str)
-
-        # Look inside to check we don't have a cache directory
-        self.assertIsNone(cache_manager._cache_directory)
-
-        self.assertCache(cache_manager)
-
-        # Test that the cache directory is marked temporary
-        self.assertTrue(cache_manager.cache_directory.isTemporary)
-
-    def testNoCacheDirReversed(self) -> None:
-        """Use default caching status and metric1 to false"""
-        config_str = """
-cached:
-  root: null
-  default: true
-  cacheable:
-    metric1: false
-        """
-        cache_manager = self._make_cache_manager(config_str)
-
-        self.assertCache(cache_manager)
-
-    def testEnvvarCacheDir(self) -> None:
-        config_str = f"""
-cached:
-  root: '{self.root}'
-  cacheable:
-    metric0: true
-        """
-
-        root = ResourcePath(self.root, forceDirectory=True)
-        env_dir = root.join("somewhere", forceDirectory=True)
-        elsewhere = root.join("elsewhere", forceDirectory=True)
-
-        # Environment variable should override the config value.
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath}):
-            cache_manager = self._make_cache_manager(config_str)
-        self.assertEqual(cache_manager.cache_directory, env_dir)
-
-        # This environment variable should not override the config value.
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
-            cache_manager = self._make_cache_manager(config_str)
-        self.assertEqual(cache_manager.cache_directory, root)
-
-        # No default setting.
-        config_str = """
-cached:
-  root: null
-  default: true
-  cacheable:
-    metric1: false
-        """
-        cache_manager = self._make_cache_manager(config_str)
-
-        # This environment variable should override the config value.
-        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
-            cache_manager = self._make_cache_manager(config_str)
-        self.assertEqual(cache_manager.cache_directory, env_dir)
-
-        # If both environment variables are set the main (not IF_UNSET)
-        # variable should win.
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath,
-                "DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": elsewhere.ospath,
-            },
-        ):
-            cache_manager = self._make_cache_manager(config_str)
-        self.assertEqual(cache_manager.cache_directory, env_dir)
-
-        # Use the API to set the environment variable, making sure that the
-        # variable is reset on exit.
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
-        ):
-            defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
-            self.assertTrue(defined)
-            cache_manager = self._make_cache_manager(config_str)
-            self.assertEqual(cache_manager.cache_directory, ResourcePath(cache_dir, forceDirectory=True))
-
-        # Now create the cache manager ahead of time and set the fallback
-        # later.
-        cache_manager = self._make_cache_manager(config_str)
-        self.assertIsNone(cache_manager._cache_directory)
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
-        ):
-            defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
-            self.assertTrue(defined)
-            self.assertEqual(cache_manager.cache_directory, ResourcePath(cache_dir, forceDirectory=True))
-
-    def testExplicitCacheDir(self) -> None:
-        config_str = f"""
-cached:
-  root: '{self.root}'
-  cacheable:
-    metric0: true
-        """
-        cache_manager = self._make_cache_manager(config_str)
-
-        # Look inside to check we do have a cache directory.
-        self.assertEqual(cache_manager.cache_directory, ResourcePath(self.root, forceDirectory=True))
-
-        self.assertCache(cache_manager)
-
-        # Test that the cache directory is not marked temporary
-        self.assertFalse(cache_manager.cache_directory.isTemporary)
-
-    def testUnexpectedFilesInCacheDir(self) -> None:
-        """Test for regression of a bug where extraneous files in a cache
-        directory would cause all cache lookups to raise an exception.
-        """
-        config_str = f"""
-cached:
-  root: '{self.root}'
-  cacheable:
-    metric0: true
-        """
-
-        for filename in ["unexpected.txt", "unexpected", "un_expected", "un_expected.txt"]:
-            unexpected_file = os.path.join(self.root, filename)
-            with open(unexpected_file, "w") as fh:
-                fh.write("test")
-
-        cache_manager = self._make_cache_manager(config_str)
-        cache_manager.scan_cache()
-        self.assertCache(cache_manager)
-
-    def assertCache(self, cache_manager: DatastoreCacheManager) -> None:
-        self.assertTrue(cache_manager.should_be_cached(self.refs[0]))
-        self.assertFalse(cache_manager.should_be_cached(self.refs[1]))
-
-        uri = cache_manager.move_to_cache(self.files[0], self.refs[0])
-        self.assertIsInstance(uri, ResourcePath)
-        self.assertIsNone(cache_manager.move_to_cache(self.files[1], self.refs[1]))
-
-        # Check presence in cache using ref and then using file extension.
-        self.assertFalse(cache_manager.known_to_cache(self.refs[1]))
-        self.assertTrue(cache_manager.known_to_cache(self.refs[0]))
-        self.assertFalse(cache_manager.known_to_cache(self.refs[1], self.files[1].getExtension()))
-        self.assertTrue(cache_manager.known_to_cache(self.refs[0], self.files[0].getExtension()))
-
-        # Cached file should no longer exist but uncached file should be
-        # unaffected.
-        self.assertFalse(self.files[0].exists())
-        self.assertTrue(self.files[1].exists())
-
-        # Should find this file and it should be within the cache directory.
-        with cache_manager.find_in_cache(self.refs[0], ".txt") as found:
-            self.assertTrue(found.exists())
-            self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
-
-        # Should not be able to find these in cache
-        with cache_manager.find_in_cache(self.refs[0], ".fits") as found:
-            self.assertIsNone(found)
-        with cache_manager.find_in_cache(self.refs[1], ".fits") as found:
-            self.assertIsNone(found)
-
-    def testNoCache(self) -> None:
-        cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
-        for uri, ref in zip(self.files, self.refs, strict=True):
-            self.assertFalse(cache_manager.should_be_cached(ref))
-            self.assertIsNone(cache_manager.move_to_cache(uri, ref))
-            self.assertFalse(cache_manager.known_to_cache(ref))
-            with cache_manager.find_in_cache(ref, ".txt") as found:
-                self.assertIsNone(found, msg=f"{cache_manager}")
-
-    def _expiration_config(self, mode: str, threshold: int) -> str:
-        return f"""
+def _expiration_config(mode: str, threshold: int | str) -> str:
+    """Return a cache config using the given expiry mode and threshold."""
+    return f"""
 cached:
   default: true
   expiry:
@@ -2219,236 +1999,450 @@ cached:
     threshold: {threshold}
   cacheable:
     unused: true
+    """
+
+
+def _assert_cache(cache_manager: DatastoreCacheManager, cache: CacheFixtures) -> None:
+    """Check the manager caches the first ref and refuses the second."""
+    assert cache_manager.should_be_cached(cache.refs[0])
+    assert not cache_manager.should_be_cached(cache.refs[1])
+
+    uri = cache_manager.move_to_cache(cache.files[0], cache.refs[0])
+    assert isinstance(uri, ResourcePath)
+    assert cache_manager.move_to_cache(cache.files[1], cache.refs[1]) is None
+
+    # Check presence in cache using ref and then using file extension.
+    assert not cache_manager.known_to_cache(cache.refs[1])
+    assert cache_manager.known_to_cache(cache.refs[0])
+    assert not cache_manager.known_to_cache(cache.refs[1], cache.files[1].getExtension())
+    assert cache_manager.known_to_cache(cache.refs[0], cache.files[0].getExtension())
+
+    # Cached file should no longer exist but uncached file should be
+    # unaffected.
+    assert not cache.files[0].exists()
+    assert cache.files[1].exists()
+
+    # Should find this file and it should be within the cache directory.
+    with cache_manager.find_in_cache(cache.refs[0], ".txt") as found:
+        assert found.exists()
+        assert found.relative_to(cache_manager.cache_directory) is not None
+
+    # Should not be able to find these in cache
+    with cache_manager.find_in_cache(cache.refs[0], ".fits") as found:
+        assert found is None
+    with cache_manager.find_in_cache(cache.refs[1], ".fits") as found:
+        assert found is None
+
+
+def _assert_expiration(
+    cache_manager: DatastoreCacheManager,
+    cache: CacheFixtures,
+    n_datasets: int,
+    n_retained: int,
+) -> None:
+    """Insert the datasets and then check the number retained."""
+    for i in range(n_datasets):
+        cached = cache_manager.move_to_cache(cache.files[i], cache.refs[i])
+        assert cached is not None
+
+    assert cache_manager.file_count == n_retained
+
+    # The oldest file should not be in the cache any more.
+    for i in range(n_datasets):
+        with cache_manager.find_in_cache(cache.refs[i], ".txt") as found:
+            if i >= n_datasets - n_retained:
+                assert isinstance(found, ResourcePath)
+            else:
+                assert found is None
+
+
+def test_no_cache_dir(cache, universe) -> None:
+    """Test a cache configured with no root directory."""
+    config_str = """
+cached:
+  root: null
+  cacheable:
+    metric0: true
+        """
+    cache_manager = _make_cache_manager(config_str, universe)
+
+    # Look inside to check we don't have a cache directory
+    assert cache_manager._cache_directory is None
+
+    _assert_cache(cache_manager, cache)
+
+    # Test that the cache directory is marked temporary
+    assert cache_manager.cache_directory.isTemporary
+
+
+def test_no_cache_dir_reversed(cache, universe) -> None:
+    """Use default caching status and metric1 to false"""
+    config_str = """
+cached:
+  root: null
+  default: true
+  cacheable:
+    metric1: false
+        """
+    cache_manager = _make_cache_manager(config_str, universe)
+
+    _assert_cache(cache_manager, cache)
+
+
+def test_envvar_cache_dir(cache, universe) -> None:
+    """Test that the cache directory can come from the environment."""
+    config_str = f"""
+cached:
+  root: '{cache.root}'
+  cacheable:
+    metric0: true
         """
 
-    def testCacheExpiryFiles(self) -> None:
-        threshold = 2  # Keep at least 2 files.
-        mode = "files"
-        config_str = self._expiration_config(mode, threshold)
+    root = ResourcePath(cache.root, forceDirectory=True)
+    env_dir = root.join("somewhere", forceDirectory=True)
+    elsewhere = root.join("elsewhere", forceDirectory=True)
 
-        cache_manager = self._make_cache_manager(config_str)
+    # Environment variable should override the config value.
+    with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath}):
+        cache_manager = _make_cache_manager(config_str, universe)
+    assert cache_manager.cache_directory == env_dir
 
-        # Check that an empty cache returns unknown for arbitrary ref
-        self.assertFalse(cache_manager.known_to_cache(self.refs[0]))
+    # This environment variable should not override the config value.
+    with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
+        cache_manager = _make_cache_manager(config_str, universe)
+    assert cache_manager.cache_directory == root
 
-        # Should end with datasets: 2, 3, 4
-        self.assertExpiration(cache_manager, 5, threshold + 1)
-        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+    # No default setting.
+    config_str = """
+cached:
+  root: null
+  default: true
+  cacheable:
+    metric1: false
+        """
+    cache_manager = _make_cache_manager(config_str, universe)
 
-        # Check that we will not expire a file that is actively in use.
-        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsNotNone(found)
+    # This environment variable should override the config value.
+    with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
+        cache_manager = _make_cache_manager(config_str, universe)
+    assert cache_manager.cache_directory == env_dir
 
-            # Trigger cache expiration that should remove the file
-            # we just retrieved. Should now have: 3, 4, 5
-            cached = cache_manager.move_to_cache(self.files[5], self.refs[5])
-            self.assertIsNotNone(cached)
+    # If both environment variables are set the main (not IF_UNSET)
+    # variable should win.
+    with unittest.mock.patch.dict(
+        os.environ,
+        {
+            "DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath,
+            "DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": elsewhere.ospath,
+        },
+    ):
+        cache_manager = _make_cache_manager(config_str, universe)
+    assert cache_manager.cache_directory == env_dir
 
-            # Cache should still report the standard file count.
-            self.assertEqual(cache_manager.file_count, threshold + 1)
+    # Use the API to set the environment variable, making sure that the
+    # variable is reset on exit.
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
+    ):
+        defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
+        assert defined
+        cache_manager = _make_cache_manager(config_str, universe)
+        assert cache_manager.cache_directory == ResourcePath(cache_dir, forceDirectory=True)
 
-            # Add additional entry to cache.
-            # Should now have 4, 5, 6
-            cached = cache_manager.move_to_cache(self.files[6], self.refs[6])
-            self.assertIsNotNone(cached)
+    # Now create the cache manager ahead of time and set the fallback
+    # later.
+    cache_manager = _make_cache_manager(config_str, universe)
+    assert cache_manager._cache_directory is None
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
+    ):
+        defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
+        assert defined
+        assert cache_manager.cache_directory == ResourcePath(cache_dir, forceDirectory=True)
 
-            # Is the file still there?
-            self.assertTrue(found.exists())
 
-            # Can we read it?
-            data = found.read()
-            self.assertGreater(len(data), 0)
+def test_explicit_cache_dir(cache, universe) -> None:
+    """Test a cache configured with an explicit root directory."""
+    config_str = f"""
+cached:
+  root: '{cache.root}'
+  cacheable:
+    metric0: true
+        """
+    cache_manager = _make_cache_manager(config_str, universe)
 
-        # Outside context the file should no longer exist.
-        self.assertFalse(found.exists())
+    # Look inside to check we do have a cache directory.
+    assert cache_manager.cache_directory == ResourcePath(cache.root, forceDirectory=True)
 
-        # File count should not have changed.
-        self.assertEqual(cache_manager.file_count, threshold + 1)
+    _assert_cache(cache_manager, cache)
 
-        # Dataset 2 was in the exempt directory but because hardlinks
-        # are used it was deleted from the main cache during cache expiry
-        # above and so should no longer be found.
-        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsNone(found)
+    # Test that the cache directory is not marked temporary
+    assert not cache_manager.cache_directory.isTemporary
 
-        # And the one stored after it is also gone.
-        with cache_manager.find_in_cache(self.refs[3], ".txt") as found:
-            self.assertIsNone(found)
 
-        # But dataset 4 is present.
-        with cache_manager.find_in_cache(self.refs[4], ".txt") as found:
-            self.assertIsNotNone(found)
+def test_unexpected_files_in_cache_dir(cache, universe) -> None:
+    """Test for regression of a bug where extraneous files in a cache
+    directory would cause all cache lookups to raise an exception.
+    """
+    config_str = f"""
+cached:
+  root: '{cache.root}'
+  cacheable:
+    metric0: true
+        """
 
-        # Adding a new dataset to the cache should now delete it.
-        cache_manager.move_to_cache(self.files[7], self.refs[7])
+    for filename in ["unexpected.txt", "unexpected", "un_expected", "un_expected.txt"]:
+        unexpected_file = os.path.join(cache.root, filename)
+        with open(unexpected_file, "w") as fh:
+            fh.write("test")
 
-        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsNone(found)
+    cache_manager = _make_cache_manager(config_str, universe)
+    cache_manager.scan_cache()
+    _assert_cache(cache_manager, cache)
 
-    def testCacheExpiryDatasets(self) -> None:
-        threshold = 2  # Keep 2 datasets.
-        mode = "datasets"
-        config_str = self._expiration_config(mode, threshold)
 
-        cache_manager = self._make_cache_manager(config_str)
-        self.assertExpiration(cache_manager, 5, threshold + 1)
-        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+def test_no_cache(cache, universe) -> None:
+    """Test that the disabled cache manager caches nothing."""
+    cache_manager = DatastoreDisabledCacheManager("", universe=universe)
+    # unittest formatted the failure message whether or not the assertion
+    # failed, so this was the only caller of the manager's __str__. A bare
+    # assert only formats its message on failure, so compute it up front.
+    message = f"{cache_manager}"
+    for uri, ref in zip(cache.files, cache.refs, strict=True):
+        assert not cache_manager.should_be_cached(ref)
+        assert cache_manager.move_to_cache(uri, ref) is None
+        assert not cache_manager.known_to_cache(ref)
+        with cache_manager.find_in_cache(ref, ".txt") as found:
+            assert found is None, message
 
-    def testCacheExpiryDatasetsFromDisabled(self) -> None:
-        threshold = 2
-        mode = "datasets"
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": f"{mode}={threshold}"},
-        ):
-            cache_manager = DatastoreCacheManager.create_disabled(universe=DimensionUniverse())
-            self.assertExpiration(cache_manager, 5, threshold + 1)
-            self.assertIn(f"{mode}={threshold}", str(cache_manager))
 
-    def testExpirationModeOverride(self) -> None:
-        threshold = 2  # Keep 2 datasets.
-        mode = "datasets"
-        config_str = self._expiration_config(mode, threshold)
+def test_cache_expiry_files(cache, universe) -> None:
+    """Test that ``files`` expiry retains the threshold number of files."""
+    threshold = 2  # Keep at least 2 files.
+    mode = "files"
+    config_str = _expiration_config(mode, threshold)
 
-        mode = "size"
-        threshold = 55
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": f"{mode}={threshold}"},
-        ):
-            cache_manager = self._make_cache_manager(config_str)
-            self.assertExpiration(cache_manager, 10, 6)
-            self.assertIn(f"{mode}={threshold}", str(cache_manager))
+    cache_manager = _make_cache_manager(config_str, universe)
 
-        # Check we get a warning with unrecognized form.
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "something"},
-        ):
-            with self.assertLogs(level="WARNING") as cm:
-                self._make_cache_manager(config_str)
-            self.assertIn("Unrecognized form (something)", cm.output[0])
+    # Check that an empty cache returns unknown for arbitrary ref
+    assert not cache_manager.known_to_cache(cache.refs[0])
 
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "something=5"},
-        ):
-            with self.assertRaises(ValueError) as cm:
-                self._make_cache_manager(config_str)
-            self.assertIn("Unrecognized value", str(cm.exception))
+    # Should end with datasets: 2, 3, 4
+    _assert_expiration(cache_manager, cache, 5, threshold + 1)
+    assert f"{mode}={threshold}" in str(cache_manager)
 
-    def testMissingThreshold(self) -> None:
-        threshold = ""
-        mode = "datasets"
-        config_str = self._expiration_config(mode, threshold)
+    # Check that we will not expire a file that is actively in use.
+    with cache_manager.find_in_cache(cache.refs[2], ".txt") as found:
+        assert found is not None
 
-        with self.assertRaises(ValueError) as cm:
-            self._make_cache_manager(config_str)
-        self.assertIn("Cache expiration threshold", str(cm.exception))
+        # Trigger cache expiration that should remove the file
+        # we just retrieved. Should now have: 3, 4, 5
+        cached = cache_manager.move_to_cache(cache.files[5], cache.refs[5])
+        assert cached is not None
 
-    def testCacheExpiryDatasetsComposite(self) -> None:
-        threshold = 2  # Keep 2 datasets.
-        mode = "datasets"
-        config_str = self._expiration_config(mode, threshold)
+        # Cache should still report the standard file count.
+        assert cache_manager.file_count == threshold + 1
 
-        cache_manager = self._make_cache_manager(config_str)
+        # Add additional entry to cache.
+        # Should now have 4, 5, 6
+        cached = cache_manager.move_to_cache(cache.files[6], cache.refs[6])
+        assert cached is not None
 
-        n_datasets = 3
-        for i in range(n_datasets):
-            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i], strict=True):
-                cached = cache_manager.move_to_cache(component_file, component_ref)
-                self.assertIsNotNone(cached)
-                self.assertTrue(cache_manager.known_to_cache(component_ref))
-                self.assertTrue(cache_manager.known_to_cache(component_ref.makeCompositeRef()))
-                self.assertTrue(cache_manager.known_to_cache(component_ref, component_file.getExtension()))
+        # Is the file still there?
+        assert found.exists()
 
-        self.assertEqual(cache_manager.file_count, 6)  # 2 datasets each of 3 files
+        # Can we read it?
+        data = found.read()
+        assert len(data) > 0
 
-        # Write two new non-composite and the number of files should drop.
-        self.assertExpiration(cache_manager, 2, 5)
+    # Outside context the file should no longer exist.
+    assert not found.exists()
 
-    def testCacheExpirySize(self) -> None:
-        threshold = 55  # Each file is 10 bytes
-        mode = "size"
-        config_str = self._expiration_config(mode, threshold)
+    # File count should not have changed.
+    assert cache_manager.file_count == threshold + 1
 
-        cache_manager = self._make_cache_manager(config_str)
-        self.assertExpiration(cache_manager, 10, 6)
-        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+    # Dataset 2 was in the exempt directory but because hardlinks
+    # are used it was deleted from the main cache during cache expiry
+    # above and so should no longer be found.
+    with cache_manager.find_in_cache(cache.refs[2], ".txt") as found:
+        assert found is None
 
-    def testDisabledCache(self) -> None:
-        # Configure an active cache but disable via environment.
-        threshold = 2
-        mode = "datasets"
-        config_str = self._expiration_config(mode, threshold)
+    # And the one stored after it is also gone.
+    with cache_manager.find_in_cache(cache.refs[3], ".txt") as found:
+        assert found is None
 
-        with unittest.mock.patch.dict(
-            os.environ,
-            {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "disabled"},
-        ):
-            env_cache_manager = self._make_cache_manager(config_str)
+    # But dataset 4 is present.
+    with cache_manager.find_in_cache(cache.refs[4], ".txt") as found:
+        assert found is not None
 
-        # Configure to be disabled
-        threshold = 0
-        mode = "disabled"
-        config_str = self._expiration_config(mode, threshold)
-        cfg_cache_manager = self._make_cache_manager(config_str)
+    # Adding a new dataset to the cache should now delete it.
+    cache_manager.move_to_cache(cache.files[7], cache.refs[7])
 
-        for cache_manager in (
-            cfg_cache_manager,
-            env_cache_manager,
-            DatastoreCacheManager.create_disabled(universe=DimensionUniverse()),
-        ):
-            for uri, ref in zip(self.files, self.refs, strict=True):
-                self.assertFalse(cache_manager.should_be_cached(ref))
-                self.assertIsNone(cache_manager.move_to_cache(uri, ref))
-                self.assertFalse(cache_manager.known_to_cache(ref))
-                with cache_manager.find_in_cache(ref, ".txt") as found:
-                    self.assertIsNone(found, msg=f"{cache_manager}")
-                self.assertIn("disabled", str(cache_manager))
+    with cache_manager.find_in_cache(cache.refs[2], ".txt") as found:
+        assert found is None
 
-    def assertExpiration(
-        self, cache_manager: DatastoreCacheManager, n_datasets: int, n_retained: int
-    ) -> None:
-        """Insert the datasets and then check the number retained."""
-        for i in range(n_datasets):
-            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
-            self.assertIsNotNone(cached)
 
-        self.assertEqual(cache_manager.file_count, n_retained)
+def test_cache_expiry_datasets(cache, universe) -> None:
+    """Test that ``datasets`` expiry retains the threshold count."""
+    threshold = 2  # Keep 2 datasets.
+    mode = "datasets"
+    config_str = _expiration_config(mode, threshold)
 
-        # The oldest file should not be in the cache any more.
-        for i in range(n_datasets):
-            with cache_manager.find_in_cache(self.refs[i], ".txt") as found:
-                if i >= n_datasets - n_retained:
-                    self.assertIsInstance(found, ResourcePath)
-                else:
-                    self.assertIsNone(found)
+    cache_manager = _make_cache_manager(config_str, universe)
+    _assert_expiration(cache_manager, cache, 5, threshold + 1)
+    assert f"{mode}={threshold}" in str(cache_manager)
 
-    def testCacheExpiryAge(self) -> None:
-        threshold = 1  # Expire older than 2 seconds
-        mode = "age"
-        config_str = self._expiration_config(mode, threshold)
 
-        cache_manager = self._make_cache_manager(config_str)
-        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+def test_cache_expiry_datasets_from_disabled(cache, universe) -> None:
+    """Test that the expiry-mode envvar enables a disabled cache."""
+    threshold = 2
+    mode = "datasets"
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_EXPIRATION_MODE": f"{mode}={threshold}"},
+    ):
+        cache_manager = DatastoreCacheManager.create_disabled(universe=DimensionUniverse())
+        _assert_expiration(cache_manager, cache, 5, threshold + 1)
+        assert f"{mode}={threshold}" in str(cache_manager)
 
-        # Insert 3 files, then sleep, then insert more.
-        for i in range(2):
-            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
-            self.assertIsNotNone(cached)
-        time.sleep(2.0)
-        for j in range(4):
-            i = 2 + j  # Continue the counting
-            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
-            self.assertIsNotNone(cached)
 
-        # Only the files written after the sleep should exist.
-        self.assertEqual(cache_manager.file_count, 4)
-        with cache_manager.find_in_cache(self.refs[1], ".txt") as found:
-            self.assertIsNone(found)
-        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsInstance(found, ResourcePath)
+def test_expiration_mode_override(cache, universe, caplog) -> None:
+    """Test that the envvar overrides the configured expiry mode."""
+    threshold = 2  # Keep 2 datasets.
+    mode = "datasets"
+    config_str = _expiration_config(mode, threshold)
+
+    mode = "size"
+    threshold = 55
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_EXPIRATION_MODE": f"{mode}={threshold}"},
+    ):
+        cache_manager = _make_cache_manager(config_str, universe)
+        _assert_expiration(cache_manager, cache, 10, 6)
+        assert f"{mode}={threshold}" in str(cache_manager)
+
+    # Check we get a warning with unrecognized form.
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "something"},
+    ):
+        with caplog.at_level(logging.WARNING):
+            _make_cache_manager(config_str, universe)
+        assert "Unrecognized form (something)" in caplog.text
+
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "something=5"},
+    ):
+        with pytest.raises(ValueError, match="Unrecognized value"):
+            _make_cache_manager(config_str, universe)
+
+
+def test_missing_threshold(universe) -> None:
+    """Test that an empty expiry threshold is rejected."""
+    threshold = ""
+    mode = "datasets"
+    config_str = _expiration_config(mode, threshold)
+
+    with pytest.raises(ValueError, match="Cache expiration threshold"):
+        _make_cache_manager(config_str, universe)
+
+
+def test_cache_expiry_datasets_composite(cache, universe) -> None:
+    """Test that ``datasets`` expiry counts a composite as one dataset."""
+    threshold = 2  # Keep 2 datasets.
+    mode = "datasets"
+    config_str = _expiration_config(mode, threshold)
+
+    cache_manager = _make_cache_manager(config_str, universe)
+
+    n_datasets = 3
+    for i in range(n_datasets):
+        for component_file, component_ref in zip(cache.comp_files[i], cache.comp_refs[i], strict=True):
+            cached = cache_manager.move_to_cache(component_file, component_ref)
+            assert cached is not None
+            assert cache_manager.known_to_cache(component_ref)
+            assert cache_manager.known_to_cache(component_ref.makeCompositeRef())
+            assert cache_manager.known_to_cache(component_ref, component_file.getExtension())
+
+    assert cache_manager.file_count == 6  # 2 datasets each of 3 files
+
+    # Write two new non-composite and the number of files should drop.
+    _assert_expiration(cache_manager, cache, 2, 5)
+
+
+def test_cache_expiry_size(cache, universe) -> None:
+    """Test that ``size`` expiry retains files up to the byte threshold."""
+    threshold = 55  # Each file is 10 bytes
+    mode = "size"
+    config_str = _expiration_config(mode, threshold)
+
+    cache_manager = _make_cache_manager(config_str, universe)
+    _assert_expiration(cache_manager, cache, 10, 6)
+    assert f"{mode}={threshold}" in str(cache_manager)
+
+
+def test_disabled_cache(cache, universe) -> None:
+    """Test that the envvar can disable a configured cache."""
+    # Configure an active cache but disable via environment.
+    threshold = 2
+    mode = "datasets"
+    config_str = _expiration_config(mode, threshold)
+
+    with unittest.mock.patch.dict(
+        os.environ,
+        {"DAF_BUTLER_CACHE_EXPIRATION_MODE": "disabled"},
+    ):
+        env_cache_manager = _make_cache_manager(config_str, universe)
+
+    # Configure to be disabled
+    threshold = 0
+    mode = "disabled"
+    config_str = _expiration_config(mode, threshold)
+    cfg_cache_manager = _make_cache_manager(config_str, universe)
+
+    for cache_manager in (
+        cfg_cache_manager,
+        env_cache_manager,
+        DatastoreCacheManager.create_disabled(universe=DimensionUniverse()),
+    ):
+        for uri, ref in zip(cache.files, cache.refs, strict=True):
+            assert not cache_manager.should_be_cached(ref)
+            assert cache_manager.move_to_cache(uri, ref) is None
+            assert not cache_manager.known_to_cache(ref)
+            with cache_manager.find_in_cache(ref, ".txt") as found:
+                assert found is None, f"{cache_manager}"
+            assert "disabled" in str(cache_manager)
+
+
+def test_cache_expiry_age(cache, universe) -> None:
+    """Test that ``age`` expiry removes files older than the threshold."""
+    threshold = 1  # Expire older than 2 seconds
+    mode = "age"
+    config_str = _expiration_config(mode, threshold)
+
+    cache_manager = _make_cache_manager(config_str, universe)
+    assert f"{mode}={threshold}" in str(cache_manager)
+
+    # Insert 3 files, then sleep, then insert more.
+    for i in range(2):
+        cached = cache_manager.move_to_cache(cache.files[i], cache.refs[i])
+        assert cached is not None
+    time.sleep(2.0)
+    for j in range(4):
+        i = 2 + j  # Continue the counting
+        cached = cache_manager.move_to_cache(cache.files[i], cache.refs[i])
+        assert cached is not None
+
+    # Only the files written after the sleep should exist.
+    assert cache_manager.file_count == 4
+    with cache_manager.find_in_cache(cache.refs[1], ".txt") as found:
+        assert found is None
+    with cache_manager.find_in_cache(cache.refs[2], ".txt") as found:
+        assert isinstance(found, ResourcePath)
 
 
 def test_basics() -> None:
