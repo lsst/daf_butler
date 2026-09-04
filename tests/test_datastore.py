@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Tests for the datastore implementations themselves."""
+
 from __future__ import annotations
 
 import contextlib
@@ -36,7 +38,6 @@ import pickle
 import shutil
 import tempfile
 import time
-import unittest
 import unittest.mock
 import uuid
 from collections.abc import Callable, Iterator
@@ -44,8 +45,9 @@ from typing import Any, cast
 
 import pytest
 import yaml
+from butler_test_support import records_from
 
-import lsst.utils.tests
+import lsst.daf.butler.datastores.fileDatastore
 from lsst.daf.butler import (
     Config,
     DataCoordinate,
@@ -81,7 +83,6 @@ from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
     BadWriteFormatter,
     DatasetTestHelper,
-    DatastoreTestHelper,
     DummyRegistry,
     MetricsExample,
     MetricsExampleDataclass,
@@ -89,37 +90,35 @@ from lsst.daf.butler.tests import (
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.daf.butler.tests.fixtures import make_example_metrics
-from lsst.daf.butler.tests.utils import TestCaseMixin
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name
 
 TESTDIR = os.path.dirname(__file__)
 
+COMPOSITE_STORAGE_CLASS_NAMES = (
+    "StructuredComposite",
+    "StructuredCompositeTestA",
+    "StructuredCompositeTestB",
+    "StructuredCompositeReadComp",
+    "StructuredData",  # No disassembly
+    "StructuredCompositeReadCompNoDisassembly",
+)
+"""Composite storage classes the disassembly test covers.
 
-def makeExampleMetrics(use_none: bool = False) -> MetricsExample:
-    """Make example dataset that can be stored in butler."""
-    if use_none:
-        array = None
-    else:
-        array = [563, 234, 456.7, 105, 2054, -1045]
-    return MetricsExample(
-        {"AM1": 5.2, "AM2": 30.6},
-        {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
-        array,
-    )
+Each case uses a distinct ``metric_comp_{i}`` dataset type so that a failure in
+one does not cascade into the others through a file clash.
+"""
+
+INGEST_TRANSFER_MODES = ("copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
+"""Transfer modes the ingest test tries; those a datastore does not support
+are expected to raise rather than being skipped."""
 
 
 class TransactionTestError(Exception):
     """Specific error for transactions, to prevent misdiagnosing
     that might otherwise occur when a standard exception is used.
     """
-
-    pass
-
-
-POSIX_MODES = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
-CHAINED_MODES = (None, "copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -157,6 +156,9 @@ class DatastoreTestProfile:
     the ephemeral profiles can leave it at the default.
     """
 
+
+POSIX_MODES = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
+CHAINED_MODES = (None, "copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
 
 PROFILES = {
     "posix": DatastoreTestProfile(
@@ -217,23 +219,17 @@ PROFILES = {
         needs_root=False,
     ),
 }
-"""One entry per concrete datastore test class."""
+"""One entry per concrete datastore test class.
 
+``trash`` and ``posix-no-checksums`` were subclasses of the posix case, so they
+rerun every shared test.
+"""
 
-def _make_datastore_storage_class_factory() -> StorageClassFactory:
-    """Load the storage classes the datastore tests refer to.
+ALL_PROFILES = list(PROFILES)
+"""Profiles that run the shared datastore tests."""
 
-    `StorageClassFactory` is a singleton, so this accumulates with whatever
-    else the session has already loaded rather than replacing it.
-
-    Returns
-    -------
-    factory : `StorageClassFactory`
-        The populated factory.
-    """
-    factory = StorageClassFactory()
-    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
-    return factory
+FILE_PROFILES = ["posix", "posix-no-checksums", "trash", "chained"]
+"""Profiles backed by a FileDatastore, which run the file-specific tests."""
 
 
 class DatastoreHarness:
@@ -308,1377 +304,1358 @@ class DatastoreHarness:
         return self._helper.makeDatasetRef(*args, **kwargs)
 
 
-class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper, TestCaseMixin):
-    """Support routines for datastore testing"""
+@pytest.fixture(scope="module")
+def datastore_storage_class_factory() -> StorageClassFactory:
+    """Storage classes for the datastore tests.
 
-    profileName: str
-    """Key in `PROFILES` naming the configuration under test."""
-
-    harness: DatastoreHarness
-    """Configuration under test and the pieces built from it."""
-
-    universe: DimensionUniverse
-    storageClassFactory: StorageClassFactory
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.storageClassFactory = _make_datastore_storage_class_factory()
-
-    def setUp(self) -> None:
-        profile = PROFILES[self.profileName]
-        root = None
-        if profile.needs_root:
-            # os.path.realpath matters for "relsymlink": on macOS a temporary
-            # file can be under either /var/folders or /private/var/folders,
-            # which name the same place, and a relative symlink between the two
-            # forms cannot be traversed.
-            root = os.path.realpath(tempfile.mkdtemp())
-        self.harness = DatastoreHarness(profile, root, self.storageClassFactory)
-        # The names the test bodies still read. Phase 2 replaces each of these
-        # reads with the harness or the profile directly.
-        self.root = self.harness.root
-        self.config = self.harness.config
-        self.configFile = self.harness.config_file
-        self.datastoreType = self.harness.datastore_type
-        self.registry = self.harness.registry
-        self.universe = self.harness.universe
-
-    def tearDown(self) -> None:
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
-
-    def makeDatastore(self, sub: str | None = None) -> Datastore:
-        # Docstring inherited.
-        return self.harness.make_datastore(sub)
+    Named distinctly from the plugin's ``storage_class_factory`` because this
+    loads ``storageClasses.yaml`` rather than the Butler configs, matching what
+    ``DatastoreTestsBase.setUpClass`` did. `StorageClassFactory` is a
+    singleton, so the two accumulate rather than conflict.
+    """
+    factory = StorageClassFactory()
+    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
+    return factory
 
 
-class DatastoreTests(DatastoreTestsBase):
-    """Some basic tests of a simple datastore."""
+@pytest.fixture
+def ds(
+    request: pytest.FixtureRequest,
+    datastore_storage_class_factory: StorageClassFactory,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> DatastoreHarness:  # numpydoc ignore=PR01
+    """Yield a `DatastoreHarness` for the requested profile."""
+    profile = PROFILES[getattr(request, "param", "posix")]
+    root = None
+    if profile.needs_root:
+        # os.path.realpath matters for "relsymlink": on macOS a temporary file
+        # can be under either /var/folders or /private/var/folders, which name
+        # the same place, and a relative symlink between the two forms cannot
+        # be traversed.
+        root = os.path.realpath(str(tmp_path_factory.mktemp("datastore")))
+    return DatastoreHarness(profile, root, datastore_storage_class_factory)
 
-    def setUp(self) -> None:
-        super().setUp()
-        profile = self.harness.profile
-        self.hasUnsupportedPut = profile.has_unsupported_put
-        self.rootKeys = profile.root_keys
-        self.isEphemeral = profile.is_ephemeral
-        self.validationCanFail = profile.validation_can_fail
-        self.uriScheme = profile.uri_scheme
-        self.ingestTransferModes = profile.ingest_transfer_modes
-        self.canIngestNoTransferAuto = profile.can_ingest_no_transfer_auto
 
-    def testConfigRoot(self) -> None:
-        full = DatastoreConfig(self.configFile)
-        config = DatastoreConfig(self.configFile, mergeDefaults=False)
-        newroot = "/random/location"
-        self.datastoreType.setConfigRoot(newroot, config, full)
-        if self.rootKeys:
-            for k in self.rootKeys:
-                self.assertIn(newroot, config[k])
+@contextlib.contextmanager
+def _temp_yaml_file(data: Any) -> Iterator[str]:
+    """Write data to a temporary YAML file and yield its path."""
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
+    try:
+        yaml.dump(data, stream=fh)
+        fh.flush()
+        yield fh.name
+    finally:
+        # Some tests delete the file
+        with contextlib.suppress(FileNotFoundError):
+            fh.close()
 
-    def testConstructor(self) -> None:
-        datastore = self.makeDatastore()
-        self.assertIsNotNone(datastore)
-        self.assertIs(datastore.isEphemeral, self.isEphemeral)
 
-    def testConfigurationValidation(self) -> None:
-        datastore = self.makeDatastore()
-        sc = self.storageClassFactory.getStorageClass("ThingOne")
-        datastore.validateConfiguration([sc])
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_config_root(ds: DatastoreHarness) -> None:
+    full = DatastoreConfig(ds.config_file)
+    config = DatastoreConfig(ds.config_file, mergeDefaults=False)
+    newroot = "/random/location"
+    ds.datastore_type.setConfigRoot(newroot, config, full)
+    if ds.profile.root_keys:
+        for k in ds.profile.root_keys:
+            assert newroot in config[k]
 
-        sc2 = self.storageClassFactory.getStorageClass("ThingTwo")
-        if self.validationCanFail:
-            with self.assertRaises(DatastoreValidationError):
-                datastore.validateConfiguration([sc2], logFailures=True)
 
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        datastore.validateConfiguration([ref])
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_constructor(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+    assert datastore is not None
+    assert datastore.isEphemeral is ds.profile.is_ephemeral
 
-    def testParameterValidation(self) -> None:
-        """Check that parameters are validated"""
-        sc = self.storageClassFactory.getStorageClass("ThingOne")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        datastore = self.makeDatastore()
-        data = {1: 2, 3: 4}
-        datastore.put(data, ref)
-        newdata = datastore.get(ref)
-        self.assertEqual(data, newdata)
-        with self.assertRaises(KeyError):
-            newdata = datastore.get(ref, parameters={"missing": 5})
 
-    def testBasicPutGet(self) -> None:
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_configuration_validation(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+    sc = ds.storage_class_factory.getStorageClass("ThingOne")
+    datastore.validateConfiguration([sc])
 
-        # Create multiple storage classes for testing different formulations
-        storageClasses = [
-            self.storageClassFactory.getStorageClass(sc)
-            for sc in ("StructuredData", "StructuredDataJson", "StructuredDataPickle")
-        ]
+    sc2 = ds.storage_class_factory.getStorageClass("ThingTwo")
+    if ds.profile.validation_can_fail:
+        with pytest.raises(DatastoreValidationError):
+            datastore.validateConfiguration([sc2], logFailures=True)
 
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-        dataId2 = {
-            "instrument": "dummy",
-            "visit": 53,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+    datastore.validateConfiguration([ref])
 
-        for sc in storageClasses:
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-            ref2 = self.makeDatasetRef("metric", dimensions, sc, dataId2)
 
-            # Make sure that using getManyURIs without predicting before the
-            # dataset has been put raises.
-            with self.assertRaises(FileNotFoundError):
-                datastore.getManyURIs([ref], predict=False)
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_parameter_validation(ds: DatastoreHarness) -> None:
+    """Check that parameters are validated"""
+    sc = ds.storage_class_factory.getStorageClass("ThingOne")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+    datastore = ds.make_datastore()
+    data = {1: 2, 3: 4}
+    datastore.put(data, ref)
+    newdata = datastore.get(ref)
+    assert data == newdata
+    with pytest.raises(KeyError):
+        newdata = datastore.get(ref, parameters={"missing": 5})
 
-            # Make sure that using getManyURIs with predicting before the
-            # dataset has been put predicts the URI.
-            uris = datastore.getManyURIs([ref, ref2], predict=True)
-            self.assertIn("52", uris[ref].primaryURI.geturl())
-            self.assertIn("#predicted", uris[ref].primaryURI.geturl())
-            self.assertIn("53", uris[ref2].primaryURI.geturl())
-            self.assertIn("#predicted", uris[ref2].primaryURI.geturl())
 
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_basic_put_get(ds: DatastoreHarness) -> None:
+    metrics = make_example_metrics()
+    datastore = ds.make_datastore()
+
+    # Create multiple storage classes for testing different formulations
+    storageClasses = [
+        ds.storage_class_factory.getStorageClass(sc)
+        for sc in ("StructuredData", "StructuredDataJson", "StructuredDataPickle")
+    ]
+
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    dataId2 = {
+        "instrument": "dummy",
+        "visit": 53,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+
+    for sc in storageClasses:
+        ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+        ref2 = ds.make_dataset_ref("metric", dimensions, sc, dataId2)
+
+        # Make sure that using getManyURIs without predicting before the
+        # dataset has been put raises.
+        with pytest.raises(FileNotFoundError):
+            datastore.getManyURIs([ref], predict=False)
+
+        # Make sure that using getManyURIs with predicting before the
+        # dataset has been put predicts the URI.
+        uris = datastore.getManyURIs([ref, ref2], predict=True)
+        assert "52" in uris[ref].primaryURI.geturl()
+        assert "#predicted" in uris[ref].primaryURI.geturl()
+        assert "53" in uris[ref2].primaryURI.geturl()
+        assert "#predicted" in uris[ref2].primaryURI.geturl()
+
+        datastore.put(metrics, ref)
+
+        # Does it exist?
+        assert datastore.exists(ref)
+        assert datastore.knows(ref)
+        multi = datastore.knows_these([ref])
+        assert multi[ref]
+        multi = datastore.mexists([ref, ref2])
+        assert multi[ref]
+        assert not multi[ref2]
+
+        # Get
+        metricsOut = datastore.get(ref, parameters=None)
+        assert metrics == metricsOut
+
+        uri = datastore.getURI(ref)
+        assert uri.scheme == ds.profile.uri_scheme
+
+        uris = datastore.getManyURIs([ref])
+        assert len(uris) == 1
+        ref, uri = uris.popitem()
+        assert uri.primaryURI.exists()
+        assert not uri.componentURIs
+
+        # Get a component -- we need to construct new refs for them
+        # with derived storage classes but with parent ID
+        for comp in ("data", "output"):
+            compRef = ref.makeComponentRef(comp)
+            output = datastore.get(compRef)
+            assert output == getattr(metricsOut, comp)
+
+            uri = datastore.getURI(compRef)
+            assert uri.scheme == ds.profile.uri_scheme
+
+            uris = datastore.getManyURIs([compRef])
+            assert len(uris) == 1
+
+    storageClass = sc
+
+    # Check that we can put a metric with None in a component and
+    # get it back as None
+    metricsNone = make_example_metrics(use_none=True)
+    dataIdNone = {
+        "instrument": "dummy",
+        "visit": 54,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    refNone = ds.make_dataset_ref("metric", dimensions, sc, dataIdNone)
+    datastore.put(metricsNone, refNone)
+
+    comp = "data"
+    for comp in ("data", "output"):
+        compRef = refNone.makeComponentRef(comp)
+        output = datastore.get(compRef)
+        assert output == getattr(metricsNone, comp)
+
+    # Check that a put fails if the dataset type is not supported
+    if ds.profile.has_unsupported_put:
+        sc = StorageClass("UnsupportedSC", pytype=type(metrics))
+        ref = ds.make_dataset_ref("unsupportedType", dimensions, sc, dataId)
+        with pytest.raises(DatasetTypeNotSupportedError):
             datastore.put(metrics, ref)
 
-            # Does it exist?
-            self.assertTrue(datastore.exists(ref))
-            self.assertTrue(datastore.knows(ref))
-            multi = datastore.knows_these([ref])
-            self.assertTrue(multi[ref])
-            multi = datastore.mexists([ref, ref2])
-            self.assertTrue(multi[ref])
-            self.assertFalse(multi[ref2])
+    # These should raise
+    ref = ds.make_dataset_ref("metrics", dimensions, storageClass, dataId)
+    with pytest.raises(FileNotFoundError):
+        # non-existing file
+        datastore.get(ref)
 
-            # Get
-            metricsOut = datastore.get(ref, parameters=None)
-            self.assertEqual(metrics, metricsOut)
+    # Get a URI from it
+    uri = datastore.getURI(ref, predict=True)
+    assert uri.scheme == ds.profile.uri_scheme
 
-            uri = datastore.getURI(ref)
-            self.assertEqual(uri.scheme, self.uriScheme)
+    with pytest.raises(FileNotFoundError):
+        datastore.getURI(ref)
 
-            uris = datastore.getManyURIs([ref])
-            self.assertEqual(len(uris), 1)
-            ref, uri = uris.popitem()
-            self.assertTrue(uri.primaryURI.exists())
-            self.assertFalse(uri.componentURIs)
 
-            # Get a component -- we need to construct new refs for them
-            # with derived storage classes but with parent ID
-            for comp in ("data", "output"):
-                compRef = ref.makeComponentRef(comp)
-                output = datastore.get(compRef)
-                self.assertEqual(output, getattr(metricsOut, comp))
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_trust_get_request(ds: DatastoreHarness) -> None:
+    """Check that we can get datasets that registry knows nothing about."""
+    datastore = ds.make_datastore()
 
-                uri = datastore.getURI(compRef)
-                self.assertEqual(uri.scheme, self.uriScheme)
+    # Skip test if the attribute is not defined
+    if not hasattr(datastore, "trustGetRequest"):
+        return
 
-                uris = datastore.getManyURIs([compRef])
-                self.assertEqual(len(uris), 1)
+    metrics = make_example_metrics()
 
-        storageClass = sc
+    i = 0
+    for sc_name in ("StructuredDataNoComponents", "StructuredData", "StructuredComposite"):
+        i += 1
+        datasetTypeName = f"test_metric{i}"  # Different dataset type name each time.
 
-        # Check that we can put a metric with None in a component and
-        # get it back as None
-        metricsNone = makeExampleMetrics(use_none=True)
-        dataIdNone = {
+        if sc_name == "StructuredComposite":
+            disassembled = True
+        else:
+            disassembled = False
+
+        # Start datastore in default configuration of using registry
+        datastore.trustGetRequest = False
+
+        # Create multiple storage classes for testing with or without
+        # disassembly
+        sc = ds.storage_class_factory.getStorageClass(sc_name)
+        dimensions = ds.universe.conform(("visit", "physical_filter"))
+
+        dataId = {
             "instrument": "dummy",
-            "visit": 54,
+            "visit": 52 + i,
             "physical_filter": "V",
             "band": "v",
             "day_obs": 20250101,
         }
-        refNone = self.makeDatasetRef("metric", dimensions, sc, dataIdNone)
-        datastore.put(metricsNone, refNone)
 
-        comp = "data"
-        for comp in ("data", "output"):
-            compRef = refNone.makeComponentRef(comp)
-            output = datastore.get(compRef)
-            self.assertEqual(output, getattr(metricsNone, comp))
+        ref = ds.make_dataset_ref(datasetTypeName, dimensions, sc, dataId)
+        datastore.put(metrics, ref)
 
-        # Check that a put fails if the dataset type is not supported
-        if self.hasUnsupportedPut:
-            sc = StorageClass("UnsupportedSC", pytype=type(metrics))
-            ref = self.makeDatasetRef("unsupportedType", dimensions, sc, dataId)
-            with self.assertRaises(DatasetTypeNotSupportedError):
-                datastore.put(metrics, ref)
+        # Does it exist?
+        assert datastore.exists(ref)
+        assert datastore.knows(ref)
+        multi = datastore.knows_these([ref])
+        assert multi[ref]
+        multi = datastore.mexists([ref])
+        assert multi[ref]
 
-        # These should raise
-        ref = self.makeDatasetRef("metrics", dimensions, storageClass, dataId)
-        with self.assertRaises(FileNotFoundError):
-            # non-existing file
+        # Get
+        metricsOut = datastore.get(ref)
+        assert metrics == metricsOut
+
+        # Get the URI(s)
+        allURIs = datastore.getURIs(ref)
+        primaryURI, componentURIs = allURIs
+        if disassembled:
+            assert primaryURI is None
+            assert len(componentURIs) == 3
+            assert list(allURIs.iter_all()) == list(componentURIs.values())
+        else:
+            assert datasetTypeName in primaryURI.path
+            assert not componentURIs
+            assert list(allURIs.iter_all()) == [primaryURI]
+
+        # Delete registry entry so now we are trusting
+        datastore.removeStoredItemInfo(ref)
+
+        # Now stop trusting and check that things break
+        datastore.trustGetRequest = False
+
+        # Does it exist?
+        assert not datastore.exists(ref)
+        assert not datastore.knows(ref)
+        multi = datastore.knows_these([ref])
+        assert not multi[ref]
+        multi = datastore.mexists([ref])
+        assert not multi[ref]
+
+        with pytest.raises(FileNotFoundError):
             datastore.get(ref)
 
-        # Get a URI from it
-        uri = datastore.getURI(ref, predict=True)
-        self.assertEqual(uri.scheme, self.uriScheme)
+        if sc_name != "StructuredDataNoComponents":
+            with pytest.raises(FileNotFoundError):
+                datastore.get(ref.makeComponentRef("data"))
 
-        with self.assertRaises(FileNotFoundError):
+        # URI should fail unless we ask for prediction
+        with pytest.raises(FileNotFoundError):
+            datastore.getURIs(ref)
+
+        predicted_primary, predicted_disassembled = datastore.getURIs(ref, predict=True)
+        if disassembled:
+            assert predicted_primary is None
+            assert len(predicted_disassembled) == 3
+            for uri in predicted_disassembled.values():
+                assert uri.fragment == "predicted"
+                assert datasetTypeName in uri.path
+        else:
+            assert datasetTypeName in predicted_primary.path
+            assert not predicted_disassembled
+            assert predicted_primary.fragment == "predicted"
+
+        # Now enable registry-free trusting mode
+        datastore.trustGetRequest = True
+
+        # Try again to get it
+        metricsOut = datastore.get(ref)
+        assert metricsOut == metrics
+
+        # Does it exist?
+        assert datastore.exists(ref)
+
+        # Get a component
+        if sc_name != "StructuredDataNoComponents":
+            comp = "data"
+            compRef = ref.makeComponentRef(comp)
+            output = datastore.get(compRef)
+            assert output == getattr(metrics, comp)
+
+        # Get the URI -- if we trust this should work even without
+        # enabling prediction.
+        primaryURI2, componentURIs2 = datastore.getURIs(ref)
+        assert primaryURI2 == primaryURI
+        assert componentURIs2 == componentURIs
+
+        # Check for compatible storage class.
+        if sc_name in ("StructuredDataNoComponents", "StructuredData"):
+            # Make new dataset ref with compatible storage class.
+            ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
+
+            # Without `set_retrieve_dataset_type_method` it will fail to
+            # find correct file.
+            assert not datastore.exists(ref_comp)
+            with pytest.raises(FileNotFoundError):
+                datastore.get(ref_comp)
+            with pytest.raises(FileNotFoundError):
+                datastore.get(ref, storageClass="StructuredDataDictJson")
+
+            # Need a special method to generate stored dataset type.
+            def _stored_dataset_type(name: str, ref: DatasetRef = ref) -> DatasetType:
+                if name == ref.datasetType.name:
+                    return ref.datasetType
+                raise ValueError(f"Unexpected dataset type name {ref.datasetType.name}")
+
+            datastore.set_retrieve_dataset_type_method(_stored_dataset_type)
+
+            # Storage class override with original dataset ref.
+            metrics_as_dict = datastore.get(ref, storageClass="StructuredDataDictJson")
+            assert isinstance(metrics_as_dict, dict)
+
+            # get() should return a dict now.
+            metrics_as_dict = datastore.get(ref_comp)
+            assert isinstance(metrics_as_dict, dict)
+
+            # exists() should work as well.
+            assert datastore.exists(ref_comp)
+
+            datastore.set_retrieve_dataset_type_method(None)
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+@pytest.mark.parametrize(("i", "sc_name"), list(enumerate(COMPOSITE_STORAGE_CLASS_NAMES)))
+def test_disassembly(ds: DatastoreHarness, i: int, sc_name: str) -> None:
+    """Test disassembly within datastore."""
+    metrics = make_example_metrics()
+    if ds.profile.is_ephemeral:
+        # in-memory datastore does not disassemble
+        return
+
+    sc = ds.storage_class_factory.getStorageClass(sc_name)
+
+    # Create the test datastore
+    datastore = ds.make_datastore()
+
+    # Dummy dataId
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}
+
+    # Create a different dataset type each time round
+    # so that a test failure in this subtest does not trigger
+    # a cascade of tests because of file clashes
+    ref = ds.make_dataset_ref(f"metric_comp_{i}", dimensions, sc, dataId)
+
+    disassembled = sc.name not in {"StructuredData", "StructuredCompositeReadCompNoDisassembly"}
+
+    datastore.put(metrics, ref)
+
+    baseURI, compURIs = datastore.getURIs(ref)
+    if disassembled:
+        assert baseURI is None
+        assert set(compURIs) == {"data", "output", "summary"}
+    else:
+        assert baseURI is not None
+        assert compURIs == {}
+
+    metrics_get = datastore.get(ref)
+    assert metrics_get == metrics
+
+    # Retrieve the composite with read parameter
+    stop = 4
+    metrics_get = datastore.get(ref, parameters={"slice": slice(stop)})
+    assert metrics_get.summary == metrics.summary
+    assert metrics_get.output == metrics.output
+    assert metrics_get.data == metrics.data[:stop]
+
+    # Retrieve a component
+    data = datastore.get(ref.makeComponentRef("data"))
+    assert data == metrics.data
+
+    # On supported storage classes attempt to access a read
+    # only component
+    if "ReadComp" in sc.name:
+        cRef = ref.makeComponentRef("counter")
+        counter = datastore.get(cRef)
+        assert counter == len(metrics.data)
+
+        counter = datastore.get(cRef, parameters={"slice": slice(stop)})
+        assert counter == stop
+
+    datastore.remove(ref)
+
+
+def _prep_delete_test(ds: DatastoreHarness, n_refs: int = 1) -> tuple[Datastore, tuple[DatasetRef, ...]]:
+    metrics = make_example_metrics()
+    datastore = ds.make_datastore()
+    # Put
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    sc = ds.storage_class_factory.getStorageClass("StructuredData")
+    refs = []
+    for i in range(n_refs):
+        dataId = {
+            "instrument": "dummy",
+            "visit": 638 + i,
+            "physical_filter": "U",
+            "band": "u",
+            "day_obs": 20250101,
+        }
+        ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+        datastore.put(metrics, ref)
+
+        # Does it exist?
+        assert datastore.exists(ref)
+
+        # Get
+        metricsOut = datastore.get(ref)
+        assert metrics == metricsOut
+        refs.append(ref)
+
+    return datastore, *refs
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_remove(ds: DatastoreHarness) -> None:
+    datastore, ref = _prep_delete_test(ds)
+
+    # Remove
+    datastore.remove(ref)
+
+    # Does it exist?
+    assert not datastore.exists(ref)
+
+    # Do we now get a predicted URI?
+    uri = datastore.getURI(ref, predict=True)
+    assert uri.fragment == "predicted"
+
+    # Get should now fail
+    with pytest.raises(FileNotFoundError):
+        datastore.get(ref)
+    # Can only delete once
+    with pytest.raises(FileNotFoundError):
+        datastore.remove(ref)
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_forget(ds: DatastoreHarness) -> None:
+    datastore, ref = _prep_delete_test(ds)
+
+    # Remove
+    datastore.forget([ref])
+
+    # Does it exist (as far as we know)?
+    assert not datastore.exists(ref)
+
+    # Do we now get a predicted URI?
+    uri = datastore.getURI(ref, predict=True)
+    assert uri.fragment == "predicted"
+
+    # Get should now fail
+    with pytest.raises(FileNotFoundError):
+        datastore.get(ref)
+
+    # Forgetting again is a silent no-op
+    datastore.forget([ref])
+
+    # Predicted URI should still point to the file.
+    assert uri.exists()
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_transfer(ds: DatastoreHarness) -> None:
+    metrics = make_example_metrics()
+
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 2048,
+        "physical_filter": "Uprime",
+        "band": "u",
+        "day_obs": 20250101,
+    }
+
+    sc = ds.storage_class_factory.getStorageClass("StructuredData")
+    ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+
+    inputDatastore = ds.make_datastore("test_input_datastore")
+    outputDatastore = ds.make_datastore("test_output_datastore")
+
+    inputDatastore.put(metrics, ref)
+    outputDatastore.transfer(inputDatastore, ref)
+
+    metricsOut = outputDatastore.get(ref)
+    assert metrics == metricsOut
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_basic_transaction(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    nDatasets = 6
+    dataIds = [
+        {"instrument": "dummy", "visit": i, "physical_filter": "V", "band": "v", "day_obs": 20250101}
+        for i in range(nDatasets)
+    ]
+    data = [
+        (
+            ds.make_dataset_ref("metric", dimensions, storageClass, dataId),
+            make_example_metrics(),
+        )
+        for dataId in dataIds
+    ]
+    succeed = data[: nDatasets // 2]
+    fail = data[nDatasets // 2 :]
+    # All datasets added in this transaction should continue to exist
+    with datastore.transaction():
+        for ref, metrics in succeed:
+            datastore.put(metrics, ref)
+    # Whereas datasets added in this transaction should not
+    # The block is inherently multi-statement: the test exists to show
+    # that everything inside the transaction rolls back.
+    with pytest.raises(TransactionTestError), datastore.transaction():  # noqa: PT012
+        for ref, metrics in fail:
+            datastore.put(metrics, ref)
+        raise TransactionTestError("This should propagate out of the context manager")
+    # Check for datasets that should exist
+    for ref, metrics in succeed:
+        # Does it exist?
+        assert datastore.exists(ref)
+        # Get
+        metricsOut = datastore.get(ref, parameters=None)
+        assert metrics == metricsOut
+        # URI
+        uri = datastore.getURI(ref)
+        assert uri.scheme == ds.profile.uri_scheme
+    # Check for datasets that should not exist
+    for ref, _ in fail:
+        # These should raise
+        with pytest.raises(FileNotFoundError):
+            # non-existing file
+            datastore.get(ref)
+        with pytest.raises(FileNotFoundError):
             datastore.getURI(ref)
 
-    def testTrustGetRequest(self) -> None:
-        """Check that we can get datasets that registry knows nothing about."""
-        datastore = self.makeDatastore()
 
-        # Skip test if the attribute is not defined
-        if not hasattr(datastore, "trustGetRequest"):
-            return
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_nested_transaction(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    metrics = make_example_metrics()
 
-        metrics = makeExampleMetrics()
-
-        i = 0
-        for sc_name in ("StructuredDataNoComponents", "StructuredData", "StructuredComposite"):
-            i += 1
-            datasetTypeName = f"test_metric{i}"  # Different dataset type name each time.
-
-            if sc_name == "StructuredComposite":
-                disassembled = True
-            else:
-                disassembled = False
-
-            # Start datastore in default configuration of using registry
-            datastore.trustGetRequest = False
-
-            # Create multiple storage classes for testing with or without
-            # disassembly
-            sc = self.storageClassFactory.getStorageClass(sc_name)
-            dimensions = self.universe.conform(("visit", "physical_filter"))
-
+    dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
+    refBefore = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+    datastore.put(metrics, refBefore)
+    # The block is inherently multi-statement: the test exists to show
+    # that everything inside the transaction rolls back.
+    with pytest.raises(TransactionTestError), datastore.transaction():  # noqa: PT012
+        dataId = {
+            "instrument": "dummy",
+            "visit": 1,
+            "physical_filter": "V",
+            "band": "v",
+            "day_obs": 20250101,
+        }
+        refOuter = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+        datastore.put(metrics, refOuter)
+        with datastore.transaction():
             dataId = {
                 "instrument": "dummy",
-                "visit": 52 + i,
+                "visit": 2,
                 "physical_filter": "V",
                 "band": "v",
                 "day_obs": 20250101,
             }
+            refInner = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+            datastore.put(metrics, refInner)
+        # All datasets should exist
+        for ref in (refBefore, refOuter, refInner):
+            metricsOut = datastore.get(ref, parameters=None)
+            assert metrics == metricsOut
+        raise TransactionTestError("This should roll back the transaction")
+    # Dataset(s) inserted before the transaction should still exist
+    metricsOut = datastore.get(refBefore, parameters=None)
+    assert metrics == metricsOut
+    # But all datasets inserted during the (rolled back) transaction
+    # should be gone
+    with pytest.raises(FileNotFoundError):
+        datastore.get(refOuter)
+    with pytest.raises(FileNotFoundError):
+        datastore.get(refInner)
 
-            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
-            datastore.put(metrics, ref)
 
-            # Does it exist?
-            self.assertTrue(datastore.exists(ref))
-            self.assertTrue(datastore.knows(ref))
-            multi = datastore.knows_these([ref])
-            self.assertTrue(multi[ref])
-            multi = datastore.mexists([ref])
-            self.assertTrue(multi[ref])
+def _prepare_ingest_test(ds: DatastoreHarness) -> tuple[MetricsExample, DatasetRef]:
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    metrics = make_example_metrics()
+    dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+    return metrics, ref
 
-            # Get
-            metricsOut = datastore.get(ref)
-            self.assertEqual(metrics, metricsOut)
 
-            # Get the URI(s)
-            allURIs = datastore.getURIs(ref)
-            primaryURI, componentURIs = allURIs
-            if disassembled:
-                self.assertIsNone(primaryURI)
-                self.assertEqual(len(componentURIs), 3)
-                self.assertEqual(list(allURIs.iter_all()), list(componentURIs.values()))
-            else:
-                self.assertIn(datasetTypeName, primaryURI.path)
-                self.assertFalse(componentURIs)
-                self.assertEqual(list(allURIs.iter_all()), [primaryURI])
+def _run_ingest_test(ds: DatastoreHarness, func: Callable[[MetricsExample, str, DatasetRef], None]) -> None:
+    metrics, ref = _prepare_ingest_test(ds)
+    # The file will be deleted after the test.
+    # For symlink tests this leads to a situation where the datastore
+    # points to a file that does not exist. This will make os.path.exist
+    # return False but then the new symlink will fail with
+    # FileExistsError later in the code so the test still passes.
+    with _temp_yaml_file(metrics._asdict()) as path:
+        func(metrics, path, ref)
 
-            # Delete registry entry so now we are trusting
-            datastore.removeStoredItemInfo(ref)
 
-            # Now stop trusting and check that things break
-            datastore.trustGetRequest = False
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+@pytest.mark.parametrize("mode", [None, "auto"])
+def test_ingest_no_transfer(ds: DatastoreHarness, mode: str | None) -> None:
+    """Test ingesting existing files with no transfer."""
+    # Some datastores have auto but can't do in place transfer
+    if (
+        mode == "auto"
+        and "auto" in ds.profile.ingest_transfer_modes
+        and not ds.profile.can_ingest_no_transfer_auto
+    ):
+        pytest.skip("Datastore supports auto but cannot transfer in place.")
 
-            # Does it exist?
-            self.assertFalse(datastore.exists(ref))
-            self.assertFalse(datastore.knows(ref))
-            multi = datastore.knows_these([ref])
-            self.assertFalse(multi[ref])
-            multi = datastore.mexists([ref])
-            self.assertFalse(multi[ref])
+    datastore = ds.make_datastore()
 
-            with self.assertRaises(FileNotFoundError):
-                datastore.get(ref)
+    def succeed(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        """Ingest a file already in the datastore root."""
+        # first move it into the root, and adjust the path
+        # accordingly.
+        # In the case of a ChainedDatastore, we have multiple
+        # roots, all of which will accept the file, so we
+        # have to copy it into all the roots.
+        relative_path = None
+        for root in datastore.roots.values():
+            if root is not None:
+                copied_path = shutil.copy(path, root.ospath)
+                relative_path = os.path.relpath(copied_path, start=root.ospath)
+        assert relative_path is not None, (
+            "Running a FileDatastore test on a Datastore instance without any roots"
+        )
+        datastore.ingest(FileDataset(path=relative_path, refs=ref), transfer=mode)
+        assert obj == datastore.get(ref)
 
-            if sc_name != "StructuredDataNoComponents":
-                with self.assertRaises(FileNotFoundError):
-                    datastore.get(ref.makeComponentRef("data"))
+    def failInputDoesNotExist(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        """Can't ingest files if we're given a bad path."""
+        with pytest.raises(FileNotFoundError):
+            datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", refs=ref), transfer=mode)
+        assert not datastore.exists(ref)
 
-            # URI should fail unless we ask for prediction
-            with self.assertRaises(FileNotFoundError):
-                datastore.getURIs(ref)
+    def failOutsideRoot(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        """Can't ingest files outside of datastore root unless
+        auto.
+        """
+        if mode == "auto":
+            datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
+            assert datastore.exists(ref)
+        else:
+            with pytest.raises(RuntimeError):
+                datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
+            assert not datastore.exists(ref)
 
-            predicted_primary, predicted_disassembled = datastore.getURIs(ref, predict=True)
-            if disassembled:
-                self.assertIsNone(predicted_primary)
-                self.assertEqual(len(predicted_disassembled), 3)
-                for uri in predicted_disassembled.values():
-                    self.assertEqual(uri.fragment, "predicted")
-                    self.assertIn(datasetTypeName, uri.path)
-            else:
-                self.assertIn(datasetTypeName, predicted_primary.path)
-                self.assertFalse(predicted_disassembled)
-                self.assertEqual(predicted_primary.fragment, "predicted")
+    def failNotImplemented(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        with pytest.raises(NotImplementedError):
+            datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
 
-            # Now enable registry-free trusting mode
-            datastore.trustGetRequest = True
+    if mode in ds.profile.ingest_transfer_modes:
+        _run_ingest_test(ds, failOutsideRoot)
+        _run_ingest_test(ds, failInputDoesNotExist)
+        _run_ingest_test(ds, succeed)
+    else:
+        _run_ingest_test(ds, failNotImplemented)
 
-            # Try again to get it
-            metricsOut = datastore.get(ref)
-            self.assertEqual(metricsOut, metrics)
 
-            # Does it exist?
-            self.assertTrue(datastore.exists(ref))
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+@pytest.mark.parametrize("mode", INGEST_TRANSFER_MODES)
+def test_ingest_transfer(ds: DatastoreHarness, mode: str) -> None:
+    """Test ingesting existing files after transferring them."""
+    datastore = ds.make_datastore(mode)
 
-            # Get a component
-            if sc_name != "StructuredDataNoComponents":
-                comp = "data"
-                compRef = ref.makeComponentRef(comp)
-                output = datastore.get(compRef)
-                self.assertEqual(output, getattr(metrics, comp))
+    def succeed(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        """Ingest a file by transferring it to the template
+        location.
+        """
+        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
+        assert obj == datastore.get(ref)
+        file_exists = os.path.exists(path)
+        if mode == "move":
+            assert not file_exists
+        else:
+            assert file_exists
 
-            # Get the URI -- if we trust this should work even without
-            # enabling prediction.
-            primaryURI2, componentURIs2 = datastore.getURIs(ref)
-            self.assertEqual(primaryURI2, primaryURI)
-            self.assertEqual(componentURIs2, componentURIs)
+    def failInputDoesNotExist(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        """Can't ingest files if we're given a bad path."""
+        with pytest.raises(FileNotFoundError):
+            # Ensure the file does not look like it is in
+            # datastore for auto mode
+            datastore.ingest(FileDataset(path="../this-file-does-not-exist.yaml", refs=ref), transfer=mode)
+        assert not datastore.exists(ref), f"Checking not in datastore using mode {mode}"
 
-            # Check for compatible storage class.
-            if sc_name in ("StructuredDataNoComponents", "StructuredData"):
-                # Make new dataset ref with compatible storage class.
-                ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
+    def failNotImplemented(
+        obj: MetricsExample,
+        path: str,
+        ref: DatasetRef,
+        mode: str | None = mode,
+        datastore: Datastore = datastore,
+    ) -> None:
+        with pytest.raises(NotImplementedError):
+            datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
 
-                # Without `set_retrieve_dataset_type_method` it will fail to
-                # find correct file.
-                self.assertFalse(datastore.exists(ref_comp))
-                with self.assertRaises(FileNotFoundError):
-                    datastore.get(ref_comp)
-                with self.assertRaises(FileNotFoundError):
-                    datastore.get(ref, storageClass="StructuredDataDictJson")
+    if mode in ds.profile.ingest_transfer_modes:
+        _run_ingest_test(ds, failInputDoesNotExist)
+        _run_ingest_test(ds, succeed)
+    else:
+        _run_ingest_test(ds, failNotImplemented)
 
-                # Need a special method to generate stored dataset type.
-                def _stored_dataset_type(name: str, ref: DatasetRef = ref) -> DatasetType:
-                    if name == ref.datasetType.name:
-                        return ref.datasetType
-                    raise ValueError(f"Unexpected dataset type name {ref.datasetType.name}")
 
-                datastore.set_retrieve_dataset_type_method(_stored_dataset_type)
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_ingest_symlink_of_symlink(ds: DatastoreHarness) -> None:
+    """Special test for symlink to a symlink ingest"""
+    metrics, ref = _prepare_ingest_test(ds)
+    # The aim of this test is to create a dataset on disk, then
+    # create a symlink to it and finally ingest the symlink such that
+    # the symlink in the datastore points to the original dataset.
+    for mode in ("symlink", "relsymlink"):
+        if mode not in ds.profile.ingest_transfer_modes:
+            continue
 
-                # Storage class override with original dataset ref.
-                metrics_as_dict = datastore.get(ref, storageClass="StructuredDataDictJson")
-                self.assertIsInstance(metrics_as_dict, dict)
+        print(f"Trying mode {mode}")
+        with _temp_yaml_file(metrics._asdict()) as realpath:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                sympath = os.path.join(tmpdir, "symlink.yaml")
+                os.symlink(os.path.realpath(realpath), sympath)
 
-                # get() should return a dict now.
-                metrics_as_dict = datastore.get(ref_comp)
-                self.assertIsInstance(metrics_as_dict, dict)
+                datastore = ds.make_datastore()
+                datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
 
-                # exists() should work as well.
-                self.assertTrue(datastore.exists(ref_comp))
+                uri = datastore.getURI(ref)
+                assert uri.isLocal, f"Check {uri.scheme}"
+                assert os.path.islink(uri.ospath), f"Check {uri} is a symlink"
 
-                datastore.set_retrieve_dataset_type_method(None)
-
-    def testDisassembly(self) -> None:
-        """Test disassembly within datastore."""
-        metrics = makeExampleMetrics()
-        if self.isEphemeral:
-            # in-memory datastore does not disassemble
-            return
-
-        # Create multiple storage classes for testing different formulations
-        # of composites. One of these will not disassemble to provide
-        # a reference.
-        storageClasses = [
-            self.storageClassFactory.getStorageClass(sc)
-            for sc in (
-                "StructuredComposite",
-                "StructuredCompositeTestA",
-                "StructuredCompositeTestB",
-                "StructuredCompositeReadComp",
-                "StructuredData",  # No disassembly
-                "StructuredCompositeReadCompNoDisassembly",
-            )
-        ]
-
-        # Create the test datastore
-        datastore = self.makeDatastore()
-
-        # Dummy dataId
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}
-
-        for i, sc in enumerate(storageClasses):
-            with self.subTest(storageClass=sc.name):
-                # Create a different dataset type each time round
-                # so that a test failure in this subtest does not trigger
-                # a cascade of tests because of file clashes
-                ref = self.makeDatasetRef(f"metric_comp_{i}", dimensions, sc, dataId)
-
-                disassembled = sc.name not in {"StructuredData", "StructuredCompositeReadCompNoDisassembly"}
-
-                datastore.put(metrics, ref)
-
-                baseURI, compURIs = datastore.getURIs(ref)
-                if disassembled:
-                    self.assertIsNone(baseURI)
-                    self.assertEqual(set(compURIs), {"data", "output", "summary"})
+                linkTarget = os.readlink(uri.ospath)
+                if mode == "relsymlink":
+                    assert not os.path.isabs(linkTarget)
                 else:
-                    self.assertIsNotNone(baseURI)
-                    self.assertEqual(compURIs, {})
+                    assert os.path.samefile(linkTarget, realpath)
 
-                metrics_get = datastore.get(ref)
-                self.assertEqual(metrics_get, metrics)
+                # Check that we can get the dataset back regardless of mode
+                metric2 = datastore.get(ref)
+                assert metric2 == metrics
 
-                # Retrieve the composite with read parameter
-                stop = 4
-                metrics_get = datastore.get(ref, parameters={"slice": slice(stop)})
-                self.assertEqual(metrics_get.summary, metrics.summary)
-                self.assertEqual(metrics_get.output, metrics.output)
-                self.assertEqual(metrics_get.data, metrics.data[:stop])
-
-                # Retrieve a component
-                data = datastore.get(ref.makeComponentRef("data"))
-                self.assertEqual(data, metrics.data)
-
-                # On supported storage classes attempt to access a read
-                # only component
-                if "ReadComp" in sc.name:
-                    cRef = ref.makeComponentRef("counter")
-                    counter = datastore.get(cRef)
-                    self.assertEqual(counter, len(metrics.data))
-
-                    counter = datastore.get(cRef, parameters={"slice": slice(stop)})
-                    self.assertEqual(counter, stop)
-
+                # Cleanup the file for next time round loop
+                # since it will get the same file name in store
                 datastore.remove(ref)
 
-    def prepDeleteTest(self, n_refs: int = 1) -> tuple[Datastore, tuple[DatasetRef, ...]]:
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
-        # Put
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        sc = self.storageClassFactory.getStorageClass("StructuredData")
-        refs = []
-        for i in range(n_refs):
-            dataId = {
-                "instrument": "dummy",
-                "visit": 638 + i,
-                "physical_filter": "U",
-                "band": "u",
-                "day_obs": 20250101,
-            }
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-            datastore.put(metrics, ref)
 
-            # Does it exist?
-            self.assertTrue(datastore.exists(ref))
+def _populate_export_datastore(ds: DatastoreHarness, name: str) -> tuple[Datastore, list[DatasetRef]]:
+    datastore = ds.make_datastore(name)
 
-            # Get
-            metricsOut = datastore.get(ref)
-            self.assertEqual(metrics, metricsOut)
-            refs.append(ref)
+    # For now only the FileDatastore can be used for this test.
+    # ChainedDatastore that only includes InMemoryDatastores have to be
+    # skipped as well.
+    for name in datastore.names:
+        if not name.startswith("InMemoryDatastore"):
+            break
+    else:
+        pytest.skip("in-memory datastore does not support record export/import")
 
-        return datastore, *refs
+    metrics = make_example_metrics()
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    sc = ds.storage_class_factory.getStorageClass("StructuredData")
 
-    def testRemove(self) -> None:
-        datastore, ref = self.prepDeleteTest()
-
-        # Remove
-        datastore.remove(ref)
-
-        # Does it exist?
-        self.assertFalse(datastore.exists(ref))
-
-        # Do we now get a predicted URI?
-        uri = datastore.getURI(ref, predict=True)
-        self.assertEqual(uri.fragment, "predicted")
-
-        # Get should now fail
-        with self.assertRaises(FileNotFoundError):
-            datastore.get(ref)
-        # Can only delete once
-        with self.assertRaises(FileNotFoundError):
-            datastore.remove(ref)
-
-    def testForget(self) -> None:
-        datastore, ref = self.prepDeleteTest()
-
-        # Remove
-        datastore.forget([ref])
-
-        # Does it exist (as far as we know)?
-        self.assertFalse(datastore.exists(ref))
-
-        # Do we now get a predicted URI?
-        uri = datastore.getURI(ref, predict=True)
-        self.assertEqual(uri.fragment, "predicted")
-
-        # Get should now fail
-        with self.assertRaises(FileNotFoundError):
-            datastore.get(ref)
-
-        # Forgetting again is a silent no-op
-        datastore.forget([ref])
-
-        # Predicted URI should still point to the file.
-        self.assertTrue(uri.exists())
-
-    def testTransfer(self) -> None:
-        metrics = makeExampleMetrics()
-
-        dimensions = self.universe.conform(("visit", "physical_filter"))
+    refs = []
+    for visit in (2048, 2049, 2050):
         dataId = {
             "instrument": "dummy",
-            "visit": 2048,
+            "visit": visit,
             "physical_filter": "Uprime",
             "band": "u",
             "day_obs": 20250101,
         }
-
-        sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-
-        inputDatastore = self.makeDatastore("test_input_datastore")
-        outputDatastore = self.makeDatastore("test_output_datastore")
-
-        inputDatastore.put(metrics, ref)
-        outputDatastore.transfer(inputDatastore, ref)
-
-        metricsOut = outputDatastore.get(ref)
-        self.assertEqual(metrics, metricsOut)
-
-    def testBasicTransaction(self) -> None:
-        datastore = self.makeDatastore()
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        nDatasets = 6
-        dataIds = [
-            {"instrument": "dummy", "visit": i, "physical_filter": "V", "band": "v", "day_obs": 20250101}
-            for i in range(nDatasets)
-        ]
-        data = [
-            (
-                self.makeDatasetRef("metric", dimensions, storageClass, dataId),
-                makeExampleMetrics(),
-            )
-            for dataId in dataIds
-        ]
-        succeed = data[: nDatasets // 2]
-        fail = data[nDatasets // 2 :]
-        # All datasets added in this transaction should continue to exist
-        with datastore.transaction():
-            for ref, metrics in succeed:
-                datastore.put(metrics, ref)
-        # Whereas datasets added in this transaction should not
-        with self.assertRaises(TransactionTestError):
-            with datastore.transaction():
-                for ref, metrics in fail:
-                    datastore.put(metrics, ref)
-                raise TransactionTestError("This should propagate out of the context manager")
-        # Check for datasets that should exist
-        for ref, metrics in succeed:
-            # Does it exist?
-            self.assertTrue(datastore.exists(ref))
-            # Get
-            metricsOut = datastore.get(ref, parameters=None)
-            self.assertEqual(metrics, metricsOut)
-            # URI
-            uri = datastore.getURI(ref)
-            self.assertEqual(uri.scheme, self.uriScheme)
-        # Check for datasets that should not exist
-        for ref, _ in fail:
-            # These should raise
-            with self.assertRaises(FileNotFoundError):
-                # non-existing file
-                datastore.get(ref)
-            with self.assertRaises(FileNotFoundError):
-                datastore.getURI(ref)
-
-    def testNestedTransaction(self) -> None:
-        datastore = self.makeDatastore()
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        metrics = makeExampleMetrics()
-
-        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
-        refBefore = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-        datastore.put(metrics, refBefore)
-        with self.assertRaises(TransactionTestError):
-            with datastore.transaction():
-                dataId = {
-                    "instrument": "dummy",
-                    "visit": 1,
-                    "physical_filter": "V",
-                    "band": "v",
-                    "day_obs": 20250101,
-                }
-                refOuter = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-                datastore.put(metrics, refOuter)
-                with datastore.transaction():
-                    dataId = {
-                        "instrument": "dummy",
-                        "visit": 2,
-                        "physical_filter": "V",
-                        "band": "v",
-                        "day_obs": 20250101,
-                    }
-                    refInner = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-                    datastore.put(metrics, refInner)
-                # All datasets should exist
-                for ref in (refBefore, refOuter, refInner):
-                    metricsOut = datastore.get(ref, parameters=None)
-                    self.assertEqual(metrics, metricsOut)
-                raise TransactionTestError("This should roll back the transaction")
-        # Dataset(s) inserted before the transaction should still exist
-        metricsOut = datastore.get(refBefore, parameters=None)
-        self.assertEqual(metrics, metricsOut)
-        # But all datasets inserted during the (rolled back) transaction
-        # should be gone
-        with self.assertRaises(FileNotFoundError):
-            datastore.get(refOuter)
-        with self.assertRaises(FileNotFoundError):
-            datastore.get(refInner)
-
-    def _prepareIngestTest(self) -> tuple[MetricsExample, DatasetRef]:
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        metrics = makeExampleMetrics()
-        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-        return metrics, ref
-
-    def runIngestTest(self, func: Callable[[MetricsExample, str, DatasetRef], None]) -> None:
-        metrics, ref = self._prepareIngestTest()
-        # The file will be deleted after the test.
-        # For symlink tests this leads to a situation where the datastore
-        # points to a file that does not exist. This will make os.path.exist
-        # return False but then the new symlink will fail with
-        # FileExistsError later in the code so the test still passes.
-        with _temp_yaml_file(metrics._asdict()) as path:
-            func(metrics, path, ref)
-
-    def testIngestNoTransfer(self) -> None:
-        """Test ingesting existing files with no transfer."""
-        for mode in (None, "auto"):
-            # Some datastores have auto but can't do in place transfer
-            if mode == "auto" and "auto" in self.ingestTransferModes and not self.canIngestNoTransferAuto:
-                continue
-
-            with self.subTest(mode=mode):
-                datastore = self.makeDatastore()
-
-                def succeed(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    """Ingest a file already in the datastore root."""
-                    # first move it into the root, and adjust the path
-                    # accordingly.
-                    # In the case of a ChainedDatastore, we have multiple
-                    # roots, all of which will accept the file, so we
-                    # have to copy it into all the roots.
-                    relative_path = None
-                    for root in datastore.roots.values():
-                        if root is not None:
-                            copied_path = shutil.copy(path, root.ospath)
-                            relative_path = os.path.relpath(copied_path, start=root.ospath)
-                    assert relative_path is not None, (
-                        "Running a FileDatastore test on a Datastore instance without any roots"
-                    )
-                    datastore.ingest(FileDataset(path=relative_path, refs=ref), transfer=mode)
-                    self.assertEqual(obj, datastore.get(ref))
-
-                def failInputDoesNotExist(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    """Can't ingest files if we're given a bad path."""
-                    with self.assertRaises(FileNotFoundError):
-                        datastore.ingest(
-                            FileDataset(path="this-file-does-not-exist.yaml", refs=ref), transfer=mode
-                        )
-                    self.assertFalse(datastore.exists(ref))
-
-                def failOutsideRoot(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    """Can't ingest files outside of datastore root unless
-                    auto.
-                    """
-                    if mode == "auto":
-                        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                        self.assertTrue(datastore.exists(ref))
-                    else:
-                        with self.assertRaises(RuntimeError):
-                            datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                        self.assertFalse(datastore.exists(ref))
-
-                def failNotImplemented(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    with self.assertRaises(NotImplementedError):
-                        datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
-
-                if mode in self.ingestTransferModes:
-                    self.runIngestTest(failOutsideRoot)
-                    self.runIngestTest(failInputDoesNotExist)
-                    self.runIngestTest(succeed)
-                else:
-                    self.runIngestTest(failNotImplemented)
-
-    def testIngestTransfer(self) -> None:
-        """Test ingesting existing files after transferring them."""
-        for mode in ("copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"):
-            with self.subTest(mode=mode):
-                datastore = self.makeDatastore(mode)
-
-                def succeed(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    """Ingest a file by transferring it to the template
-                    location.
-                    """
-                    datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                    self.assertEqual(obj, datastore.get(ref))
-                    file_exists = os.path.exists(path)
-                    if mode == "move":
-                        self.assertFalse(file_exists)
-                    else:
-                        self.assertTrue(file_exists)
-
-                def failInputDoesNotExist(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    """Can't ingest files if we're given a bad path."""
-                    with self.assertRaises(FileNotFoundError):
-                        # Ensure the file does not look like it is in
-                        # datastore for auto mode
-                        datastore.ingest(
-                            FileDataset(path="../this-file-does-not-exist.yaml", refs=ref), transfer=mode
-                        )
-                    self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
-
-                def failNotImplemented(
-                    obj: MetricsExample,
-                    path: str,
-                    ref: DatasetRef,
-                    mode: str | None = mode,
-                    datastore: Datastore = datastore,
-                ) -> None:
-                    with self.assertRaises(NotImplementedError):
-                        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-
-                if mode in self.ingestTransferModes:
-                    self.runIngestTest(failInputDoesNotExist)
-                    self.runIngestTest(succeed)
-                else:
-                    self.runIngestTest(failNotImplemented)
-
-    def testIngestSymlinkOfSymlink(self) -> None:
-        """Special test for symlink to a symlink ingest"""
-        metrics, ref = self._prepareIngestTest()
-        # The aim of this test is to create a dataset on disk, then
-        # create a symlink to it and finally ingest the symlink such that
-        # the symlink in the datastore points to the original dataset.
-        for mode in ("symlink", "relsymlink"):
-            if mode not in self.ingestTransferModes:
-                continue
-
-            print(f"Trying mode {mode}")
-            with _temp_yaml_file(metrics._asdict()) as realpath:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    sympath = os.path.join(tmpdir, "symlink.yaml")
-                    os.symlink(os.path.realpath(realpath), sympath)
-
-                    datastore = self.makeDatastore()
-                    datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
-
-                    uri = datastore.getURI(ref)
-                    self.assertTrue(uri.isLocal, f"Check {uri.scheme}")
-                    self.assertTrue(os.path.islink(uri.ospath), f"Check {uri} is a symlink")
-
-                    linkTarget = os.readlink(uri.ospath)
-                    if mode == "relsymlink":
-                        self.assertFalse(os.path.isabs(linkTarget))
-                    else:
-                        self.assertTrue(os.path.samefile(linkTarget, realpath))
-
-                    # Check that we can get the dataset back regardless of mode
-                    metric2 = datastore.get(ref)
-                    self.assertEqual(metric2, metrics)
-
-                    # Cleanup the file for next time round loop
-                    # since it will get the same file name in store
-                    datastore.remove(ref)
-
-    def _populate_export_datastore(self, name: str) -> tuple[Datastore, list[DatasetRef]]:
-        datastore = self.makeDatastore(name)
-
-        # For now only the FileDatastore can be used for this test.
-        # ChainedDatastore that only includes InMemoryDatastores have to be
-        # skipped as well.
-        for name in datastore.names:
-            if not name.startswith("InMemoryDatastore"):
-                break
-        else:
-            raise unittest.SkipTest("in-memory datastore does not support record export/import")
-
-        metrics = makeExampleMetrics()
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        sc = self.storageClassFactory.getStorageClass("StructuredData")
-
-        refs = []
-        for visit in (2048, 2049, 2050):
-            dataId = {
-                "instrument": "dummy",
-                "visit": visit,
-                "physical_filter": "Uprime",
-                "band": "u",
-                "day_obs": 20250101,
-            }
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-            datastore.put(metrics, ref)
-            refs.append(ref)
-        return datastore, refs
-
-    def testExportImportRecords(self) -> None:
-        """Test for export_records and import_records methods."""
-        datastore, refs = self._populate_export_datastore("test_datastore")
-        for exported_refs in (refs, refs[1:]):
-            n_refs = len(exported_refs)
-            records = datastore.export_records(exported_refs)
-            self.assertGreater(len(records), 0)
-            self.assertTrue(set(records.keys()) <= set(datastore.names))
-            # In a ChainedDatastore each FileDatastore will have a complete set
-            for datastore_name in records:
-                record_data = records[datastore_name]
-                self.assertEqual(len(record_data.records), n_refs)
-
-                # Check that subsetting works, include non-existing dataset ID.
-                dataset_ids = {exported_refs[0].id, uuid.uuid4()}
-                subset = record_data.subset(dataset_ids)
-                assert subset is not None
-                self.assertEqual(len(subset.records), 1)
-                subset = record_data.subset({uuid.uuid4()})
-                self.assertIsNone(subset)
-
-        # Use the same datastore name to import relative path.
-        datastore2 = self.makeDatastore("test_datastore")
-
-        records = datastore.export_records(refs[1:])
-        datastore2.import_records(records)
-
-        with self.assertRaises(FileNotFoundError):
-            data = datastore2.get(refs[0])
-        data = datastore2.get(refs[1])
-        self.assertIsNotNone(data)
-        data = datastore2.get(refs[2])
-        self.assertIsNotNone(data)
-
-    def testExportImportTable(self) -> None:
-        datastore, refs = self._populate_export_datastore("test_datastore")
-        table = datastore.export_table([ref.id for ref in refs])
-        datastore2 = self.makeDatastore("test_datastore")
-        datastore2.import_table(table)
-
-        for ref in refs:
-            self.assertIsNotNone(datastore2.get(ref))
-            self.assertEqual(datastore.getURI(ref), datastore2.getURI(ref))
-            original_info = datastore.get_file_info_for_transfer([ref.id])[ref.id][0]
-            imported_info_list = datastore.get_file_info_for_transfer([ref.id]).get(ref.id)
-            self.assertIsNotNone(imported_info_list)
-            self.assertEqual(len(imported_info_list), 1)
-            imported_info = imported_info_list[0]
-            self.assertEqual(imported_info.file_info.formatter, original_info.file_info.formatter)
-            self.assertEqual(
-                imported_info.file_info.storage_class_name, original_info.file_info.storage_class_name
-            )
-            self.assertEqual(imported_info.file_info.file_size, original_info.file_info.file_size)
-            self.assertEqual(imported_info.file_info.checksum, original_info.file_info.checksum)
-            self.assertEqual(imported_info.file_info.component, original_info.file_info.component)
-
-    def testExportPredictedRecords(self):
-        if self.isEphemeral:
-            raise unittest.SkipTest("in-memory datastore does not support record export/import")
-        sc = self.storageClassFactory.getStorageClass("ThingOne")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-
-        datastore = self.makeDatastore("test_datastore")
-        names = {n for n in datastore.names if not n.startswith("InMemory")}
-        records = datastore.export_predicted_records([ref])
-
-        # Expect predicted records from all datastores.
-        self.assertEqual(set(records.keys()), names)
-
-        for record_data in records.values():
-            self.assertEqual(len(record_data.records), 1)
-
-    def testExport(self) -> None:
-        datastore, refs = self._populate_export_datastore("test_datastore")
-
-        datasets = list(datastore.export(refs))
-        self.assertEqual(len(datasets), 3)
-
-        for transfer in (None, "auto"):
-            # Both will default to None
-            datasets = list(datastore.export(refs, transfer=transfer))
-            self.assertEqual(len(datasets), 3)
-
-        with self.assertRaises(TypeError):
-            list(datastore.export(refs, transfer="copy"))
-
-        with self.assertRaises(TypeError):
-            list(datastore.export(refs, directory="exportDir", transfer="move"))
-
-        # Create a new ref that is not known to the datastore and try to
-        # export it.
-        sc = self.storageClassFactory.getStorageClass("ThingOne")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        with self.assertRaises(FileNotFoundError):
-            list(datastore.export(refs + [ref], transfer=None))
-
-    def test_pydantic_dict_storage_class_conversions(self) -> None:
-        """Test converting a dataset stored as a pydantic model into a dict on
-        read.
-        """
-        datastore = self.makeDatastore()
-        store_as_model = self.makeDatasetRef(
-            "store_as_model",
-            dimensions=self.universe.empty,
-            storageClass="DictConvertibleModel",
-            dataId=DataCoordinate.make_empty(self.universe),
-        )
-        content = {"a": "one", "b": "two"}
-        model = DictConvertibleModel.from_dict(content, extra="original content")
-        datastore.put(model, store_as_model)
-        retrieved_model = datastore.get(store_as_model)
-        self.assertEqual(retrieved_model, model)
-        loaded = datastore.get(store_as_model.overrideStorageClass("NativeDictForConvertibleModel"))
-        self.assertEqual(type(loaded), dict)
-        self.assertEqual(loaded, content)
-
-    def test_simple_class_put_get(self) -> None:
-        """Test that we can put and get a simple class with dict()
-        constructor.
-        """
-        datastore = self.makeDatastore()
-        data = MetricsExample(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
-        self._assert_different_puts(datastore, "MetricsExample", data)
-
-    def test_dataclass_put_get(self) -> None:
-        """Test that we can put and get a simple dataclass."""
-        datastore = self.makeDatastore()
-        data = MetricsExampleDataclass(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
-        self._assert_different_puts(datastore, "MetricsExampleDataclass", data)
-
-    def test_pydantic_put_get(self) -> None:
-        """Test that we can put and get a simple Pydantic model."""
-        datastore = self.makeDatastore()
-        data = MetricsExampleModel(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
-        self._assert_different_puts(datastore, "MetricsExampleModel", data)
-
-    def test_tuple_put_get(self) -> None:
-        """Test that we can put and get a tuple."""
-        datastore = self.makeDatastore()
-        data = ("a", "b", 1)
-        self._assert_different_puts(datastore, "TupleExample", data)
-
-    def _assert_different_puts(self, datastore: Datastore, storageClass_root: str, data: Any) -> None:
-        refs = {
-            x: self.makeDatasetRef(
-                f"stora_as_{x}",
-                dimensions=self.universe.empty,
-                storageClass=f"{storageClass_root}{x}",
-                dataId=DataCoordinate.make_empty(self.universe),
-            )
-            for x in ["A", "B"]
-        }
-
-        for ref in refs.values():
-            datastore.put(data, ref)
-
-        self.assertEqual(datastore.get(refs["A"]), datastore.get(refs["B"]))
-
-
-class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
-    """PosixDatastore specialization"""
-
-    profileName = "posix"
-
-    def testAtomicWrite(self) -> None:
-        """Test that we write to a temporary and then rename"""
-        datastore = self.makeDatastore()
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        metrics = makeExampleMetrics()
-
-        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-
-        with self.assertLogs("lsst.resources", "DEBUG") as cm:
-            datastore.put(metrics, ref)
-        move_logs = [ll for ll in cm.output if "transfer=" in ll]
-        self.assertIn("transfer=move", move_logs[0])
-
-        # And the transfer should be file to file.
-        self.assertEqual(move_logs[0].count("file://"), 2)
-
-    def testCanNotDeterminePutFormatterLocation(self) -> None:
-        """Verify that the expected exception is raised if the FileDatastore
-        can not determine the put formatter location.
-        """
-        _ = makeExampleMetrics()
-        datastore = self.makeDatastore()
-
-        # Create multiple storage classes for testing different formulations
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-
-        sccomp = StorageClass("Dummy")
-        compositeStorageClass = StorageClass(
-            "StructuredComposite", components={"dummy": sccomp, "dummy2": sccomp}
-        )
-
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
-
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-        compRef = self.makeDatasetRef("metric", dimensions, compositeStorageClass, dataId)
-
-        def raiser(ref: DatasetRef) -> None:
-            raise DatasetTypeNotSupportedError()
-
-        with unittest.mock.patch.object(
-            lsst.daf.butler.datastores.fileDatastore.FileDatastore,
-            "_determine_put_formatter_location",
-            side_effect=raiser,
-        ):
-            # verify the non-composite ref execution path:
-            with self.assertRaises(DatasetTypeNotSupportedError):
-                datastore.getURIs(ref, predict=True)
-
-            # verify the composite-ref execution path:
-            with self.assertRaises(DatasetTypeNotSupportedError):
-                datastore.getURIs(compRef, predict=True)
-
-    def test_roots(self):
-        datastore = self.makeDatastore()
-
-        self.assertEqual(set(datastore.names), set(datastore.roots.keys()))
-        for root in datastore.roots.values():
-            if root is not None:
-                self.assertTrue(root.exists())
-
-    def test_prepare_get_for_external_client(self):
-        datastore = self.makeDatastore()
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"}
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-        # Most of the coverage for this function is in test_server.py,
-        # because it requires a file backend that supports URL signing.
-        self.assertIsNone(datastore.prepare_get_for_external_client(ref))
-
-
-class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
-    """Posix datastore tests but with checksums disabled."""
-
-    profileName = "posix-no-checksums"
-
-    def testChecksum(self) -> None:
-        """Ensure that checksums have not been calculated."""
-        datastore = self.makeDatastore()
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        metrics = makeExampleMetrics()
-
-        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-
-        # Configuration should have disabled checksum calculation
+        ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
         datastore.put(metrics, ref)
-        infos = datastore.getStoredItemsInfo(ref)
-        self.assertIsNone(infos[0].checksum)
+        refs.append(ref)
+    return datastore, refs
 
-        # Remove put back but with checksums enabled explicitly
-        datastore.remove(ref)
-        datastore.useChecksum = True
-        datastore.put(metrics, ref)
 
-        infos = datastore.getStoredItemsInfo(ref)
-        self.assertIsNotNone(infos[0].checksum)
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_export_import_records(ds: DatastoreHarness) -> None:
+    """Test for export_records and import_records methods."""
+    datastore, refs = _populate_export_datastore(ds, "test_datastore")
+    for exported_refs in (refs, refs[1:]):
+        n_refs = len(exported_refs)
+        records = datastore.export_records(exported_refs)
+        assert len(records) > 0
+        assert set(records.keys()) <= set(datastore.names)
+        # In a ChainedDatastore each FileDatastore will have a complete set
+        for datastore_name in records:
+            record_data = records[datastore_name]
+            assert len(record_data.records) == n_refs
 
-    def test_repeat_ingest(self):
-        """Test that repeatedly ingesting the same file in direct mode
-        is allowed.
+            # Check that subsetting works, include non-existing dataset ID.
+            dataset_ids = {exported_refs[0].id, uuid.uuid4()}
+            subset = record_data.subset(dataset_ids)
+            assert subset is not None
+            assert len(subset.records) == 1
+            subset = record_data.subset({uuid.uuid4()})
+            assert subset is None
 
-        Test can only run with FileDatastore since that is the only one
-        supporting "direct" ingest.
-        """
-        metrics, v4ref = self._prepareIngestTest()
-        datastore = self.makeDatastore()
-        v5ref = DatasetRef(
-            v4ref.datasetType, v4ref.dataId, v4ref.run, id_generation_mode=DatasetIdGenEnum.DATAID_TYPE_RUN
+    # Use the same datastore name to import relative path.
+    datastore2 = ds.make_datastore("test_datastore")
+
+    records = datastore.export_records(refs[1:])
+    datastore2.import_records(records)
+
+    with pytest.raises(FileNotFoundError):
+        data = datastore2.get(refs[0])
+    data = datastore2.get(refs[1])
+    assert data is not None
+    data = datastore2.get(refs[2])
+    assert data is not None
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_export_import_table(ds: DatastoreHarness) -> None:
+    datastore, refs = _populate_export_datastore(ds, "test_datastore")
+    table = datastore.export_table([ref.id for ref in refs])
+    datastore2 = ds.make_datastore("test_datastore")
+    datastore2.import_table(table)
+
+    for ref in refs:
+        assert datastore2.get(ref) is not None
+        assert datastore.getURI(ref) == datastore2.getURI(ref)
+        original_info = datastore.get_file_info_for_transfer([ref.id])[ref.id][0]
+        imported_info_list = datastore.get_file_info_for_transfer([ref.id]).get(ref.id)
+        assert imported_info_list is not None
+        assert len(imported_info_list) == 1
+        imported_info = imported_info_list[0]
+        assert imported_info.file_info.formatter == original_info.file_info.formatter
+        assert imported_info.file_info.storage_class_name == original_info.file_info.storage_class_name
+        assert imported_info.file_info.file_size == original_info.file_info.file_size
+        assert imported_info.file_info.checksum == original_info.file_info.checksum
+        assert imported_info.file_info.component == original_info.file_info.component
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_export_predicted_records(ds: DatastoreHarness) -> None:
+    if ds.profile.is_ephemeral:
+        pytest.skip("in-memory datastore does not support record export/import")
+    sc = ds.storage_class_factory.getStorageClass("ThingOne")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+
+    datastore = ds.make_datastore("test_datastore")
+    names = {n for n in datastore.names if not n.startswith("InMemory")}
+    records = datastore.export_predicted_records([ref])
+
+    # Expect predicted records from all datastores.
+    assert set(records.keys()) == names
+
+    for record_data in records.values():
+        assert len(record_data.records) == 1
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_export(ds: DatastoreHarness) -> None:
+    datastore, refs = _populate_export_datastore(ds, "test_datastore")
+
+    datasets = list(datastore.export(refs))
+    assert len(datasets) == 3
+
+    for transfer in (None, "auto"):
+        # Both will default to None
+        datasets = list(datastore.export(refs, transfer=transfer))
+        assert len(datasets) == 3
+
+    with pytest.raises(TypeError):
+        list(datastore.export(refs, transfer="copy"))
+
+    with pytest.raises(TypeError):
+        list(datastore.export(refs, directory="exportDir", transfer="move"))
+
+    # Create a new ref that is not known to the datastore and try to
+    # export it.
+    sc = ds.storage_class_factory.getStorageClass("ThingOne")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+    ref = ds.make_dataset_ref("metric", dimensions, sc, dataId)
+    with pytest.raises(FileNotFoundError):
+        list(datastore.export(refs + [ref], transfer=None))
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_pydantic_dict_storage_class_conversions(ds: DatastoreHarness) -> None:
+    """Test converting a dataset stored as a pydantic model into a dict on
+    read.
+    """
+    datastore = ds.make_datastore()
+    store_as_model = ds.make_dataset_ref(
+        "store_as_model",
+        dimensions=ds.universe.empty,
+        storageClass="DictConvertibleModel",
+        dataId=DataCoordinate.make_empty(ds.universe),
+    )
+    content = {"a": "one", "b": "two"}
+    model = DictConvertibleModel.from_dict(content, extra="original content")
+    datastore.put(model, store_as_model)
+    retrieved_model = datastore.get(store_as_model)
+    assert retrieved_model == model
+    loaded = datastore.get(store_as_model.overrideStorageClass("NativeDictForConvertibleModel"))
+    assert type(loaded) is dict
+    assert loaded == content
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_simple_class_put_get(ds: DatastoreHarness) -> None:
+    """Test that we can put and get a simple class with dict()
+    constructor.
+    """
+    datastore = ds.make_datastore()
+    data = MetricsExample(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+    _assert_different_puts(ds, datastore, "MetricsExample", data)
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_dataclass_put_get(ds: DatastoreHarness) -> None:
+    """Test that we can put and get a simple dataclass."""
+    datastore = ds.make_datastore()
+    data = MetricsExampleDataclass(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+    _assert_different_puts(ds, datastore, "MetricsExampleDataclass", data)
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_pydantic_put_get(ds: DatastoreHarness) -> None:
+    """Test that we can put and get a simple Pydantic model."""
+    datastore = ds.make_datastore()
+    data = MetricsExampleModel(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+    _assert_different_puts(ds, datastore, "MetricsExampleModel", data)
+
+
+@pytest.mark.parametrize("ds", ALL_PROFILES, indirect=True)
+def test_tuple_put_get(ds: DatastoreHarness) -> None:
+    """Test that we can put and get a tuple."""
+    datastore = ds.make_datastore()
+    data = ("a", "b", 1)
+    _assert_different_puts(ds, datastore, "TupleExample", data)
+
+
+def _assert_different_puts(
+    ds: DatastoreHarness, datastore: Datastore, storageClass_root: str, data: Any
+) -> None:
+    refs = {
+        x: ds.make_dataset_ref(
+            f"stora_as_{x}",
+            dimensions=ds.universe.empty,
+            storageClass=f"{storageClass_root}{x}",
+            dataId=DataCoordinate.make_empty(ds.universe),
         )
+        for x in ["A", "B"]
+    }
 
-        with _temp_yaml_file(metrics._asdict()) as path:
+    for ref in refs.values():
+        datastore.put(data, ref)
+
+    assert datastore.get(refs["A"]) == datastore.get(refs["B"])
+
+
+@pytest.mark.parametrize("ds", FILE_PROFILES, indirect=True)
+def test_atomic_write(ds: DatastoreHarness, caplog: pytest.LogCaptureFixture) -> None:
+    """Test that we write to a temporary and then rename"""
+    datastore = ds.make_datastore()
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    metrics = make_example_metrics()
+
+    dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+
+    with caplog.at_level(logging.DEBUG, logger="lsst.resources"):
+        caplog.clear()
+        datastore.put(metrics, ref)
+        records = records_from(caplog, "lsst.resources", logging.DEBUG)
+    move_logs = [record.getMessage() for record in records if "transfer=" in record.getMessage()]
+    assert move_logs, "Expected a transfer log message from lsst.resources"
+    assert "transfer=move" in move_logs[0]
+
+    # And the transfer should be file to file.
+    assert move_logs[0].count("file://") == 2
+
+
+@pytest.mark.parametrize("ds", FILE_PROFILES, indirect=True)
+def test_can_not_determine_put_formatter_location(ds: DatastoreHarness) -> None:
+    """Verify that the expected exception is raised if the FileDatastore
+    can not determine the put formatter location.
+    """
+    _ = make_example_metrics()
+    datastore = ds.make_datastore()
+
+    # Create multiple storage classes for testing different formulations
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+
+    sccomp = StorageClass("Dummy")
+    compositeStorageClass = StorageClass(
+        "StructuredComposite", components={"dummy": sccomp, "dummy2": sccomp}
+    )
+
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
+
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+    compRef = ds.make_dataset_ref("metric", dimensions, compositeStorageClass, dataId)
+
+    def raiser(ref: DatasetRef) -> None:
+        raise DatasetTypeNotSupportedError()
+
+    with unittest.mock.patch.object(
+        lsst.daf.butler.datastores.fileDatastore.FileDatastore,
+        "_determine_put_formatter_location",
+        side_effect=raiser,
+    ):
+        # verify the non-composite ref execution path:
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.getURIs(ref, predict=True)
+
+        # verify the composite-ref execution path:
+        with pytest.raises(DatasetTypeNotSupportedError):
+            datastore.getURIs(compRef, predict=True)
+
+
+@pytest.mark.parametrize("ds", FILE_PROFILES, indirect=True)
+def test_roots(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+
+    assert set(datastore.names) == set(datastore.roots.keys())
+    for root in datastore.roots.values():
+        if root is not None:
+            assert root.exists()
+
+
+@pytest.mark.parametrize("ds", FILE_PROFILES, indirect=True)
+def test_prepare_get_for_external_client(ds: DatastoreHarness) -> None:
+    datastore = ds.make_datastore()
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"}
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+    # Most of the coverage for this function is in test_server.py,
+    # because it requires a file backend that supports URL signing.
+    assert datastore.prepare_get_for_external_client(ref) is None
+
+
+@pytest.mark.parametrize("ds", ["posix-no-checksums"], indirect=True)
+def test_checksum(ds: DatastoreHarness) -> None:
+    """Ensure that checksums have not been calculated."""
+    datastore = ds.make_datastore()
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    metrics = make_example_metrics()
+
+    dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v", "day_obs": 20250101}
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
+
+    # Configuration should have disabled checksum calculation
+    datastore.put(metrics, ref)
+    infos = datastore.getStoredItemsInfo(ref)
+    assert infos[0].checksum is None
+
+    # Remove put back but with checksums enabled explicitly
+    datastore.remove(ref)
+    datastore.useChecksum = True
+    datastore.put(metrics, ref)
+
+    infos = datastore.getStoredItemsInfo(ref)
+    assert infos[0].checksum is not None
+
+
+@pytest.mark.parametrize("ds", ["posix-no-checksums"], indirect=True)
+def test_repeat_ingest(ds: DatastoreHarness) -> None:
+    """Test that repeatedly ingesting the same file in direct mode
+    is allowed.
+
+    Test can only run with FileDatastore since that is the only one
+    supporting "direct" ingest.
+    """
+    metrics, v4ref = _prepare_ingest_test(ds)
+    datastore = ds.make_datastore()
+    v5ref = DatasetRef(
+        v4ref.datasetType, v4ref.dataId, v4ref.run, id_generation_mode=DatasetIdGenEnum.DATAID_TYPE_RUN
+    )
+
+    with _temp_yaml_file(metrics._asdict()) as path:
+        datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
+
+        # This will fail because the ref is using UUIDv4.
+        with pytest.raises(RuntimeError):
             datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
-            # This will fail because the ref is using UUIDv4.
-            with self.assertRaises(RuntimeError):
-                datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
+        # UUIDv5 can be repeatedly ingested in direct mode.
+        datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
+        datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
 
-            # UUIDv5 can be repeatedly ingested in direct mode.
-            datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
-            datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
-
-            with self.assertRaises(RuntimeError):
-                datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
+        with pytest.raises(RuntimeError):
+            datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
 
 
-class TrashDatastoreTestCase(PosixDatastoreTestCase):
-    """Restrict trash test to FileDatastore."""
+@pytest.mark.parametrize("ds", ["trash"], indirect=True)
+def test_trash(ds: DatastoreHarness) -> None:
+    datastore, *refs = _prep_delete_test(ds, n_refs=10)
 
-    profileName = "trash"
+    # Trash one of them.
+    ref = refs.pop()
+    uri = datastore.getURI(ref)
+    datastore.trash(ref)
+    assert uri.exists(), uri  # Not deleted yet
+    datastore.emptyTrash()
+    assert not uri.exists(), uri
 
-    def testTrash(self) -> None:
-        datastore, *refs = self.prepDeleteTest(n_refs=10)
+    # Trash it again should be fine.
+    datastore.trash(ref)
 
-        # Trash one of them.
-        ref = refs.pop()
-        uri = datastore.getURI(ref)
-        datastore.trash(ref)
-        self.assertTrue(uri.exists(), uri)  # Not deleted yet
-        datastore.emptyTrash()
-        self.assertFalse(uri.exists(), uri)
+    # Trash multiple items at once.
+    subset = [refs.pop(), refs.pop()]
+    datastore.trash(subset)
+    datastore.emptyTrash()
 
-        # Trash it again should be fine.
-        datastore.trash(ref)
+    # Remove a record and trash should do nothing.
+    # This is execution butler scenario.
+    ref = refs.pop()
+    uri = datastore.getURI(ref)
+    datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+    assert uri.exists()
+    datastore.trash(ref)
+    datastore.emptyTrash()
+    assert uri.exists()
 
-        # Trash multiple items at once.
-        subset = [refs.pop(), refs.pop()]
-        datastore.trash(subset)
-        datastore.emptyTrash()
+    # Switch on trust and it should delete the file.
+    datastore.trustGetRequest = True
+    datastore.trash([ref])
+    assert not uri.exists()
 
-        # Remove a record and trash should do nothing.
-        # This is execution butler scenario.
-        ref = refs.pop()
-        uri = datastore.getURI(ref)
-        datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
-        self.assertTrue(uri.exists())
-        datastore.trash(ref)
-        datastore.emptyTrash()
-        self.assertTrue(uri.exists())
-
-        # Switch on trust and it should delete the file.
-        datastore.trustGetRequest = True
-        datastore.trash([ref])
-        self.assertFalse(uri.exists())
-
-        # Remove multiples at once in trust mode.
-        subset = [refs.pop() for i in range(3)]
-        datastore.trash(subset)
-        datastore.trash(refs.pop())  # Check that a single ref can trash
-
-    def test_empty_trash(self) -> None:
-        """Test parameters and return value for empty trash."""
-        datastore, *refs = self.prepDeleteTest(n_refs=10)
-
-        # Trash one of them.
-        ref = refs.pop()
-        uri = datastore.getURI(ref)
-        datastore.trash(ref)
-        self.assertTrue(uri.exists(), uri)  # Not deleted yet
-
-        # Empty trash but with a list of refs that does not include the
-        # one in the trash table.
-        removed = datastore.emptyTrash(refs=refs)
-        self.assertEqual(len(removed), 0)
-        self.assertTrue(uri.exists(), uri)
-
-        # Empty the entire trash but in dry_run mode.
-        removed = datastore.emptyTrash(dry_run=True)
-        self.assertEqual(len(removed), 1)
-        self.assertEqual(removed.pop(), uri)
-        self.assertTrue(uri.exists(), uri)
-
-        # Empty the trash specifying the actual ref.
-        removed = datastore.emptyTrash(refs=[ref])
-        self.assertEqual(len(removed), 1)
-        self.assertEqual(removed.pop(), uri)
-        self.assertFalse(uri.exists(), uri)
-
-        # Trash everything and empty.
-        datastore.trash(refs)
-        removed = datastore.emptyTrash(dry_run=True)
-        for u in removed:
-            self.assertTrue(u.exists())
-        removed = datastore.emptyTrash()
-        for u in removed:
-            self.assertFalse(u.exists())
+    # Remove multiples at once in trust mode.
+    subset = [refs.pop() for i in range(3)]
+    datastore.trash(subset)
+    datastore.trash(refs.pop())  # Check that a single ref can trash
 
 
-class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
-    """Test datastore cleans up on failure."""
+@pytest.mark.parametrize("ds", ["trash"], indirect=True)
+def test_empty_trash(ds: DatastoreHarness) -> None:
+    """Test parameters and return value for empty trash."""
+    datastore, *refs = _prep_delete_test(ds, n_refs=10)
 
-    profileName = "posix"
+    # Trash one of them.
+    ref = refs.pop()
+    uri = datastore.getURI(ref)
+    datastore.trash(ref)
+    assert uri.exists(), uri  # Not deleted yet
 
-    def testCleanup(self) -> None:
-        """Test that a failed formatter write does cleanup a partial file."""
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
+    # Empty trash but with a list of refs that does not include the
+    # one in the trash table.
+    removed = datastore.emptyTrash(refs=refs)
+    assert len(removed) == 0
+    assert uri.exists(), uri
 
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+    # Empty the entire trash but in dry_run mode.
+    removed = datastore.emptyTrash(dry_run=True)
+    assert len(removed) == 1
+    assert removed.pop() == uri
+    assert uri.exists(), uri
 
-        dimensions = self.universe.conform(("visit", "physical_filter"))
-        dataId = {
-            "instrument": "dummy",
-            "visit": 52,
-            "physical_filter": "V",
-            "band": "v",
-            "day_obs": 20250101,
-        }
+    # Empty the trash specifying the actual ref.
+    removed = datastore.emptyTrash(refs=[ref])
+    assert len(removed) == 1
+    assert removed.pop() == uri
+    assert not uri.exists(), uri
 
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-
-        # Determine where the file will end up (we assume Formatters use
-        # the same file extension)
-        expectedUri = datastore.getURI(ref, predict=True)
-        self.assertEqual(expectedUri.fragment, "predicted")
-
-        self.assertEqual(expectedUri.getExtension(), ".yaml", f"Is there a file extension in {expectedUri}")
-
-        # Try formatter that fails and formatter that fails and leaves
-        # a file behind
-        for formatter in (BadWriteFormatter, BadNoWriteFormatter):
-            with self.subTest(formatter=str(formatter)):
-                # Monkey patch the formatter
-                datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
-
-                # Try to put the dataset, it should fail
-                with self.assertRaises(RuntimeError):
-                    datastore.put(metrics, ref)
-
-                # Check that there is no file on disk
-                self.assertFalse(expectedUri.exists(), f"Check for existence of {expectedUri}")
-
-                # Check that there is a directory
-                dir = expectedUri.dirname()
-                self.assertTrue(dir.exists(), f"Check for existence of directory {dir}")
-
-        # Force YamlFormatter and check that this time a file is written
-        datastore.formatterFactory.registerFormatter(ref.datasetType, YamlFormatter, overwrite=True)
-        datastore.put(metrics, ref)
-        self.assertTrue(expectedUri.exists(), f"Check for existence of {expectedUri}")
-        datastore.remove(ref)
-        self.assertFalse(expectedUri.exists(), f"Check for existence of now removed {expectedUri}")
+    # Trash everything and empty.
+    datastore.trash(refs)
+    removed = datastore.emptyTrash(dry_run=True)
+    for u in removed:
+        assert u.exists()
+    removed = datastore.emptyTrash()
+    for u in removed:
+        assert not u.exists()
 
 
-class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):
-    """PosixDatastore specialization"""
+@pytest.mark.parametrize("ds", ["posix"], indirect=True)
+def test_cleanup(ds: DatastoreHarness) -> None:
+    """Test that a failed formatter write does cleanup a partial file."""
+    metrics = make_example_metrics()
+    datastore = ds.make_datastore()
 
-    profileName = "in-memory"
+    storageClass = ds.storage_class_factory.getStorageClass("StructuredData")
 
+    dimensions = ds.universe.conform(("visit", "physical_filter"))
+    dataId = {
+        "instrument": "dummy",
+        "visit": 52,
+        "physical_filter": "V",
+        "band": "v",
+        "day_obs": 20250101,
+    }
 
-class ChainedDatastoreTestCase(PosixDatastoreTestCase):
-    """ChainedDatastore specialization using a POSIXDatastore"""
+    ref = ds.make_dataset_ref("metric", dimensions, storageClass, dataId)
 
-    profileName = "chained"
+    # Determine where the file will end up (we assume Formatters use
+    # the same file extension)
+    expectedUri = datastore.getURI(ref, predict=True)
+    assert expectedUri.fragment == "predicted"
 
+    assert expectedUri.getExtension() == ".yaml", f"Is there a file extension in {expectedUri}"
 
-class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
-    """ChainedDatastore specialization using all InMemoryDatastore"""
+    # Try a formatter that fails, then one that fails and leaves a file
+    # behind. These stay a loop rather than becoming a parametrization: the
+    # directory the second case asserts on is created by the first case's
+    # failed put, so the two are not independent.
+    for formatter in (BadWriteFormatter, BadNoWriteFormatter):
+        # Monkey patch the formatter
+        datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 
-    profileName = "chained-memory"
+        # Try to put the dataset, it should fail
+        with pytest.raises(RuntimeError):
+            datastore.put(metrics, ref)
 
+        # Check that there is no file on disk
+        assert not expectedUri.exists(), f"Check for existence of {expectedUri}"
 
-def _make_datastore(config_file: str, root: str | None) -> Datastore:
-    """Build a datastore from a test configuration, as the base class did.
+        # Check that there is a directory
+        dir = expectedUri.dirname()
+        assert dir.exists(), f"Check for existence of directory {dir}"
 
-    Parameters
-    ----------
-    config_file : `str`
-        Configuration file name, relative to ``config/basic``.
-    root : `str` or `None`
-        Root to point the configuration at, or `None` for an ephemeral
-        datastore that has no root.
-
-    Returns
-    -------
-    datastore : `Datastore`
-        The configured datastore.
-    """
-    path = os.path.join(TESTDIR, "config/basic", config_file)
-    config = DatastoreConfig(path)
-    datastore_type = cast(type[Datastore], doImport(config["cls"]))
-    if root is not None:
-        datastore_type.setConfigRoot(root, config, config.copy())
-    registry = DummyRegistry()
-    return Datastore.fromConfig(config=config.copy(), bridgeManager=registry.getDatastoreBridgeManager())
+    # Force YamlFormatter and check that this time a file is written
+    datastore.formatterFactory.registerFormatter(ref.datasetType, YamlFormatter, overwrite=True)
+    datastore.put(metrics, ref)
+    assert expectedUri.exists(), f"Check for existence of {expectedUri}"
+    datastore.remove(ref)
+    assert not expectedUri.exists(), f"Check for existence of now removed {expectedUri}"
 
 
 DATA_ID = {
@@ -1745,6 +1722,17 @@ def constraint_storage_class_factory() -> StorageClassFactory:
     factory = StorageClassFactory()
     factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
     return factory
+
+
+def _make_datastore(config_file: str, root: str | None) -> Datastore:
+    """Build a datastore from a test configuration, as the base class did."""
+    path = os.path.join(TESTDIR, "config/basic", config_file)
+    config = DatastoreConfig(path)
+    datastore_type = cast(type[Datastore], doImport(config["cls"]))
+    if root is not None:
+        datastore_type.setConfigRoot(root, config, config.copy())
+    registry = DummyRegistry()
+    return Datastore.fromConfig(config=config.copy(), bridgeManager=registry.getDatastoreBridgeManager())
 
 
 @pytest.fixture
@@ -1879,7 +1867,6 @@ def test_per_store_constraints(
     datastore.remove(ref)
 
 
-@unittest.mock.patch.dict(os.environ, {}, clear=True)
 @dataclasses.dataclass
 class CacheFixtures:
     """Datasets and files shared by the cache tests."""
@@ -2733,20 +2720,3 @@ def test_stored_file_info_table_records() -> None:
     assert len(filtered_table) == 2
     _check_records(filtered_table.to_arrow().to_pylist())
     assert filtered_table.to_stored_file_info_table().to_records() == input_records
-
-
-@contextlib.contextmanager
-def _temp_yaml_file(data: Any) -> Iterator[str]:
-    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
-    try:
-        yaml.dump(data, stream=fh)
-        fh.flush()
-        yield fh.name
-    finally:
-        # Some tests delete the file
-        with contextlib.suppress(FileNotFoundError):
-            fh.close()
-
-
-if __name__ == "__main__":
-    unittest.main()
