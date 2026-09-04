@@ -1827,8 +1827,6 @@ class FileDatastoreButlerTests(ButlerTests):
     by datastores that inherit from FileDatastore.
     """
 
-    trustModeSupported = True
-
     def testComponentFromOverriddenStorageClassWarns(self) -> None:
         """Test that getting a component that only the read storage class
         defines warns, since the whole dataset has to be retrieved and
@@ -2752,6 +2750,90 @@ class RemoteTestDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestC
     profileName = "remote_test"
 
 
+DEFAULT_MANAGER = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+"""Dataset record storage manager used when a test does not name one."""
+
+
+class TransferHarness:
+    """State shared by the butler-to-butler transfer tests.
+
+    This mirrors what ``DatastoreTransfers`` held on ``self``. It is local to
+    this file rather than part of the shipped fixture plugin, because its
+    ``create_butler`` builds a pair of repositories with a chosen dataset
+    record storage manager, which is unrelated to
+    `~lsst.daf.butler.tests.fixtures.ButlerHarness.create_butler`.
+
+    Parameters
+    ----------
+    root : `str`
+        Directory the repositories are created under.
+    config_file : `str`
+        Butler configuration the repositories are built from.
+    storage_class_factory : `~lsst.daf.butler.StorageClassFactory`
+        Factory holding the storage classes for this configuration.
+    exit_stack : `contextlib.ExitStack`
+        Stack the created Butlers are closed on.
+    """
+
+    source_butler: Butler
+    target_butler: Butler
+
+    def __init__(
+        self,
+        root: str,
+        config_file: str,
+        storage_class_factory: StorageClassFactory,
+        exit_stack: contextlib.ExitStack,
+    ) -> None:
+        self.root = root
+        self.config_file = config_file
+        self.config = Config(config_file)
+        self.storage_class_factory = storage_class_factory
+        self.exit_stack = exit_stack
+
+    def create_butler(self, manager: str | None, label: str, config_file: str | None = None) -> Butler:
+        """Create a repository using the given dataset storage manager.
+
+        Parameters
+        ----------
+        manager : `str` or `None`
+            Dataset record storage manager, or `None` for `DEFAULT_MANAGER`.
+        label : `str`
+            Suffix distinguishing this repository's directory.
+        config_file : `str`, optional
+            Configuration to use instead of the harness's own.
+
+        Returns
+        -------
+        butler : `~lsst.daf.butler.Butler`
+            Writeable Butler on the new repository.
+        """
+        if manager is None:
+            manager = DEFAULT_MANAGER
+        config = Config(config_file if config_file is not None else self.config_file)
+        config["registry", "managers", "datasets"] = manager
+        butler = Butler.from_config(
+            make_repo_for_test(f"{self.root}/butler{label}", config=config), writeable=True
+        )
+        self.exit_stack.enter_context(butler)
+        return butler
+
+    def create_butlers(
+        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
+    ) -> None:
+        """Create the source and target butlers for a transfer test.
+
+        Parameters
+        ----------
+        manager1, manager2 : `str` or `None`, optional
+            Dataset record storage manager for each repository.
+        source_config : `str`, optional
+            Configuration for the source repository.
+        """
+        self.source_butler = self.create_butler(manager1, "1", config_file=source_config)
+        self.target_butler = self.create_butler(manager2, "2")
+
+
 class DatastoreTransfers(TestCaseMixin):
     """Base test setup for data transfers between butlers.  The concrete tests
     for specific configurations are in other classes, below.
@@ -2759,34 +2841,45 @@ class DatastoreTransfers(TestCaseMixin):
 
     storageClassFactory: StorageClassFactory
 
+    profileName = "posix"
+    """Key of `DATASTORE_PROFILES` naming the datastore under test."""
+
+    harness: TransferHarness
+    """Repositories under test and the Butlers built from them."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.storageClassFactory = StorageClassFactory()
 
     def setUp(self) -> None:
-        self.root = makeTestTempDir(TESTDIR)
-        self.config = Config(self.configFile)
+        exit_stack = self.enterContext(contextlib.ExitStack())
+        root = makeTestTempDir(TESTDIR)
+        self.addCleanup(removeTestTempDir, root)
+        config_file = os.path.join(TESTDIR, DATASTORE_PROFILES[self.profileName].config_file)
 
         # Some tests cause convertors to be replaced so ensure
         # the storage class factory is reset each time.
         self.storageClassFactory.reset()
-        self.storageClassFactory.addFromConfig(self.configFile)
+        self.storageClassFactory.addFromConfig(config_file)
 
-    def tearDown(self) -> None:
-        removeTestTempDir(self.root)
+        self.harness = TransferHarness(root, config_file, self.storageClassFactory, exit_stack)
+        # The names the test bodies still read. Phase 2 replaces each of these
+        # reads with the harness directly.
+        self.root = root
+        self.config = self.harness.config
+        self.configFile = config_file
 
     def create_butler(self, manager: str | None, label: str, config_file: str | None = None) -> Butler:
-        if manager is None:
-            manager = (
-                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
-            )
-        config = Config(config_file if config_file is not None else self.configFile)
-        config["registry", "managers", "datasets"] = manager
-        butler = Butler.from_config(
-            make_repo_for_test(f"{self.root}/butler{label}", config=config), writeable=True
-        )
-        self.enterContext(butler)
-        return butler
+        # Docstring inherited.
+        return self.harness.create_butler(manager, label, config_file)
+
+    def create_butlers(
+        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
+    ) -> None:
+        # Docstring inherited.
+        self.harness.create_butlers(manager1, manager2, source_config)
+        self.source_butler = self.harness.source_butler
+        self.target_butler = self.harness.target_butler
 
     def assertButlerTransfers(
         self,
@@ -3059,14 +3152,6 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     dataset types. The test ignores that.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def create_butlers(
-        self, manager1: str | None = None, manager2: str | None = None, source_config: str | None = None
-    ) -> None:
-        self.source_butler = self.create_butler(manager1, "1", config_file=source_config)
-        self.target_butler = self.create_butler(manager2, "2")
-
     def testTransferUuidToUuid(self) -> None:
         self.create_butlers()
         self.assertButlerTransfers()
@@ -3263,14 +3348,12 @@ class PosixDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     """Test transfers using a chained datastore."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+    profileName = "chained"
 
 
 @unittest.skipIf(not butler_server_is_available, butler_server_import_error)
 class ButlerServerDatastoreTransfers(DatastoreTransfers, unittest.TestCase):
     """Test ``transfer_from`` involving Butler server."""
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def test_transfers_from_remote_to_direct(self) -> None:
         from lsst.daf.butler.remote_butler._remote_file_transfer_source import (
