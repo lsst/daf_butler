@@ -170,13 +170,22 @@ def free_names(text: str) -> set[str]:
     Returns
     -------
     names : `set` [`str`]
-        Names loaded by the snippet, including attribute bases and decorators.
+        Names loaded by the snippet, plus the parameter names of any function
+        it defines, since those are how pytest names a fixture.
     """
-    return {
-        node.id
-        for node in ast.walk(ast.parse(text))
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    tree = ast.parse(text)
+    names = {
+        node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
     }
+    # pytest resolves a fixture by parameter name, which is not a name load,
+    # so a test's arguments are dependencies too.
+    names |= {
+        arg.arg
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+    }
+    return names
 
 
 def import_lines(src: str) -> dict[str, str]:
