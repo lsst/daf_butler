@@ -1,0 +1,1154 @@
+{
+  "lsst/daf/butler/__init__.py": {
+    "arcs": 40,
+    "lines": 39
+  },
+  "lsst/daf/butler/_butler.py": {
+    "arcs": 1053,
+    "lines": 586
+  },
+  "lsst/daf/butler/_butler_collections.py": {
+    "arcs": 177,
+    "lines": 110
+  },
+  "lsst/daf/butler/_butler_config.py": {
+    "arcs": 114,
+    "lines": 84
+  },
+  "lsst/daf/butler/_butler_instance_options.py": {
+    "arcs": 17,
+    "lines": 13
+  },
+  "lsst/daf/butler/_butler_metrics.py": {
+    "arcs": 127,
+    "lines": 76
+  },
+  "lsst/daf/butler/_butler_repo_index.py": {
+    "arcs": 119,
+    "lines": 84
+  },
+  "lsst/daf/butler/_collection_type.py": {
+    "arcs": 33,
+    "lines": 25
+  },
+  "lsst/daf/butler/_config.py": {
+    "arcs": 741,
+    "lines": 521
+  },
+  "lsst/daf/butler/_config_support.py": {
+    "arcs": 178,
+    "lines": 125
+  },
+  "lsst/daf/butler/_dataset_association.py": {
+    "arcs": 52,
+    "lines": 38
+  },
+  "lsst/daf/butler/_dataset_existence.py": {
+    "arcs": 25,
+    "lines": 21
+  },
+  "lsst/daf/butler/_dataset_provenance.py": {
+    "arcs": 302,
+    "lines": 202
+  },
+  "lsst/daf/butler/_dataset_ref.py": {
+    "arcs": 627,
+    "lines": 433
+  },
+  "lsst/daf/butler/_dataset_type.py": {
+    "arcs": 451,
+    "lines": 313
+  },
+  "lsst/daf/butler/_deferredDatasetHandle.py": {
+    "arcs": 57,
+    "lines": 39
+  },
+  "lsst/daf/butler/_exceptions.py": {
+    "arcs": 132,
+    "lines": 87
+  },
+  "lsst/daf/butler/_exceptions_legacy.py": {
+    "arcs": 18,
+    "lines": 9
+  },
+  "lsst/daf/butler/_file_dataset.py": {
+    "arcs": 85,
+    "lines": 60
+  },
+  "lsst/daf/butler/_file_descriptor.py": {
+    "arcs": 49,
+    "lines": 33
+  },
+  "lsst/daf/butler/_formatter.py": {
+    "arcs": 861,
+    "lines": 589
+  },
+  "lsst/daf/butler/_labeled_butler_factory.py": {
+    "arcs": 126,
+    "lines": 88
+  },
+  "lsst/daf/butler/_limited_butler.py": {
+    "arcs": 154,
+    "lines": 98
+  },
+  "lsst/daf/butler/_location.py": {
+    "arcs": 138,
+    "lines": 95
+  },
+  "lsst/daf/butler/_named.py": {
+    "arcs": 270,
+    "lines": 185
+  },
+  "lsst/daf/butler/_quantum.py": {
+    "arcs": 394,
+    "lines": 272
+  },
+  "lsst/daf/butler/_quantum_backed.py": {
+    "arcs": 507,
+    "lines": 324
+  },
+  "lsst/daf/butler/_query_all_datasets.py": {
+    "arcs": 105,
+    "lines": 77
+  },
+  "lsst/daf/butler/_registry_shim.py": {
+    "arcs": 330,
+    "lines": 198
+  },
+  "lsst/daf/butler/_rubin/__init__.py": {
+    "arcs": 3,
+    "lines": 2
+  },
+  "lsst/daf/butler/_rubin/file_datasets.py": {
+    "arcs": 29,
+    "lines": 24
+  },
+  "lsst/daf/butler/_rubin/temporary_for_ingest.py": {
+    "arcs": 99,
+    "lines": 68
+  },
+  "lsst/daf/butler/_rubin/transfer_datasets_in_place.py": {
+    "arcs": 33,
+    "lines": 25
+  },
+  "lsst/daf/butler/_standalone_datastore.py": {
+    "arcs": 77,
+    "lines": 51
+  },
+  "lsst/daf/butler/_storage_class.py": {
+    "arcs": 546,
+    "lines": 383
+  },
+  "lsst/daf/butler/_storage_class_delegate.py": {
+    "arcs": 114,
+    "lines": 88
+  },
+  "lsst/daf/butler/_timespan.py": {
+    "arcs": 293,
+    "lines": 202
+  },
+  "lsst/daf/butler/_topology.py": {
+    "arcs": 84,
+    "lines": 55
+  },
+  "lsst/daf/butler/_utilities/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/_utilities/locked_object.py": {
+    "arcs": 21,
+    "lines": 14
+  },
+  "lsst/daf/butler/_utilities/named_locks.py": {
+    "arcs": 29,
+    "lines": 19
+  },
+  "lsst/daf/butler/_utilities/thread_safe_cache.py": {
+    "arcs": 30,
+    "lines": 20
+  },
+  "lsst/daf/butler/_uuid.py": {
+    "arcs": 14,
+    "lines": 12
+  },
+  "lsst/daf/butler/arrow_utils.py": {
+    "arcs": 357,
+    "lines": 227
+  },
+  "lsst/daf/butler/cli/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/cli/butler.py": {
+    "arcs": 235,
+    "lines": 162
+  },
+  "lsst/daf/butler/cli/cliLog.py": {
+    "arcs": 176,
+    "lines": 131
+  },
+  "lsst/daf/butler/cli/cmd/__init__.py": {
+    "arcs": 5,
+    "lines": 4
+  },
+  "lsst/daf/butler/cli/cmd/_remove_collections.py": {
+    "arcs": 78,
+    "lines": 58
+  },
+  "lsst/daf/butler/cli/cmd/_remove_runs.py": {
+    "arcs": 96,
+    "lines": 70
+  },
+  "lsst/daf/butler/cli/cmd/commands.py": {
+    "arcs": 731,
+    "lines": 456
+  },
+  "lsst/daf/butler/cli/opt/__init__.py": {
+    "arcs": 4,
+    "lines": 3
+  },
+  "lsst/daf/butler/cli/opt/arguments.py": {
+    "arcs": 16,
+    "lines": 13
+  },
+  "lsst/daf/butler/cli/opt/optionGroups.py": {
+    "arcs": 76,
+    "lines": 46
+  },
+  "lsst/daf/butler/cli/opt/options.py": {
+    "arcs": 195,
+    "lines": 146
+  },
+  "lsst/daf/butler/cli/progress.py": {
+    "arcs": 44,
+    "lines": 30
+  },
+  "lsst/daf/butler/cli/utils.py": {
+    "arcs": 654,
+    "lines": 442
+  },
+  "lsst/daf/butler/column_spec.py": {
+    "arcs": 247,
+    "lines": 176
+  },
+  "lsst/daf/butler/datastore/__init__.py": {
+    "arcs": 3,
+    "lines": 2
+  },
+  "lsst/daf/butler/datastore/_datastore.py": {
+    "arcs": 679,
+    "lines": 415
+  },
+  "lsst/daf/butler/datastore/_transfer.py": {
+    "arcs": 28,
+    "lines": 21
+  },
+  "lsst/daf/butler/datastore/cache_manager.py": {
+    "arcs": 587,
+    "lines": 435
+  },
+  "lsst/daf/butler/datastore/composites.py": {
+    "arcs": 68,
+    "lines": 51
+  },
+  "lsst/daf/butler/datastore/constraints.py": {
+    "arcs": 72,
+    "lines": 52
+  },
+  "lsst/daf/butler/datastore/file_templates.py": {
+    "arcs": 455,
+    "lines": 335
+  },
+  "lsst/daf/butler/datastore/generic_base.py": {
+    "arcs": 55,
+    "lines": 37
+  },
+  "lsst/daf/butler/datastore/record_data.py": {
+    "arcs": 218,
+    "lines": 145
+  },
+  "lsst/daf/butler/datastore/stored_file_info.py": {
+    "arcs": 292,
+    "lines": 211
+  },
+  "lsst/daf/butler/datastores/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/datastores/chainedDatastore.py": {
+    "arcs": 854,
+    "lines": 577
+  },
+  "lsst/daf/butler/datastores/fileDatastore.py": {
+    "arcs": 1753,
+    "lines": 1219
+  },
+  "lsst/daf/butler/datastores/file_datastore/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/datastores/file_datastore/get.py": {
+    "arcs": 278,
+    "lines": 212
+  },
+  "lsst/daf/butler/datastores/file_datastore/retrieve_artifacts.py": {
+    "arcs": 214,
+    "lines": 147
+  },
+  "lsst/daf/butler/datastores/file_datastore/transfer.py": {
+    "arcs": 49,
+    "lines": 35
+  },
+  "lsst/daf/butler/datastores/inMemoryDatastore.py": {
+    "arcs": 328,
+    "lines": 234
+  },
+  "lsst/daf/butler/ddl.py": {
+    "arcs": 325,
+    "lines": 232
+  },
+  "lsst/daf/butler/delegates/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/delegates/arrowtable.py": {
+    "arcs": 208,
+    "lines": 147
+  },
+  "lsst/daf/butler/dimensions/__init__.py": {
+    "arcs": 17,
+    "lines": 16
+  },
+  "lsst/daf/butler/dimensions/_config.py": {
+    "arcs": 433,
+    "lines": 311
+  },
+  "lsst/daf/butler/dimensions/_coordinate.py": {
+    "arcs": 637,
+    "lines": 405
+  },
+  "lsst/daf/butler/dimensions/_data_coordinate_iterable.py": {
+    "arcs": 358,
+    "lines": 231
+  },
+  "lsst/daf/butler/dimensions/_database.py": {
+    "arcs": 229,
+    "lines": 144
+  },
+  "lsst/daf/butler/dimensions/_elements.py": {
+    "arcs": 324,
+    "lines": 197
+  },
+  "lsst/daf/butler/dimensions/_governor.py": {
+    "arcs": 68,
+    "lines": 45
+  },
+  "lsst/daf/butler/dimensions/_group.py": {
+    "arcs": 347,
+    "lines": 227
+  },
+  "lsst/daf/butler/dimensions/_packer.py": {
+    "arcs": 51,
+    "lines": 35
+  },
+  "lsst/daf/butler/dimensions/_record_set.py": {
+    "arcs": 591,
+    "lines": 363
+  },
+  "lsst/daf/butler/dimensions/_record_table.py": {
+    "arcs": 134,
+    "lines": 86
+  },
+  "lsst/daf/butler/dimensions/_records.py": {
+    "arcs": 359,
+    "lines": 257
+  },
+  "lsst/daf/butler/dimensions/_schema.py": {
+    "arcs": 218,
+    "lines": 170
+  },
+  "lsst/daf/butler/dimensions/_skypix.py": {
+    "arcs": 110,
+    "lines": 78
+  },
+  "lsst/daf/butler/dimensions/_universe.py": {
+    "arcs": 275,
+    "lines": 188
+  },
+  "lsst/daf/butler/dimensions/construction.py": {
+    "arcs": 73,
+    "lines": 53
+  },
+  "lsst/daf/butler/dimensions/record_cache.py": {
+    "arcs": 44,
+    "lines": 32
+  },
+  "lsst/daf/butler/direct_butler/__init__.py": {
+    "arcs": 2,
+    "lines": 1
+  },
+  "lsst/daf/butler/direct_butler/_direct_butler.py": {
+    "arcs": 2003,
+    "lines": 1286
+  },
+  "lsst/daf/butler/direct_butler/_direct_butler_collections.py": {
+    "arcs": 193,
+    "lines": 124
+  },
+  "lsst/daf/butler/direct_query_driver/__init__.py": {
+    "arcs": 4,
+    "lines": 3
+  },
+  "lsst/daf/butler/direct_query_driver/_driver.py": {
+    "arcs": 934,
+    "lines": 621
+  },
+  "lsst/daf/butler/direct_query_driver/_postprocessing.py": {
+    "arcs": 122,
+    "lines": 81
+  },
+  "lsst/daf/butler/direct_query_driver/_query_analysis.py": {
+    "arcs": 128,
+    "lines": 91
+  },
+  "lsst/daf/butler/direct_query_driver/_query_builder.py": {
+    "arcs": 274,
+    "lines": 189
+  },
+  "lsst/daf/butler/direct_query_driver/_result_page_converter.py": {
+    "arcs": 345,
+    "lines": 223
+  },
+  "lsst/daf/butler/direct_query_driver/_sql_builders.py": {
+    "arcs": 361,
+    "lines": 241
+  },
+  "lsst/daf/butler/direct_query_driver/_sql_column_visitor.py": {
+    "arcs": 293,
+    "lines": 199
+  },
+  "lsst/daf/butler/formatters/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/formatters/astropyTable.py": {
+    "arcs": 26,
+    "lines": 20
+  },
+  "lsst/daf/butler/formatters/json.py": {
+    "arcs": 43,
+    "lines": 32
+  },
+  "lsst/daf/butler/formatters/logs.py": {
+    "arcs": 23,
+    "lines": 17
+  },
+  "lsst/daf/butler/formatters/matplotlib.py": {
+    "arcs": 19,
+    "lines": 14
+  },
+  "lsst/daf/butler/formatters/packages.py": {
+    "arcs": 29,
+    "lines": 23
+  },
+  "lsst/daf/butler/formatters/parquet.py": {
+    "arcs": 884,
+    "lines": 626
+  },
+  "lsst/daf/butler/formatters/pickle.py": {
+    "arcs": 25,
+    "lines": 19
+  },
+  "lsst/daf/butler/formatters/typeless.py": {
+    "arcs": 77,
+    "lines": 50
+  },
+  "lsst/daf/butler/formatters/yaml.py": {
+    "arcs": 45,
+    "lines": 35
+  },
+  "lsst/daf/butler/json.py": {
+    "arcs": 53,
+    "lines": 32
+  },
+  "lsst/daf/butler/logging.py": {
+    "arcs": 425,
+    "lines": 291
+  },
+  "lsst/daf/butler/mapping_factory.py": {
+    "arcs": 111,
+    "lines": 77
+  },
+  "lsst/daf/butler/name_shrinker.py": {
+    "arcs": 35,
+    "lines": 28
+  },
+  "lsst/daf/butler/nonempty_mapping.py": {
+    "arcs": 56,
+    "lines": 36
+  },
+  "lsst/daf/butler/persistence_context.py": {
+    "arcs": 49,
+    "lines": 41
+  },
+  "lsst/daf/butler/progress.py": {
+    "arcs": 225,
+    "lines": 137
+  },
+  "lsst/daf/butler/pydantic_utils.py": {
+    "arcs": 163,
+    "lines": 115
+  },
+  "lsst/daf/butler/queries/__init__.py": {
+    "arcs": 7,
+    "lines": 6
+  },
+  "lsst/daf/butler/queries/_base.py": {
+    "arcs": 82,
+    "lines": 50
+  },
+  "lsst/daf/butler/queries/_data_coordinate_query_results.py": {
+    "arcs": 51,
+    "lines": 35
+  },
+  "lsst/daf/butler/queries/_dataset_query_results.py": {
+    "arcs": 78,
+    "lines": 53
+  },
+  "lsst/daf/butler/queries/_dimension_record_query_results.py": {
+    "arcs": 56,
+    "lines": 37
+  },
+  "lsst/daf/butler/queries/_expression_strings.py": {
+    "arcs": 339,
+    "lines": 240
+  },
+  "lsst/daf/butler/queries/_general_query_results.py": {
+    "arcs": 164,
+    "lines": 110
+  },
+  "lsst/daf/butler/queries/_identifiers.py": {
+    "arcs": 129,
+    "lines": 89
+  },
+  "lsst/daf/butler/queries/_query.py": {
+    "arcs": 412,
+    "lines": 282
+  },
+  "lsst/daf/butler/queries/convert_args.py": {
+    "arcs": 91,
+    "lines": 62
+  },
+  "lsst/daf/butler/queries/driver.py": {
+    "arcs": 140,
+    "lines": 88
+  },
+  "lsst/daf/butler/queries/expression_factory.py": {
+    "arcs": 351,
+    "lines": 222
+  },
+  "lsst/daf/butler/queries/expressions/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/queries/expressions/categorize.py": {
+    "arcs": 17,
+    "lines": 12
+  },
+  "lsst/daf/butler/queries/expressions/parser/__init__.py": {
+    "arcs": 6,
+    "lines": 5
+  },
+  "lsst/daf/butler/queries/expressions/parser/exprTree.py": {
+    "arcs": 434,
+    "lines": 285
+  },
+  "lsst/daf/butler/queries/expressions/parser/parser.py": {
+    "arcs": 8,
+    "lines": 6
+  },
+  "lsst/daf/butler/queries/expressions/parser/parserLex.py": {
+    "arcs": 115,
+    "lines": 91
+  },
+  "lsst/daf/butler/queries/expressions/parser/parserYacc.py": {
+    "arcs": 296,
+    "lines": 201
+  },
+  "lsst/daf/butler/queries/expressions/parser/ply/__init__.py": {
+    "arcs": 3,
+    "lines": 2
+  },
+  "lsst/daf/butler/queries/expressions/parser/ply/lex.py": {
+    "arcs": 450,
+    "lines": 375
+  },
+  "lsst/daf/butler/queries/expressions/parser/ply/yacc.py": {
+    "arcs": 1361,
+    "lines": 1068
+  },
+  "lsst/daf/butler/queries/expressions/parser/treeVisitor.py": {
+    "arcs": 67,
+    "lines": 46
+  },
+  "lsst/daf/butler/queries/overlaps.py": {
+    "arcs": 306,
+    "lines": 198
+  },
+  "lsst/daf/butler/queries/predicate_constraints_summary.py": {
+    "arcs": 143,
+    "lines": 99
+  },
+  "lsst/daf/butler/queries/result_specs.py": {
+    "arcs": 210,
+    "lines": 151
+  },
+  "lsst/daf/butler/queries/tree/__init__.py": {
+    "arcs": 13,
+    "lines": 12
+  },
+  "lsst/daf/butler/queries/tree/_base.py": {
+    "arcs": 84,
+    "lines": 61
+  },
+  "lsst/daf/butler/queries/tree/_column_expression.py": {
+    "arcs": 218,
+    "lines": 152
+  },
+  "lsst/daf/butler/queries/tree/_column_literal.py": {
+    "arcs": 265,
+    "lines": 179
+  },
+  "lsst/daf/butler/queries/tree/_column_reference.py": {
+    "arcs": 133,
+    "lines": 93
+  },
+  "lsst/daf/butler/queries/tree/_column_set.py": {
+    "arcs": 261,
+    "lines": 164
+  },
+  "lsst/daf/butler/queries/tree/_predicate.py": {
+    "arcs": 472,
+    "lines": 312
+  },
+  "lsst/daf/butler/queries/tree/_query_tree.py": {
+    "arcs": 150,
+    "lines": 110
+  },
+  "lsst/daf/butler/queries/visitors.py": {
+    "arcs": 279,
+    "lines": 159
+  },
+  "lsst/daf/butler/registry/__init__.py": {
+    "arcs": 11,
+    "lines": 10
+  },
+  "lsst/daf/butler/registry/_caching_context.py": {
+    "arcs": 56,
+    "lines": 39
+  },
+  "lsst/daf/butler/registry/_collection_record_cache.py": {
+    "arcs": 47,
+    "lines": 35
+  },
+  "lsst/daf/butler/registry/_collection_summary.py": {
+    "arcs": 111,
+    "lines": 72
+  },
+  "lsst/daf/butler/registry/_collection_summary_cache.py": {
+    "arcs": 27,
+    "lines": 19
+  },
+  "lsst/daf/butler/registry/_config.py": {
+    "arcs": 52,
+    "lines": 40
+  },
+  "lsst/daf/butler/registry/_defaults.py": {
+    "arcs": 128,
+    "lines": 89
+  },
+  "lsst/daf/butler/registry/_exceptions.py": {
+    "arcs": 47,
+    "lines": 24
+  },
+  "lsst/daf/butler/registry/_registry.py": {
+    "arcs": 385,
+    "lines": 202
+  },
+  "lsst/daf/butler/registry/_registry_base.py": {
+    "arcs": 297,
+    "lines": 176
+  },
+  "lsst/daf/butler/registry/_registry_factory.py": {
+    "arcs": 48,
+    "lines": 31
+  },
+  "lsst/daf/butler/registry/attributes.py": {
+    "arcs": 106,
+    "lines": 74
+  },
+  "lsst/daf/butler/registry/bridge/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/registry/bridge/ephemeral.py": {
+    "arcs": 101,
+    "lines": 55
+  },
+  "lsst/daf/butler/registry/bridge/monolithic.py": {
+    "arcs": 293,
+    "lines": 195
+  },
+  "lsst/daf/butler/registry/collections/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/registry/collections/_base.py": {
+    "arcs": 624,
+    "lines": 413
+  },
+  "lsst/daf/butler/registry/collections/nameKey.py": {
+    "arcs": 279,
+    "lines": 187
+  },
+  "lsst/daf/butler/registry/collections/synthIntKey.py": {
+    "arcs": 307,
+    "lines": 208
+  },
+  "lsst/daf/butler/registry/connectionString.py": {
+    "arcs": 39,
+    "lines": 28
+  },
+  "lsst/daf/butler/registry/databases/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/registry/databases/postgresql.py": {
+    "arcs": 528,
+    "lines": 341
+  },
+  "lsst/daf/butler/registry/databases/sqlite.py": {
+    "arcs": 378,
+    "lines": 254
+  },
+  "lsst/daf/butler/registry/datasets/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/registry/datasets/byDimensions/__init__.py": {
+    "arcs": 2,
+    "lines": 1
+  },
+  "lsst/daf/butler/registry/datasets/byDimensions/_dataset_type_cache.py": {
+    "arcs": 81,
+    "lines": 57
+  },
+  "lsst/daf/butler/registry/datasets/byDimensions/_manager.py": {
+    "arcs": 1289,
+    "lines": 883
+  },
+  "lsst/daf/butler/registry/datasets/byDimensions/summaries.py": {
+    "arcs": 299,
+    "lines": 196
+  },
+  "lsst/daf/butler/registry/datasets/byDimensions/tables.py": {
+    "arcs": 337,
+    "lines": 240
+  },
+  "lsst/daf/butler/registry/dimensions/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/registry/dimensions/static.py": {
+    "arcs": 790,
+    "lines": 552
+  },
+  "lsst/daf/butler/registry/expand_data_ids.py": {
+    "arcs": 45,
+    "lines": 28
+  },
+  "lsst/daf/butler/registry/interfaces/__init__.py": {
+    "arcs": 10,
+    "lines": 9
+  },
+  "lsst/daf/butler/registry/interfaces/_attributes.py": {
+    "arcs": 49,
+    "lines": 32
+  },
+  "lsst/daf/butler/registry/interfaces/_bridge.py": {
+    "arcs": 136,
+    "lines": 86
+  },
+  "lsst/daf/butler/registry/interfaces/_collections.py": {
+    "arcs": 259,
+    "lines": 157
+  },
+  "lsst/daf/butler/registry/interfaces/_database.py": {
+    "arcs": 925,
+    "lines": 572
+  },
+  "lsst/daf/butler/registry/interfaces/_database_explain.py": {
+    "arcs": 15,
+    "lines": 11
+  },
+  "lsst/daf/butler/registry/interfaces/_datasets.py": {
+    "arcs": 223,
+    "lines": 130
+  },
+  "lsst/daf/butler/registry/interfaces/_dimensions.py": {
+    "arcs": 95,
+    "lines": 57
+  },
+  "lsst/daf/butler/registry/interfaces/_obscore.py": {
+    "arcs": 77,
+    "lines": 47
+  },
+  "lsst/daf/butler/registry/interfaces/_opaque.py": {
+    "arcs": 73,
+    "lines": 49
+  },
+  "lsst/daf/butler/registry/interfaces/_versioning.py": {
+    "arcs": 111,
+    "lines": 69
+  },
+  "lsst/daf/butler/registry/managers.py": {
+    "arcs": 307,
+    "lines": 229
+  },
+  "lsst/daf/butler/registry/obscore/__init__.py": {
+    "arcs": 6,
+    "lines": 5
+  },
+  "lsst/daf/butler/registry/obscore/_config.py": {
+    "arcs": 120,
+    "lines": 99
+  },
+  "lsst/daf/butler/registry/obscore/_manager.py": {
+    "arcs": 291,
+    "lines": 211
+  },
+  "lsst/daf/butler/registry/obscore/_records.py": {
+    "arcs": 230,
+    "lines": 184
+  },
+  "lsst/daf/butler/registry/obscore/_schema.py": {
+    "arcs": 149,
+    "lines": 114
+  },
+  "lsst/daf/butler/registry/obscore/_spatial.py": {
+    "arcs": 54,
+    "lines": 35
+  },
+  "lsst/daf/butler/registry/obscore/default_spatial.py": {
+    "arcs": 59,
+    "lines": 46
+  },
+  "lsst/daf/butler/registry/opaque.py": {
+    "arcs": 155,
+    "lines": 105
+  },
+  "lsst/daf/butler/registry/queries/__init__.py": {
+    "arcs": 2,
+    "lines": 1
+  },
+  "lsst/daf/butler/registry/queries/_query_common.py": {
+    "arcs": 130,
+    "lines": 89
+  },
+  "lsst/daf/butler/registry/queries/_query_data_coordinates.py": {
+    "arcs": 145,
+    "lines": 98
+  },
+  "lsst/daf/butler/registry/queries/_query_datasets.py": {
+    "arcs": 99,
+    "lines": 68
+  },
+  "lsst/daf/butler/registry/queries/_query_dimension_records.py": {
+    "arcs": 34,
+    "lines": 24
+  },
+  "lsst/daf/butler/registry/queries/_results.py": {
+    "arcs": 158,
+    "lines": 93
+  },
+  "lsst/daf/butler/registry/sql_registry.py": {
+    "arcs": 766,
+    "lines": 496
+  },
+  "lsst/daf/butler/registry/versions.py": {
+    "arcs": 117,
+    "lines": 84
+  },
+  "lsst/daf/butler/registry/wildcards.py": {
+    "arcs": 199,
+    "lines": 139
+  },
+  "lsst/daf/butler/remote_butler/__init__.py": {
+    "arcs": 3,
+    "lines": 2
+  },
+  "lsst/daf/butler/remote_butler/_collection_args.py": {
+    "arcs": 49,
+    "lines": 38
+  },
+  "lsst/daf/butler/remote_butler/_config.py": {
+    "arcs": 16,
+    "lines": 11
+  },
+  "lsst/daf/butler/remote_butler/_defaults.py": {
+    "arcs": 15,
+    "lines": 9
+  },
+  "lsst/daf/butler/remote_butler/_errors.py": {
+    "arcs": 10,
+    "lines": 7
+  },
+  "lsst/daf/butler/remote_butler/_factory.py": {
+    "arcs": 106,
+    "lines": 68
+  },
+  "lsst/daf/butler/remote_butler/_get.py": {
+    "arcs": 63,
+    "lines": 43
+  },
+  "lsst/daf/butler/remote_butler/_http_connection.py": {
+    "arcs": 195,
+    "lines": 137
+  },
+  "lsst/daf/butler/remote_butler/_query_driver.py": {
+    "arcs": 237,
+    "lines": 162
+  },
+  "lsst/daf/butler/remote_butler/_query_results.py": {
+    "arcs": 32,
+    "lines": 23
+  },
+  "lsst/daf/butler/remote_butler/_ref_utils.py": {
+    "arcs": 94,
+    "lines": 64
+  },
+  "lsst/daf/butler/remote_butler/_registry.py": {
+    "arcs": 300,
+    "lines": 189
+  },
+  "lsst/daf/butler/remote_butler/_remote_butler.py": {
+    "arcs": 796,
+    "lines": 476
+  },
+  "lsst/daf/butler/remote_butler/_remote_butler_collections.py": {
+    "arcs": 106,
+    "lines": 69
+  },
+  "lsst/daf/butler/remote_butler/_remote_file_transfer_source.py": {
+    "arcs": 66,
+    "lines": 49
+  },
+  "lsst/daf/butler/remote_butler/authentication/__init__.py": {
+    "arcs": 2,
+    "lines": 0
+  },
+  "lsst/daf/butler/remote_butler/authentication/cadc.py": {
+    "arcs": 33,
+    "lines": 23
+  },
+  "lsst/daf/butler/remote_butler/authentication/interface.py": {
+    "arcs": 8,
+    "lines": 5
+  },
+  "lsst/daf/butler/remote_butler/authentication/rubin.py": {
+    "arcs": 45,
+    "lines": 31
+  },
+  "lsst/daf/butler/remote_butler/server/__init__.py": {
+    "arcs": 3,
+    "lines": 2
+  },
+  "lsst/daf/butler/remote_butler/server/_config.py": {
+    "arcs": 59,
+    "lines": 46
+  },
+  "lsst/daf/butler/remote_butler/server/_dependencies.py": {
+    "arcs": 76,
+    "lines": 50
+  },
+  "lsst/daf/butler/remote_butler/server/_factory.py": {
+    "arcs": 22,
+    "lines": 15
+  },
+  "lsst/daf/butler/remote_butler/server/_gafaelfawr.py": {
+    "arcs": 82,
+    "lines": 52
+  },
+  "lsst/daf/butler/remote_butler/server/_server.py": {
+    "arcs": 74,
+    "lines": 59
+  },
+  "lsst/daf/butler/remote_butler/server/_telemetry.py": {
+    "arcs": 43,
+    "lines": 31
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_external.py": {
+    "arcs": 410,
+    "lines": 262
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_external_query.py": {
+    "arcs": 212,
+    "lines": 138
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_file_info.py": {
+    "arcs": 44,
+    "lines": 32
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_internal.py": {
+    "arcs": 16,
+    "lines": 12
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_query_limits.py": {
+    "arcs": 53,
+    "lines": 41
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_query_serialization.py": {
+    "arcs": 44,
+    "lines": 29
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_query_streaming.py": {
+    "arcs": 101,
+    "lines": 72
+  },
+  "lsst/daf/butler/remote_butler/server/handlers/_utils.py": {
+    "arcs": 23,
+    "lines": 16
+  },
+  "lsst/daf/butler/remote_butler/server_models.py": {
+    "arcs": 321,
+    "lines": 229
+  },
+  "lsst/daf/butler/repo_relocation.py": {
+    "arcs": 25,
+    "lines": 19
+  },
+  "lsst/daf/butler/script/__init__.py": {
+    "arcs": 23,
+    "lines": 22
+  },
+  "lsst/daf/butler/script/_associate.py": {
+    "arcs": 24,
+    "lines": 15
+  },
+  "lsst/daf/butler/script/_pruneDatasets.py": {
+    "arcs": 171,
+    "lines": 116
+  },
+  "lsst/daf/butler/script/butlerImport.py": {
+    "arcs": 32,
+    "lines": 21
+  },
+  "lsst/daf/butler/script/certifyCalibrations.py": {
+    "arcs": 23,
+    "lines": 14
+  },
+  "lsst/daf/butler/script/collectionChain.py": {
+    "arcs": 74,
+    "lines": 51
+  },
+  "lsst/daf/butler/script/configDump.py": {
+    "arcs": 18,
+    "lines": 13
+  },
+  "lsst/daf/butler/script/configValidate.py": {
+    "arcs": 16,
+    "lines": 12
+  },
+  "lsst/daf/butler/script/createRepo.py": {
+    "arcs": 33,
+    "lines": 19
+  },
+  "lsst/daf/butler/script/exportCalibs.py": {
+    "arcs": 23,
+    "lines": 18
+  },
+  "lsst/daf/butler/script/ingest_files.py": {
+    "arcs": 116,
+    "lines": 77
+  },
+  "lsst/daf/butler/script/ingest_zip.py": {
+    "arcs": 19,
+    "lines": 10
+  },
+  "lsst/daf/butler/script/queryCollections.py": {
+    "arcs": 245,
+    "lines": 156
+  },
+  "lsst/daf/butler/script/queryDataIds.py": {
+    "arcs": 129,
+    "lines": 89
+  },
+  "lsst/daf/butler/script/queryDatasetTypes.py": {
+    "arcs": 34,
+    "lines": 23
+  },
+  "lsst/daf/butler/script/queryDatasets.py": {
+    "arcs": 241,
+    "lines": 172
+  },
+  "lsst/daf/butler/script/queryDimensionRecords.py": {
+    "arcs": 85,
+    "lines": 60
+  },
+  "lsst/daf/butler/script/register_dataset_type.py": {
+    "arcs": 36,
+    "lines": 24
+  },
+  "lsst/daf/butler/script/removeCollections.py": {
+    "arcs": 90,
+    "lines": 66
+  },
+  "lsst/daf/butler/script/removeDatasetType.py": {
+    "arcs": 9,
+    "lines": 6
+  },
+  "lsst/daf/butler/script/removeRuns.py": {
+    "arcs": 88,
+    "lines": 61
+  },
+  "lsst/daf/butler/script/retrieveArtifacts.py": {
+    "arcs": 69,
+    "lines": 49
+  },
+  "lsst/daf/butler/script/transferDatasets.py": {
+    "arcs": 36,
+    "lines": 21
+  },
+  "lsst/daf/butler/time_utils.py": {
+    "arcs": 127,
+    "lines": 101
+  },
+  "lsst/daf/butler/timespan_database_representation.py": {
+    "arcs": 289,
+    "lines": 186
+  },
+  "lsst/daf/butler/transfers/__init__.py": {
+    "arcs": 4,
+    "lines": 3
+  },
+  "lsst/daf/butler/transfers/_context.py": {
+    "arcs": 199,
+    "lines": 132
+  },
+  "lsst/daf/butler/transfers/_interfaces.py": {
+    "arcs": 70,
+    "lines": 44
+  },
+  "lsst/daf/butler/transfers/_yaml.py": {
+    "arcs": 523,
+    "lines": 377
+  },
+  "lsst/daf/butler/utils.py": {
+    "arcs": 60,
+    "lines": 45
+  },
+  "lsst/daf/butler/version.py": {
+    "arcs": 7,
+    "lines": 6
+  }
+}
