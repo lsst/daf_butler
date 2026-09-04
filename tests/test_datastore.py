@@ -1634,12 +1634,22 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
     even if child datastore would accept.
     """
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePb.yaml")
+    configFile = "chainedDatastorePb.yaml"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Built straight from the configuration, as the other constraint tests
+        # are, so DatastoreTestsBase.setUpClass has nothing left to do here.
+        cls.storageClassFactory = _make_constraint_storage_class_factory()
+        cls.universe = DimensionUniverse()
 
     def setUp(self) -> None:
-        # Override the working directory before calling the base class
         self.root = tempfile.mkdtemp()
-        super().setUp()
+
+    def makeDatastore(self, sub: str | None = None) -> Datastore:
+        # Docstring inherited.
+        assert sub is None, "the constraint tests do not use datastore subdirectories"
+        return _make_datastore(self.configFile, self.root)
 
     def testConstraints(self) -> None:
         """Test chained datastore constraints model."""
