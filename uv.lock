@@ -1955,6 +1955,7 @@ test = [
 dev = [
     { name = "cryptography" },
     { name = "fsspec" },
+    { name = "lsst-daf-butler", extra = ["https", "postgres", "remote", "s3", "server"] },
     { name = "matplotlib" },
     { name = "moto" },
     { name = "mypy" },
@@ -2013,6 +2014,7 @@ provides-extras = ["postgres", "remote", "server", "test", "s3", "https", "gs"]
 dev = [
     { name = "cryptography", specifier = ">=49" },
     { name = "fsspec", specifier = ">=2026.7.0" },
+    { name = "lsst-daf-butler", extras = ["postgres", "remote", "server", "s3", "https"] },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "moto", specifier = ">=5.2.2" },
     { name = "mypy", specifier = ">=2.3.1" },

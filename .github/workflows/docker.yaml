@@ -100,7 +100,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked --all-extras --group dockertest
+        run: uv sync --locked --group dockertest
 
       - name: Run smoke test
         run: |

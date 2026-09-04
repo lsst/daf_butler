@@ -23,4 +23,4 @@ jobs:
           enable-cache: true
 
       - name: Run mypy
-        run: uv run --locked --all-extras mypy
+        run: uv run --locked mypy

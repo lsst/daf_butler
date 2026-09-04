@@ -54,7 +54,7 @@ jobs:
         if: matrix.variant.pinned == false
 
       - name: Build and install
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked
 
       - name: List installed packages
         run: uv tree
