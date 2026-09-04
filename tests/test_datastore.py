@@ -113,42 +113,253 @@ class TransactionTestError(Exception):
     pass
 
 
+POSIX_MODES = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
+CHAINED_MODES = (None, "copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
+
+
+@dataclasses.dataclass(frozen=True)
+class DatastoreTestProfile:
+    """Everything that varied between the concrete datastore test classes."""
+
+    config_file: str
+    """Path, relative to the test directory, of the datastore config."""
+
+    uri_scheme: str
+    """Scheme the datastore's URIs are expected to use."""
+
+    ingest_transfer_modes: tuple[str | None, ...]
+    """Transfer modes this datastore supports for ingest."""
+
+    is_ephemeral: bool
+    """Whether the datastore loses its contents when it goes away."""
+
+    root_keys: tuple[str, ...] | None
+    """Config keys holding a filesystem root, or `None` if there are none."""
+
+    validation_can_fail: bool
+    """Whether configuration validation can fail for this datastore."""
+
+    has_unsupported_put: bool
+    """Whether some storage class is rejected on put."""
+
+    needs_root: bool = True
+    """Whether the datastore has to be pointed at a temporary directory."""
+
+    can_ingest_no_transfer_auto: bool = True
+    """Whether "auto" ingest can leave the file where it is.
+
+    Only consulted when ``"auto"`` is in `ingest_transfer_modes`, which is why
+    the ephemeral profiles can leave it at the default.
+    """
+
+
+PROFILES = {
+    "posix": DatastoreTestProfile(
+        config_file="butler.yaml",
+        uri_scheme="file",
+        ingest_transfer_modes=POSIX_MODES,
+        is_ephemeral=False,
+        root_keys=("root",),
+        validation_can_fail=True,
+        has_unsupported_put=True,
+    ),
+    "posix-no-checksums": DatastoreTestProfile(
+        config_file="posixDatastoreNoChecksums.yaml",
+        uri_scheme="file",
+        ingest_transfer_modes=POSIX_MODES,
+        is_ephemeral=False,
+        root_keys=("root",),
+        validation_can_fail=True,
+        has_unsupported_put=True,
+    ),
+    "trash": DatastoreTestProfile(
+        config_file="butler.yaml",
+        uri_scheme="file",
+        ingest_transfer_modes=POSIX_MODES,
+        is_ephemeral=False,
+        root_keys=("root",),
+        validation_can_fail=True,
+        has_unsupported_put=True,
+    ),
+    "in-memory": DatastoreTestProfile(
+        config_file="inMemoryDatastore.yaml",
+        uri_scheme="mem",
+        ingest_transfer_modes=(),
+        is_ephemeral=True,
+        root_keys=None,
+        validation_can_fail=False,
+        has_unsupported_put=False,
+        needs_root=False,
+    ),
+    "chained": DatastoreTestProfile(
+        config_file="chainedDatastore.yaml",
+        uri_scheme="file",
+        ingest_transfer_modes=CHAINED_MODES,
+        is_ephemeral=False,
+        root_keys=(".datastores.1.root", ".datastores.2.root"),
+        validation_can_fail=True,
+        has_unsupported_put=False,
+        can_ingest_no_transfer_auto=False,
+    ),
+    "chained-memory": DatastoreTestProfile(
+        config_file="chainedDatastore2.yaml",
+        uri_scheme="mem",
+        ingest_transfer_modes=(),
+        is_ephemeral=True,
+        root_keys=None,
+        validation_can_fail=False,
+        has_unsupported_put=False,
+        needs_root=False,
+    ),
+}
+"""One entry per concrete datastore test class."""
+
+
+def _make_datastore_storage_class_factory() -> StorageClassFactory:
+    """Load the storage classes the datastore tests refer to.
+
+    `StorageClassFactory` is a singleton, so this accumulates with whatever
+    else the session has already loaded rather than replacing it.
+
+    Returns
+    -------
+    factory : `StorageClassFactory`
+        The populated factory.
+    """
+    factory = StorageClassFactory()
+    factory.addFromConfig(os.path.join(TESTDIR, "config/basic/storageClasses.yaml"))
+    return factory
+
+
+class DatastoreHarness:
+    """A datastore configuration under test, and the pieces built from it.
+
+    This replaces ``DatastoreTestsBase``: the same registry, config and
+    datastore-class lookup, without the inheritance.
+
+    Parameters
+    ----------
+    profile : `DatastoreTestProfile`
+        The configuration under test.
+    root : `str` or `None`
+        Temporary directory the datastore should use, if it needs one.
+    storage_class_factory : `~lsst.daf.butler.StorageClassFactory`
+        Factory holding the datastore test storage classes.
+    """
+
+    def __init__(
+        self,
+        profile: DatastoreTestProfile,
+        root: str | None,
+        storage_class_factory: StorageClassFactory,
+    ) -> None:
+        self.profile = profile
+        self.root = root
+        self.storage_class_factory = storage_class_factory
+        self.universe = DimensionUniverse()
+        self.config_file = os.path.join(TESTDIR, "config/basic", profile.config_file)
+        self.config = DatastoreConfig(self.config_file)
+        # Do not assume the constructor name; rely on the configuration file.
+        self.datastore_type = cast(type[Datastore], doImport(self.config["cls"]))
+        if root is not None:
+            self.datastore_type.setConfigRoot(root, self.config, self.config.copy())
+        self.registry = DummyRegistry()
+        self._helper = DatasetTestHelper()
+
+    def make_datastore(self, sub: str | None = None) -> Datastore:
+        """Make a new datastore of the configured type.
+
+        Parameters
+        ----------
+        sub : `str`, optional
+            If given, the datastore is distinct from any built with a
+            different value, and gets its own registry.
+
+        Returns
+        -------
+        datastore : `~lsst.daf.butler.Datastore`
+            The new datastore.
+        """
+        config = self.config.copy()
+        if sub is not None and self.root is not None:
+            self.datastore_type.setConfigRoot(os.path.join(self.root, sub), config, self.config)
+        registry = DummyRegistry() if sub is not None else self.registry
+        return Datastore.fromConfig(config=config, bridgeManager=registry.getDatastoreBridgeManager())
+
+    def make_dataset_ref(self, *args: Any, **kwargs: Any) -> DatasetRef:
+        """Build a `DatasetRef` for a test.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Forwarded to
+            `~lsst.daf.butler.tests.DatasetTestHelper.makeDatasetRef`.
+
+        Returns
+        -------
+        ref : `~lsst.daf.butler.DatasetRef`
+            The new reference.
+        """
+        return self._helper.makeDatasetRef(*args, **kwargs)
+
+
 class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper, TestCaseMixin):
     """Support routines for datastore testing"""
 
-    root: str | None = None
+    profileName: str
+    """Key in `PROFILES` naming the configuration under test."""
+
+    harness: DatastoreHarness
+    """Configuration under test and the pieces built from it."""
+
     universe: DimensionUniverse
     storageClassFactory: StorageClassFactory
 
     @classmethod
     def setUpClass(cls) -> None:
-        # Storage Classes are fixed for all datastores in these tests
-        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
-        cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(scConfigFile)
-
-        # Read the Datastore config so we can get the class
-        # information (since we should not assume the constructor
-        # name here, but rely on the configuration file itself)
-        datastoreConfig = DatastoreConfig(cls.configFile)
-        cls.datastoreType = cast(type[Datastore], doImport(datastoreConfig["cls"]))
-        cls.universe = DimensionUniverse()
+        cls.storageClassFactory = _make_datastore_storage_class_factory()
 
     def setUp(self) -> None:
-        self.setUpDatastoreTests(DummyRegistry, DatastoreConfig)
+        profile = PROFILES[self.profileName]
+        root = None
+        if profile.needs_root:
+            # os.path.realpath matters for "relsymlink": on macOS a temporary
+            # file can be under either /var/folders or /private/var/folders,
+            # which name the same place, and a relative symlink between the two
+            # forms cannot be traversed.
+            root = os.path.realpath(tempfile.mkdtemp())
+        self.harness = DatastoreHarness(profile, root, self.storageClassFactory)
+        # The names the test bodies still read. Phase 2 replaces each of these
+        # reads with the harness or the profile directly.
+        self.root = self.harness.root
+        self.config = self.harness.config
+        self.configFile = self.harness.config_file
+        self.datastoreType = self.harness.datastore_type
+        self.registry = self.harness.registry
+        self.universe = self.harness.universe
 
     def tearDown(self) -> None:
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
+    def makeDatastore(self, sub: str | None = None) -> Datastore:
+        # Docstring inherited.
+        return self.harness.make_datastore(sub)
+
 
 class DatastoreTests(DatastoreTestsBase):
     """Some basic tests of a simple datastore."""
 
-    hasUnsupportedPut = True
-    rootKeys: tuple[str, ...] | None = None
-    isEphemeral: bool = False
-    validationCanFail: bool = False
+    def setUp(self) -> None:
+        super().setUp()
+        profile = self.harness.profile
+        self.hasUnsupportedPut = profile.has_unsupported_put
+        self.rootKeys = profile.root_keys
+        self.isEphemeral = profile.is_ephemeral
+        self.validationCanFail = profile.validation_can_fail
+        self.uriScheme = profile.uri_scheme
+        self.ingestTransferModes = profile.ingest_transfer_modes
+        self.canIngestNoTransferAuto = profile.can_ingest_no_transfer_auto
 
     def testConfigRoot(self) -> None:
         full = DatastoreConfig(self.configFile)
@@ -1146,25 +1357,7 @@ class DatastoreTests(DatastoreTestsBase):
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    uriScheme = "file"
-    canIngestNoTransferAuto = True
-    ingestTransferModes = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
-    isEphemeral = False
-    rootKeys = ("root",)
-    validationCanFail = True
-
-    def setUp(self) -> None:
-        # The call to os.path.realpath is necessary because Mac temporary files
-        # can end up in either /private/var/folders or /var/folders, which
-        # refer to the same location but don't appear to.
-        # This matters for "relsymlink" transfer mode, because it needs to be
-        # able to read the file through a relative symlink, but some of the
-        # intermediate directories are not traversable if you try to get from a
-        # tempfile in /var/folders to one in /private/var/folders via a
-        # relative path.
-        self.root = os.path.realpath(self.enterContext(tempfile.TemporaryDirectory()))
-        super().setUp()
+    profileName = "posix"
 
     def testAtomicWrite(self) -> None:
         """Test that we write to a temporary and then rename"""
@@ -1249,7 +1442,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
 class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
     """Posix datastore tests but with checksums disabled."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreNoChecksums.yaml")
+    profileName = "posix-no-checksums"
 
     def testChecksum(self) -> None:
         """Ensure that checksums have not been calculated."""
@@ -1305,7 +1498,7 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
 class TrashDatastoreTestCase(PosixDatastoreTestCase):
     """Restrict trash test to FileDatastore."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    profileName = "trash"
 
     def testTrash(self) -> None:
         datastore, *refs = self.prepDeleteTest(n_refs=10)
@@ -1387,12 +1580,7 @@ class TrashDatastoreTestCase(PosixDatastoreTestCase):
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
     """Test datastore cleans up on failure."""
 
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self) -> None:
-        # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp()
-        super().setUp()
+    profileName = "posix"
 
     def testCleanup(self) -> None:
         """Test that a failed formatter write does cleanup a partial file."""
@@ -1448,33 +1636,19 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
 class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
-    uriScheme = "mem"
-    hasUnsupportedPut = False
-    ingestTransferModes = ()
-    isEphemeral = True
-    rootKeys = None
-    validationCanFail = False
+    profileName = "in-memory"
 
 
 class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
-    hasUnsupportedPut = False
-    canIngestNoTransferAuto = False
-    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
-    isEphemeral = False
-    rootKeys = (".datastores.1.root", ".datastores.2.root")
-    validationCanFail = True
+    profileName = "chained"
 
 
 class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
 
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
-    validationCanFail = False
-    isEphemeral = True
+    profileName = "chained-memory"
 
 
 def _make_constraint_storage_class_factory() -> StorageClassFactory:
