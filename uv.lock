@@ -1101,8 +1101,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
     { name = "pydantic" },
-    { name = "starlette", version = "0.52.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "starlette", version = "1.6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "starlette" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
@@ -2037,7 +2036,7 @@ dockertest = [{ name = "testcontainers" }]
 
 [[package]]
 name = "lsst-resources"
-version = "30.2026.3304"
+version = "0+unknown"
 source = { git = "https://github.com/lsst/resources?rev=main#71aa5f6e251f155ad615abedad1f08e944ebdc97" }
 dependencies = [
     { name = "lsst-utils" },
@@ -2087,7 +2086,7 @@ wheels = [
 
 [[package]]
 name = "lsst-sphinxutils"
-version = "30.2026.3300"
+version = "0+unknown"
 source = { git = "https://github.com/lsst/sphinxutils?rev=main#f19a2bea7c531165255f81dd52122788e48a30c7" }
 dependencies = [
     { name = "documenteer", extra = ["guide"] },
@@ -2096,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "lsst-utils"
-version = "30.0.11rc1"
+version = "0+unknown"
 source = { git = "https://github.com/lsst/utils?rev=main#36f3e0efcb38c1da6b56e14e9f24f5ba3b471e70" }
 dependencies = [
     { name = "astropy" },
@@ -3816,7 +3815,7 @@ dependencies = [
     { name = "gidgethub" },
     { name = "httpx" },
     { name = "pydantic" },
-    { name = "starlette", version = "0.52.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "starlette" },
     { name = "structlog" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a7/95/b61927ff01924de96f59898a898fbd82e2decb99f8b205146bfdf82dcc1b/safir-4.3.0.tar.gz", hash = "sha256:7a5df1d6a2dd22aa8ba8d19e3390721152fe43540e7dbb754dac321affe8dc43", size = 148443, upload-time = "2023-05-23T23:05:16.137Z" }
@@ -3844,7 +3843,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "safir-logging" },
     { name = "sentry-sdk" },
-    { name = "starlette", version = "1.6.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "starlette" },
     { name = "structlog" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1b/37/819bb51a9c5a3bf8734d8121f03e42187ba5209768d6c023a6600f8e2585/safir-15.2.1.tar.gz", hash = "sha256:5e9f70fcb091b91f63f5b48d3cd71efa57b5307b690287327a8cda16961b474e", size = 571259, upload-time = "2026-08-04T21:12:59.651Z" }
@@ -4298,36 +4297,15 @@ wheels = [
 
 [[package]]
 name = "starlette"
-version = "0.52.1"
+version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version < '3.12'",
-]
-dependencies = [
-    { name = "anyio" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/68/79977123bb7be889ad680d79a40f339082c1978b5cfcf62c2d8d196873ac/starlette-0.52.1.tar.gz", hash = "sha256:834edd1b0a23167694292e94f597773bc3f89f362be6effee198165a35d62933", size = 2653702, upload-time = "2026-01-18T13:34:11.062Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/0d/13d1d239a25cbfb19e740db83143e95c772a1fe10202dda4b76792b114dd/starlette-0.52.1-py3-none-any.whl", hash = "sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74", size = 74272, upload-time = "2026-01-18T13:34:09.188Z" },
-]
-
-[[package]]
-name = "starlette"
-version = "1.6.0"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.15'",
-    "python_full_version == '3.14.*'",
-    "python_full_version >= '3.12' and python_full_version < '3.14'",
-]
 dependencies = [
     { name = "anyio" },
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/bb/2799cc2ede3ed41131f8975621e7213dfc7ef4acbbaadfa440f32500c370/starlette-1.3.1-py3-none-any.whl", hash = "sha256:c7372aae11c3c3f26a42df7bd626cec2f47d03483d261d369516a615a53714c6", size = 73632, upload-time = "2026-06-12T09:23:10.017Z" },
 ]
 
 [[package]]
