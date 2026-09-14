@@ -435,6 +435,12 @@ storageClasses:
     parameters:
       - blend_id
     delegate: lsst.meas.extensions.scarlet.io.ScarletModelDelegate
+    converters:
+      # This converter always raises, but it needs to exist in order for the
+      # formatter's can_accept to be reached when saving an
+      # LsstScarletModelData to an old dataset type with the ScarletModelData
+      # storage class.
+      lsst.meas.extensions.scarlet.io.LsstScarletModelData: lsst.meas.extensions.scarlet.io.utils.no_conversion_from_lsst_scarlet_model_data
   LsstScarletModelData:
     pytype: lsst.meas.extensions.scarlet.io.LsstScarletModelData
     converters:
