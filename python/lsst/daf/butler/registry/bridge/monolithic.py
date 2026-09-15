@@ -294,11 +294,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # refs.
         preserved: set[str] | None = None
         if record_column is not None:
-            # Some helper subqueries
-            items_not_in_trash = join_records(
-                sqlalchemy.sql.select(records_table._table.columns[record_column]),
-                self._tables.dataset_location,
-            ).alias("items_not_in_trash")
+            # The artifacts belonging to the trashed refs under consideration.
             items_in_trash = join_records(
                 sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location_trash,
@@ -309,16 +305,23 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 )
             items_in_trash_alias = items_in_trash.alias("items_in_trash")
 
+            # Whether one of those artifacts is also referenced by a ref that
+            # is not in the trash. Written as a correlated EXISTS so that the
+            # query is driven by the trashed artifacts and probes the records
+            # table by artifact, rather than materializing every artifact the
+            # datastore holds in order to join the two sets.
+            referenced_by_live_ref = join_records(
+                sqlalchemy.sql.select(sqlalchemy.sql.literal(1)), self._tables.dataset_location
+            ).where(
+                records_table._table.columns[record_column] == items_in_trash_alias.columns[record_column]
+            )
+
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
-            items_to_preserve = sqlalchemy.sql.select(
-                items_in_trash_alias.columns[record_column]
-            ).select_from(
-                items_not_in_trash.join(
-                    items_in_trash_alias,
-                    onclause=items_in_trash_alias.columns[record_column]
-                    == items_not_in_trash.columns[record_column],
-                )
+            items_to_preserve = (
+                sqlalchemy.sql.select(items_in_trash_alias.columns[record_column])
+                .distinct()
+                .where(sqlalchemy.exists(referenced_by_live_ref))
             )
             with self._db.query(items_to_preserve) as sql_result:
                 preserved = {row[record_column] for row in sql_result.mappings()}
