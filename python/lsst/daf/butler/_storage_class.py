@@ -700,25 +700,16 @@ class StorageClassFactory(metaclass=Singleton):
     This class is a singleton, with each instance sharing the pool of
     StorageClasses. Since code can not know whether it is the first
     time the instance has been created, the constructor takes no arguments.
-    To populate the factory with storage classes, a call to
-    `~StorageClassFactory.addFromConfig()` should be made.
-
-    Parameters
-    ----------
-    config : `StorageClassConfig` or `str`, optional
-        Load configuration. In a ButlerConfig` the relevant configuration
-        is located in the ``storageClasses`` section.
+    To populate the factory with storage classes beyond the defaults, a call
+    to `~StorageClassFactory.addFromConfig()` should be made.
     """
 
-    def __init__(self, config: StorageClassConfig | str | None = None):
+    def __init__(self) -> None:
         self._storageClasses: dict[str, StorageClass] = {}
         self._lock = RLock()
 
         # Always seed with the default config
         self.addFromConfig(StorageClassConfig())
-
-        if config is not None:
-            self.addFromConfig(config)
 
     def __str__(self) -> str:
         """Return summary of factory.
