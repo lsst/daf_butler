@@ -369,6 +369,27 @@ class StorageClass:
             return True
         return False
 
+    @staticmethod
+    def _lookup_names_for(name: str) -> tuple[LookupKey, ...]:
+        """Return the lookup keys for a storage class of the given name.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the storage class.
+
+        Returns
+        -------
+        names : `tuple` of `LookupKey`
+            Tuple of a `LookupKey` using the storage class name.
+
+        Notes
+        -----
+        Takes a name rather than a `StorageClass` so that callers holding only
+        the name do not have to load the definition to derive lookup keys.
+        """
+        return (LookupKey(name=name),)
+
     def _lookupNames(self) -> tuple[LookupKey, ...]:
         """Keys to use when looking up this DatasetRef in a configuration.
 
@@ -379,7 +400,7 @@ class StorageClass:
         names : `tuple` of `LookupKey`
             Tuple of a `LookupKey` using the `StorageClass` name.
         """
-        return (LookupKey(name=self.name),)
+        return self._lookup_names_for(self.name)
 
     def knownParameters(self) -> set[str]:
         """Return set of all parameters known to this `StorageClass`.
