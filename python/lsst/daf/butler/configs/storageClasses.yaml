@@ -45,7 +45,7 @@ storageClasses:
     pytype: lsst.afw.cameraGeom.Camera
   Detector:
     pytype: lsst.afw.cameraGeom.Detector
-    converter:
+    converters:
       lsst.images.cameras.Detector: lsst.images.cameras.Detector.to_legacy
   Box2I:
     pytype: lsst.geom.Box2I
