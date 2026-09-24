@@ -328,6 +328,10 @@ storageClasses:
       # available when doing a storage class conversion to VisitImage on read.
       - preserve_quantization
 
+      # The `exposure` dimension record.  Required when doing a storage class
+      # conversion to VisitImage on read, and not accepted otherwise.
+      - exposure_record
+
     components:
       image: Image
       mask: Mask
