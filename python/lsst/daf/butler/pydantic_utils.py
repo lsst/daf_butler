@@ -293,7 +293,7 @@ a hex encoding of the sphgeom-encoded bytes.
 """
 
 
-def _deserialize_bytes_hex(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> Region:
+def _deserialize_bytes_hex(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> bytes:
     if isinstance(value, bytes):
         return value
 

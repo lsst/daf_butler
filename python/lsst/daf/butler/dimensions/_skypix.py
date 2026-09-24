@@ -36,7 +36,7 @@ from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
-from lsst.sphgeom import PixelizationABC
+from lsst.sphgeom.pixelization_abc import PixelizationABC
 
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
@@ -130,7 +130,7 @@ class SkyPixDimension(Dimension):
     def __init__(self, system: SkyPixSystem, level: int):
         self.system = system
         self.level = level
-        self.pixelization = system.PixelizationClass(level)
+        self.pixelization = system.PixelizationClass(level)  # type: ignore
 
     @property
     def name(self) -> str:

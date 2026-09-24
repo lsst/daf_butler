@@ -167,18 +167,20 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 LocalBase64Bytes = Base64Bytes
 
 
-class Base64Region(Base64Bytes):
+class Base64Region(sqlalchemy.TypeDecorator):
     """A SQLAlchemy custom type for Python `lsst.sphgeom.Region`.
 
     Maps Python `lsst.sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
+
+    impl = sqlalchemy.Text
 
     cache_ok = True  # have to be set explicitly in each class
 
     def process_bind_param(self, value: Region | None, dialect: sqlalchemy.engine.Dialect) -> str | None:
         if value is None:
             return None
-        return super().process_bind_param(value.encode(), dialect)
+        return b64encode(value.encode()).decode("ascii")
 
     def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> Region | None:
         if value is None:

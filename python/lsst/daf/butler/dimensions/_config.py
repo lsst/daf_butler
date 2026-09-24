@@ -36,7 +36,7 @@ from typing import Any, ClassVar, Literal, Union, final
 import pydantic
 
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.sphgeom import PixelizationABC
+from lsst.sphgeom.pixelization_abc import PixelizationABC
 from lsst.utils.doImport import doImportType
 
 from .._config import Config, ConfigSubset
