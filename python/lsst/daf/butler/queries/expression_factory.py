@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 
 import astropy.time
 
-from lsst.sphgeom import Region
+from lsst.sphgeom import LonLat, Region
 
 from .._exceptions import InvalidQueryError
 from ..dimensions import Dimension, DimensionElement, DimensionUniverse
@@ -366,13 +366,13 @@ class RegionProxy(ExpressionProxy):
     def __init__(self, expression: tree.ColumnExpression):
         self._expr = expression
 
-    def overlaps(self, other: RegionProxy | Region) -> tree.Predicate:
+    def overlaps(self, other: RegionProxy | Region | LonLat) -> tree.Predicate:
         """Return a boolean expression representing an overlap test between
         this region and another.
 
         Parameters
         ----------
-        other : `RegionProxy` or `lsst.sphgeom.Region`
+        other : `RegionProxy` or `lsst.sphgeom.Region` or `lsst.sphgeom.LonLat`
             Expression or literal to compare to.
 
         Returns

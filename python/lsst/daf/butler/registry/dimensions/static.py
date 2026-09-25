@@ -296,6 +296,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             )
         elif isinstance(element, SkyPixDimension):
             id = data_id[element_name]
+            assert isinstance(id, int), "Pixel IDs expected to be integers"
             return element.RecordClass(id=id, region=element.pixelization.pixel(id))
         else:
             table = self._tables[element.name]

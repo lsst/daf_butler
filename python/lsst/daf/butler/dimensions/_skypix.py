@@ -130,7 +130,7 @@ class SkyPixDimension(Dimension):
     def __init__(self, system: SkyPixSystem, level: int):
         self.system = system
         self.level = level
-        self.pixelization = system.PixelizationClass(level)
+        self.pixelization = system.PixelizationClass(level)  # type: ignore
 
     @property
     def name(self) -> str:

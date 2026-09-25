@@ -1014,4 +1014,5 @@ class _SkyPixDimensionRecordLookupHelper(_DimensionRecordLookupHelper):
 
     def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord:
         id = required_values[0]
+        assert isinstance(id, int), "Pixel IDs are integers"
         return self.dimension.RecordClass(id=id, region=self.dimension.pixelization.pixel(id))
