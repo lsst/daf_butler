@@ -112,10 +112,9 @@ class SchemaValidationError(ValidationError):
         return decorate
 
 
-class Base64Bytes(sqlalchemy.TypeDecorator):
-    """A SQLAlchemy custom type for Python `bytes`.
-
-    Maps Python `bytes` to a base64-encoded `sqlalchemy.Text` field.
+class _Base64Text(sqlalchemy.TypeDecorator):
+    """Base class for SQLAlchemy types that encode Python `bytes` values to
+    base64 text columns.
 
     Parameters
     ----------
@@ -129,8 +128,6 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.Text
 
-    cache_ok = True
-
     def __init__(self, nbytes: int | None = None, *args: Any, **kwargs: Any):
         if nbytes is not None:
             length = 4 * ceil(nbytes / 3) if self.impl is sqlalchemy.String else None
@@ -138,6 +135,15 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
             length = None
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
+
+
+class Base64Bytes(_Base64Text):
+    """A SQLAlchemy custom type for Python `bytes`.
+
+    Maps Python `bytes` to a base64-encoded `sqlalchemy.Text` field.
+    """
+
+    cache_ok = True
 
     def process_bind_param(self, value: bytes | None, dialect: sqlalchemy.engine.Dialect) -> str | None:
         # 'value' is native `bytes`.  We want to encode that to base64 `bytes`
@@ -167,7 +173,7 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 LocalBase64Bytes = Base64Bytes
 
 
-class Base64Region(Base64Bytes):
+class Base64Region(_Base64Text):
     """A SQLAlchemy custom type for Python `lsst.sphgeom.Region`.
 
     Maps Python `lsst.sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
@@ -178,7 +184,7 @@ class Base64Region(Base64Bytes):
     def process_bind_param(self, value: Region | None, dialect: sqlalchemy.engine.Dialect) -> str | None:
         if value is None:
             return None
-        return super().process_bind_param(value.encode(), dialect)
+        return b64encode(value.encode()).decode("ascii")
 
     def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> Region | None:
         if value is None:
