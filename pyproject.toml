@@ -25,7 +25,9 @@ keywords = ["lsst"]
 dependencies = [
     "astropy >=7.0",
     "pyyaml >=5.1",
-    "sqlalchemy >=1.4",
+    # TODO DM-56282: SQLAlchemy 2.1 switches to psycopg 3 by default, and some
+    # code changes are required to maintain compatibility.
+    "sqlalchemy >=1.4,<2.1",
     "click >= 7.0",
     "lsst-sphgeom",
     "lsst-utils",

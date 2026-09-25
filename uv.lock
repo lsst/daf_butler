@@ -2046,7 +2046,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=5.1" },
     { name = "safir", marker = "extra == 'server'", specifier = ">=3.4.0" },
     { name = "sentry-sdk", extras = ["fastapi", "sqlalchemy"], marker = "extra == 'server'", specifier = ">=2.68.0" },
-    { name = "sqlalchemy", specifier = ">=1.4" },
+    { name = "sqlalchemy", specifier = ">=1.4,<2.1" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.52.4" },
 ]
 provides-extras = ["postgres", "remote", "server", "test", "s3", "https", "gs"]
