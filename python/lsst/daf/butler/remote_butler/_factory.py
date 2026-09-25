@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButlerFactory",)
 
-import httpx
+import httpx2
 
 from lsst.daf.butler.repo_relocation import replaceRoot
 
@@ -54,8 +54,8 @@ class RemoteButlerFactory:
     config : `RemoteButlerOptionsModel`
         `RemoteButler` configuration information (as read from `ButlerConfig`
         YAML file).
-    http_client : `httpx.Client`, optional
-        The httpx connection pool that RemoteButler instances created by this
+    http_client : `httpx2.Client`, optional
+        The httpx2 connection pool that RemoteButler instances created by this
         factory will use for making HTTP requests.  If omitted, creates a new
         connection pool.
 
@@ -65,13 +65,13 @@ class RemoteButlerFactory:
     ``create_factory_from_config``.
     """
 
-    def __init__(self, config: RemoteButlerOptionsModel, http_client: httpx.Client | None = None):
+    def __init__(self, config: RemoteButlerOptionsModel, http_client: httpx2.Client | None = None):
         self._config = config
         self.server_url = str(config.url)
         if http_client is not None:
             self.http_client = http_client
         else:
-            self.http_client = httpx.Client(
+            self.http_client = httpx2.Client(
                 # This timeout is fairly conservative.  This value isn't the
                 # maximum amount of time the request can take -- it's the
                 # maximum amount of time to wait after receiving the last chunk
@@ -87,7 +87,7 @@ class RemoteButlerFactory:
 
     @staticmethod
     def create_factory_from_config(
-        config: ButlerConfig, http_client: httpx.Client | None = None
+        config: ButlerConfig, http_client: httpx2.Client | None = None
     ) -> RemoteButlerFactory:
         # There is a convention in Butler config files where <butlerRoot> in a
         # configuration option refers to the directory containing the
@@ -102,7 +102,7 @@ class RemoteButlerFactory:
 
     @staticmethod
     def create_factory_for_url(
-        server_url: str, http_client: httpx.Client | None = None
+        server_url: str, http_client: httpx2.Client | None = None
     ) -> RemoteButlerFactory:
         config = ButlerConfig(server_url)
         return RemoteButlerFactory.create_factory_from_config(config, http_client=http_client)

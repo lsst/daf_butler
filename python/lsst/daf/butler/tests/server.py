@@ -50,7 +50,7 @@ class TestServerInstance:
     config_file_path: str
     """Path to the Butler config file used by the server."""
     client: TestClient
-    """HTTPX client connected to the temporary server."""
+    """httpx2 client connected to the temporary server."""
     remote_butler: RemoteButler
     """`RemoteButler` connected to the temporary server."""
     remote_butler_without_error_propagation: RemoteButler

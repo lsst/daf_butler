@@ -43,7 +43,7 @@ from lsst.daf.butler.tests.server_available import butler_server_import_error, b
 from lsst.resources import ResourcePath
 
 if butler_server_is_available:
-    import httpx
+    import httpx2
 
     from lsst.daf.butler.remote_butler import ButlerServerError
     from lsst.daf.butler.tests.server import create_test_server
@@ -70,17 +70,17 @@ class RemoteButlerErrorHandlingTests(unittest.TestCase):
         self.mock = self.enterContext(patch.object(self.butler._connection._client, "send"))
 
     def _mock_error_response(self, content: str) -> None:
-        self.mock.return_value = httpx.Response(
-            status_code=422, content=content, request=httpx.Request("GET", "/")
+        self.mock.return_value = httpx2.Response(
+            status_code=422, content=content, request=httpx2.Request("GET", "/")
         )
 
     def test_internal_server_error(self):
-        self.mock.side_effect = httpx.HTTPError("unhandled error")
+        self.mock.side_effect = httpx2.HTTPError("unhandled error")
         with self.assertRaises(ButlerServerError):
             self.butler.get_dataset_type("int")
 
     def test_unknown_error_type(self):
-        self.mock.return_value = httpx.Response(
+        self.mock.return_value = httpx2.Response(
             status_code=422, json={"error_type": "not a known error type", "detail": "an error happened"}
         )
         with self.assertRaises(UnknownButlerUserError):

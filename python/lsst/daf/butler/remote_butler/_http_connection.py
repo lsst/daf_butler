@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 from uuid import uuid4
 
-import httpx
+import httpx2
 from pydantic import BaseModel, ValidationError
 
 from lsst.daf.butler import __version__
@@ -57,7 +57,7 @@ class RemoteButlerHttpConnection:
 
     Parameters
     ----------
-    http_client : `httpx.Client`
+    http_client : `httpx2.Client`
         HTTP connection pool we will use to connect to the server.
     server_url : `str`
         URL of the Butler server we will connect to.
@@ -66,13 +66,13 @@ class RemoteButlerHttpConnection:
     """
 
     def __init__(
-        self, http_client: httpx.Client, server_url: str, auth: RemoteButlerAuthenticationProvider
+        self, http_client: httpx2.Client, server_url: str, auth: RemoteButlerAuthenticationProvider
     ) -> None:
         self._client = http_client
         self.server_url = server_url
         self.auth = auth
 
-    def post(self, path: str, model: BaseModel) -> httpx.Response:
+    def post(self, path: str, model: BaseModel) -> httpx2.Response:
         """Send a POST request to the Butler server.
 
         Parameters
@@ -85,7 +85,7 @@ class RemoteButlerHttpConnection:
 
         Returns
         -------
-        response: `~httpx.Response`
+        response: `~httpx2.Response`
             The response from the server.
 
         Raises
@@ -99,7 +99,7 @@ class RemoteButlerHttpConnection:
         return self._send_request(request)
 
     @contextmanager
-    def post_with_stream_response(self, path: str, model: BaseModel) -> Iterator[httpx.Response]:
+    def post_with_stream_response(self, path: str, model: BaseModel) -> Iterator[httpx2.Response]:
         """Send a POST request to the Butler server.
 
         Parameters
@@ -112,7 +112,7 @@ class RemoteButlerHttpConnection:
 
         Returns
         -------
-        response: `~httpx.Response`
+        response: `~httpx2.Response`
             The response from the server.
 
         Raises
@@ -135,7 +135,7 @@ class RemoteButlerHttpConnection:
             headers={"content-type": "application/json"},
         )
 
-    def get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx.Response:
+    def get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx2.Response:
         """Send a GET request to the Butler server.
 
         Parameters
@@ -147,7 +147,7 @@ class RemoteButlerHttpConnection:
 
         Returns
         -------
-        response: `~httpx.Response`
+        response: `~httpx2.Response`
             The response from the server.
 
         Raises
@@ -202,7 +202,7 @@ class RemoteButlerHttpConnection:
             request_id=request_id,
         )
 
-    def _send_request(self, request: _Request) -> httpx.Response:
+    def _send_request(self, request: _Request) -> httpx2.Response:
         """Send an HTTP request to the Butler server with authentication
         headers and a request ID.
 
@@ -213,15 +213,15 @@ class RemoteButlerHttpConnection:
             response = self._send_with_retries(request, stream=False)
             self._handle_http_status(response, request.request_id)
             return response
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ButlerServerError(
                 client_request_id=request.request_id, status_code=e.response.status_code
             ) from e
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ButlerServerError(client_request_id=request.request_id) from e
 
     @contextmanager
-    def _send_request_with_stream_response(self, request: _Request) -> Iterator[httpx.Response]:
+    def _send_request_with_stream_response(self, request: _Request) -> Iterator[httpx2.Response]:
         try:
             response = self._send_with_retries(request, stream=True)
             try:
@@ -229,14 +229,14 @@ class RemoteButlerHttpConnection:
                 yield response
             finally:
                 response.close()
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise ButlerServerError(
                 client_request_id=request.request_id, status_code=e.response.status_code
             ) from e
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ButlerServerError(client_request_id=request.request_id) from e
 
-    def _send_with_retries(self, request: _Request, stream: bool) -> httpx.Response:
+    def _send_with_retries(self, request: _Request, stream: bool) -> httpx2.Response:
         max_retry_time_seconds = 120
         start_time = time.time()
         while True:
@@ -251,7 +251,7 @@ class RemoteButlerHttpConnection:
             else:
                 return response
 
-    def _handle_http_status(self, response: httpx.Response, request_id: str) -> None:
+    def _handle_http_status(self, response: httpx2.Response, request_id: str) -> None:
         if response.status_code == ERROR_STATUS_CODE:
             # Raise an exception that the server has forwarded to the
             # client.
@@ -274,7 +274,7 @@ class _Retry:
     delay_seconds: int
 
 
-def _needs_retry(response: httpx.Response) -> _Retry:
+def _needs_retry(response: httpx2.Response) -> _Retry:
     # Handle a 503 Service Unavailable, sent by the server if it is
     # overloaded, or a 429, sent by the server if the client
     # triggers a rate limit.
@@ -294,12 +294,12 @@ def _needs_retry(response: httpx.Response) -> _Retry:
     return _Retry(False, 0)
 
 
-def parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
+def parse_model(response: httpx2.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
     """Deserialize a Pydantic model from the body of an HTTP response.
 
     Parameters
     ----------
-    response : `~httpx.Response`
+    response : `~httpx2.Response`
         An HTTP response object.
     model : `type` [ ``pydantic.BaseModel`` ]
         A Pydantic model class that will be used to parse the response body.
@@ -312,7 +312,9 @@ def parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _An
     return model.model_validate_json(response.read())
 
 
-def _try_to_parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel | None:
+def _try_to_parse_model(
+    response: httpx2.Response, model: type[_AnyPydanticModel]
+) -> _AnyPydanticModel | None:
     """Attempt to deserialize a Pydantic model from the body of an HTTP
     response.  Returns `None` if the content could not be parsed as JSON or
     failed validation against the model.
@@ -350,5 +352,5 @@ def quote_path_variable(path: str) -> str:  # numpydoc ignore=PR01
 
 @dataclass(frozen=True)
 class _Request:
-    request: httpx.Request
+    request: httpx2.Request
     request_id: str

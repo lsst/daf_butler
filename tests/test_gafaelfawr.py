@@ -33,7 +33,7 @@ from lsst.daf.butler.tests.server_available import butler_server_import_error, b
 
 if butler_server_is_available:
     import fastapi
-    import httpx
+    import httpx2
 
     from lsst.daf.butler.remote_butler.server._dependencies import repository_authorization_dependency
     from lsst.daf.butler.remote_butler.server._gafaelfawr import GafaelfawrClient, GafaelfawrGroupAuthorizer
@@ -48,17 +48,17 @@ class GafaelfawrAuthorizationTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_gafaelfawr_group_auth(self) -> None:
         response_code = 200
         response_data = {"username": "some-user", "groups": [{"name": "some-group"}, {"name": "b"}]}
-        request_headers: httpx.Headers = httpx.Headers(None)
+        request_headers: httpx2.Headers = httpx2.Headers(None)
         request_count = 0
 
-        def handler(request: httpx.Request):
+        def handler(request: httpx2.Request):
             nonlocal request_headers
             request_headers = request.headers
             nonlocal request_count
             request_count += 1
-            return httpx.Response(response_code, json=response_data)
+            return httpx2.Response(response_code, json=response_data)
 
-        transport = httpx.MockTransport(handler)
+        transport = httpx2.MockTransport(handler)
 
         client = GafaelfawrClient("http://gafaelfawr.example", transport=transport)
         authorizer = GafaelfawrGroupAuthorizer(

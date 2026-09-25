@@ -44,13 +44,14 @@ dynamic = ["version"]
 [project.optional-dependencies]
 postgres = ["psycopg2"]
 remote = [
-    "httpx",
+    "httpx2",
     # RemoteButler always uses HTTPS URLs for accessing files in the Datastore,
     # so we need resources to have HTTPS support.
     "lsst-resources[https]"
 ]
 server = [
     "fastapi",
+    "httpx2",
     "lsst-resources[https,s3]",
     "safir >= 3.4.0",
     "sentry-sdk[fastapi,sqlalchemy]>=2.68.0",

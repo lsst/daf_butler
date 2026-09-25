@@ -5,7 +5,7 @@ import tempfile
 import time
 import unittest
 
-import httpx
+import httpx2
 from testcontainers.core.container import DockerContainer
 
 from lsst.daf.butler.remote_butler._factory import RemoteButlerFactory
@@ -66,7 +66,7 @@ def _wait_for_startup(server_url):
     while attempt < max_retries:
         attempt += 1
         try:
-            httpx.get(server_url)
+            httpx2.get(server_url)
             return
         except Exception as e:
             exception = e
@@ -85,7 +85,7 @@ class ButlerDockerTestCase(unittest.TestCase):
         cls.server_uri = cls.enterClassContext(_run_server_docker())
 
     def test_get_dataset_type(self):
-        client = httpx.Client(
+        client = httpx2.Client(
             headers={
                 # Mock Gafaelfawr authentication headers
                 "X-Auth-Request-User": "fake-username",
