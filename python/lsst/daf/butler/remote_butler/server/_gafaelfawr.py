@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-import httpx
+import httpx2
 import pydantic
 
 from ..authentication.rubin import RubinAuthenticationProvider
@@ -44,14 +44,14 @@ class GafaelfawrClient:
     base_url : `str`
         The top-level HTTP path where Gafaelfawr can be found (e.g.
         ``"https://data-int.lsst.cloud/auth"``).
-    transport : ``httpx.AsyncBaseTransport``, optional
+    transport : ``httpx2.AsyncBaseTransport``, optional
         Override the HTTP client's transport.  (For unit tests).
     """
 
-    def __init__(self, base_url: str, *, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(self, base_url: str, *, transport: httpx2.AsyncBaseTransport | None = None) -> None:
         if transport is None:
-            transport = httpx.AsyncHTTPTransport(retries=3)
-        self._client = httpx.AsyncClient(base_url=base_url, transport=transport, timeout=20.0)
+            transport = httpx2.AsyncHTTPTransport(retries=3)
+        self._client = httpx2.AsyncClient(base_url=base_url, transport=transport, timeout=20.0)
 
     async def get_groups(self, user_token: str) -> list[str]:
         response = await self._client.get(

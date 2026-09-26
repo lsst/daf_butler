@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-import httpx
+import httpx2
 from pydantic import TypeAdapter
 
 from .._dataset_ref import DatasetRef
@@ -40,13 +40,13 @@ from .server_models import QueryExecuteResultData
 _QueryResultTypeAdapter = TypeAdapter[QueryExecuteResultData](QueryExecuteResultData)
 
 
-def read_query_results(response: httpx.Response) -> Iterator[QueryExecuteResultData]:
+def read_query_results(response: httpx2.Response) -> Iterator[QueryExecuteResultData]:
     """Read streaming query results from the server.
 
     Parameters
     ----------
-    response : `httpx.Response`
-        HTTPX response object from a request where ``stream=True`` was set.
+    response : `httpx2.Response`
+        Httpx2 response object from a request where ``stream=True`` was set.
 
     Yields
     ------

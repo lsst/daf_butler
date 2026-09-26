@@ -48,7 +48,7 @@ try:
     # Dependencies required by Butler server and RemoteButler, but not
     # available in LSST Pipelines Stack.
     import fastapi  # noqa: F401
-    import httpx  # noqa: F401
+    import httpx2  # noqa: F401
     import safir  # noqa: F401
 except ImportError as e:
     butler_server_is_available = False

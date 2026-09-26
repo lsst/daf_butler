@@ -36,7 +36,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import ExitStack
 from typing import Any, Literal, overload
 
-import httpx
+import httpx2
 
 from ...butler import Butler
 from .._dataset_type import DatasetType
@@ -101,7 +101,7 @@ class RemoteQueryDriver(QueryDriver):
         self._butler = butler
         self._connection = connection
         self._stored_query_inputs: list[AdditionalQueryInput] = []
-        self._pending_queries: set[httpx.Response] = set()
+        self._pending_queries: set[httpx2.Response] = set()
         self._closed = False
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> Literal[False]:

@@ -65,7 +65,7 @@ from lsst.resources.http import HttpResourcePath
 
 if butler_server_is_available:
     import fastapi
-    import httpx
+    import httpx2
     import safir.dependencies.logger
     from fastapi.testclient import TestClient
 
@@ -282,7 +282,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # This is kind of a fragile test.  Butler's search logic does a lot of
         # manipulations involving creating new ResourcePaths, and ResourcePath
-        # doesn't use httpx so we can't easily inject the TestClient in there.
+        # doesn't use httpx2 so we can't easily inject the TestClient in there.
         # We don't have an actual valid HTTP URL to give to the constructor
         # because the test instance of the server is accessed via ASGI.
         #
@@ -545,7 +545,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         check_uris(componentUris)
 
     def test_file_download_redirect(self):
-        def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx.Response:
+        def get_download_redirect(id: DatasetId, component: str | None = None) -> httpx2.Response:
             uri = generate_file_download_uri("http://unittest.test/", TEST_REPOSITORY_NAME, id, component)
             return self.client.get(
                 uri,
