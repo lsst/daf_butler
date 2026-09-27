@@ -1,0 +1,32 @@
+DM-55822 is complete. Tasks 1-23 of docs/superpowers/plans/2026-08-25-butler-test-pytest-migration.md are done.
+
+Result: tests/test_butler.py and tests/test_datastore.py are gone, replaced by eight tests/test_butler_*.py,
+five tests/test_datastore_*.py and tests/butler_test_support.py. 555 test executions became 433.
+Runtime for those files: 75s, or 32s under -n 3, against an 86s baseline. With -m "not postgres and not
+server", 356 tests in 41s. Whole suite: 1940 passed, 30 skipped, 6 xfailed.
+
+Final coverage gate against ~/dm55822/rebaseline.coverage: zero lost lines, zero lost arcs, skip count
+equal to the baseline. All 555 original test ids appear exactly once in the mapping table.
+
+Left for you:
+- The mapping table is copied at ~/dm55822/mapping.md; paste it into the ticket if you have not already.
+  It also holds the "Findings for separate tickets" list, which is the only place those are recorded now
+  that tests/_migration/ is deleted. Recoverable from git: git show 9961ff7b7:tests/_migration/mapping.md
+- Findings worth their own tickets:
+  * test_provenance's "force a bad input ID" case never reaches the input lookup; the key it injects
+    separates on spaces while the header separates on ".", so from_flat_dict rejects the separator first.
+  * CleanupPosixDatastoreTestCase's two formatter cases are order-dependent: the directory the second
+    asserts on is created by the first case's failed put.
+  * FileDatastore and RemoteButler reject transfer="move" with different messages.
+  * MetricTestRepo.addDataset is annotated dict[str, Any] but forwards to Butler.put, which takes any DataId.
+- ruff check . reports 2 pre-existing UP042 findings in registry/obscore/_config.py, untouched by this
+  branch. Probably a newer ruff than the last lint pass.
+- Coverage databases in ~/dm55822/ (baseline, rebaseline, postconvert, dedup18-22) can be deleted; they
+  total about 2 GB.
+
+Two things a future session should know:
+- Never run a bare `git stash` in this repo. The tree is usually clean, so the stash creates no entry and a
+  paired `git stash pop` pops an unrelated pre-existing stash from another ticket branch.
+- unittest builds an assertion message eagerly, a bare `assert x, f"..."` builds it only on failure. A
+  message that was the only caller of some __repr__ silently stops calling it. That is the one real defect
+  the coverage gate caught in this whole migration.
