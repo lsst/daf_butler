@@ -39,11 +39,13 @@ storageClasses:
       lsst.ip.isr.IntermediateSystemTransmissionCurve: lsst.ip.isr.IntermediateSystemTransmissionCurve.getTransmissionCurve
   ExposureSummaryStats:
     pytype: lsst.afw.image.ExposureSummaryStats
+    converters:
+      lsst.images.ObservationSummaryStats: lsst.images.ObservationSummaryStats.to_legacy
   Camera:
     pytype: lsst.afw.cameraGeom.Camera
   Detector:
     pytype: lsst.afw.cameraGeom.Detector
-    converter:
+    converters:
       lsst.images.cameras.Detector: lsst.images.cameras.Detector.to_legacy
   Box2I:
     pytype: lsst.geom.Box2I
@@ -589,6 +591,8 @@ storageClasses:
       sky_projection: SkyProjection
   ObservationSummaryStats:
     pytype: lsst.images.ObservationSummaryStats
+    converters:
+      lsst.afw.image.ExposureSummaryStats: lsst.images.ObservationSummaryStats.from_legacy
   ImageField:
     pytype: lsst.images.fields.BaseField
   BackgroundMap:
