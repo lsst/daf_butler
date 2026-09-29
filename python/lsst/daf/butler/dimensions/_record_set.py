@@ -38,7 +38,7 @@ __all__ = (
 
 import dataclasses
 from collections.abc import Collection, Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, Self, TypeAlias, final
+from typing import TYPE_CHECKING, Any, Protocol, Self, TypeAlias, cast, final
 
 import pydantic
 
@@ -1013,5 +1013,5 @@ class _SkyPixDimensionRecordLookupHelper(_DimensionRecordLookupHelper):
     dimension: SkyPixDimension = dataclasses.field(kw_only=True)
 
     def fallback(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord:
-        id = required_values[0]
+        id = cast(int, required_values[0])
         return self.dimension.RecordClass(id=id, region=self.dimension.pixelization.pixel(id))

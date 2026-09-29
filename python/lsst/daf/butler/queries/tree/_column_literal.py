@@ -320,7 +320,7 @@ class RegionColumnLiteral(ColumnLiteralBase):
     """The wrapped value after base64 encoding."""
 
     @cached_property
-    def value(self) -> bytes:
+    def value(self) -> lsst.sphgeom.Region:
         """The wrapped value."""
         return lsst.sphgeom.Region.decode(b64decode(self.encoded))
 

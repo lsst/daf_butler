@@ -64,11 +64,10 @@ from lsst.sphgeom import (
     HtmPixelization,
     LonLat,
     Mq3cPixelization,
-    Pixelization,
+    PixelizationABC,
     Q3cPixelization,
     RangeSet,
     UnitVector3d,
-    Vector3d,
 )
 
 # Pixelization for which one pixel defines the overall area of interest.
@@ -240,6 +239,7 @@ def make_plots(
     """
     parent_index = PARENT_PIX.index(UnitVector3d(1, 0, 0))
     parent_pixel = PARENT_PIX.pixel(parent_index)
+    assert isinstance(parent_pixel, ConvexPolygon)
     common_ranges = COMMON_PIX.envelope(parent_pixel)
     detector_grid_ranges = DETECTOR_GRID_PIX.interior(parent_pixel)
     patch_grid_ranges = PATCH_GRID_PIX.envelope(parent_pixel)
@@ -382,6 +382,7 @@ def write_yaml(filename: str) -> None:
             detector_vertices = []
             for index in pixel_indices:
                 polygon = DETECTOR_GRID_PIX.pixel(index)
+                assert isinstance(polygon, ConvexPolygon)
                 detector_vertices.extend(polygon.getVertices())
             visit_vertices.extend(detector_vertices)
             visit_detector_records.append(
@@ -414,6 +415,7 @@ def write_yaml(filename: str) -> None:
         tract_vertices = []
         for patch_id, patch_data in tract_data.items():
             patch_polygon = PATCH_GRID_PIX.pixel(patch_data["region"])
+            assert isinstance(patch_polygon, ConvexPolygon)
             tract_vertices.extend(patch_polygon.getVertices())
             patch_record = patch_data.copy()
             patch_record["region"] = patch_polygon
@@ -469,7 +471,7 @@ def write_yaml(filename: str) -> None:
         yaml.dump(document, file, sort_keys=False)
 
 
-def lonlat_tuple(position: LonLat | Vector3d) -> tuple[float, float]:
+def lonlat_tuple(position: LonLat | UnitVector3d) -> tuple[float, float]:
     """Transform a `lsst.sphgeom.LonLat` or `lsst.sphgeom.Vector3d` to a
     2-tuple of `float` degrees.
     """
@@ -477,7 +479,7 @@ def lonlat_tuple(position: LonLat | Vector3d) -> tuple[float, float]:
     return (lonlat.getLon().asDegrees(), lonlat.getLat().asDegrees())
 
 
-def make_tangent_wcs(position: LonLat | Vector3d) -> WCS:
+def make_tangent_wcs(position: LonLat | UnitVector3d) -> WCS:
     """Create an `astropy.WCS` that maps the sky to a tangent plane with
     degree-unit pixels at the given point.
 
@@ -514,7 +516,7 @@ def project_polygon_vertices(wcs: WCS, polygon: ConvexPolygon) -> np.ndarray:
 
 
 def plot_pixels(
-    pixelization: Pixelization,
+    pixelization: PixelizationABC,
     wcs: WCS,
     indices: Iterable[int],
     *callbacks: Callable[[int, np.ndarray, np.ndarray], None],
@@ -543,7 +545,7 @@ def plot_pixels(
 
 
 def plot_hull(
-    pixelization: Pixelization,
+    pixelization: PixelizationABC,
     wcs: WCS,
     indices: Iterable[int],
     *callbacks: Callable[[list[int], np.ndarray, np.ndarray], None],

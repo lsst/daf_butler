@@ -31,7 +31,7 @@ import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import Any
+from typing import Any, cast
 
 import sqlalchemy
 
@@ -295,7 +295,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 table.columns[element_name] == data_id[element_name]
             )
         elif isinstance(element, SkyPixDimension):
-            id = data_id[element_name]
+            id = cast(int, data_id[element_name])
             return element.RecordClass(id=id, region=element.pixelization.pixel(id))
         else:
             table = self._tables[element.name]
