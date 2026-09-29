@@ -15,10 +15,11 @@ updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     cooldown:
       default-days: 7
     groups:
-      weekly-batch:
+      monthly-batch:
         patterns:
           - "*"
+    versioning-strategy: "lockfile-only"
