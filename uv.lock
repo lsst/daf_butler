@@ -11,6 +11,7 @@ resolution-markers = [
 [manifest]
 overrides = [
     { name = "lsst-resources", extras = ["https", "s3"], git = "https://github.com/lsst/resources?rev=main" },
+    { name = "lsst-sphgeom", git = "https://github.com/lsst/sphgeom?rev=main" },
     { name = "lsst-utils", git = "https://github.com/lsst/utils?rev=main" },
 ]
 
@@ -2099,31 +2100,12 @@ s3 = [
 
 [[package]]
 name = "lsst-sphgeom"
-version = "30.2026.1600"
-source = { registry = "https://pypi.org/simple" }
+version = "30.2026.3902"
+source = { git = "https://github.com/lsst/sphgeom?rev=main#8f490195a6efe382d3564dccfe4987182b53ad96" }
 dependencies = [
     { name = "hpgeom" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/32/ac/504ff01fcd1455734635b7fb5b083540287202d6e3bdc34d86e25ae9d37c/lsst_sphgeom-30.2026.1600.tar.gz", hash = "sha256:0aaf5d9b018ab380dea06dccc6180bcbc6f4dbeb6d0091c8c8d91edfa4da5f3e", size = 162789, upload-time = "2026-04-16T07:50:34.37Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/c5/51430f5cff14430819521cd61b4dbadcc0b407e162cc3957c232f2d78ef7/lsst_sphgeom-30.2026.1600-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:ffcd031aa01359eba5fb75062e475c83bc0127e8770b2b70abbcf7b6ce600f23", size = 618134, upload-time = "2026-04-16T07:50:10.307Z" },
-    { url = "https://files.pythonhosted.org/packages/d7/51/2b694c747d95bea0883156f98004456d3234907752f2d0a48d97b75f5f24/lsst_sphgeom-30.2026.1600-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:490e06af76725360a1d9d7bedb0623e53a75ef1207875632b0b32e5eb62dca6e", size = 594847, upload-time = "2026-04-16T07:50:11.907Z" },
-    { url = "https://files.pythonhosted.org/packages/ef/c4/23743ce36a1bd13f80587aec5eb25c68bf437eaa0e634498719545f72d78/lsst_sphgeom-30.2026.1600-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7eed234f86ba45f674b6e9a943bacb382af0ab6c9abd344f2838a578f8001ab3", size = 829328, upload-time = "2026-04-16T07:50:13.496Z" },
-    { url = "https://files.pythonhosted.org/packages/35/0a/b0266c600dda6cebd7dfe61941cc4a228f676b858ab8180d7bcf4a91286e/lsst_sphgeom-30.2026.1600-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b3807419bba71a5f57f1bb91ce60dca53eb81fdfc84cfc82d8f4384f12890369", size = 886618, upload-time = "2026-04-16T07:50:14.905Z" },
-    { url = "https://files.pythonhosted.org/packages/75/86/a02d8eaedff51f4d8d3e641303dbdd9694d291c98f8abf59313e488f7b8e/lsst_sphgeom-30.2026.1600-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:cd4bff7cbda213d89a6405c9f1d627a9f84083671bc243edc2ba5c6e3fd76ab7", size = 631089, upload-time = "2026-04-16T07:50:16.446Z" },
-    { url = "https://files.pythonhosted.org/packages/c4/f0/287db86178c9e5a90a717d35bdd3b592731b55b051f0b6404ff2b8218b9d/lsst_sphgeom-30.2026.1600-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ff4420e17ed671d6ceb4adf4c812392edb47f53bd85c057a26452d585484fbdf", size = 600979, upload-time = "2026-04-16T07:50:17.749Z" },
-    { url = "https://files.pythonhosted.org/packages/6c/32/e1869754b17e3c005a0656cab23e9e32bd3b068d209300eaa77f66470319/lsst_sphgeom-30.2026.1600-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7d7211a6b624f40a895a3a1c7bdbf47f6cbb2b5ab46dff60121b92738c9e83d2", size = 828921, upload-time = "2026-04-16T07:50:19.098Z" },
-    { url = "https://files.pythonhosted.org/packages/e9/5e/47d7139294bab7ab4990656d60f21ae418dee648fe9aa3cf5f8c53fa7f7d/lsst_sphgeom-30.2026.1600-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5ed375f8e2466aa3ed91778e8089d5b792d621cd7e9aa74137009fbf1be5c54c", size = 885142, upload-time = "2026-04-16T07:50:21.251Z" },
-    { url = "https://files.pythonhosted.org/packages/b7/d5/781c4c321b3f66488c1740f208ebd235fe4288764d3f588b4a06aa97f69e/lsst_sphgeom-30.2026.1600-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:da79506c6ed862a15fc390b14be6630ecd1812ee9725fffc360fbf22ded370f1", size = 631254, upload-time = "2026-04-16T07:50:22.626Z" },
-    { url = "https://files.pythonhosted.org/packages/05/66/ed681113aa57b67beca4620a5086a6bccce99b97ac60a6ac203d765bc210/lsst_sphgeom-30.2026.1600-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:0fad12b453b7251dcd95a0c8ab4b6b5678335b2ae19962f171dfddd22f09e217", size = 600720, upload-time = "2026-04-16T07:50:23.909Z" },
-    { url = "https://files.pythonhosted.org/packages/24/32/84e663dd9b6dfb258f8ad16b124550b4c59cd7663455b318f4affb7d3639/lsst_sphgeom-30.2026.1600-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f360c7d54a8eee10477bce14ce22f185a7259d1b9ca879a5238517eee909e778", size = 828468, upload-time = "2026-04-16T07:50:25.314Z" },
-    { url = "https://files.pythonhosted.org/packages/0b/cc/6585f3b47dd4950af93c7b47f3feb0ad289b6dc55ee797c0f06180afeadc/lsst_sphgeom-30.2026.1600-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3f35953fd1e8c017d4b33eb3b23e60e251891699e054472326c2eacc6ed547d0", size = 885100, upload-time = "2026-04-16T07:50:27.066Z" },
-    { url = "https://files.pythonhosted.org/packages/aa/aa/91766029c5a0c59e02ecd67a3c5416d71fd126a9cb18bc1a7e2e3c919db7/lsst_sphgeom-30.2026.1600-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:64add026bbca741ed455ef2716f5292b69bf1b7fe8d85b25933a7d8bf3981d13", size = 629521, upload-time = "2026-04-16T07:50:28.679Z" },
-    { url = "https://files.pythonhosted.org/packages/61/b6/6a2f596e618627186e07f0045592b79a331c98611a3ee4b57ba56ed1bb66/lsst_sphgeom-30.2026.1600-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:b8492598f2e02eb6094b91aaf84002998a7cb5b0f5a946b3e1050d464e41694f", size = 602030, upload-time = "2026-04-16T07:50:30.082Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/58/875f4f9979186c11167a00de156ce6e20928716ec7286fc417547afde12a/lsst_sphgeom-30.2026.1600-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4dace5634154cd16a057cba711fa1f7490c4e0ce879664ca26ba5fbc89fdce4a", size = 831104, upload-time = "2026-04-16T07:50:31.616Z" },
-    { url = "https://files.pythonhosted.org/packages/8b/69/75aed822d56c35f2c2f763ce792e9f3bf314a7526da7112592924e10ae8f/lsst_sphgeom-30.2026.1600-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f27a6df509ed000d549523ac44cad08052a1b76e5097a916ac8021ea40fcba1d", size = 886235, upload-time = "2026-04-16T07:50:33.068Z" },
 ]
 
 [[package]]
