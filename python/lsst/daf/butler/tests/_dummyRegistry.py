@@ -30,6 +30,7 @@ __all__ = ("DummyRegistry",)
 
 from collections.abc import Iterable, Iterator
 from typing import Any
+from uuid import UUID
 
 from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
@@ -125,9 +126,9 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 else:
                     yield d
 
-    def fetch_batches(self, **where: Any) -> Iterator[list[dict]]:
+    def fetch_by_dataset_ids(self, dataset_ids: Iterable[UUID]) -> Iterator[list[dict]]:
         # Docstring inherited from OpaqueTableStorage.
-        yield list(self.fetch(**where))
+        yield list(self.fetch(dataset_id=list(dataset_ids)))
 
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.

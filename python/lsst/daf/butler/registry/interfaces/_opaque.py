@@ -36,6 +36,7 @@ __all__ = ["OpaqueTableStorage", "OpaqueTableStorageManager"]
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from ...ddl import TableSpec
 from ._database import Database, StaticTablesContext
@@ -130,16 +131,14 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch_batches(
-        self,
-        **where: Any,
-    ) -> Iterator[Sequence[Mapping]]:
-        """Retrieve records from an opaque table in batches.
+    def fetch_by_dataset_ids(self, dataset_ids: Iterable[UUID]) -> Iterator[Sequence[Mapping]]:
+        """Retrieve records from an opaque table based on lists of dataset
+        UUIDs.
 
         Parameters
         ----------
-        **where
-            Same as ``OpaqueTableStorage.fetch``.
+        dataset_ids
+            List of dataset IDs for which we will retrieve records.
 
         Yields
         ------
