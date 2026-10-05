@@ -377,7 +377,7 @@ class PostgresqlDatabase(Database):
         else:
             query = base_insert.on_conflict_do_nothing()
         with self._transaction() as (_, connection):
-            return connection.execute(query, rows).rowcount
+            return connection.execution_options(preserve_rowcount=True).execute(query, rows).rowcount
 
     def constant_rows(
         self,
