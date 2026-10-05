@@ -35,7 +35,7 @@ __all__ = ["PostgresqlDatabase"]
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from typing import Any
+from typing import Any, cast
 
 import psycopg2
 import sqlalchemy
@@ -92,13 +92,8 @@ class PostgresqlDatabase(Database):
         allow_temporary_tables: bool = True,
     ):
         with engine.connect() as connection:
-            # `typing.Any` to make mypy ignore the line below, can't
-            # use type: ignore
-            dbapi: Any = connection.connection
-            try:
-                dsn = dbapi.get_dsn_parameters()
-            except (AttributeError, KeyError) as err:
-                raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
+            query = sql.select(sql.func.current_database())
+            dbname = cast(str, connection.execute(query).scalar())
             if namespace is None:
                 query = sql.select(sql.func.current_schema())
                 namespace = connection.execute(query).scalar()
@@ -117,7 +112,7 @@ class PostgresqlDatabase(Database):
             origin=origin,
             namespace=namespace,
             writeable=writeable,
-            dbname=dsn.get("dbname"),
+            dbname=dbname,
             metadata=None,
             pg_version=pg_version,
             allow_temporary_tables=allow_temporary_tables,
