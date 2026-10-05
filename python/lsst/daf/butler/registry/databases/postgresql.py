@@ -37,10 +37,10 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from typing import Any, cast
 
-import psycopg2
 import sqlalchemy
 import sqlalchemy.dialects.postgresql
 from sqlalchemy import sql
+from sqlalchemy.dialects.postgresql import Range
 
 from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
@@ -72,10 +72,9 @@ class PostgresqlDatabase(Database):
 
     Notes
     -----
-    This currently requires the psycopg2 driver to be used as the backend for
-    SQLAlchemy.  Running the tests for this class requires the
-    ``testing.postgresql`` be installed, which we assume indicates that a
-    PostgreSQL server is installed and can be run locally in userspace.
+    Running the tests for this class requires the ``testing.postgresql`` be
+    installed, which we assume indicates that a PostgreSQL server is installed
+    and can be run locally in userspace.
 
     Some functionality provided by this class (and used by `Registry`) requires
     the ``btree_gist`` PostgreSQL server extension to be installed an enabled
@@ -471,25 +470,23 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def process_bind_param(
-        self, value: Timespan | None, dialect: sqlalchemy.engine.Dialect
-    ) -> psycopg2.extras.NumericRange | None:
+    def process_bind_param(self, value: Timespan | None, dialect: sqlalchemy.engine.Dialect) -> Range | None:
         if value is None:
             return None
         if not isinstance(value, Timespan):
             raise TypeError(f"Unsupported type: {type(value)}, expected Timespan.")
         if value.isEmpty():
-            return psycopg2.extras.NumericRange(empty=True)
+            return Range(empty=True)
         else:
             converter = time_utils.TimeConverter()
             assert value.nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
             assert value.nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
             lower = None if value.nsec[0] == converter.min_nsec else value.nsec[0]
             upper = None if value.nsec[1] == converter.max_nsec else value.nsec[1]
-            return psycopg2.extras.NumericRange(lower=lower, upper=upper)
+            return Range(lower=lower, upper=upper)
 
     def process_result_value(
-        self, value: psycopg2.extras.NumericRange | None, dialect: sqlalchemy.engine.Dialect
+        self, value: Range | None, dialect: sqlalchemy.engine.Dialect
     ) -> Timespan | None:
         if value is None:
             return None
