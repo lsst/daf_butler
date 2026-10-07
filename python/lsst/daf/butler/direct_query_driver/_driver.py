@@ -354,8 +354,9 @@ class DirectQueryDriver(QueryDriver):
             dict_rows = [dict(zip(dimensions.required, values)) for values in rows]
         from_clause: sqlalchemy.FromClause
         if self.db.supports_temporary_tables and len(dict_rows) > self._constant_rows_limit:
-            from_clause = self._exit_stack.enter_context(self.db.temporary_table(table_spec))
-            self.db.insert(from_clause, *dict_rows)
+            table = self._exit_stack.enter_context(self.db.temporary_table(table_spec))
+            self.db.insert(table, *dict_rows)
+            from_clause = table
         else:
             from_clause = self.db.constant_rows(table_spec.fields, *dict_rows)
         if key is None:
