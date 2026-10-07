@@ -34,6 +34,8 @@ import shutil
 import tempfile
 import unittest
 
+from sqlalchemy.engine import make_url
+
 from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.connectionString import ConnectionStringFactory
 from lsst.utils.db_auth import DbAuthError
@@ -62,8 +64,8 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
             conStr = ConnectionStringFactory.fromConfig(regConf, db_auth_path=self.db_auth_path)
             with self.subTest(confFile=fileName):
                 self.assertEqual(
-                    conStr.render_as_string(hide_password=False),
-                    regConf["expected"],
+                    conStr,
+                    make_url(regConf["expected"]),
                     "test connection string built from config",
                 )
 
