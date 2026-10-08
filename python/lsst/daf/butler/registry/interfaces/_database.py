@@ -1698,7 +1698,11 @@ class Database(ABC):
                     content[k].add(v)
             changing_columns = [col for col, values in content.items() if len(values) > 1]
 
-        if len(changing_columns) != 1:
+        if not columns:
+            # No columns means to delete all rows.
+            with self._transaction() as (_, connection):
+                return connection.execute(sql).rowcount
+        elif len(changing_columns) != 1:
             # More than one column changes each time so do explicit bind
             # parameters and have each row processed separately.
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
