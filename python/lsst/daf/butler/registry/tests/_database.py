@@ -42,6 +42,7 @@ from typing import Any
 
 import astropy.time
 import sqlalchemy
+import sqlalchemy.dialects.postgresql
 
 from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
@@ -1288,15 +1289,20 @@ class DatabaseTests(ABC):
         )
         # This should use DISTINCT ON in PostgreSQL and GROUP BY in SQLite.
         if db.has_distinct_on:
-            sql = (
-                sqlalchemy.select(
-                    t.c.id.label("i"),
-                    t.c.name.label("n"),
-                    *ts_col.flatten("t"),
-                )
-                .select_from(t)
-                .distinct(t.c.id)
-            )
+            sql = sqlalchemy.select(
+                t.c.id.label("i"),
+                t.c.name.label("n"),
+                *ts_col.flatten("t"),
+            ).select_from(t)
+            # SQLAlchemy 2.1 deprecates Select.distinct(*columns) in favor of
+            # Select.ext(dialects.postgresql.distinct_on(*columns)), but that
+            # does not exist in 2.0.
+            if (distinct_on := getattr(sqlalchemy.dialects.postgresql, "distinct_on", None)) and hasattr(
+                sql, "ext"
+            ):
+                sql = sql.ext(distinct_on(t.c.id))
+            else:
+                sql = sql.distinct(t.c.id)
         elif db.has_any_aggregate:
             sql = (
                 sqlalchemy.select(

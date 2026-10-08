@@ -35,6 +35,7 @@ from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 import sqlalchemy
+import sqlalchemy.dialects.postgresql
 
 from .. import ddl
 from ..dimensions import DimensionGroup
@@ -175,7 +176,15 @@ class SqlSelectBuilder:
         if self.distinct is True:
             result = result.distinct()
         elif self.distinct:
-            result = result.distinct(*self.distinct)
+            # SQLAlchemy 2.1 deprecates Select.distinct(*columns) in favor of
+            # Select.ext(dialects.postgresql.distinct_on(*columns)), but that
+            # does not exist in 2.0.
+            if (distinct_on := getattr(sqlalchemy.dialects.postgresql, "distinct_on", None)) and hasattr(
+                result, "ext"
+            ):
+                result = result.ext(distinct_on(*self.distinct))
+            else:
+                result = result.distinct(*self.distinct)
         if self.group_by:
             result = result.group_by(*self.group_by)
         if self.joins.where_terms:
