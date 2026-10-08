@@ -135,92 +135,100 @@ class ParquetFormatter(FormatterV2):
         with generic_open(path, fs) as handle:
             schema = pq.read_schema(handle)
 
-        schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
+            schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
-        if component in ("columns", "schema") or self.file_descriptor.readStorageClass.name in schema_names:
-            # The schema will be translated to column format
-            # depending on the input type.
-            return schema
-        elif component == "rowcount":
-            # Get the rowcount from the metadata if possible, otherwise count.
-            if b"lsst::arrow::rowcount" in schema.metadata:
-                return int(schema.metadata[b"lsst::arrow::rowcount"])
+            if (
+                component in ("columns", "schema")
+                or self.file_descriptor.readStorageClass.name in schema_names
+            ):
+                # The schema will be translated to column format
+                # depending on the input type.
+                return schema
+            elif component == "rowcount":
+                # Get the rowcount from the metadata if possible, otherwise
+                # count.
+                if b"lsst::arrow::rowcount" in schema.metadata:
+                    return int(schema.metadata[b"lsst::arrow::rowcount"])
 
-            with generic_open(path, fs) as handle:
                 temp_table = pq.read_table(
                     handle,
                     columns=[schema.names[0]],
                     use_threads=False,
                     use_pandas_metadata=False,
+                    schema=schema,
+                )
+                return temp_table.num_rows
+
+            par_columns = None
+            strip_astropy_meta_yaml = True
+            if self.file_descriptor.parameters:
+                par_columns = self.file_descriptor.parameters.pop("columns", None)
+                if par_columns:
+                    has_pandas_multi_index = False
+                    if schema.metadata and b"pandas" in schema.metadata:
+                        md = json.loads(schema.metadata[b"pandas"])
+                        if len(md["column_indexes"]) > 1:
+                            has_pandas_multi_index = True
+
+                    if not has_pandas_multi_index:
+                        # Ensure uniqueness, keeping order.
+                        par_columns_in = list(dict.fromkeys(ensure_iterable(par_columns)))
+                        file_columns = [name for name in schema.names if not name.startswith("__")]
+
+                        # Do case-sensitive glob-style matching, again ensuring
+                        # uniqueness and ordering.
+                        par_columns = {}
+                        for par_column in par_columns_in:
+                            found = False
+                            for file_column in file_columns:
+                                if fnmatchcase(file_column, par_column):
+                                    found = True
+                                    par_columns[file_column] = True
+                            if not found:
+                                raise ValueError(
+                                    f"""Column {par_column} specified in parameters not available in """
+                                    """parquet file."""
+                                )
+                        par_columns = list(par_columns.keys())
+                    else:
+                        par_columns = _standardize_multi_index_columns(
+                            arrow_schema_to_pandas_index(schema),
+                            par_columns,
+                        )
+
+                strip_astropy_meta_yaml = self.file_descriptor.parameters.pop(
+                    "strip_astropy_meta_yaml",
+                    True,
                 )
 
-            return len(temp_table[schema.names[0]])
-
-        par_columns = None
-        strip_astropy_meta_yaml = True
-        if self.file_descriptor.parameters:
-            par_columns = self.file_descriptor.parameters.pop("columns", None)
-            if par_columns:
-                has_pandas_multi_index = False
-                if schema.metadata and b"pandas" in schema.metadata:
-                    md = json.loads(schema.metadata[b"pandas"])
-                    if len(md["column_indexes"]) > 1:
-                        has_pandas_multi_index = True
-
-                if not has_pandas_multi_index:
-                    # Ensure uniqueness, keeping order.
-                    par_columns_in = list(dict.fromkeys(ensure_iterable(par_columns)))
-                    file_columns = [name for name in schema.names if not name.startswith("__")]
-
-                    # Do case-sensitive glob-style matching, again ensuring
-                    # uniqueness and ordering.
-                    par_columns = {}
-                    for par_column in par_columns_in:
-                        found = False
-                        for file_column in file_columns:
-                            if fnmatchcase(file_column, par_column):
-                                found = True
-                                par_columns[file_column] = True
-                        if not found:
-                            raise ValueError(
-                                f"Column {par_column} specified in parameters not available in parquet file."
-                            )
-                    par_columns = list(par_columns.keys())
-                else:
-                    par_columns = _standardize_multi_index_columns(
-                        arrow_schema_to_pandas_index(schema),
-                        par_columns,
+                if len(self.file_descriptor.parameters):
+                    raise ValueError(
+                        f"Unsupported parameters {self.file_descriptor.parameters} in ArrowTable read."
                     )
 
-            strip_astropy_meta_yaml = self.file_descriptor.parameters.pop(
-                "strip_astropy_meta_yaml",
-                True,
-            )
-
-            if len(self.file_descriptor.parameters):
-                raise ValueError(
-                    f"Unsupported parameters {self.file_descriptor.parameters} in ArrowTable read."
-                )
-
-        metadata = schema.metadata if schema.metadata is not None else {}
-        with generic_open(path, fs) as handle:
+            metadata = schema.metadata if schema.metadata is not None else {}
             arrow_table = pq.read_table(
                 handle,
                 columns=par_columns,
                 use_threads=False,
                 use_pandas_metadata=(b"pandas" in metadata),
+                schema=schema,
             )
 
-        if strip_astropy_meta_yaml:
-            metadata = arrow_table.schema.metadata
-            # Only strip if (a) we have metadata; (b) it contains
-            # ``table_meta_yaml``; (c) it contains ``lsst::arrow::rowcount``
-            # to avoid stripping data from pure astropy tables (not written
-            # by the butler).
-            if metadata and metadata.pop(b"table_meta_yaml", None) and b"lsst::arrow::rowcount" in metadata:
-                arrow_table = arrow_table.replace_schema_metadata(metadata)
+            if strip_astropy_meta_yaml:
+                metadata = arrow_table.schema.metadata
+                # Only strip if (a) we have metadata; (b) it contains
+                # ``table_meta_yaml``; (c) it contains
+                # ``lsst::arrow::rowcount`` to avoid stripping data from pure
+                # astropy tables (not written by the butler).
+                if (
+                    metadata
+                    and metadata.pop(b"table_meta_yaml", None)
+                    and b"lsst::arrow::rowcount" in metadata
+                ):
+                    arrow_table = arrow_table.replace_schema_metadata(metadata)
 
-        return arrow_table
+            return arrow_table
 
     def add_provenance(self, in_memory_dataset: Any, provenance: DatasetProvenance | None = None) -> Any:
         return _add_arrow_provenance(in_memory_dataset, self.dataset_ref, provenance)
