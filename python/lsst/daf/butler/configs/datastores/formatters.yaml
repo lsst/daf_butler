@@ -112,6 +112,7 @@ MaskV2: lsst.images.formatters.GenericFormatter
 MaskedImageV2: lsst.images.formatters.GenericFormatter
 VisitImage: lsst.images.formatters.GenericFormatter
 DifferenceImage: lsst.images.formatters.GenericFormatter
+ConvolutionKernel: lsst.images.formatters.GenericFormatter
 ColorImage: lsst.images.formatters.GenericFormatter
 ExtendedPsfCandidates: lsst.images.formatters.GenericFormatter
 ExtendedPsfImage: lsst.images.formatters.GenericFormatter
