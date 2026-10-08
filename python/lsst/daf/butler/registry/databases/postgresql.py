@@ -33,6 +33,7 @@ from ... import ddl, time_utils
 __all__ = ["PostgresqlDatabase"]
 
 import re
+import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from typing import Any, cast
@@ -386,7 +387,21 @@ class PostgresqlDatabase(Database):
         name: str | None = None,
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
-        return super().constant_rows(fields, *rows, name=name)
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+
+        # Convert rows to columns.
+        column_values = {name: [row[name] for row in rows] for name in fields.names}
+
+        columns: list[sqlalchemy.schema.Column] = []
+        column_data = []
+        for field in fields:
+            array_type: Any = sqlalchemy.dialects.postgresql.ARRAY(field.dtype)
+            column_data.append(sqlalchemy.literal(column_values[field.name], type_=array_type))
+            columns.append(sqlalchemy.schema.Column(field.name, type_=field.dtype))
+
+        unnest_expr = sqlalchemy.func.unnest(*column_data).table_valued(*columns).render_derived(name=name)
+        return unnest_expr
 
     @property
     def has_distinct_on(self) -> bool:

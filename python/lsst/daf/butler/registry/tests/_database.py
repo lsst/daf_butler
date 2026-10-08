@@ -47,6 +47,7 @@ import sqlalchemy.dialects.postgresql
 from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
 from ..._timespan import Timespan
+from ...tests.utils import TestCaseMixin
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])
@@ -114,7 +115,7 @@ def _patch_getExistingTable(db: Database) -> Database:
     db.getExistingTable = original_method
 
 
-class DatabaseTests(ABC):
+class DatabaseTests(ABC, TestCaseMixin):
     """Generic tests for the `Database` interface that can be subclassed to
     generate tests for concrete implementations.
     """
@@ -1250,11 +1251,16 @@ class DatabaseTests(ABC):
             values_data,
         )
         select_values_joined = sqlalchemy.sql.select(
-            values.columns["s"].label("name"), static.b.columns["value"].label("value")
+            values.columns["s"].label("name"),
+            static.b.columns["value"].label("value"),
+            values.columns["r"].label("region"),
         ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
         self.assertCountEqual(
             [row._mapping for row in self.query_list(new_db, select_values_joined)],
-            [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
+            [
+                {"value": 11, "name": "b1", "region": None},
+                {"value": 13, "name": "b3", "region": Circle.empty()},
+            ],
         )
 
     def test_aggregate(self) -> None:
