@@ -375,14 +375,18 @@ class CollectionSummaryManager:
             )
 
         sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
-        sql = sql.where(coll_col.in_([coll.key for coll in non_chains]))
+        sql = sql.where(self._db.make_in_array_constraint(coll_col, [coll.key for coll in non_chains]))
         # For caching we need to fetch complete summaries.
         if self._caching_context.collection_summaries is None:
             if dataset_type_names is not None:
                 db_dataset_type_names = [
                     self._reversed_renames.get(name, name) for name in dataset_type_names
                 ]
-                sql = sql.where(self._dataset_type_table.columns["name"].in_(db_dataset_type_names))
+                sql = sql.where(
+                    self._db.make_in_array_constraint(
+                        self._dataset_type_table.columns["name"], db_dataset_type_names
+                    )
+                )
 
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections

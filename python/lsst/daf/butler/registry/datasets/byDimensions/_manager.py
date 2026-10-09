@@ -505,7 +505,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             sql = sqlalchemy.sql.select(
                 id_col,
                 self._static.dataset.columns["dataset_type_id"],
-            ).where(id_col.in_(batch))
+            ).where(self._db.make_in_array_constraint(id_col, batch))
             with self._db.query(sql) as sql_result:
                 dataset_rows = sql_result.mappings().all()
             for row in dataset_rows:
@@ -524,7 +524,9 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             dynamic_tables = self._get_dynamic_tables(dimension_group)
             tags_table = self._get_tags_table(dynamic_tables)
             for batch in chunk_iterable(datasets, 50000):
-                tags_sql = tags_table.select().where(tags_table.columns["dataset_id"].in_(batch))
+                tags_sql = tags_table.select().where(
+                    self._db.make_in_array_constraint(tags_table.columns["dataset_id"], batch)
+                )
                 # Join in the collection table to fetch the run name.
                 collection_column = tags_table.columns[self._collections.getCollectionForeignKeyName()]
                 joined_collections = self._collections.join_collections_sql(collection_column, tags_sql)
@@ -1415,7 +1417,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(DatasetRecordStorageManager):
             if "collection" in fields:
                 fields_provided["collection"] = sqlalchemy.literal("NO COLLECTIONS")
         else:
-            sql_projection.joins.where(collection_col.in_([collection.key for collection in collections]))
+            sql_projection.joins.where(
+                self._db.make_in_array_constraint(
+                    collection_col, [collection.key for collection in collections]
+                )
+            )
             if "collection" in fields:
                 # Avoid a join to the collection table to get the name by using
                 # a CASE statement.  The SQL will be a bit more verbose but

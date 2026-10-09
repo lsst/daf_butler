@@ -181,7 +181,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 dataset_ids = [ref.id for ref in refs_chunk]
                 where = sqlalchemy.sql.and_(
                     self._tables.dataset_location.columns.datastore_name == self.datastoreName,
-                    self._tables.dataset_location.columns.dataset_id.in_(dataset_ids),
+                    self._db.make_in_array_constraint(
+                        self._tables.dataset_location.columns.dataset_id, dataset_ids
+                    ),
                 )
                 self._db.deleteWhere(self._tables.dataset_location, where)
 
@@ -200,7 +202,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
                 where = sqlalchemy.sql.and_(
                     location.columns.datastore_name == self.datastoreName,
-                    location.columns.dataset_id.in_(dataset_ids),
+                    self._db.make_in_array_constraint(location.columns.dataset_id, dataset_ids),
                 )
 
                 select = (
@@ -223,7 +225,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                     .where(
                         sqlalchemy.sql.and_(
                             self._tables.dataset_location.columns.datastore_name == self.datastoreName,
-                            self._tables.dataset_location.columns.dataset_id.in_(batch),
+                            self._db.make_in_array_constraint(
+                                self._tables.dataset_location.columns.dataset_id, batch
+                            ),
                         )
                     )
                 )
@@ -277,7 +281,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         info_in_trash = join_records(records_table._table.select(), self._tables.dataset_location_trash)
         if selected_ids:
             info_in_trash = info_in_trash.where(
-                self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+                self._db.make_in_array_constraint(
+                    self._tables.dataset_location_trash.columns["dataset_id"], selected_ids
+                )
             )
         info_in_trash = info_in_trash.with_for_update(skip_locked=True)
 
@@ -301,7 +307,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             )
             if selected_ids:
                 items_in_trash = items_in_trash.where(
-                    self._tables.dataset_location_trash.columns["dataset_id"].in_(selected_ids)
+                    self._db.make_in_array_constraint(
+                        self._tables.dataset_location_trash.columns["dataset_id"], selected_ids
+                    )
                 )
             items_in_trash_alias = items_in_trash.alias("items_in_trash")
 

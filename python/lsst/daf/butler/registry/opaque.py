@@ -119,7 +119,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
             # cases it should be helpful to order the items in the clause.
             values = sorted(set(values))
             for iposn in range(0, len(values), in_limit):
-                in_clause = column.in_(values[iposn : iposn + in_limit])
+                in_clause = self._db.make_in_array_constraint(column, values[iposn : iposn + in_limit])
                 yield in_clause
 
         def _batch_in_clauses(**where: Any) -> Iterator[sqlalchemy.sql.expression.ColumnElement]:

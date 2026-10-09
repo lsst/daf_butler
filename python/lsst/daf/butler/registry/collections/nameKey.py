@@ -242,7 +242,11 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         # transaction. When we fetch just few records we need to process result
         # of the first query before we can run the second one.
         if collection_ids is not None:
-            sql = sql.where(self._tables.collection.columns[self._collectionIdName].in_(collection_ids))
+            sql = sql.where(
+                self._db.make_in_array_constraint(
+                    self._tables.collection.columns[self._collectionIdName], collection_ids
+                )
+            )
             with self._db.transaction():
                 with self._db.query(sql) as sql_result:
                     sql_rows = sql_result.mappings().fetchall()
@@ -252,7 +256,9 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
                 if chained_ids:
                     # Retrieve chained collection compositions
                     chain_sql = chain_sql.where(
-                        self._tables.collection_chain.columns["parent"].in_(chained_ids)
+                        self._db.make_in_array_constraint(
+                            self._tables.collection_chain.columns["parent"], chained_ids
+                        )
                     )
                     with self._db.query(chain_sql) as sql_result:
                         chain_rows = sql_result.mappings().fetchall()

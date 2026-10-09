@@ -472,7 +472,12 @@ class DefaultCollectionManager(CollectionManager[K]):
             sql = (
                 sqlalchemy.sql.select(id_column, doc_column)
                 .select_from(self._tables.collection)
-                .where(sqlalchemy.sql.and_(id_column.in_(chunk), doc_column != sqlalchemy.literal("")))
+                .where(
+                    sqlalchemy.sql.and_(
+                        self._db.make_in_array_constraint(id_column, chunk),
+                        doc_column != sqlalchemy.literal(""),
+                    )
+                )
             )
             with self._db.query(sql) as sql_result:
                 for row in sql_result:
@@ -687,7 +692,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         child_keys: list[K],
     ) -> None:
         table = self._tables.collection_chain
-        where = sqlalchemy.and_(table.c.parent == parent_key, table.c.child.in_(child_keys))
+        where = sqlalchemy.and_(
+            table.c.parent == parent_key, self._db.make_in_array_constraint(table.c.child, child_keys)
+        )
         self._db.deleteWhere(table, where)
 
     def _find_prepend_position(self, c: _CollectionChainModificationContext) -> int:
@@ -866,7 +873,7 @@ class DefaultCollectionManager(CollectionManager[K]):
                 sqlalchemy.cast(None, type_=key_type).label("parent"),
                 sqlalchemy.cast(None, type_=sqlalchemy.SmallInteger).label("position"),
             )
-            .where(coll_1.columns["name"].in_(collections))
+            .where(self._db.make_in_array_constraint(coll_1.columns["name"], collections))
             .cte("chains", recursive=True)
         )
 

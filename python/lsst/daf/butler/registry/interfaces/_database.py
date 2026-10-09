@@ -48,7 +48,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from threading import Lock
-from typing import Any, cast, final
+from typing import Any, TypeVar, cast, final
 
 import astropy.time
 import sqlalchemy
@@ -58,6 +58,8 @@ from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 from ._database_explain import get_query_plan
+
+_T = TypeVar("_T")
 
 
 class DatabaseInsertMode(enum.Enum):
@@ -1735,7 +1737,7 @@ class Database(ABC):
             with self._transaction() as (_, connection):
                 for iposn in range(0, n_elements, n_per_loop):
                     endpos = iposn + n_per_loop
-                    in_clause = table.columns[name].in_(in_content[iposn:endpos])
+                    in_clause = self.make_in_array_constraint(table.columns[name], in_content[iposn:endpos])
 
                     newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
                     rowcount += connection.execute(newsql).rowcount
@@ -2006,6 +2008,11 @@ class Database(ABC):
         `False`; the caller is responsible for checking that property first.
         """
         raise NotImplementedError()
+
+    def make_in_array_constraint(
+        self, column: sqlalchemy.ColumnElement[_T], values: Iterable[_T]
+    ) -> sqlalchemy.ColumnElement[bool]:
+        return column.in_(values)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,
