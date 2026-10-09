@@ -42,8 +42,7 @@ dynamic = ["version"]
 "Source" = "https://github.com/lsst/daf_butler"
 
 [project.optional-dependencies]
-# psycopg2 for SQLALchemy 2.0, psycopg for 2.1.
-postgres = ["psycopg", "psycopg2"]
+postgres = ["sqlalchemy[postgresql]"]
 remote = [
     "httpx2",
     # RemoteButler always uses HTTPS URLs for accessing files in the Datastore,
