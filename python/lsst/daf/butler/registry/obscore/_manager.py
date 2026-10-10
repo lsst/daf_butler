@@ -332,7 +332,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 assert fk_field is not None, "Cannot be None by construction"
                 # There may be too many of them, do it in chunks.
                 for ids in chunk_iterable(dataset_ids):
-                    where = self.table.columns[fk_field.name].in_(ids)
+                    where = self.db.make_in_array_constraint(self.table.columns[fk_field.name], ids)
                     count += self.db.deleteWhere(self.table, where)
         return count
 

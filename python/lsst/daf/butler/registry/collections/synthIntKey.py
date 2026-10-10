@@ -259,7 +259,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         # transaction. When we fetch just few records we need to process first
         # query before wi can run second one,
         if collections is not None:
-            sql = sql.where(collection.columns[column_name].in_(collections))
+            sql = sql.where(self._db.make_in_array_constraint(collection.columns[column_name], collections))
             with self._db.transaction():
                 with self._db.query(sql) as sql_result:
                     sql_rows = sql_result.mappings().fetchall()
@@ -267,7 +267,11 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
                 records, chained_ids = self._rows_to_records(sql_rows)
 
                 if chained_ids:
-                    chain_sql = chain_sql.where(collection_chain.columns["parent"].in_(list(chained_ids)))
+                    chain_sql = chain_sql.where(
+                        self._db.make_in_array_constraint(
+                            collection_chain.columns["parent"], list(chained_ids)
+                        )
+                    )
 
                     with self._db.query(chain_sql) as sql_result:
                         chain_rows = sql_result.mappings().fetchall()

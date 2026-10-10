@@ -405,7 +405,7 @@ class SqliteDatabase(Database):
         #    UNION ALL
         #    SELECT ? AS a, ? AS b
         #
-        selects = [
+        selects: list[sqlalchemy.sql.Select] = [
             sqlalchemy.sql.select(
                 *[sqlalchemy.sql.literal(row[field.name], field.dtype).label(field.name) for field in fields]
             )

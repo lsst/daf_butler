@@ -33,19 +33,22 @@ from ... import ddl, time_utils
 __all__ = ["PostgresqlDatabase"]
 
 import re
+import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from typing import Any
+from typing import Any, TypeVar, cast
 
-import psycopg2
 import sqlalchemy
 import sqlalchemy.dialects.postgresql
 from sqlalchemy import sql
+from sqlalchemy.dialects.postgresql import Range
 
 from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database, DatabaseMetadata
+
+_T = TypeVar("_T")
 
 
 class PostgresqlDatabase(Database):
@@ -72,10 +75,9 @@ class PostgresqlDatabase(Database):
 
     Notes
     -----
-    This currently requires the psycopg2 driver to be used as the backend for
-    SQLAlchemy.  Running the tests for this class requires the
-    ``testing.postgresql`` be installed, which we assume indicates that a
-    PostgreSQL server is installed and can be run locally in userspace.
+    Running the tests for this class requires the ``testing.postgresql`` be
+    installed, which we assume indicates that a PostgreSQL server is installed
+    and can be run locally in userspace.
 
     Some functionality provided by this class (and used by `Registry`) requires
     the ``btree_gist`` PostgreSQL server extension to be installed an enabled
@@ -92,13 +94,8 @@ class PostgresqlDatabase(Database):
         allow_temporary_tables: bool = True,
     ):
         with engine.connect() as connection:
-            # `typing.Any` to make mypy ignore the line below, can't
-            # use type: ignore
-            dbapi: Any = connection.connection
-            try:
-                dsn = dbapi.get_dsn_parameters()
-            except (AttributeError, KeyError) as err:
-                raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
+            query = sql.select(sql.func.current_database())
+            dbname = cast(str, connection.execute(query).scalar())
             if namespace is None:
                 query = sql.select(sql.func.current_schema())
                 namespace = connection.execute(query).scalar()
@@ -117,7 +114,7 @@ class PostgresqlDatabase(Database):
             origin=origin,
             namespace=namespace,
             writeable=writeable,
-            dbname=dsn.get("dbname"),
+            dbname=dbname,
             metadata=None,
             pg_version=pg_version,
             allow_temporary_tables=allow_temporary_tables,
@@ -383,7 +380,7 @@ class PostgresqlDatabase(Database):
         else:
             query = base_insert.on_conflict_do_nothing()
         with self._transaction() as (_, connection):
-            return connection.execute(query, rows).rowcount
+            return connection.execution_options(preserve_rowcount=True).execute(query, rows).rowcount
 
     def constant_rows(
         self,
@@ -392,7 +389,21 @@ class PostgresqlDatabase(Database):
         name: str | None = None,
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
-        return super().constant_rows(fields, *rows, name=name)
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+
+        # Convert rows to columns.
+        column_values = {name: [row[name] for row in rows] for name in fields.names}
+
+        columns: list[sqlalchemy.schema.Column] = []
+        column_data = []
+        for field in fields:
+            array_type: Any = sqlalchemy.dialects.postgresql.ARRAY(field.dtype)
+            column_data.append(sqlalchemy.literal(column_values[field.name], type_=array_type))
+            columns.append(sqlalchemy.schema.Column(field.name, type_=field.dtype))
+
+        unnest_expr = sqlalchemy.func.unnest(*column_data).table_valued(*columns).render_derived(name=name)
+        return unnest_expr
 
     @property
     def has_distinct_on(self) -> bool:
@@ -462,6 +473,12 @@ class PostgresqlDatabase(Database):
         pattern = _escape(pattern)
         return expression.op("LIKE")(sqlalchemy.literal(pattern))
 
+    def make_in_array_constraint(
+        self, column: sqlalchemy.ColumnElement[_T], values: Iterable[_T]
+    ) -> sqlalchemy.ColumnElement[bool]:
+        array_type = sqlalchemy.dialects.postgresql.ARRAY(column.type)
+        return column == sqlalchemy.any_(sqlalchemy.literal(list(values), array_type))
+
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
     """A single-column `Timespan` representation usable only with
@@ -476,25 +493,23 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def process_bind_param(
-        self, value: Timespan | None, dialect: sqlalchemy.engine.Dialect
-    ) -> psycopg2.extras.NumericRange | None:
+    def process_bind_param(self, value: Timespan | None, dialect: sqlalchemy.engine.Dialect) -> Range | None:
         if value is None:
             return None
         if not isinstance(value, Timespan):
             raise TypeError(f"Unsupported type: {type(value)}, expected Timespan.")
         if value.isEmpty():
-            return psycopg2.extras.NumericRange(empty=True)
+            return Range(empty=True)
         else:
             converter = time_utils.TimeConverter()
             assert value.nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
             assert value.nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
             lower = None if value.nsec[0] == converter.min_nsec else value.nsec[0]
             upper = None if value.nsec[1] == converter.max_nsec else value.nsec[1]
-            return psycopg2.extras.NumericRange(lower=lower, upper=upper)
+            return Range(lower=lower, upper=upper)
 
     def process_result_value(
-        self, value: psycopg2.extras.NumericRange | None, dialect: sqlalchemy.engine.Dialect
+        self, value: Range | None, dialect: sqlalchemy.engine.Dialect
     ) -> Timespan | None:
         if value is None:
             return None

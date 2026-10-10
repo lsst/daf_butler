@@ -48,7 +48,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from threading import Lock
-from typing import Any, cast, final
+from typing import Any, TypeVar, cast, final
 
 import astropy.time
 import sqlalchemy
@@ -58,6 +58,8 @@ from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 from ._database_explain import get_query_plan
+
+_T = TypeVar("_T")
 
 
 class DatabaseInsertMode(enum.Enum):
@@ -1551,12 +1553,7 @@ class Database(ABC):
             if not returnIds:
                 if select is not None:
                     if names is None:
-                        # columns() is deprecated since 1.4, but
-                        # selected_columns() method did not exist in 1.3.
-                        if hasattr(select, "selected_columns"):
-                            names = select.selected_columns.keys()
-                        else:
-                            names = select.columns.keys()
+                        names = select.selected_columns.keys()
                     connection.execute(table.insert().from_select(list(names), select))
                 else:
                     connection.execute(table.insert(), rows)
@@ -1703,7 +1700,11 @@ class Database(ABC):
                     content[k].add(v)
             changing_columns = [col for col, values in content.items() if len(values) > 1]
 
-        if len(changing_columns) != 1:
+        if not columns:
+            # No columns means to delete all rows.
+            with self._transaction() as (_, connection):
+                return connection.execute(sql).rowcount
+        elif len(changing_columns) != 1:
             # More than one column changes each time so do explicit bind
             # parameters and have each row processed separately.
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
@@ -1736,7 +1737,7 @@ class Database(ABC):
             with self._transaction() as (_, connection):
                 for iposn in range(0, n_elements, n_per_loop):
                     endpos = iposn + n_per_loop
-                    in_clause = table.columns[name].in_(in_content[iposn:endpos])
+                    in_clause = self.make_in_array_constraint(table.columns[name], in_content[iposn:endpos])
 
                     newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
                     rowcount += connection.execute(newsql).rowcount
@@ -2007,6 +2008,11 @@ class Database(ABC):
         `False`; the caller is responsible for checking that property first.
         """
         raise NotImplementedError()
+
+    def make_in_array_constraint(
+        self, column: sqlalchemy.ColumnElement[_T], values: Iterable[_T]
+    ) -> sqlalchemy.ColumnElement[bool]:
+        return column.in_(values)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

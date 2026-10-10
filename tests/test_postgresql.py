@@ -62,14 +62,18 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         cls.postgres = cls.enterClassContext(setup_postgres_test_db())
 
     def makeEmptyDatabase(self, origin: int = 0) -> PostgresqlDatabase:
-        return PostgresqlDatabase.fromUri(
+        db = PostgresqlDatabase.fromUri(
             origin=origin, uri=self.postgres.url, namespace=self.postgres.generate_namespace_name()
         )
+        self.addCleanup(db.dispose)
+        return db
 
     def getNewConnection(self, database: PostgresqlDatabase, *, writeable: bool) -> PostgresqlDatabase:
-        return PostgresqlDatabase.fromUri(
+        db = PostgresqlDatabase.fromUri(
             origin=database.origin, uri=self.postgres.url, namespace=database.namespace, writeable=writeable
         )
+        self.addCleanup(db.dispose)
+        return db
 
     @contextmanager
     def asReadOnly(self, database: PostgresqlDatabase) -> PostgresqlDatabase:

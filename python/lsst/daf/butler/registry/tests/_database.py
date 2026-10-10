@@ -42,10 +42,12 @@ from typing import Any
 
 import astropy.time
 import sqlalchemy
+import sqlalchemy.dialects.postgresql
 
 from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
 from ..._timespan import Timespan
+from ...tests.utils import TestCaseMixin
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])
@@ -113,7 +115,7 @@ def _patch_getExistingTable(db: Database) -> Database:
     db.getExistingTable = original_method
 
 
-class DatabaseTests(ABC):
+class DatabaseTests(ABC, TestCaseMixin):
     """Generic tests for the `Database` interface that can be subclassed to
     generate tests for concrete implementations.
     """
@@ -1249,11 +1251,16 @@ class DatabaseTests(ABC):
             values_data,
         )
         select_values_joined = sqlalchemy.sql.select(
-            values.columns["s"].label("name"), static.b.columns["value"].label("value")
+            values.columns["s"].label("name"),
+            static.b.columns["value"].label("value"),
+            values.columns["r"].label("region"),
         ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
         self.assertCountEqual(
             [row._mapping for row in self.query_list(new_db, select_values_joined)],
-            [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
+            [
+                {"value": 11, "name": "b1", "region": None},
+                {"value": 13, "name": "b3", "region": Circle.empty()},
+            ],
         )
 
     def test_aggregate(self) -> None:
@@ -1288,15 +1295,20 @@ class DatabaseTests(ABC):
         )
         # This should use DISTINCT ON in PostgreSQL and GROUP BY in SQLite.
         if db.has_distinct_on:
-            sql = (
-                sqlalchemy.select(
-                    t.c.id.label("i"),
-                    t.c.name.label("n"),
-                    *ts_col.flatten("t"),
-                )
-                .select_from(t)
-                .distinct(t.c.id)
-            )
+            sql = sqlalchemy.select(
+                t.c.id.label("i"),
+                t.c.name.label("n"),
+                *ts_col.flatten("t"),
+            ).select_from(t)
+            # SQLAlchemy 2.1 deprecates Select.distinct(*columns) in favor of
+            # Select.ext(dialects.postgresql.distinct_on(*columns)), but that
+            # does not exist in 2.0.
+            if (distinct_on := getattr(sqlalchemy.dialects.postgresql, "distinct_on", None)) and hasattr(
+                sql, "ext"
+            ):
+                sql = sql.ext(distinct_on(t.c.id))
+            else:
+                sql = sql.distinct(t.c.id)
         elif db.has_any_aggregate:
             sql = (
                 sqlalchemy.select(

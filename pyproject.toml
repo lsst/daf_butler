@@ -25,9 +25,7 @@ keywords = ["lsst"]
 dependencies = [
     "astropy >=7.0",
     "pyyaml >=5.1",
-    # TODO DM-56282: SQLAlchemy 2.1 switches to psycopg 3 by default, and some
-    # code changes are required to maintain compatibility.
-    "sqlalchemy >=1.4,<2.1",
+    "sqlalchemy >=2.0,<2.2",
     "click >= 7.0",
     "lsst-sphgeom",
     "lsst-utils",
@@ -44,7 +42,7 @@ dynamic = ["version"]
 "Source" = "https://github.com/lsst/daf_butler"
 
 [project.optional-dependencies]
-postgres = ["psycopg2"]
+postgres = ["sqlalchemy[postgresql]"]
 remote = [
     "httpx2",
     # RemoteButler always uses HTTPS URLs for accessing files in the Datastore,
