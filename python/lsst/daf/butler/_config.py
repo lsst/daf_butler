@@ -37,6 +37,7 @@ import json
 import logging
 import os
 import pprint
+import re
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
@@ -104,7 +105,18 @@ def _mergeInto(d: Any, u: Mapping[str, Any]) -> Any:
                 lhs = {}
             d[k] = _mergeInto(lhs, v)
         else:
-            d[k] = v
+            # If a path entry and if included ${k} in new value,
+            # replace ${k} with old value (similar to shell behavior.)
+            if k.endswith("_PATH"):
+                try:
+                    d[k] = re.sub(rf"\${{{k}}}", d[k], v)
+                except (KeyError, TypeError):
+                    # KeyError if k not in d already.
+                    # TypeError if v is None or not a string.
+                    d[k] = v
+            else:
+                d[k] = v
+
     return d
 
 
