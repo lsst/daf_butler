@@ -306,6 +306,20 @@ class ConfigTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             c.update([1, 2, 3])
 
+        # Test _mergeInto(): appending path values
+        c1 = Config({"A_PATH": "${rootA1}/pathA1:${A_PATH}", "B": "B1", "x": 0.5})
+        c2 = Config({"A_PATH": "${rootA2}/pathA2:${A_PATH}", "B": "B2", "x": 1.5})
+        c1.update(c2)
+        self.assertEqual(c1, {"A_PATH": "${rootA2}/pathA2:${rootA1}/pathA1:${A_PATH}", "B": "B2", "x": 1.5})
+        self.assertEqual(c2["A_PATH"], "${rootA2}/pathA2:${A_PATH}")
+
+        # Test _mergeInto(): new path key when merging path values
+        c1 = Config({"B": "B1", "x": 0.5})
+        c2 = Config({"A_PATH": "${rootA2}/pathA2:${A_PATH}", "B": "B2", "x": 1.5})
+        c1.update(c2)
+        self.assertEqual(c1, {"A_PATH": "${rootA2}/pathA2:${A_PATH}", "B": "B2", "x": 1.5})
+        self.assertEqual(c2["A_PATH"], "${rootA2}/pathA2:${A_PATH}")
+
     def testHierarchy(self):
         c = Config()
 
