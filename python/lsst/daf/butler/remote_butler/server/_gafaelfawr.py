@@ -31,6 +31,7 @@ from collections import defaultdict
 
 import httpx2
 import pydantic
+from fastapi import HTTPException
 
 from ..authentication.rubin import RubinAuthenticationProvider
 
@@ -98,7 +99,7 @@ class GafaelfawrGroupAuthorizer:
     ) -> bool:
         allowed_groups = self._repository_groups.get(repository)
         if allowed_groups is None:
-            raise ValueError(f"Unknown repository '${repository}'")
+            raise HTTPException(status_code=404, detail=f"Unknown repository '{repository}'")
 
         if "*" in allowed_groups:
             return True

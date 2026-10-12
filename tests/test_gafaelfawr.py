@@ -96,7 +96,8 @@ class GafaelfawrAuthorizationTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request_count, 1)
 
         # Bad repository name
-        with self.assertRaises(ValueError):
+        with self.assertRaises(fastapi.HTTPException) as e:
             await repository_authorization_dependency(
                 "unknown_repository", "username", "mock-token", authorizer
             )
+        self.assertEqual(e.exception.status_code, 404)
