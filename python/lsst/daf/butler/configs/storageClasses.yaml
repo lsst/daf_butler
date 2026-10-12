@@ -495,6 +495,10 @@ storageClasses:
       # most recent).
       logs: StructuredDataDict # dict[uuid.UUID, list[ButlerLogRecords]]
       metadata: StructuredDataDict # dict[uuid.UUID, list[TaskMetadata]]
+  AstropyUnit:
+    pytype: astropy.units.UnitBase
+  Bounds:
+    pytype: lsst.images.Bounds
   BoxV2:
     pytype: lsst.images.Box
     converters:
@@ -519,6 +523,7 @@ storageClasses:
     derivedComponents:
       sky_projection: SkyProjection
       bbox: BoxV2
+      unit: AstropyUnit
     converters:
       lsst.afw.image.Image: lsst.images.Image.from_legacy
   MaskV2:
@@ -541,6 +546,7 @@ storageClasses:
       image: ImageV2
       mask: MaskV2
       variance: ImageV2
+      unit: AstropyUnit
       components: StructuredDataDict
     converters:
       lsst.afw.image.MaskedImage: lsst.images.MaskedImage.from_legacy
@@ -574,6 +580,7 @@ storageClasses:
       detector: DetectorV2
       photometric_scaling: ImageField
       backgrounds: BackgroundMap
+      bounds: Bounds
       masked_image: MaskedImageV2
     converters:
       lsst.afw.image.Exposure: lsst.images.VisitImage.from_legacy
