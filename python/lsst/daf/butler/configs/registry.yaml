@@ -4,6 +4,7 @@ registry:
   engines:
     sqlite: lsst.daf.butler.registry.databases.sqlite.SqliteDatabase
     postgresql: lsst.daf.butler.registry.databases.postgresql.PostgresqlDatabase
+    mysql: lsst.daf.butler.registry.databases.mysql.MySqlDatabase
   managers:
     attributes: lsst.daf.butler.registry.attributes.DefaultButlerAttributeManager
     opaque: lsst.daf.butler.registry.opaque.ByNameOpaqueTableStorageManager
