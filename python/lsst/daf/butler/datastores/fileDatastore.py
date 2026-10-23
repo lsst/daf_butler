@@ -66,6 +66,7 @@ from lsst.daf.butler.datastore import (
     DatastoreConfig,
     DatastoreOpaqueTable,
     DatastoreValidationError,
+    DuplicateIdError,
 )
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -2339,6 +2340,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
+        # Before modifying anything make sure that dataset ID is not already
+        # registered. The check must be done before calling
+        # _write_in_memory_to_artifact because it defines undo callback that
+        # deletes existing artifact. This does not protect against concurrent
+        # inserts by multiple clients, e.g. when doing concurrent imports.
+        records = self._table.fetch(dataset_id=ref.id)
+        if next(records, None):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 
@@ -2373,6 +2383,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     @transactional
     def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        records = self._table.fetch(dataset_id=ref.id)
+        if next(records, None):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 

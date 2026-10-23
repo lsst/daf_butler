@@ -38,6 +38,7 @@ __all__ = (
     "DatastoreOpaqueTable",
     "DatastoreTransaction",
     "DatastoreValidationError",
+    "DuplicateIdError",
     "NullDatastore",
 )
 
@@ -87,6 +88,12 @@ class DatastoreConfig(ConfigSubset):
 
 class DatastoreValidationError(ValidationError):
     """There is a problem with the Datastore configuration."""
+
+    pass
+
+
+class DuplicateIdError(Exception):
+    """Exception raised when trying to store dataset with the existing ID."""
 
     pass
 
@@ -655,6 +662,11 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         provenance : `DatasetProvenance` or `None`, optional
             Any provenance that should be attached to the serialized dataset.
             Not supported by all serialization mechanisms.
+
+        Raises
+        ------
+        DuplicateIdError
+            Raised if datastore already has a dataset with the same dataset ID.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -675,6 +687,11 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
             Mapping of a datastore name to dataset reference stored in that
             datastore, reference will include datastore records. Only
             non-ephemeral datastores will appear in this mapping.
+
+        Raises
+        ------
+        DuplicateIdError
+            Raised if datastore already has a dataset with the same dataset ID.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
