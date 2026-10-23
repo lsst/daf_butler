@@ -79,7 +79,7 @@ from .._query_all_datasets import QueryAllDatasetsParameters, query_all_datasets
 from .._registry_shim import RegistryShim
 from .._storage_class import StorageClass, StorageClassFactory
 from .._timespan import Timespan
-from ..datastore import Datastore, NullDatastore
+from ..datastore import Datastore, DuplicateIdError, NullDatastore
 from ..datastores.file_datastore.retrieve_artifacts import ZipIndex, retrieve_and_zip
 from ..datastores.file_datastore.transfer import retrieve_file_transfer_records
 from ..dimensions import DataCoordinate, Dimension, DimensionGroup
@@ -1069,18 +1069,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # nothing and just return an original ref. We have to raise in
                 # this case, there is a datastore check below for that.
                 self._registry._importDatasets([datasetRefOrType], expand=True)
-                # Before trying to write to the datastore check that it does
-                # not know this dataset. This is prone to races, of course.
-                if self._datastore.knows(datasetRefOrType):
-                    raise ConflictingDefinitionError(
-                        f"Datastore already contains dataset: {datasetRefOrType}"
-                    )
                 # Try to write dataset to the datastore, if it fails due to a
                 # race with another write, the content of stored data may be
                 # unpredictable.
                 try:
                     self._datastore.put(obj, datasetRefOrType, provenance=provenance)
-                except IntegrityError as e:
+                except DuplicateIdError as e:
                     raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
 
             return datasetRefOrType
@@ -1098,7 +1092,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # Add Registry Dataset entry.
             dataId = self._registry.expandDataId(dataId, dimensions=datasetType.dimensions, **kwargs)
             (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-            self._datastore.put(obj, ref, provenance=provenance)
+            try:
+                self._datastore.put(obj, ref, provenance=provenance)
+            except DuplicateIdError as e:
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
 
         return ref
 

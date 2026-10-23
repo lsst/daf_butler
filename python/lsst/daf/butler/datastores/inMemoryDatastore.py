@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
 from lsst.daf.butler._exceptions import DatasetTypeNotSupportedError
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DuplicateIdError
 from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore, post_process_get
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
@@ -416,6 +416,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             raise DatasetTypeNotSupportedError(
                 f"Dataset {ref} has been rejected by this datastore via configuration."
             )
+
+        # Do not override existing datasets.
+        if ref.id in self.records:
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
 
         # May need to coerce the in memory dataset to the correct
         # python type, otherwise parameters may not work.
