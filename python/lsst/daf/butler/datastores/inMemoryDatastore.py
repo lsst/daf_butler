@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
 from lsst.daf.butler._exceptions import DatasetTypeNotSupportedError
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DuplicateIdError
 from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore, post_process_get
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
@@ -417,6 +417,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
                 f"Dataset {ref} has been rejected by this datastore via configuration."
             )
 
+        # Do not override existing datasets.
+        if ref.id in self.records:
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         # May need to coerce the in memory dataset to the correct
         # python type, otherwise parameters may not work.
         try:
@@ -446,13 +450,6 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
-
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        # It is OK to call put() here because registry is not populating
-        # bridges as we return empty dict from this method.
-        self.put(in_memory_dataset, ref)
-        # As ephemeral we return empty dict.
-        return {}
 
     def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.

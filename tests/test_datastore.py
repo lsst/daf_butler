@@ -55,7 +55,13 @@ from lsst.daf.butler import (
     StorageClass,
     StorageClassFactory,
 )
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError, NullDatastore
+from lsst.daf.butler.datastore import (
+    DatasetRefURIs,
+    DatastoreConfig,
+    DatastoreValidationError,
+    DuplicateIdError,
+    NullDatastore,
+)
 from lsst.daf.butler.datastore.cache_manager import (
     DatastoreCacheManager,
     DatastoreCacheManagerConfig,
@@ -324,6 +330,22 @@ class DatastoreTests(DatastoreTestsBase):
 
         with self.assertRaises(FileNotFoundError):
             datastore.getURI(ref)
+
+        # Calling put twice.
+        dataId = {
+            "instrument": "dummy",
+            "visit": 55,
+            "physical_filter": "V",
+            "band": "v",
+            "day_obs": 20250101,
+        }
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
+        datastore.put(metrics, ref)
+        datastore.get(ref)
+        # Second put must fail but dataset will still be there.
+        with self.assertRaises(DuplicateIdError):
+            datastore.put(metricsNone, ref)
+        self.assertEqual(datastore.get(ref), metrics)
 
     def testTrustGetRequest(self) -> None:
         """Check that we can get datasets that registry knows nothing about."""
@@ -1290,14 +1312,14 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
             datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # This will fail because the ref is using UUIDv4.
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # UUIDv5 can be repeatedly ingested in direct mode.
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
 
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
 
 

@@ -38,12 +38,12 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+from uuid import UUID
 
 from sqlalchemy import BigInteger, String
 
 from lsst.daf.butler import (
     Config,
-    DatasetDatastoreRecords,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -66,6 +66,7 @@ from lsst.daf.butler.datastore import (
     DatastoreConfig,
     DatastoreOpaqueTable,
     DatastoreValidationError,
+    DuplicateIdError,
 )
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -1139,12 +1140,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             check_every_n = 0
 
+        dataset_ids: set[DatasetId] = set()
         for count, dataset in enumerate(datasets):
             acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
             if not acceptable:
                 continue
             else:
                 dataset.refs = acceptable
+                dataset_ids.update(ref.id for ref in acceptable)
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
@@ -1174,6 +1177,28 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 dataset.path, transfer=transfer, check_existence=check_existence
             )
             filtered.append(dataset)
+
+        # Check that none of dataset IDs is already in this datastore. We allow
+        # re-ingest of UUIDv5 datasets in direct mode.
+        record_batches = self._table.fetch_batches(dataset_id=sorted(dataset_ids))
+        known_ids = []
+        for records in record_batches:
+            for record in records:
+                dataset_id: UUID = record["dataset_id"]
+                if transfer != "direct" or dataset_id.version != 5:
+                    known_ids.append(dataset_id)
+        if known_ids:
+            if len(known_ids) == 1:
+                raise DuplicateIdError(f"Attempt to override existing dataset: {known_ids[0]}")
+            else:
+                known_ids_str = " ".join(str(known_id) for known_id in known_ids[:10])
+                if len(known_ids) < 10:
+                    raise DuplicateIdError(f"Attempt to override existing datasets: {known_ids_str}")
+                else:
+                    raise DuplicateIdError(
+                        f"Attempt to override existing datasets ({len(known_ids)} total): {known_ids} ..."
+                    )
+
         return _IngestPrepData(filtered)
 
     @transactional
@@ -2339,6 +2364,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
+        # Before modifying anything make sure that dataset ID is not already
+        # registered. The check must be done before calling
+        # _write_in_memory_to_artifact because it defines undo callback that
+        # deletes existing artifact. This does not protect against concurrent
+        # inserts by multiple clients, e.g. when doing concurrent imports.
+        records = self._table.fetch(dataset_id=ref.id)
+        if next(records, None):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 
@@ -2370,38 +2404,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
-
-    @transactional
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        doDisassembly = self.composites.shouldBeDisassembled(ref)
-        # doDisassembly = True
-
-        artifacts = []
-        if doDisassembly:
-            components = ref.datasetType.storageClass.delegate().disassemble(in_memory_dataset)
-            if components is None:
-                raise RuntimeError(
-                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
-                    f"with storage class {ref.datasetType.storageClass.name} "
-                    "is configured to be disassembled, but cannot be."
-                )
-            for component, componentInfo in components.items():
-                # Don't recurse because we want to take advantage of
-                # bulk insert -- need a new DatasetRef that refers to the
-                # same dataset_id but has the component DatasetType
-                # DatasetType does not refer to the types of components
-                # So we construct one ourselves.
-                compRef = ref.makeComponentRef(component)
-                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
-                artifacts.append((compRef, storedInfo))
-        else:
-            # Write the entire thing out
-            storedInfo = self._write_in_memory_to_artifact(in_memory_dataset, ref)
-            artifacts.append((ref, storedInfo))
-
-        ref_records: DatasetDatastoreRecords = {self._opaque_table_name: [info for _, info in artifacts]}
-        ref = ref.replace(datastore_records=ref_records)
-        return {self.name: ref}
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:

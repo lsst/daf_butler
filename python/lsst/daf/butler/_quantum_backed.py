@@ -51,10 +51,11 @@ from ._limited_butler import LimitedButler
 from ._quantum import Quantum
 from ._standalone_datastore import instantiate_standalone_datastore
 from ._storage_class import StorageClass, StorageClassFactory
-from .datastore import Datastore
+from .datastore import Datastore, DuplicateIdError
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from .dimensions import DimensionUniverse
+from .registry import ConflictingDefinitionError
 from .registry.interfaces import Database, DatastoreRegistryBridgeManager, OpaqueTableStorageManager
 
 if TYPE_CHECKING:
@@ -439,7 +440,10 @@ class QuantumBackedButler(LimitedButler):
         if ref.id not in self._predicted_outputs:
             raise RuntimeError("Cannot `put` dataset that was not predicted as an output.")
         with self._metrics.instrument_put(log=_LOG, msg="Put QBB dataset"):
-            self._datastore.put(obj, ref, provenance=provenance)
+            try:
+                self._datastore.put(obj, ref, provenance=provenance)
+            except DuplicateIdError as e:
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
             self._actual_output_refs.add(ref)
         return ref
 

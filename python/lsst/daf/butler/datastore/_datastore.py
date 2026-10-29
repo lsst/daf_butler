@@ -38,6 +38,7 @@ __all__ = (
     "DatastoreOpaqueTable",
     "DatastoreTransaction",
     "DatastoreValidationError",
+    "DuplicateIdError",
     "NullDatastore",
 )
 
@@ -87,6 +88,12 @@ class DatastoreConfig(ConfigSubset):
 
 class DatastoreValidationError(ValidationError):
     """There is a problem with the Datastore configuration."""
+
+    pass
+
+
+class DuplicateIdError(Exception):
+    """Exception raised when trying to store dataset with the existing ID."""
 
     pass
 
@@ -655,26 +662,11 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         provenance : `DatasetProvenance` or `None`, optional
             Any provenance that should be attached to the serialized dataset.
             Not supported by all serialization mechanisms.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        """Write an in-memory dataset with a given `DatasetRef` to the store.
-
-        Parameters
-        ----------
-        in_memory_dataset : `object`
-            The Dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-
-        Returns
-        -------
-        datastore_refs : `~collections.abc.Mapping` [`str`, `DatasetRef`]
-            Mapping of a datastore name to dataset reference stored in that
-            datastore, reference will include datastore records. Only
-            non-ephemeral datastores will appear in this mapping.
+        Raises
+        ------
+        DuplicateIdError
+            Raised if datastore already has a dataset with the same dataset ID.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -746,6 +738,9 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+        DuplicateIdError
+            Raised if dataset ID of any dataset already exists in this
+            datastore.
 
         Notes
         -----
@@ -852,6 +847,9 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+        DuplicateIdError
+            Raised if dataset ID of any dataset already exists in this
+            datastore.
 
         Notes
         -----
@@ -1555,9 +1553,6 @@ class NullDatastore(Datastore):
     def put(
         self, inMemoryDataset: Any, datasetRef: DatasetRef, provenance: DatasetProvenance | None = None
     ) -> None:
-        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
-
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def ingest(
