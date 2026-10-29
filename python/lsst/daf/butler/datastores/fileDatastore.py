@@ -43,7 +43,6 @@ from sqlalchemy import BigInteger, String
 
 from lsst.daf.butler import (
     Config,
-    DatasetDatastoreRecords,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -2380,42 +2379,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
-
-    @transactional
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        records = self._table.fetch(dataset_id=ref.id)
-        if next(records, None):
-            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
-
-        doDisassembly = self.composites.shouldBeDisassembled(ref)
-        # doDisassembly = True
-
-        artifacts = []
-        if doDisassembly:
-            components = ref.datasetType.storageClass.delegate().disassemble(in_memory_dataset)
-            if components is None:
-                raise RuntimeError(
-                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
-                    f"with storage class {ref.datasetType.storageClass.name} "
-                    "is configured to be disassembled, but cannot be."
-                )
-            for component, componentInfo in components.items():
-                # Don't recurse because we want to take advantage of
-                # bulk insert -- need a new DatasetRef that refers to the
-                # same dataset_id but has the component DatasetType
-                # DatasetType does not refer to the types of components
-                # So we construct one ourselves.
-                compRef = ref.makeComponentRef(component)
-                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
-                artifacts.append((compRef, storedInfo))
-        else:
-            # Write the entire thing out
-            storedInfo = self._write_in_memory_to_artifact(in_memory_dataset, ref)
-            artifacts.append((ref, storedInfo))
-
-        ref_records: DatasetDatastoreRecords = {self._opaque_table_name: [info for _, info in artifacts]}
-        ref = ref.replace(datastore_records=ref_records)
-        return {self.name: ref}
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
