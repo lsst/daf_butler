@@ -1,3 +1,40 @@
+Butler v30.0.12 (2026-10-27)
+============================
+
+Bug Fixes
+---------
+
+- Fixed the error reported when a malformed dataset type name is given to a client/server Butler.
+
+  Previously a name that is not syntactically valid (for example the string ``"..."`` is not the same as the ``...`` wildcard) either produced an HTTP 404 from the client or an unhandled internal server error.
+  ``DatasetTypeExpressionError`` is now a user-facing error that the server forwards to its clients, and client/server Butler rejects invalid dataset type names before contacting the server. (`DM-53347 <https://rubinobs.atlassian.net/browse/DM-53347>`_)
+- Fixed an issue where HTTP disconnects during RemoteButler query result streaming would report asyncio errors in the server logs. (`DM-55631 <https://rubinobs.atlassian.net/browse/DM-55631>`_)
+- The library now typechecks cleanly against the typings in ``lsst-sphgeom``. (`DM-56359 <https://rubinobs.atlassian.net/browse/DM-56359>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- Rewrote the query that finds artifacts shared between trashed and untrashed datasets to use a correlated ``EXISTS`` semi-join.
+  The previous form joined every artifact recorded by the datastore against the trashed artifacts, so the cost of emptying the trash did not depend on how many datasets were being removed.
+  On a repository holding 1.5 billion datastore records this reduces the per-chunk cost of ``Butler.pruneDatasets`` and ``remove-runs`` from over an hour to a few seconds. (`DM-56097 <https://rubinobs.atlassian.net/browse/DM-56097>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- The datastore tests that used a moto-mocked S3 bucket now use the ``remote-test`` URI scheme from ``lsst.resources``.
+  This tests the same not-local code paths far more quickly, and ``s3fs`` is no longer required to run the test suite. (`DM-55824 <https://rubinobs.atlassian.net/browse/DM-55824>`_)
+- Optimized test execution by using a shared cache for SQLite butler repos and by reducing time spent registering storage classes that are already known to the singleton. (`DM-55885 <https://rubinobs.atlassian.net/browse/DM-55885>`_)
+- Library versions for development and Docker builds are now managed using ``uv.lock`` instead of ``requirements.txt``. (`DM-55886 <https://rubinobs.atlassian.net/browse/DM-55886>`_)
+- Added the ``AstropyUnit`` and ``Bounds`` storage classes.
+  ``ImageV2`` and ``MaskedImageV2`` now have a ``unit`` derived component, and ``VisitImage`` now has a ``bounds`` derived component.
+  These let a task read the units of an ``lsst.images`` dataset, or the region of it that holds valid data, without reading its pixels.
+  ``ConvolutionKernel`` datasets can now be written on their own, not just read as the ``kernel`` component of a ``DifferenceImage``. (`DM-56116 <https://rubinobs.atlassian.net/browse/DM-56116>`_)
+- ``RemoteButler`` now requires ``httpx2`` instead of ``httpx``. (`DM-56245 <https://rubinobs.atlassian.net/browse/DM-56245>`_)
+- Added support for SQLAlchemy version 2.1. (`DM-56282 <https://rubinobs.atlassian.net/browse/DM-56282>`_)
+
+
 Butler v30.0.11 (2026-08-13)
 ============================
 
