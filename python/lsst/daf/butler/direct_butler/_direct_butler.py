@@ -50,7 +50,6 @@ from types import EllipsisType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, TextIO, cast
 
 from deprecated.sphinx import deprecated
-from sqlalchemy.exc import IntegrityError
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import find_outside_stacklevel, get_class_of
@@ -1794,7 +1793,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
             try:
                 self._datastore.ingest_zip(zip_path, transfer=transfer, dry_run=dry_run)
-            except IntegrityError as e:
+            except DuplicateIdError as e:
                 raise ConflictingDefinitionError(
                     f"Datastore already contains one or more datasets: {e}"
                 ) from e
@@ -1924,7 +1923,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 self._datastore.ingest(
                     *new_datasets, transfer=transfer, record_validation_info=record_validation_info
                 )
-            except IntegrityError as e:
+            except DuplicateIdError as e:
                 raise ConflictingDefinitionError(
                     f"Datastore already contains one or more datasets: {e}"
                 ) from e

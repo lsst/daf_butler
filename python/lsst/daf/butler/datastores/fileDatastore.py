@@ -38,6 +38,7 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+from uuid import UUID
 
 from sqlalchemy import BigInteger, String
 
@@ -110,6 +111,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
 from ..datastore import FileTransferMap, FileTransferRecord
+from .utils import report_duplicate_ids
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -1139,12 +1141,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             check_every_n = 0
 
+        dataset_ids: set[DatasetId] = set()
         for count, dataset in enumerate(datasets):
             acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
             if not acceptable:
                 continue
             else:
                 dataset.refs = acceptable
+                dataset_ids.update(ref.id for ref in acceptable)
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
@@ -1174,7 +1178,41 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 dataset.path, transfer=transfer, check_existence=check_existence
             )
             filtered.append(dataset)
+
+        # Check that none of dataset IDs is already in this datastore.
+        self._check_existing_datasets(dataset_ids, True, transfer)
+
         return _IngestPrepData(filtered)
+
+    def _check_existing_datasets(
+        self, dataset_ids: Iterable[DatasetId], allow_raw_reingest: bool, transfer: str | None = None
+    ) -> None:
+        """Check that none of dataset IDs is already in this datastore.
+
+        Parameters
+        ----------
+        dataset_ids : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs to check.
+        allow_raw_reingest : `bool`
+            If true then allow re-ingest of UUIDv5 datasets in direct mode.
+        transfer : `str` or `None`
+            Transfer mode, only used when ``allow_raw_reingest`` is true.
+
+        Raises
+        ------
+        DuplicateIdError
+            Raised if any dataset ID is already known to the datastore.
+        """
+        record_batches = self._table.fetch_batches(dataset_id=sorted(dataset_ids))
+        known_ids = set()
+        for records in record_batches:
+            for record in records:
+                dataset_id: UUID = record["dataset_id"]
+                if not (allow_raw_reingest and transfer == "direct" and dataset_id.version == 5):
+                    known_ids.add(dataset_id)
+        if known_ids:
+            # Will raise DuplicateIdError.
+            report_duplicate_ids(known_ids)
 
     @transactional
     def _finishIngest(
@@ -2200,6 +2238,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             raise DatasetTypeNotSupportedError(
                 "Some refs in the Zip file are not supported by this datastore"
             )
+
+        # Check that none of dataset IDs is already in this datastore. Note
+        # that unlike ingest() this method does not differentiate between
+        # UUIDv5 and all others.
+        if not dry_run:
+            self._check_existing_datasets(id_to_ref, False)
 
         # Transfer the Zip file into the datastore file system.
         # There is no RUN as such to use for naming.

@@ -56,6 +56,7 @@ from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
 from ..datastore import DuplicateIdError, FileTransferMap
+from .utils import report_duplicate_ids
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -912,6 +913,17 @@ class ChainedDatastore(Datastore):
             raise DatasetTypeNotSupportedError(
                 "Some of the refs in the given Zip file are not acceptable to this datastore."
             )
+
+        # Before trying to call ingest_zip() on any child datastore check if
+        # any of them already have these datasets, this is to avoid potential
+        # inconsistencies when one of the children has that dataset already but
+        # others do not.
+        known_ids = []
+        if not dry_run:
+            known_ids = [ref.id for ref, known in self.knows_these(refs).items() if known]
+        if known_ids:
+            # Will raise DuplicateIdError.
+            report_duplicate_ids(known_ids)
 
         n_success = 0
         final_exception: Exception | None = None

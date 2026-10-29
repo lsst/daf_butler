@@ -77,6 +77,7 @@ from lsst.daf.butler.datastore.stored_file_info import (
     StoredFileInfoTable,
     make_datastore_path_relative,
 )
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import retrieve_and_zip
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,
@@ -1312,15 +1313,29 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
             datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # This will fail because the ref is using UUIDv4.
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # UUIDv5 can be repeatedly ingested in direct mode.
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
 
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
+
+    def test_repeat_ingest_zip(self):
+        """Check repeated calls to ingest_zip."""
+        metrics, ref = self._prepareIngestTest()
+        datastore = self.makeDatastore()
+
+        with _temp_yaml_file(metrics._asdict()) as path:
+            datastore.ingest(FileDataset(path=path, refs=ref), transfer="direct")
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+                # Dump to zip file.
+                zip_path = retrieve_and_zip([ref], tmpdir, datastore.retrieveArtifacts)
+
+                with self.assertRaises(DuplicateIdError):
+                    datastore.ingest_zip(zip_path, "copy")
 
 
 class TrashDatastoreTestCase(PosixDatastoreTestCase):
