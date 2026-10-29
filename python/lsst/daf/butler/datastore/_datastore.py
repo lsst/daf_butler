@@ -670,31 +670,6 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        """Write an in-memory dataset with a given `DatasetRef` to the store.
-
-        Parameters
-        ----------
-        in_memory_dataset : `object`
-            The Dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-
-        Returns
-        -------
-        datastore_refs : `~collections.abc.Mapping` [`str`, `DatasetRef`]
-            Mapping of a datastore name to dataset reference stored in that
-            datastore, reference will include datastore records. Only
-            non-ephemeral datastores will appear in this mapping.
-
-        Raises
-        ------
-        DuplicateIdError
-            Raised if datastore already has a dataset with the same dataset ID.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
     def _overrideTransferMode(self, *datasets: FileDataset, transfer: str | None = None) -> str | None:
         """Allow ingest transfer mode to be defaulted based on datasets.
 
@@ -1572,9 +1547,6 @@ class NullDatastore(Datastore):
     def put(
         self, inMemoryDataset: Any, datasetRef: DatasetRef, provenance: DatasetProvenance | None = None
     ) -> None:
-        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
-
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def ingest(
