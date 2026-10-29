@@ -738,6 +738,9 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+        DuplicateIdError
+            Raised if dataset ID of any dataset already exists in this
+            datastore.
 
         Notes
         -----
@@ -844,6 +847,9 @@ class Datastore(FileTransferSource, metaclass=ABCMeta):
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+        DuplicateIdError
+            Raised if dataset ID of any dataset already exists in this
+            datastore.
 
         Notes
         -----

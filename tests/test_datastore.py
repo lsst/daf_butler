@@ -1312,14 +1312,14 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
             datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # This will fail because the ref is using UUIDv4.
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # UUIDv5 can be repeatedly ingested in direct mode.
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
             datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
 
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(DuplicateIdError):
                 datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
 
 

@@ -38,6 +38,7 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+from uuid import UUID
 
 from sqlalchemy import BigInteger, String
 
@@ -1139,12 +1140,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             check_every_n = 0
 
+        dataset_ids: set[DatasetId] = set()
         for count, dataset in enumerate(datasets):
             acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
             if not acceptable:
                 continue
             else:
                 dataset.refs = acceptable
+                dataset_ids.update(ref.id for ref in acceptable)
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
@@ -1174,6 +1177,28 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 dataset.path, transfer=transfer, check_existence=check_existence
             )
             filtered.append(dataset)
+
+        # Check that none of dataset IDs is already in this datastore. We allow
+        # re-ingest of UUIDv5 datasets in direct mode.
+        record_batches = self._table.fetch_batches(dataset_id=sorted(dataset_ids))
+        known_ids = []
+        for records in record_batches:
+            for record in records:
+                dataset_id: UUID = record["dataset_id"]
+                if transfer != "direct" or dataset_id.version != 5:
+                    known_ids.append(dataset_id)
+        if known_ids:
+            if len(known_ids) == 1:
+                raise DuplicateIdError(f"Attempt to override existing dataset: {known_ids[0]}")
+            else:
+                known_ids_str = " ".join(str(known_id) for known_id in known_ids[:10])
+                if len(known_ids) < 10:
+                    raise DuplicateIdError(f"Attempt to override existing datasets: {known_ids_str}")
+                else:
+                    raise DuplicateIdError(
+                        f"Attempt to override existing datasets ({len(known_ids)} total): {known_ids} ..."
+                    )
+
         return _IngestPrepData(filtered)
 
     @transactional

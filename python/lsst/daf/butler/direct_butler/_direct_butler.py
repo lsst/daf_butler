@@ -1924,7 +1924,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 self._datastore.ingest(
                     *new_datasets, transfer=transfer, record_validation_info=record_validation_info
                 )
-            except IntegrityError as e:
+            except DuplicateIdError as e:
                 raise ConflictingDefinitionError(
                     f"Datastore already contains one or more datasets: {e}"
                 ) from e
