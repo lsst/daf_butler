@@ -55,7 +55,7 @@ from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
-from ..datastore import FileTransferMap
+from ..datastore import DuplicateIdError, FileTransferMap
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -452,6 +452,13 @@ class ChainedDatastore(Datastore):
             All datastores reported `DatasetTypeNotSupportedError`.
         """
         log.debug("Put %s", ref)
+
+        # Before trying to call put() on any child datastore check if any of
+        # them already have this dataset ID, this is to avoid potential
+        # inconsistencies when one of the children has that dataset already but
+        # others do not.
+        if self.knows(ref):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
 
         # Confirm that we can accept this dataset
         if not self.constraints.isAcceptable(ref):
