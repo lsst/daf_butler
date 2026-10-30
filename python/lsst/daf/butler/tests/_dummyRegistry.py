@@ -32,6 +32,7 @@ from collections.abc import Iterable, Iterator
 from typing import Any
 
 from lsst.daf.butler import DimensionUniverse, ddl
+from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     Database,
@@ -82,8 +83,8 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 if len(matching) != 0:
                     match insert_mode:
                         case DatabaseInsertMode.INSERT:
-                            raise RuntimeError(
-                                f"Unique constraint {constraint} violation in external table {self.name}."
+                            raise ConflictingDefinitionError(
+                                f"Table {self.name} already contains matching record(s): {matching}"
                             )
                         case DatabaseInsertMode.ENSURE:
                             # Row already exists. Skip.

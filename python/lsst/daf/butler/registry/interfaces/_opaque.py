@@ -72,6 +72,12 @@ class OpaqueTableStorage(ABC):
             of the insert to be registered. Can be ignored if rollback is
             handled via a different mechanism, such as by a database. Can be
             `None` if no external transaction is available.
+
+        Raises
+        ------
+        ConflictingDefinitionError
+            Raised if the record with a matching primary or unique key already
+            exists.
         """
         raise NotImplementedError()
 
