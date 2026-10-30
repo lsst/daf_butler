@@ -124,6 +124,11 @@ class DatastoreRegistryBridge(ABC):
         ----------
         refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the datasets.
+
+        Raises
+        ------
+        ConflictingDefinitionError
+            Raised if any of the ``refs`` is already registered.
         """
         raise NotImplementedError()
 

@@ -41,6 +41,7 @@ from lsst.utils.iteration import chunk_iterable
 
 from ..._dataset_ref import DatasetId
 from ...datastore.stored_file_info import StoredDatastoreItemInfo
+from .._exceptions import ConflictingDefinitionError
 from ..interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
@@ -170,7 +171,10 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        self._db.insert(self._tables.dataset_location, *self._refsToRows(refs))
+        try:
+            self._db.insert(self._tables.dataset_location, *self._refsToRows(refs))
+        except sqlalchemy.exc.IntegrityError as exc:
+            raise ConflictingDefinitionError("Some datasets were already registered.") from exc
 
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge

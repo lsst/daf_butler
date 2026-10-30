@@ -33,6 +33,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from ..._dataset_ref import DatasetId
+from .._exceptions import ConflictingDefinitionError
 from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, OpaqueTableStorage
 
 if TYPE_CHECKING:
@@ -65,7 +66,10 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        self._datasetIds.update(ref.id for ref in refs)
+        new_ids = {ref.id for ref in refs}
+        if known_ids := new_ids & self._datasetIds:
+            raise ConflictingDefinitionError(f"Some datasets are already in registry: {known_ids}")
+        self._datasetIds.update(new_ids)
 
     def ensure(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
