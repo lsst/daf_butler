@@ -1414,7 +1414,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         exists : `bool`
             `True` if the dataset is known to the datastore.
         """
-        fileLocations = self._get_dataset_locations_info(ref)
+        fileLocations = self._get_dataset_locations_info(ref, ignore_datastore_records=True)
         if fileLocations:
             return True
         return False
