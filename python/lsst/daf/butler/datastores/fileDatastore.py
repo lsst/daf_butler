@@ -38,12 +38,12 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+from uuid import UUID
 
 from sqlalchemy import BigInteger, String
 
 from lsst.daf.butler import (
     Config,
-    DatasetDatastoreRecords,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -66,6 +66,7 @@ from lsst.daf.butler.datastore import (
     DatastoreConfig,
     DatastoreOpaqueTable,
     DatastoreValidationError,
+    DuplicateIdError,
 )
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -110,6 +111,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 
 from ..datastore import FileTransferMap, FileTransferRecord
+from .utils import report_duplicate_ids
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetProvenance, LookupKey
@@ -1139,12 +1141,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         else:
             check_every_n = 0
 
+        dataset_ids: set[DatasetId] = set()
         for count, dataset in enumerate(datasets):
             acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
             if not acceptable:
                 continue
             else:
                 dataset.refs = acceptable
+                dataset_ids.update(ref.id for ref in acceptable)
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
@@ -1174,7 +1178,41 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 dataset.path, transfer=transfer, check_existence=check_existence
             )
             filtered.append(dataset)
+
+        # Check that none of dataset IDs is already in this datastore.
+        self._check_existing_datasets(dataset_ids, True, transfer)
+
         return _IngestPrepData(filtered)
+
+    def _check_existing_datasets(
+        self, dataset_ids: Iterable[DatasetId], allow_raw_reingest: bool, transfer: str | None = None
+    ) -> None:
+        """Check that none of dataset IDs is already in this datastore.
+
+        Parameters
+        ----------
+        dataset_ids : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs to check.
+        allow_raw_reingest : `bool`
+            If true then allow re-ingest of UUIDv5 datasets in direct mode.
+        transfer : `str` or `None`
+            Transfer mode, only used when ``allow_raw_reingest`` is true.
+
+        Raises
+        ------
+        DuplicateIdError
+            Raised if any dataset ID is already known to the datastore.
+        """
+        record_batches = self._table.fetch_batches(dataset_id=sorted(dataset_ids))
+        known_ids = set()
+        for records in record_batches:
+            for record in records:
+                dataset_id: UUID = record["dataset_id"]
+                if not (allow_raw_reingest and transfer == "direct" and dataset_id.version == 5):
+                    known_ids.add(dataset_id)
+        if known_ids:
+            # Will raise DuplicateIdError.
+            report_duplicate_ids(known_ids)
 
     @transactional
     def _finishIngest(
@@ -1376,7 +1414,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         exists : `bool`
             `True` if the dataset is known to the datastore.
         """
-        fileLocations = self._get_dataset_locations_info(ref)
+        fileLocations = self._get_dataset_locations_info(ref, ignore_datastore_records=True)
         if fileLocations:
             return True
         return False
@@ -2201,6 +2239,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 "Some refs in the Zip file are not supported by this datastore"
             )
 
+        # Check that none of dataset IDs is already in this datastore. Note
+        # that unlike ingest() this method does not differentiate between
+        # UUIDv5 and all others.
+        if not dry_run:
+            self._check_existing_datasets(id_to_ref, False)
+
         # Transfer the Zip file into the datastore file system.
         # There is no RUN as such to use for naming.
         # Potentially could use the RUN from the first ref in the index
@@ -2339,6 +2383,15 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
+        # Before modifying anything make sure that dataset ID is not already
+        # registered. The check must be done before calling
+        # _write_in_memory_to_artifact because it defines undo callback that
+        # deletes existing artifact. This does not protect against concurrent
+        # inserts by multiple clients, e.g. when doing concurrent imports.
+        records = self._table.fetch(dataset_id=ref.id)
+        if next(records, None):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 
@@ -2370,38 +2423,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
-
-    @transactional
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        doDisassembly = self.composites.shouldBeDisassembled(ref)
-        # doDisassembly = True
-
-        artifacts = []
-        if doDisassembly:
-            components = ref.datasetType.storageClass.delegate().disassemble(in_memory_dataset)
-            if components is None:
-                raise RuntimeError(
-                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
-                    f"with storage class {ref.datasetType.storageClass.name} "
-                    "is configured to be disassembled, but cannot be."
-                )
-            for component, componentInfo in components.items():
-                # Don't recurse because we want to take advantage of
-                # bulk insert -- need a new DatasetRef that refers to the
-                # same dataset_id but has the component DatasetType
-                # DatasetType does not refer to the types of components
-                # So we construct one ourselves.
-                compRef = ref.makeComponentRef(component)
-                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
-                artifacts.append((compRef, storedInfo))
-        else:
-            # Write the entire thing out
-            storedInfo = self._write_in_memory_to_artifact(in_memory_dataset, ref)
-            artifacts.append((ref, storedInfo))
-
-        ref_records: DatasetDatastoreRecords = {self._opaque_table_name: [info for _, info in artifacts]}
-        ref = ref.replace(datastore_records=ref_records)
-        return {self.name: ref}
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:

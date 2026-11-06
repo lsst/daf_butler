@@ -55,7 +55,8 @@ from lsst.utils.introspection import get_full_type_name
 from lsst.utils.logging import getLogger
 
 from .._dataset_ref import DatasetId
-from ..datastore import FileTransferMap
+from ..datastore import DuplicateIdError, FileTransferMap
+from .utils import report_duplicate_ids
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetProvenance, DatasetType, LookupKey, StorageClass
@@ -453,6 +454,13 @@ class ChainedDatastore(Datastore):
         """
         log.debug("Put %s", ref)
 
+        # Before trying to call put() on any child datastore check if any of
+        # them already have this dataset ID, this is to avoid potential
+        # inconsistencies when one of the children has that dataset already but
+        # others do not.
+        if self.knows(ref):
+            raise DuplicateIdError(f"Attempt to override existing dataset: {ref.id}")
+
         # Confirm that we can accept this dataset
         if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
@@ -491,53 +499,6 @@ class ChainedDatastore(Datastore):
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
-
-    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
-        # Docstring inherited from base class.
-        log.debug("Put %s", ref)
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(
-                f"Dataset {ref} has been rejected by this datastore via configuration."
-            )
-
-        isPermanent = False
-        nsuccess = 0
-        npermanent = 0
-        nephemeral = 0
-        stored_refs: dict[str, DatasetRef] = {}
-        for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
-            if (
-                constraints is not None and not constraints.isAcceptable(ref)
-            ) or not datastore.constraints.isAcceptable(ref):
-                log.debug("Datastore %s skipping put via configuration for ref %s", datastore.name, ref)
-                continue
-
-            if datastore.isEphemeral:
-                nephemeral += 1
-            else:
-                npermanent += 1
-            try:
-                stored_ref_map = datastore.put_new(in_memory_dataset, ref)
-                stored_refs.update(stored_ref_map)
-                nsuccess += 1
-                if not datastore.isEphemeral:
-                    isPermanent = True
-            except DatasetTypeNotSupportedError:
-                pass
-
-        if nsuccess == 0:
-            raise DatasetTypeNotSupportedError(f"None of the chained datastores supported ref {ref}")
-
-        if not isPermanent and npermanent > 0:
-            warnings.warn(f"Put of {ref} only succeeded in ephemeral databases", stacklevel=2)
-
-        if self._transaction is not None:
-            self._transaction.registerUndo("put", self.remove, ref)
-
-        return stored_refs
 
     def _overrideTransferMode(self, *datasets: Any, transfer: str | None = None) -> str | None:
         # Docstring inherited from base class.
@@ -952,6 +913,17 @@ class ChainedDatastore(Datastore):
             raise DatasetTypeNotSupportedError(
                 "Some of the refs in the given Zip file are not acceptable to this datastore."
             )
+
+        # Before trying to call ingest_zip() on any child datastore check if
+        # any of them already have these datasets, this is to avoid potential
+        # inconsistencies when one of the children has that dataset already but
+        # others do not.
+        known_ids = []
+        if not dry_run:
+            known_ids = [ref.id for ref, known in self.knows_these(refs).items() if known]
+        if known_ids:
+            # Will raise DuplicateIdError.
+            report_duplicate_ids(known_ids)
 
         n_success = 0
         final_exception: Exception | None = None

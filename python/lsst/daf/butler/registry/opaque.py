@@ -38,9 +38,11 @@ from collections.abc import Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
+import sqlalchemy.exc
 
 from .._utilities.thread_safe_cache import ThreadSafeCache
 from ..ddl import FieldSpec, TableSpec
+from ._exceptions import ConflictingDefinitionError
 from .interfaces import (
     Database,
     OpaqueTableStorage,
@@ -84,7 +86,12 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # Docstring inherited from OpaqueTableStorage.
         # The provided transaction object can be ignored since we rely on
         # the database itself providing any rollback functionality.
-        self._db.insert(self._table, *data)
+        try:
+            self._db.insert(self._table, *data)
+        except sqlalchemy.exc.IntegrityError as exc:
+            raise ConflictingDefinitionError(
+                f"Table {self._table.name} already contains matching record(s)."
+            ) from exc
 
     def ensure(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
