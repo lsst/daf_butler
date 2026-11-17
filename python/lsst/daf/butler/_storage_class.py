@@ -369,6 +369,27 @@ class StorageClass:
             return True
         return False
 
+    @staticmethod
+    def _lookup_names_for(name: str) -> tuple[LookupKey, ...]:
+        """Return the lookup keys for a storage class of the given name.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the storage class.
+
+        Returns
+        -------
+        names : `tuple` of `LookupKey`
+            Tuple of a `LookupKey` using the storage class name.
+
+        Notes
+        -----
+        Takes a name rather than a `StorageClass` so that callers holding only
+        the name do not have to load the definition to derive lookup keys.
+        """
+        return (LookupKey(name=name),)
+
     def _lookupNames(self) -> tuple[LookupKey, ...]:
         """Keys to use when looking up this DatasetRef in a configuration.
 
@@ -379,7 +400,7 @@ class StorageClass:
         names : `tuple` of `LookupKey`
             Tuple of a `LookupKey` using the `StorageClass` name.
         """
-        return (LookupKey(name=self.name),)
+        return self._lookup_names_for(self.name)
 
     def knownParameters(self) -> set[str]:
         """Return set of all parameters known to this `StorageClass`.
@@ -679,25 +700,16 @@ class StorageClassFactory(metaclass=Singleton):
     This class is a singleton, with each instance sharing the pool of
     StorageClasses. Since code can not know whether it is the first
     time the instance has been created, the constructor takes no arguments.
-    To populate the factory with storage classes, a call to
-    `~StorageClassFactory.addFromConfig()` should be made.
-
-    Parameters
-    ----------
-    config : `StorageClassConfig` or `str`, optional
-        Load configuration. In a ButlerConfig` the relevant configuration
-        is located in the ``storageClasses`` section.
+    To populate the factory with storage classes beyond the defaults, a call
+    to `~StorageClassFactory.addFromConfig()` should be made.
     """
 
-    def __init__(self, config: StorageClassConfig | str | None = None):
+    def __init__(self) -> None:
         self._storageClasses: dict[str, StorageClass] = {}
         self._lock = RLock()
 
         # Always seed with the default config
         self.addFromConfig(StorageClassConfig())
-
-        if config is not None:
-            self.addFromConfig(config)
 
     def __str__(self) -> str:
         """Return summary of factory.

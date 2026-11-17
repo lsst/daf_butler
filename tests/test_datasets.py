@@ -45,6 +45,7 @@ from lsst.daf.butler import (
     StorageClassFactory,
     UnknownComponentError,
 )
+from lsst.daf.butler._config_support import LookupKey
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import ZipIndex
 from lsst.daf.butler.formatters.yaml import YamlFormatter
@@ -91,6 +92,56 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
         self.assertEqual(datasetType.dimensions, dimensions)
+
+    def testLookupNames(self) -> None:
+        """Test lookup keys are derived without loading storage classes."""
+        dimensions = self.universe.conform(("instrument", "visit"))
+
+        # Storage class names that are deliberately not registered. Deriving
+        # lookup keys must not require the definitions to be available.
+        datasetType = DatasetType("test_lookup", dimensions, "test_lookup_unregistered")
+        factory = StorageClassFactory()
+        self.assertNotIn("test_lookup_unregistered", factory)
+
+        names = datasetType._lookupNames()
+        self.assertEqual(
+            names,
+            (
+                LookupKey(name="test_lookup"),
+                LookupKey(dimensions=dimensions),
+                LookupKey(name="test_lookup_unregistered"),
+            ),
+        )
+
+        # A component adds the parent name and the parent storage class name.
+        componentType = DatasetType(
+            "test_lookup.comp",
+            dimensions,
+            "test_lookup_comp_unregistered",
+            parentStorageClass="test_lookup_unregistered",
+        )
+        self.assertEqual(
+            componentType._lookupNames(),
+            (
+                LookupKey(name="test_lookup.comp"),
+                LookupKey(name="test_lookup"),
+                LookupKey(dimensions=dimensions),
+                LookupKey(name="test_lookup_comp_unregistered"),
+                LookupKey(name="test_lookup_unregistered"),
+            ),
+        )
+
+        # Registered storage classes give the same answer.
+        registered = StorageClass("test_lookup_registered")
+        factory.registerStorageClass(registered)
+        self.assertEqual(
+            DatasetType("test_lookup2", dimensions, registered)._lookupNames(),
+            (
+                LookupKey(name="test_lookup2"),
+                LookupKey(dimensions=dimensions),
+                LookupKey(name="test_lookup_registered"),
+            ),
+        )
 
     def testNameValidation(self) -> None:
         """Test that dataset type names only contain certain characters

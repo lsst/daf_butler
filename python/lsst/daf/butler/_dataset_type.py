@@ -691,6 +691,12 @@ class DatasetType:
             is first, then the name without the component and finally
             the storage class name and the storage class name of the
             composite.
+
+        Notes
+        -----
+        The keys are derived from the storage class names without loading the
+        storage class definitions, so configuration lookups do not require the
+        corresponding Python types to be importable.
         """
         rootName, componentName = self.nameAndComponent()
         lookups: tuple[LookupKey, ...] = (LookupKey(name=self.name),)
@@ -701,9 +707,9 @@ class DatasetType:
             # Dimensions are a lower priority than dataset type name
             lookups = lookups + (LookupKey(dimensions=self._dimensions),)
 
-        storageClasses = self.storageClass._lookupNames()
-        if componentName is not None and self.parentStorageClass is not None:
-            storageClasses += self.parentStorageClass._lookupNames()
+        storageClasses = StorageClass._lookup_names_for(self._storageClassName)
+        if componentName is not None and self._parentStorageClassName is not None:
+            storageClasses += StorageClass._lookup_names_for(self._parentStorageClassName)
 
         return lookups + storageClasses
 
